@@ -3329,7 +3329,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                         <span>{likeCount}</span>
                       </button>
                     )}
-                    <a className="library-card-link" href={previewUrl} target="_blank" rel="noreferrer">
+                    <a className="library-card-link" href={editUrl} aria-label={`Edit ${entry.title || entry.id}`}>
                     <div className="library-card-visual">
                       <video
                         className="library-card-webm"
