@@ -2,7 +2,7 @@ const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
 const defaultBasePath = 'library';
-import { dataScienceSchema, inferDataScienceMetadata } from './spine-data-science.js';
+import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-science.js';
 
 function cleanRepoPath(value = '') {
   return String(value).trim().replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
