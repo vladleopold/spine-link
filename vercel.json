@@ -1,0 +1,153 @@
+{
+  "headers": [
+    {
+      "source": "/(.*).html",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "index, follow, max-image-preview:large"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/xml; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
+      "source": "/sitemap-index.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/xml; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
+      "source": "/sitemap-video.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/xml; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
+      "source": "/sitemap.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
+      "source": "/llms.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/spine-link-video.html",
+      "destination": "/api/github-asset?path=spine-link-video.html"
+    },
+    {
+      "source": "/spine-online-video.html",
+      "destination": "/api/github-asset?path=spine-online-video.html"
+    },
+    {
+      "source": "/spine-link.webm",
+      "destination": "/api/github-asset?path=spine-link.webm"
+    },
+    {
+      "source": "/spine-online.webm",
+      "destination": "/api/github-asset?path=spine-online.webm"
+    },
+    {
+      "source": "/spine-link-video-thumbnail.png",
+      "destination": "/api/github-asset?path=spine-link-video-thumbnail.png"
+    },
+    {
+      "source": "/video_tumbnail.png",
+      "destination": "/api/github-asset?path=video_tumbnail.png"
+    },
+    {
+      "source": "/sitemap-video.xml",
+      "destination": "/api/sitemap-video"
+    },
+    {
+      "source": "/p/:id",
+      "destination": "/api/github-preview?path=library/:id"
+    },
+    {
+      "source": "/u/:id",
+      "destination": "/api/github-library?user=:id"
+    },
+    {
+      "source": "/world-spine-archive",
+      "destination": "/api/github-archive"
+    },
+    {
+      "source": "/world-spine-archive/:id",
+      "destination": "/api/github-archive?id=:id"
+    },
+    {
+      "source": "/assets/library/:id/generated-preview.webp",
+      "destination": "/api/github-generated-thumbnail?id=:id"
+    },
+    {
+      "source": "/assets/library/:id/generated-preview.webm",
+      "destination": "/api/github-generated-preview-webm?id=:id"
+    },
+    {
+      "source": "/assets/:path*",
+      "destination": "/api/github-asset?path=:path*"
+    }
+  ]
+}

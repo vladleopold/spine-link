@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spine-Link — Online Spine Preview and Spine Web Viewer</title>
+    <meta
+      name="description"
+      content="Preview Spine animations online with Spine-Link. Open Spine JSON, SKEL, atlas, PNG, JPG, and WEBP files in a browser-based Spine web viewer and share permanent preview links."
+    />
+    <meta
+      name="keywords"
+      content="spine, spine library, spine portfolio, spine animator, spine animations, spine work, spne lib, spine link, spine preview, spine online, spine web, spine webview, preview spine, spine viewer, spine animation preview, spine json viewer, spine atlas preview, online spine viewer, spine web player, spine preview tool"
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="googlebot" content="index, follow, max-image-preview:large" />
+    <meta name="application-name" content="Share your animation" />
+    <meta name="apple-mobile-web-app-title" content="Share your animation" />
+    <link rel="canonical" href="https://spine-link.vercel.app/" />
+    <link rel="amphtml" href="https://spine-link.vercel.app/amp.html" />
+    <meta name="theme-color" content="#000000" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://spine-link.vercel.app/" />
+    <meta property="og:title" content="Spine-Link — Online Spine Preview & Spine Web Viewer" />
+    <meta
+      property="og:description"
+      content="Preview Spine animations online. Upload JSON/SKEL, atlas, and textures, then share a permanent Spine web preview link."
+    />
+    <meta property="og:site_name" content="Share your animation" />
+    <meta property="og:image" content="https://spine-link.vercel.app/og-image.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Spine-Link — Online Spine Preview & Spine Web Viewer" />
+    <meta
+      name="twitter:description"
+      content="Drag and drop Spine files to preview animations online and generate permanent web preview links."
+    />
+    <meta name="twitter:image" content="https://spine-link.vercel.app/og-image.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        color: #e7edf4;
+        background: #000;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        overflow: hidden;
+        background: #000;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .app-shell {
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        min-height: 100vh;
+        padding: 24px;
+        background: #000;
+      }
+
+      .particle-field {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        opacity: 0.64;
+      }
+
+      .seo-intro {
+        position: fixed;
+        left: 12px;
+        bottom: 8px;
+        z-index: 30;
+        max-width: min(460px, calc(50vw - 90px));
+        color: rgba(205, 210, 218, 0.28);
+        font-size: 8px;
+        line-height: 1.25;
+        pointer-events: none;
+      }
+
+      .seo-intro h1,
+      .seo-intro p {
+        display: inline;
+        margin: 0;
+        font: inherit;
+      }
+
+      .workspace {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 20px;
+        height: calc(100vh - 48px);
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .brand-link {
+        color: #f7fbff;
+        text-decoration: none;
+      }
+
+      .brand-logo {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #f7fbff;
+        font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif;
+        font-size: clamp(38px, 4.7vw, 68px);
+        font-weight: 500;
+        line-height: 0.78;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        text-shadow:
+          0 0 1px rgba(255, 255, 255, 0.86),
+          0 6px 18px rgba(0, 0, 0, 0.42);
+      }
+
+      .brand-plus {
+        margin-left: 8px;
+        color: #ff6a28;
+        font-size: 0.72em;
+        font-weight: 800;
+        letter-spacing: 0.22em;
+        line-height: 1;
+        transform: translate(-15px, 0.18em);
+      }
+
+      .brand-spine-mark {
+        display: inline-grid;
+        gap: 4px;
+        width: 16px;
+        margin: 0 -3px 0 -5px;
+        transform: translateY(1px);
+      }
+
+      .brand-spine-mark i {
+        display: block;
+        width: 16px;
+        height: 7px;
+        border-radius: 999px;
+        background: #ff5a1f;
+        box-shadow: 0 0 8px rgba(255, 90, 31, 0.22);
+      }
+
+      .brand-spine-mark i:nth-child(1) {
+        transform: translateX(-1px);
+      }
+
+      .brand-spine-mark i:nth-child(2) {
+        width: 14px;
+        transform: translateX(2px);
+      }
+
+      .brand-spine-mark i:nth-child(3) {
+        width: 12px;
+        transform: translateX(4px);
+      }
+
+      .brand-spine-mark i:nth-child(4) {
+        width: 10px;
+        transform: translateX(6px);
+      }
+
+      .brand-spine-mark i:nth-child(5) {
+        width: 8px;
+        transform: translateX(8px);
+      }
+
+      .site-menu {
+        position: relative;
+        z-index: 45;
+        margin-left: auto;
+      }
+
+      .site-menu summary {
+        list-style: none;
+      }
+
+      .site-menu summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .site-menu-toggle {
+        display: inline-grid;
+        place-items: center;
+        gap: 4px;
+        width: 44px;
+        height: 44px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 8px;
+        background: rgba(15, 18, 22, 0.72);
+        color: #f7fbff;
+        cursor: pointer;
+      }
+
+      .site-menu-toggle span {
+        display: block;
+        width: 18px;
+        height: 2px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+
+      .site-menu-panel {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: 0;
+        display: grid;
+        gap: 4px;
+        width: min(300px, calc(100vw - 32px));
+        padding: 8px;
+        border: 1px solid rgba(140, 199, 255, 0.24);
+        border-radius: 8px;
+        background: rgba(12, 14, 17, 0.96);
+      }
+
+      .site-menu-panel a {
+        display: grid;
+        gap: 2px;
+        min-height: 58px;
+        padding: 10px 12px;
+        border-radius: 6px;
+        color: #f7fbff;
+        text-decoration: none;
+      }
+
+      .site-menu-panel strong {
+        font-size: 13px;
+        line-height: 1.2;
+      }
+
+      .site-menu-panel span {
+        color: rgba(231, 237, 244, 0.62);
+        font-size: 12px;
+        line-height: 1.25;
+      }
+
+      .auth-panel {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .my-library-button,
+      .google-fallback-button {
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 999px;
+        background: rgba(19, 22, 26, 0.86);
+        color: #f7fbff;
+        box-shadow: inset 0 0 18px rgba(255, 255, 255, 0.03);
+      }
+
+      .my-library-button,
+      .google-fallback-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 44px;
+        padding: 0 16px;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      .google-fallback-button > span:first-child {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: #f7fbff;
+        color: #171b20;
+        font-weight: 950;
+      }
+
+      .boot-drop-zone {
+        position: fixed;
+        z-index: 20;
+        top: 50%;
+        left: 50%;
+        display: grid;
+        place-items: center;
+        align-content: center;
+        gap: 14px;
+        width: min(760px, calc(100vw - 48px));
+        min-height: 316px;
+        padding: 44px;
+        border: 1px dashed rgba(140, 199, 255, 0.86);
+        border-radius: 8px;
+        background: rgba(45, 45, 45, 0.78);
+        color: rgba(231, 237, 244, 0.74);
+        text-align: center;
+        cursor: pointer;
+        transform: translate(-50%, -50%);
+        backdrop-filter: blur(3px);
+      }
+
+      .boot-drop-zone::before {
+        content: none;
+      }
+
+      .boot-drop-zone.is-dragging {
+        border-color: rgba(255, 106, 40, 0.94);
+        background: rgba(55, 39, 31, 0.86);
+      }
+
+      .boot-upload-icon {
+        width: 52px;
+        height: 52px;
+        fill: none;
+        stroke: rgba(231, 237, 244, 0.72);
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .boot-drop-zone strong {
+        color: rgba(231, 237, 244, 0.82);
+        font-size: clamp(28px, 3.1vw, 38px);
+        line-height: 1;
+      }
+
+      .boot-drop-zone span {
+        max-width: 620px;
+        color: rgba(231, 237, 244, 0.5);
+        font-size: clamp(18px, 1.7vw, 24px);
+        line-height: 1.25;
+      }
+
+      .boot-drop-zone input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+      }
+
+      .site-credit {
+        position: fixed;
+        left: 50%;
+        bottom: 4px;
+        z-index: 30;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 48px;
+        min-height: 48px;
+        padding: 0 12px;
+        color: rgba(231, 237, 244, 0.54);
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-decoration: none;
+        text-transform: lowercase;
+        transform: translateX(-50%);
+      }
+
+      .world-archive-link {
+        position: fixed;
+        right: 14px;
+        bottom: 12px;
+        z-index: 35;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0 16px;
+        border: 1px solid rgba(179, 255, 64, 0.72);
+        border-radius: 8px;
+        color: #eaffc2;
+        background: rgba(10, 13, 15, 0.72);
+        box-shadow:
+          0 12px 34px rgba(0, 0, 0, 0.34),
+          inset 0 0 18px rgba(179, 255, 64, 0.08);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-decoration: none;
+        backdrop-filter: blur(10px);
+      }
+
+      @media (max-width: 760px) {
+        .app-shell {
+          padding: 14px;
+        }
+
+        .workspace {
+          height: calc(100vh - 28px);
+        }
+
+        .topbar {
+          gap: 10px;
+        }
+
+        .google-fallback-button {
+          display: none;
+        }
+
+        .boot-drop-zone {
+          width: min(620px, calc(100vw - 28px));
+          min-height: 248px;
+          padding: 30px 20px;
+        }
+
+        .brand-logo {
+          font-size: clamp(28px, 11vw, 46px);
+        }
+
+        .world-archive-link {
+          right: 10px;
+          bottom: 10px;
+          max-width: calc(100vw - 20px);
+        }
+      }
+    </style>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Share your animation",
+        "alternateName": ["Spine-Link", "Spine Link", "spine library", "spine portfolio"],
+        "url": "https://spine-link.vercel.app/"
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Share your animation",
+        "alternateName": ["Spine Link", "Spine preview online", "Spine web viewer", "spine library", "spine portfolio"],
+        "url": "https://spine-link.vercel.app/",
+        "inLanguage": "en",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Any",
+        "description": "Online Spine preview and Spine web viewer for JSON, SKEL, atlas, PNG, JPG, and WEBP texture files.",
+        "browserRequirements": "Requires a modern browser with JavaScript and WebGL support.",
+        "featureList": [
+          "Preview Spine JSON and SKEL animation files online",
+          "Open atlas files and PNG, JPG, or WEBP textures",
+          "Generate permanent Spine web preview links",
+          "Switch animation sets and preview PMA or blend settings"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "creator": {
+          "@type": "Person",
+          "name": "leopold",
+          "url": "https://t.me/vladleopold"
+        },
+        "sameAs": ["https://t.me/vladleopold"],
+        "keywords": "spine, spine library, spine portfolio, spine animator, spine animations, spine work, spne lib, spine link, spine preview, spine online, spine web, spine webview, preview spine, spine viewer, spine animation preview"
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What Spine files can Spine-Link preview?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Spine-Link previews Spine JSON or SKEL skeleton files together with atlas files and PNG, JPG, or WEBP texture images."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I share a Spine animation preview online?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Spine-Link can upload a preview package and create a permanent web link for sharing Spine animation previews in a browser."
+            }
+          }
+        ]
+      }
+    </script>
+    <style>
+      .search-content {
+        position: fixed;
+        left: 12px;
+        bottom: 10px;
+        z-index: 0;
+        max-width: 520px;
+        color: rgba(231, 237, 244, 0.46);
+        font: 10px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        pointer-events: none;
+      }
+
+      .search-content h1,
+      .search-content h2,
+      .search-content p,
+      .search-content ul {
+        display: inline;
+        margin: 0;
+        padding: 0;
+        font: inherit;
+      }
+
+      .search-content li {
+        display: inline;
+      }
+
+      .search-content a {
+        display: inline-flex;
+        align-items: center;
+        min-width: 48px;
+        min-height: 48px;
+        margin: 0 12px 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="search-content" aria-label="Spine-Link search description">
+      <h1>Spine-Link online Spine preview and Spine web viewer.</h1>
+      <p>
+        Preview Spine animations online from JSON, SKEL, atlas, PNG, JPG, and WEBP files. Spine-Link helps artists,
+        animators, and game developers inspect Spine files in the browser, test animation playback, and create permanent
+        web preview links.
+      </p>
+      <h2>Spine preview features.</h2>
+      <ul>
+        <li>Browser-based Spine viewer.</li>
+        <li>Spine JSON and SKEL preview.</li>
+        <li>Atlas and texture loading.</li>
+        <li>Permanent Spine web links.</li>
+        <li><a href="/spine-link.html">Spine-Link</a>.</li>
+        <li><a href="/spine-preview-online.html">Spine preview online</a>.</li>
+        <li><a href="/spine-web-viewer.html">Spine web viewer</a>.</li>
+        <li><a href="/spine-animation-preview.html">Spine animation preview</a>.</li>
+        <li><a href="/spine-library.html">Spine library</a>.</li>
+        <li><a href="/spine-portfolio.html">Spine portfolio</a>.</li>
+        <li><a href="/spine-animator.html">Spine animator</a>.</li>
+        <li><a href="/spine-animations.html">Spine animations</a>.</li>
+        <li><a href="/spine-work.html">Spine work</a>.</li>
+        <li><a href="/spne-lib.html">Spne lib</a>.</li>
+      </ul>
+    </section>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

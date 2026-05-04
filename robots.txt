@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://spine-link.vercel.app/sitemap.xml
+Sitemap: https://spine-link.vercel.app/sitemap.txt
+Sitemap: https://spine-link.vercel.app/sitemap-video.xml
+Sitemap: https://spine-link.vercel.app/sitemap-index.xml

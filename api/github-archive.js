@@ -1,0 +1,401 @@
+const defaultOwner = 'vladleopold';
+const defaultRepo = 'spine';
+const defaultBranch = 'main';
+const defaultBasePath = 'library';
+
+function cleanRepoPath(value = '') {
+  return String(value).trim().replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
+}
+
+function base64ToText(base64) {
+  return Buffer.from(String(base64).replace(/\s/g, ''), 'base64').toString('utf8');
+}
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeImage(value = '') {
+  const url = String(value).trim();
+  return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
+}
+
+function safeVideo(value = '') {
+  const url = String(value).trim();
+  return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
+}
+
+function generatedThumbnailUrl(origin, entry) {
+  const id = String(entry?.id || '').trim();
+  const poster = String(entry?.thumbnailPoster || '');
+  return origin && id && /^data:image\/webp;base64,/i.test(poster)
+    ? `${origin}/assets/library/${encodeURIComponent(id)}/generated-preview.webp`
+    : '';
+}
+
+function githubHeaders(token) {
+  return {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${token}`,
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+}
+
+async function githubText(settings, path) {
+  const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
+  const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`, {
+    headers: githubHeaders(settings.token),
+  });
+  if (!response.ok) return '';
+  const data = await response.json();
+  return data?.content ? base64ToText(data.content) : '';
+}
+
+async function githubBuffer(settings, path) {
+  const encodedPath = encodeURIComponent(cleanRepoPath(path)).replace(/%2F/g, '/');
+  const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`, {
+    headers: githubHeaders(settings.token),
+  });
+  if (!response.ok) return null;
+  const data = await response.json();
+  if (typeof data?.content === 'string' && data.content.trim()) {
+    return Buffer.from(data.content.replace(/\s/g, ''), 'base64');
+  }
+  if (typeof data?.download_url === 'string' && data.download_url) {
+    const rawResponse = await fetch(data.download_url, { headers: githubHeaders(settings.token) });
+    if (!rawResponse.ok) return null;
+    return Buffer.from(await rawResponse.arrayBuffer());
+  }
+  return null;
+}
+
+function compareArchiveEntries(a, b) {
+  return String(b?.uploadedAt || '').localeCompare(String(a?.uploadedAt || ''));
+}
+
+function previewUrl(entry) {
+  const id = encodeURIComponent(String(entry?.id || ''));
+  const animation = String(entry?.defaultAnimation || '').trim();
+  return animation ? `/p/${id}?animation=${encodeURIComponent(animation)}` : `/p/${id}`;
+}
+
+function stableMetric(value = '', min = 1, range = 99) {
+  let hash = 0;
+  for (const character of String(value)) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  return min + (hash % range);
+}
+
+function imageSizeFromBuffer(buffer) {
+  if (!buffer || buffer.length < 32) return null;
+  if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+    let offset = 12;
+    while (offset + 8 <= buffer.length) {
+      const chunkType = buffer.toString('ascii', offset, offset + 4);
+      const chunkSize = buffer.readUInt32LE(offset + 4);
+      const dataOffset = offset + 8;
+      if (chunkType === 'VP8 ' && dataOffset + 10 <= buffer.length) {
+        return { width: buffer.readUInt16LE(dataOffset + 6) & 0x3fff, height: buffer.readUInt16LE(dataOffset + 8) & 0x3fff };
+      }
+      if (chunkType === 'VP8L' && dataOffset + 5 <= buffer.length) {
+        const bits = buffer.readUInt32LE(dataOffset + 1);
+        return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+      }
+      if (chunkType === 'VP8X' && dataOffset + 10 <= buffer.length) {
+        return {
+          width: 1 + buffer.readUIntLE(dataOffset + 4, 3),
+          height: 1 + buffer.readUIntLE(dataOffset + 7, 3),
+        };
+      }
+      offset += 8 + chunkSize + (chunkSize % 2);
+    }
+  }
+  if (buffer[0] === 0x89 && buffer.toString('ascii', 1, 4) === 'PNG' && buffer.length >= 24) {
+    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+  }
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < buffer.length) {
+      if (buffer[offset] !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      const marker = buffer[offset + 1];
+      const length = buffer.readUInt16BE(offset + 2);
+      if (marker >= 0xc0 && marker <= 0xc3 && offset + 8 < buffer.length) {
+        return { width: buffer.readUInt16BE(offset + 7), height: buffer.readUInt16BE(offset + 5) };
+      }
+      offset += 2 + length;
+    }
+  }
+  return null;
+}
+
+function repoPathFromAssetUrl(entry, value) {
+  const url = String(value || '');
+  const marker = '/assets/';
+  const markerIndex = url.indexOf(marker);
+  if (markerIndex >= 0) return decodeURIComponent(url.slice(markerIndex + marker.length).split(/[?#]/)[0]);
+  const path = cleanRepoPath(entry?.thumbnailPosterPath || entry?.thumbnailPath || '');
+  return path || '';
+}
+
+async function enrichArchiveEntryLayout(settings, origin, entry) {
+  if (!entry || typeof entry !== 'object') return entry;
+  const width = Number(entry.previewWidth || entry.thumbnailWidth || entry.mediaWidth);
+  const height = Number(entry.previewHeight || entry.thumbnailHeight || entry.mediaHeight);
+  if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+    return { ...entry, mediaAspectRatio: width / height };
+  }
+
+  const posterUrl = safeImage(entry.thumbnailPoster || '') || generatedThumbnailUrl(origin, entry) || safeImage(entry.thumbnail || '');
+  const repoPath = repoPathFromAssetUrl(entry, posterUrl);
+  if (!repoPath || repoPath.includes('/generated-preview.webp')) return entry;
+  const buffer = await githubBuffer(settings, repoPath);
+  const size = imageSizeFromBuffer(buffer);
+  return size ? { ...entry, mediaAspectRatio: size.width / size.height, mediaWidth: size.width, mediaHeight: size.height } : entry;
+}
+
+async function enrichArchiveLayout(settings, origin, entries) {
+  const enriched = [];
+  for (const entry of entries) enriched.push(await enrichArchiveEntryLayout(settings, origin, entry));
+  return enriched;
+}
+
+function tileClassForEntry(entry) {
+  const ratio = Number(entry?.mediaAspectRatio || 0);
+  if (Number.isFinite(ratio) && ratio >= 1.28) return 'tile tile--wide';
+  if (Number.isFinite(ratio) && ratio <= 0.78) return 'tile tile--tall';
+  return 'tile tile--square';
+}
+
+function mediaHtml(entry, { origin = '', posterClass = '' } = {}) {
+  const video = safeVideo(entry?.webmPreview || '');
+  const poster = safeImage(entry?.thumbnailPoster || '') || generatedThumbnailUrl(origin, entry);
+  const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
+  const thumbnail = isGifThumbnail ? poster : safeImage(entry?.thumbnail || '');
+  if (video) {
+    return `<video class="${posterClass}" src="${escapeHtml(video)}" data-video-src="${escapeHtml(video)}" ${poster ? `poster="${escapeHtml(poster)}"` : ''} muted loop playsinline preload="metadata"></video>`;
+  }
+  if (thumbnail) {
+    return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="" loading="lazy" decoding="async" />`;
+  }
+  return `<div class="media-fallback">${Array.isArray(entry?.animations) ? entry.animations.length : 0}</div>`;
+}
+
+function baseStyles() {
+  return `
+      * { box-sizing: border-box; }
+      * { scrollbar-width: thin; scrollbar-color: rgba(74,78,84,.72) transparent; }
+      *::-webkit-scrollbar { width: 8px; height: 8px; }
+      *::-webkit-scrollbar-track { background: transparent; }
+      *::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(74,78,84,.72); background-clip: content-box; }
+      html, body { min-height: 100%; margin: 0; }
+      body { color: #edf5ff; background: #050607; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .page { width: min(1440px, calc(100% - 28px)); margin: 0 auto; padding: 26px 0 46px; }
+      .top { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+      .brand { color: #fff; text-decoration: none; font-size: clamp(32px, 5vw, 72px); font-weight: 950; letter-spacing: .02em; line-height: .9; }
+      .brand span { display: block; color: #ff6a28; font-size: 12px; letter-spacing: .32em; text-transform: uppercase; }
+      .back { color: #b3ff40; font-weight: 800; text-decoration: none; }
+      .muted { color: rgba(237,245,255,.62); }
+      @media (max-width: 700px) {
+        * { scrollbar-width: none; }
+        *::-webkit-scrollbar { width: 0; height: 0; display: none; }
+        .page { width: min(100% - 18px, 1440px); padding-top: 18px; }
+        .top { align-items: flex-start; flex-direction: column; }
+      }
+  `;
+}
+
+function archiveHtml({ origin, entries }) {
+  const cards = entries
+    .map((entry) => {
+      const title = escapeHtml(entry?.title || entry?.id || 'Spine preview');
+      const spineUrl = previewUrl(entry);
+      const metricId = String(entry?.id || entry?.title || '');
+      const likes = stableMetric(metricId, 12, 87);
+      const views = stableMetric(`${metricId}:views`, 140, 2860);
+      return `<a class="${tileClassForEntry(entry)}" href="${escapeHtml(spineUrl)}" aria-label="Open ${title}">
+        <div class="tile-media">${mediaHtml(entry, { origin })}</div>
+        <div class="tile-overlay">
+          <strong class="tile-title">${title}</strong>
+          <span class="tile-stats" aria-label="${likes} likes and ${views} views">
+            <span class="tile-stat"><span aria-hidden="true">♡</span>${likes}</span>
+            <span class="tile-stat"><span aria-hidden="true">◉</span>${views}</span>
+          </span>
+        </div>
+      </a>`;
+    })
+    .join('');
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>World Spine Archive</title>
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="${origin}/world-spine-archive" />
+    <style>
+      ${baseStyles()}
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); grid-auto-flow: dense; gap: 10px; }
+      .tile { position: relative; min-height: 220px; overflow: hidden; border: 1px solid rgba(140,199,255,.18); border-radius: 8px; color: inherit; background: #090b0d; text-decoration: none; }
+      .tile--wide { grid-column: span 2; min-height: 220px; }
+      .tile--tall { grid-row: span 2; min-height: 450px; }
+      .tile--square { min-height: 220px; }
+      .tile:hover { border-color: rgba(179,255,64,.68); }
+      .tile-media, .tile-media img, .tile-media video { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .tile-media img, .tile-media video { object-fit: cover; transform: scale(1.08); background: #050607; }
+      .tile::after { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,.72), rgba(0,0,0,.12) 35%, rgba(0,0,0,.22)); pointer-events: none; }
+      .tile-overlay { position: absolute; top: 10px; right: 10px; left: 10px; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+      .tile-title { min-width: 0; overflow: hidden; color: #fff; font-size: 14px; font-weight: 950; text-overflow: ellipsis; text-shadow: 0 2px 14px rgba(0,0,0,.86); white-space: nowrap; }
+      .tile-stats { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+      .tile-stat { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 0 8px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: rgba(237,245,255,.9); background: rgba(5,7,9,.58); box-shadow: 0 10px 24px rgba(0,0,0,.22); font-size: 12px; font-weight: 900; line-height: 1; backdrop-filter: blur(10px); }
+      .tile-stat:first-child { color: #ffd6e7; border-color: rgba(255,185,214,.24); }
+      .media-fallback { display: grid; place-items: center; width: 100%; height: 100%; color: #fff; font-size: 60px; font-weight: 950; background: radial-gradient(circle, rgba(140,199,255,.15), rgba(0,0,0,.92)); }
+      @media (max-width: 700px) {
+        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .tile, .tile--wide, .tile--tall, .tile--square { min-height: 230px; grid-column: span 1; grid-row: span 1; }
+        .tile-overlay { grid-template-columns: 1fr; align-items: start; gap: 8px; }
+        .tile-stats { justify-self: start; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="top">
+        <h1 class="brand"><span>Spine-Link</span>WORLD SPINE ARCHIVE</h1>
+        <a class="back" href="/">Create preview</a>
+      </header>
+      ${entries.length ? `<section class="grid">${cards}</section>` : '<p class="muted">No public previews yet.</p>'}
+    </main>
+    <script>
+      function playArchiveVideo(video) {
+        const source = video.dataset.videoSrc || video.getAttribute("src") || "";
+        if (!source) return;
+        if (!video.getAttribute("src")) video.setAttribute("src", source);
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.play().catch(() => {});
+      }
+      function stopArchiveVideo(video) {
+        video.pause();
+        try { video.currentTime = 0; } catch {}
+      }
+      document.querySelectorAll(".tile").forEach((tile) => {
+        const video = tile.querySelector("video");
+        if (!video) return;
+        tile.addEventListener("mouseenter", () => playArchiveVideo(video));
+        tile.addEventListener("mouseleave", () => stopArchiveVideo(video));
+      });
+      function randomArchivePulse() {
+        const videos = Array.from(document.querySelectorAll(".tile video")).filter((video) => video.dataset.videoSrc || video.getAttribute("src"));
+        if (!videos.length) {
+          window.setTimeout(randomArchivePulse, 4200);
+          return;
+        }
+        const sample = videos.sort(() => Math.random() - 0.5).slice(0, Math.max(1, Math.min(4, Math.ceil(videos.length * 0.22))));
+        sample.forEach((video) => {
+          playArchiveVideo(video);
+          window.setTimeout(() => {
+            if (!video.matches(":hover")) stopArchiveVideo(video);
+          }, 1800 + Math.random() * 1700);
+        });
+        window.setTimeout(randomArchivePulse, 3600 + Math.random() * 2600);
+      }
+      window.setTimeout(randomArchivePulse, 900);
+    </script>
+  </body>
+</html>`;
+}
+
+function archiveItemHtml({ origin, entry }) {
+  const title = escapeHtml(entry?.title || entry?.id || 'Spine preview');
+  const animations = Array.isArray(entry?.animations) ? entry.animations.length : 0;
+  const spineUrl = previewUrl(entry);
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${title} - World Spine Archive</title>
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="${origin}/world-spine-archive/${encodeURIComponent(String(entry?.id || ''))}" />
+    <style>
+      ${baseStyles()}
+      .viewer { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: stretch; }
+      .media-panel { min-height: min(74vh, 760px); overflow: hidden; border: 1px solid rgba(140,199,255,.2); border-radius: 8px; background: #050607; }
+      .media-panel img, .media-panel video { width: 100%; height: 100%; min-height: min(74vh, 760px); object-fit: contain; background: #050607; }
+      .side { display: flex; flex-direction: column; justify-content: space-between; gap: 18px; padding: 18px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(255,255,255,.045); }
+      h1 { margin: 0 0 8px; font-size: clamp(30px, 5vw, 56px); line-height: .95; }
+      .spine-link { display: inline-flex; justify-content: center; align-items: center; min-height: 48px; padding: 0 16px; border: 1px solid rgba(179,255,64,.72); border-radius: 8px; color: #eaffc2; font-weight: 900; text-decoration: none; background: rgba(179,255,64,.12); }
+      @media (max-width: 860px) { .viewer { grid-template-columns: 1fr; } .media-panel, .media-panel img, .media-panel video { min-height: 58vh; } }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="top">
+        <a class="back" href="/world-spine-archive">WORLD SPINE ARCHIVE</a>
+        <a class="back" href="/">Create preview</a>
+      </header>
+      <section class="viewer">
+        <div class="media-panel">${mediaHtml(entry, { origin, posterClass: 'media-main' })}</div>
+        <aside class="side">
+          <div>
+            <p class="muted">Spine media preview</p>
+            <h1>${title}</h1>
+            <p class="muted">${animations} animations</p>
+          </div>
+          <a class="spine-link" href="${spineUrl}">Open Spine animation</a>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
+export default async function handler(request, response) {
+  if (request.method !== 'GET') {
+    response.setHeader('Allow', 'GET');
+    return response.status(405).send('Method not allowed');
+  }
+
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return response.status(500).send('GITHUB_TOKEN is not configured');
+
+  const settings = {
+    owner: process.env.GITHUB_OWNER || defaultOwner,
+    repo: process.env.GITHUB_REPO || defaultRepo,
+    branch: process.env.GITHUB_BRANCH || defaultBranch,
+    basePath: cleanRepoPath(process.env.GITHUB_BASE_PATH || defaultBasePath),
+    token,
+  };
+  const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
+
+  try {
+    const indexText = await githubText(settings, `${settings.basePath}/index.json`);
+    const allEntries = indexText ? JSON.parse(indexText) : [];
+    const entries = Array.isArray(allEntries)
+      ? allEntries.filter((entry) => entry?.hiddenFromPublicLibrary !== true && (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster))
+      : [];
+    entries.sort(compareArchiveEntries);
+    const layoutEntries = await enrichArchiveLayout(settings, origin, entries);
+
+    const archiveId = String(request.query?.id || '').trim();
+    response.setHeader('Content-Type', 'text/html; charset=utf-8');
+    response.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    if (archiveId) {
+      const entry = layoutEntries.find((item) => String(item?.id || '') === archiveId);
+      return response.status(entry ? 200 : 404).send(entry ? archiveItemHtml({ origin, entry }) : 'Archive item not found');
+    }
+
+    return response.status(200).send(archiveHtml({ origin, entries: layoutEntries }));
+  } catch (error) {
+    return response.status(500).send(error instanceof Error ? error.message : 'Archive failed');
+  }
+}
