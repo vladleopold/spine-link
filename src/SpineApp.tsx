@@ -121,6 +121,7 @@ type LibraryEntry = {
   ownerPicture?: string;
   publicOwnerId?: string;
   showOwnerLibrary?: boolean;
+  portfolioMode?: boolean;
   hiddenFromPublicLibrary?: boolean;
   libraryOrder?: number;
   uploadedAt: string;
@@ -2389,7 +2390,9 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
       if (!response.ok) {
         throw new Error(typeof result?.error === "string" ? result.error : `Library API ${response.status}`);
       }
-      setLibraryEntries(Array.isArray(result.entries) ? normalizeLibraryOrder(result.entries) : []);
+      const nextEntries = Array.isArray(result.entries) ? normalizeLibraryOrder(result.entries) : [];
+      setLibraryEntries(nextEntries);
+      setIsPortfolioMode(nextEntries.some((entry) => entry.portfolioMode === true));
     } catch (nextError) {
       setGoogleAuthError(nextError instanceof Error ? nextError.message : "Could not merge browser library.");
     }
@@ -2420,7 +2423,9 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         throw new Error(typeof result?.error === "string" ? result.error : `Library API ${response.status}`);
       }
 
-      setLibraryEntries(Array.isArray(result.entries) ? normalizeLibraryOrder(result.entries) : []);
+      const nextEntries = Array.isArray(result.entries) ? normalizeLibraryOrder(result.entries) : [];
+      setLibraryEntries(nextEntries);
+      setIsPortfolioMode(nextEntries.some((entry) => entry.portfolioMode === true));
     } catch (nextError) {
       setLibraryError(nextError instanceof Error ? nextError.message : "Could not load library.");
     } finally {
@@ -2451,6 +2456,46 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     setStatus("Choose files for a new library card.");
     publishedKeysRef.current.clear();
     window.setTimeout(() => uploadInputRef.current?.click(), 0);
+  };
+
+  const updateOwnerPortfolioMode = async (nextMode: boolean) => {
+    setIsPortfolioMode(nextMode);
+    setLibraryError("");
+    setProfileVisibilityStatus(nextMode ? "Portfolio mode saved" : "Library mode saved");
+
+    try {
+      const requestHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (googleIdToken) requestHeaders.Authorization = `Bearer ${googleIdToken}`;
+
+      const response = await fetch("/api/github-upload", {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify({
+          action: "update-owner-portfolio-mode",
+          googleIdToken,
+          anonymousAccount,
+          settings: githubPublishSettings,
+          portfolioMode: nextMode,
+          ownerName: googleUser?.name,
+          ownerPicture: googleUser?.picture,
+          publicOwnerId: publicLibraryOwnerId,
+          commitPrefix: nextMode ? "Enable Spine-Link portfolio mode" : "Enable Spine-Link library mode",
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : `Library API ${response.status}`);
+      if (Array.isArray(result.entries)) {
+        const nextEntries = normalizeLibraryOrder(result.entries);
+        setLibraryEntries(nextEntries);
+        setIsPortfolioMode(nextEntries.some((entry) => entry.portfolioMode === true));
+      }
+    } catch (nextError) {
+      setIsPortfolioMode(!nextMode);
+      setLibraryError(nextError instanceof Error ? nextError.message : "Could not save portfolio mode.");
+      setProfileVisibilityStatus("");
+    }
   };
 
   const updateSharedProfileVisibility = async (nextValue: boolean) => {
@@ -2659,6 +2704,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           ownerAnonId: existingEntry?.ownerAnonId || anonymousAccount.id,
           ownerAnonFingerprint: existingEntry?.ownerAnonFingerprint || anonymousAccount.fingerprint,
           showOwnerLibrary: existingEntry?.showOwnerLibrary ?? showProfileOnSharedPages,
+          portfolioMode: existingEntry?.portfolioMode ?? isPortfolioMode,
           hiddenFromPublicLibrary: existingEntry?.hiddenFromPublicLibrary,
           uploadedAt: existingEntry?.uploadedAt || uploadedAt,
           skeleton: spine.skeletonName,
@@ -3149,7 +3195,9 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
               <button
                 className={`portfolio-mode-button ${isPortfolioMode ? "active" : ""}`}
                 type="button"
-                onClick={() => setIsPortfolioMode((currentMode) => !currentMode)}
+                onClick={() => {
+                  void updateOwnerPortfolioMode(!isPortfolioMode);
+                }}
                 aria-pressed={isPortfolioMode}
                 title={isPortfolioMode ? "Switch to library mode" : "Switch to portfolio mode"}
               >

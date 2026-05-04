@@ -410,6 +410,7 @@ export default async function handler(request, response) {
         ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id, ownerAnonFingerprint: anonymousAccount.fingerprint } : {}),
         publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
         showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
+        portfolioMode: Boolean(entry?.portfolioMode),
       };
       const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
@@ -528,6 +529,41 @@ export default async function handler(request, response) {
       return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, entries), changed });
     }
 
+    if (action === 'update-owner-portfolio-mode') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const indexPath = joinRepoPath(settings.basePath, 'index.json');
+      const currentIndex = await getGitHubContent(settings, indexPath);
+      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
+      const portfolioMode = Boolean(body?.portfolioMode);
+      const userEmail = String(googlePayload?.email || '').toLowerCase();
+      const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
+      const ownerName = cleanPublicProfileText(googlePayload?.name || body?.ownerName || '');
+      const ownerPicture = cleanPublicProfileImage(googlePayload?.picture || body?.ownerPicture || '');
+      const publicOwnerId = publicOwnerIdFor(googlePayload, anonymousAccount, body?.publicOwnerId);
+      let changed = false;
+      const nextEntries = currentEntries.map((currentEntry) => {
+        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
+        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
+        const isOwner = (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
+        if (!isOwner) return currentEntry;
+        changed = changed || Boolean(currentEntry?.portfolioMode) !== portfolioMode;
+        const nextEntry = { ...currentEntry, publicOwnerId, portfolioMode };
+        if (googlePayload?.email) nextEntry.ownerEmail = googlePayload.email;
+        if (ownerName) nextEntry.ownerName = ownerName;
+        if (ownerPicture) nextEntry.ownerPicture = ownerPicture;
+        return nextEntry;
+      });
+      if (changed || currentIndex?.sha) {
+        await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update public page mode`, currentIndex?.sha, origin);
+      }
+      const entries = nextEntries.filter((currentEntry) => {
+        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
+        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
+        return (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
+      }).sort(compareLibraryEntries);
+      return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, entries), changed });
+    }
+
     if (action === 'delete-entry') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const entryId = String(body?.entryId || '').trim();
@@ -634,6 +670,7 @@ export default async function handler(request, response) {
       ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id, ownerAnonFingerprint: anonymousAccount.fingerprint } : {}),
       publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
       showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
+      portfolioMode: Boolean(entry?.portfolioMode),
     };
     const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
 

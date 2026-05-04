@@ -109,7 +109,11 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
   const ownerName = escapeHtml(showOwnerName ? firstEntry.ownerName || 'Spine-Link creator' : 'Spine-Link library');
   const ownerPicture = showOwnerName ? safeImage(firstEntry.ownerPicture || '') : '';
   const ownerInitial = ownerName.replace(/&[^;]+;/g, '').slice(0, 1).toUpperCase() || 'S';
-  const title = `${ownerName} - Spine portfolio media gallery`;
+  const isLibraryMode = entries.some((entry) => entry?.portfolioMode === true);
+  const publicPageLabel = isLibraryMode ? 'Library' : 'Portfolio';
+  const publicPageLabelLower = publicPageLabel.toLowerCase();
+  const publicPageClass = isLibraryMode ? 'is-library-page' : 'is-portfolio-page';
+  const title = `${ownerName} - Spine ${publicPageLabelLower} media gallery`;
   const cards = entries
     .map((entry) => {
       const itemTitle = escapeHtml(entry.title || entry.id || 'Spine preview');
@@ -131,8 +135,9 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       const likeCount = baseLikeCount(likeId);
       const thumbnailStyle = thumbnail || thumbnailPoster ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
       const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''}${thumbnailPoster ? ` poster="${escapeHtml(thumbnailPoster)}"` : ''} muted playsinline loop preload="metadata" aria-hidden="true"></video>`;
+      const likeButton = isLibraryMode ? '' : `<button class="portfolio-like-button" type="button" data-like-id="${escapeHtml(likeId)}" data-base-likes="${likeCount}" aria-pressed="false" title="Like"><span aria-hidden="true">♡</span><strong>${likeCount}</strong></button>`;
       return `<article class="library-card" data-entry-id="${entryId}"${thumbnailStyle}>
-        <button class="portfolio-like-button" type="button" data-like-id="${escapeHtml(likeId)}" data-base-likes="${likeCount}" aria-pressed="false" title="Like"><span aria-hidden="true">♡</span><strong>${likeCount}</strong></button>
+        ${likeButton}
         <a class="library-card-link" href="${previewUrl}" aria-label="Open ${itemTitle}">
           <div class="library-card-visual">
             ${previewMedia}
@@ -182,6 +187,9 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       .library-grid { column-count: 3; column-gap: 18px; }
       .library-card { position: relative; display: inline-block; width: 100%; margin: 0 0 18px; overflow: hidden; break-inside: avoid; border: 2px solid rgba(255,185,214,.72); border-radius: 8px; color: inherit; background: radial-gradient(circle at 22% 22%, rgba(255,106,40,.28), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.32), transparent 32%), linear-gradient(135deg, rgba(32,35,38,.98), rgba(20,22,25,.98)); box-shadow: 0 0 0 1px rgba(255,185,214,.2), 0 20px 56px rgba(0,0,0,.34); transition: transform 150ms ease, border-color 150ms ease; }
       .library-card:hover { transform: translateY(-3px); border-color: #ffe4ef; }
+      .is-library-page .creator-card { border-color: rgba(140,199,255,.24); box-shadow: inset 0 0 0 1px rgba(140,199,255,.05), 0 22px 70px rgba(0,0,0,.32); }
+      .is-library-page .library-card { border-color: rgba(140,199,255,.58); box-shadow: 0 0 0 1px rgba(140,199,255,.14), 0 20px 56px rgba(0,0,0,.34); }
+      .is-library-page .library-card:hover { border-color: rgba(179,255,64,.9); }
       .library-card::before { content: ""; position: absolute; inset: 0; z-index: 0; background-image: var(--library-thumbnail); background-position: center; background-repeat: no-repeat; background-size: cover; opacity: .92; transform: scale(1.18); transform-origin: center; }
       .library-card::after { content: ""; position: absolute; inset: 0; z-index: 0; background: linear-gradient(rgba(8,10,12,.34), rgba(8,10,12,.52)), radial-gradient(circle at 22% 22%, rgba(255,106,40,.14), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.18), transparent 32%); pointer-events: none; }
       .library-card-link { position: relative; z-index: 1; display: block; color: inherit; text-decoration: none; }
@@ -205,11 +213,11 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       @media (max-width: 640px) { * { scrollbar-width: none; } *::-webkit-scrollbar { width: 0; height: 0; display: none; } .creator-card { grid-template-columns: 1fr; gap: 22px; padding: 20px; } .creator-row { align-items: center; justify-self: stretch; flex-direction: row; gap: 14px; } .creator-avatar { width: clamp(44px, 15vw, 56px); height: clamp(44px, 15vw, 56px); } .creator-name-line { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, max-content); column-gap: 40px; row-gap: 7px; } .creator-name { max-width: calc(100vw - 140px); font-size: clamp(18px, 6.2vw, 30px); white-space: nowrap; } .creator-count { font-size: clamp(14px, 4.4vw, 18px); } .library-grid { column-count: 1; } .library-card-visual { min-height: 210px; } }
     </style>
   </head>
-  <body>
+  <body class="${publicPageClass}">
     <canvas class="particle-field" id="particle-field" aria-hidden="true"></canvas>
     <main class="page">
-      <section class="creator-card" aria-label="Portfolio">
-        <div class="creator-kicker">Portfolio</div>
+      <section class="creator-card" aria-label="${publicPageLabel}">
+        <div class="creator-kicker">${publicPageLabel}</div>
         <div class="creator-row">
           <div class="creator-avatar" aria-hidden="true">
             ${ownerPicture ? `<img src="${ownerPicture}" alt="" />` : `<div class="creator-avatar-fallback">${ownerInitial}</div>`}
@@ -219,7 +227,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
           </div>
         </div>
       </section>
-      ${entries.length ? `<section class="library-grid">${cards}</section>` : '<div class="empty">This public portfolio is empty or hidden.</div>'}
+      ${entries.length ? `<section class="library-grid">${cards}</section>` : `<div class="empty">This public ${publicPageLabelLower} is empty or hidden.</div>`}
     </main>
     <script>
       function startParticleField() {
