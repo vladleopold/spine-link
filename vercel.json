@@ -150,8 +150,8 @@
       "destination": "/api/github-generated-preview-webm?id=:id"
     },
     {
-      "source": "/assets/:path*",
-      "destination": "/api/github-asset?path=:path*"
+      "source": "/assets/:path(.*)",
+      "destination": "/api/github-asset?path=:path"
     }
   ]
 }
