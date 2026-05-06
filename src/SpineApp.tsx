@@ -1552,6 +1552,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   const [publishProgress, setPublishProgress] = useState({ isOpen: false, value: 0, label: "" });
   const [isLinkBannerOpen, setIsLinkBannerOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState("");
   const [previewNote, setPreviewNote] = useState("");
   const [previewNoteStatus, setPreviewNoteStatus] = useState("");
   const [currentLibraryEntry, setCurrentLibraryEntry] = useState<LibraryEntry | null>(null);
@@ -1647,6 +1648,16 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   useEffect(() => {
     activeAnimationRef.current = activeAnimation;
   }, [activeAnimation]);
+
+  useEffect(() => {
+    if (!currentLibraryEntry) return;
+    setSelectedPreviewImage(
+      currentLibraryEntry.thumbnailPoster ||
+        currentLibraryEntry.thumbnail ||
+        generatedPosterUrlForEntry(currentLibraryEntry) ||
+        "",
+    );
+  }, [currentLibraryEntry]);
 
   useEffect(() => {
     animationsRef.current = animations;
@@ -2086,13 +2097,17 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     setActiveAnimation(animationName);
     playAnimationWithLoopMode(playerRef.current, animationName, loopEnabledRef.current, () => loopEnabledRef.current);
     applyZoomToPlayer(zoomRef.current, false);
+    window.setTimeout(() => {
+      const canvas = (playerRef.current as unknown as { canvas?: HTMLCanvasElement | null } | null)?.canvas;
+      if (!canvas) return;
+      try {
+        setSelectedPreviewImage(canvas.toDataURL("image/webp", 0.72));
+      } catch {
+        setSelectedPreviewImage("");
+      }
+    }, 160);
     if (currentLibraryEntry) {
       setGeneratedPreviewUrl(previewUrlForEntry(currentLibraryEntry.id, animationName));
-      window.setTimeout(() => {
-        if (preparedSpineRef.current && animationsRef.current.length && activeAnimationRef.current === animationName) {
-          void publishToGitHub(preparedSpineRef.current, animationsRef.current, animationName);
-        }
-      }, 180);
       return;
     }
     if (!generatedPreviewUrl && preparedSpine && animations.length) {
@@ -3114,9 +3129,21 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
                 onChange={(event) => event.target.files && void prepareFromFiles(event.target.files)}
               />
-              <Upload size={22} />
-              <strong>Drag files here</strong>
-              <span>json/skel, atlas, and one or more texture images</span>
+              {isEditPage && selectedPreviewImage ? (
+                <div className="selected-preview-card">
+                  <img src={selectedPreviewImage} alt="" />
+                  <div>
+                    <strong>Preview</strong>
+                    <span>{activeAnimation || "selected animation"}</span>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <Upload size={22} />
+                  <strong>Drag files here</strong>
+                  <span>json/skel, atlas, and one or more texture images</span>
+                </>
+              )}
             </label>
 
             {shouldShowStatus && (
@@ -3224,7 +3251,23 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
             </div>
 
             <div className="animation-list">
-              <div className="section-title">{isEditPage ? "select card preview/this video in Google Video Search shows" : "Animations"}</div>
+              <div className="animation-list-top">
+                <div className="section-title">{isEditPage ? "select card preview/this video in Google Video Search shows" : "Animations"}</div>
+                {isEditPage && (
+                  <button
+                    className="save-selected-preview-button"
+                    type="button"
+                    onClick={() => {
+                      if (!preparedSpine || !animations.length || !activeAnimation) return;
+                      void publishToGitHub(preparedSpine, animations, activeAnimation);
+                    }}
+                    disabled={!preparedSpine || !animations.length || !activeAnimation || isPublishingLink}
+                  >
+                    {isPublishingLink ? <Loader2 className="spin" size={15} /> : <LinkIcon size={15} />}
+                    Save selected preview
+                  </button>
+                )}
+              </div>
               {animations.length === 0 ? (
                 <p className="muted">Clickable skeleton animations will appear here after upload.</p>
               ) : (
