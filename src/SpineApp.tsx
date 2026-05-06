@@ -1051,17 +1051,108 @@ function evenDimension(value: number) {
   return Math.max(2, Math.round(value / 2) * 2);
 }
 
-function previewCanvasSize(sourceCanvas: HTMLCanvasElement, maxWidth = 1280, maxHeight = 720) {
-  const sourceWidth = sourceCanvas.clientWidth || sourceCanvas.width || 1;
-  const sourceHeight = sourceCanvas.clientHeight || sourceCanvas.height || 1;
-  const aspectRatio = Math.max(0.2, Math.min(5, sourceWidth / sourceHeight));
-  const boundsWidth = aspectRatio >= 1 ? maxWidth : maxHeight;
-  const boundsHeight = aspectRatio >= 1 ? maxHeight : maxWidth;
-  const scale = Math.min(boundsWidth / sourceWidth, boundsHeight / sourceHeight, Math.max(1, 720 / Math.min(sourceWidth, sourceHeight)));
+type CanvasContentBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+function previewCanvasSize(bounds: CanvasContentBounds, maxWidth = 1280, maxHeight = 1280) {
+  const sourceWidth = Math.max(1, bounds.width);
+  const sourceHeight = Math.max(1, bounds.height);
+  const scale = Math.min(maxWidth / sourceWidth, maxHeight / sourceHeight, Math.max(1, 720 / Math.min(sourceWidth, sourceHeight)));
   return {
-    width: evenDimension(Math.min(boundsWidth, sourceWidth * scale)),
-    height: evenDimension(Math.min(boundsHeight, sourceHeight * scale)),
+    width: evenDimension(Math.min(maxWidth, sourceWidth * scale)),
+    height: evenDimension(Math.min(maxHeight, sourceHeight * scale)),
   };
+}
+
+function sampleCanvasCornerBackground(data: Uint8ClampedArray, width: number, height: number): [number, number, number, number] {
+  const sampleSize = Math.max(2, Math.min(16, Math.floor(Math.min(width, height) / 8)));
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  let alpha = 0;
+  let count = 0;
+  const samplePixel = (x: number, y: number) => {
+    const index = (y * width + x) * 4;
+    red += data[index];
+    green += data[index + 1];
+    blue += data[index + 2];
+    alpha += data[index + 3];
+    count += 1;
+  };
+
+  for (let y = 0; y < sampleSize; y += 1) {
+    for (let x = 0; x < sampleSize; x += 1) {
+      samplePixel(x, y);
+      samplePixel(width - 1 - x, y);
+      samplePixel(x, height - 1 - y);
+      samplePixel(width - 1 - x, height - 1 - y);
+    }
+  }
+
+  return [red / count, green / count, blue / count, alpha / count];
+}
+
+function detectCanvasContentBounds(sourceCanvas: HTMLCanvasElement): CanvasContentBounds {
+  const width = sourceCanvas.width;
+  const height = sourceCanvas.height;
+  const fullBounds = { x: 0, y: 0, width, height };
+  if (!width || !height) return fullBounds;
+
+  const probeCanvas = document.createElement("canvas");
+  probeCanvas.width = width;
+  probeCanvas.height = height;
+  const probeContext = probeCanvas.getContext("2d", { willReadFrequently: true });
+  if (!probeContext) return fullBounds;
+
+  probeContext.clearRect(0, 0, width, height);
+  probeContext.drawImage(sourceCanvas, 0, 0);
+
+  let imageData: ImageData;
+  try {
+    imageData = probeContext.getImageData(0, 0, width, height);
+  } catch {
+    return fullBounds;
+  }
+
+  const data = imageData.data;
+  const background = sampleCanvasCornerBackground(data, width, height);
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      const alpha = data[index + 3];
+      const colorDistance =
+        Math.abs(data[index] - background[0]) +
+        Math.abs(data[index + 1] - background[1]) +
+        Math.abs(data[index + 2] - background[2]) +
+        Math.abs(alpha - background[3]);
+      if (alpha > 12 && colorDistance > 34) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return fullBounds;
+
+  const contentWidth = maxX - minX + 1;
+  const contentHeight = maxY - minY + 1;
+  const padding = Math.max(2, Math.round(Math.max(contentWidth, contentHeight) * 0.015));
+  const x = Math.max(0, minX - padding);
+  const y = Math.max(0, minY - padding);
+  const right = Math.min(width, maxX + padding + 1);
+  const bottom = Math.min(height, maxY + padding + 1);
+  return { x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) };
 }
 
 function drawCanvasPreviewFrame(
@@ -1069,10 +1160,11 @@ function drawCanvasPreviewFrame(
   sourceCanvas: HTMLCanvasElement,
   width: number,
   height: number,
+  sourceBounds: CanvasContentBounds,
 ) {
-  const scale = Math.min(width / sourceCanvas.width, height / sourceCanvas.height);
-  const nextWidth = Math.max(1, Math.round(sourceCanvas.width * scale));
-  const nextHeight = Math.max(1, Math.round(sourceCanvas.height * scale));
+  const scale = Math.min(width / sourceBounds.width, height / sourceBounds.height);
+  const nextWidth = Math.max(1, Math.round(sourceBounds.width * scale));
+  const nextHeight = Math.max(1, Math.round(sourceBounds.height * scale));
   const offsetX = Math.round((width - nextWidth) / 2);
   const offsetY = Math.round((height - nextHeight) / 2);
   context.clearRect(0, 0, width, height);
@@ -1080,7 +1172,7 @@ function drawCanvasPreviewFrame(
   context.fillRect(0, 0, width, height);
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
-  context.drawImage(sourceCanvas, offsetX, offsetY, nextWidth, nextHeight);
+  context.drawImage(sourceCanvas, sourceBounds.x, sourceBounds.y, sourceBounds.width, sourceBounds.height, offsetX, offsetY, nextWidth, nextHeight);
 }
 
 async function createCanvasPreviewMedia(
@@ -1101,7 +1193,10 @@ async function createCanvasPreviewMedia(
   if (!mimeType) return emptyPreview;
 
   try {
-    const { width, height } = previewCanvasSize(sourceCanvas);
+    await restartAnimation?.();
+    await waitAnimationFrames(4);
+    const sourceBounds = detectCanvasContentBounds(sourceCanvas);
+    const { width, height } = previewCanvasSize(sourceBounds);
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -1110,9 +1205,7 @@ async function createCanvasPreviewMedia(
     if (!context || !stream) return emptyPreview;
     const frameTrack = stream.getVideoTracks()[0] as (MediaStreamTrack & { requestFrame?: () => void }) | undefined;
 
-    await restartAnimation?.();
-    await waitAnimationFrames(4);
-    drawCanvasPreviewFrame(context, sourceCanvas, width, height);
+    drawCanvasPreviewFrame(context, sourceCanvas, width, height, sourceBounds);
     frameTrack?.requestFrame?.();
     const poster = canvas.toDataURL("image/webp", 0.94);
 
@@ -1148,7 +1241,7 @@ async function createCanvasPreviewMedia(
 
     await restartAnimation?.();
     await waitAnimationFrames(1);
-    drawCanvasPreviewFrame(context, sourceCanvas, width, height);
+    drawCanvasPreviewFrame(context, sourceCanvas, width, height, sourceBounds);
     recorder.start(250);
     frameTrack?.requestFrame?.();
     const startedAt = performance.now();
@@ -1157,10 +1250,10 @@ async function createCanvasPreviewMedia(
       const targetTime = startedAt + frame * frameDurationMs;
       const delay = targetTime - performance.now();
       if (delay > 0) await wait(delay);
-      drawCanvasPreviewFrame(context, sourceCanvas, width, height);
+      drawCanvasPreviewFrame(context, sourceCanvas, width, height, sourceBounds);
       frameTrack?.requestFrame?.();
     }
-    drawCanvasPreviewFrame(context, sourceCanvas, width, height);
+    drawCanvasPreviewFrame(context, sourceCanvas, width, height, sourceBounds);
     frameTrack?.requestFrame?.();
     await wait(180);
     recorder.stop();

@@ -350,7 +350,7 @@ function archiveHtml({ origin, entries, exclusions }) {
       .tile--full { grid-column: 1 / -1; grid-row: span 3; }
       .tile:hover { border-color: rgba(179,255,64,.68); }
       .tile-media, .tile-media img, .tile-media video { position: absolute; inset: 0; width: 100%; height: 100%; }
-      .tile-media img, .tile-media video { object-fit: contain; transform: none; background: #050607; }
+      .tile-media img, .tile-media video { object-fit: cover; transform: none; background: #050607; }
       .tile::after { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,.72), rgba(0,0,0,.12) 35%, rgba(0,0,0,.22)); pointer-events: none; }
       .tile-overlay { position: absolute; top: 10px; right: 10px; left: 10px; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
       .tile-title { min-width: 0; overflow: hidden; color: #fff; font-size: 14px; font-weight: 950; text-overflow: ellipsis; text-shadow: 0 2px 14px rgba(0,0,0,.86); white-space: nowrap; }
