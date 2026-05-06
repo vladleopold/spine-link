@@ -183,13 +183,6 @@ type AnonymousAccount = {
   fingerprint: string;
 };
 
-type LibraryCardTransition = {
-  isOpen: boolean;
-  rect: { top: number; left: number; width: number; height: number };
-  image: string;
-  title: string;
-};
-
 type GoogleCredentialResponse = {
   credential?: string;
 };
@@ -1632,7 +1625,6 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   const [previewNote, setPreviewNote] = useState("");
   const [previewNoteStatus, setPreviewNoteStatus] = useState("");
   const [currentLibraryEntry, setCurrentLibraryEntry] = useState<LibraryEntry | null>(null);
-  const [libraryCardTransition, setLibraryCardTransition] = useState<LibraryCardTransition | null>(null);
   const [status, setStatus] = useState("Drop three Spine files here: json, atlas, and texture.");
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -2595,53 +2587,19 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   }, [loadLibrary]);
 
   const startNewLibraryEntry = (sourceElement?: HTMLElement | null) => {
-    if (sourceElement) {
-      const rect = sourceElement.getBoundingClientRect();
-      setLibraryCardTransition({
-        isOpen: true,
-        rect: {
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          height: rect.height,
-        },
-        image: "",
-        title: "Setup",
-      });
-    }
-    window.setTimeout(() => {
-      setIsLibraryOpen(false);
-      setCurrentLibraryEntry(null);
-      setGeneratedPreviewUrl("");
-      setIsLinkBannerOpen(false);
-      setCopyStatus("");
-      setPreviewNote("");
-      setPreviewNoteStatus("");
-      setSelectedCardSize("auto");
-      setError("");
-      setStatus("Choose files for a new library card.");
-      publishedKeysRef.current.clear();
-      setLibraryCardTransition(null);
-      uploadInputRef.current?.click();
-    }, sourceElement ? 520 : 0);
-  };
-
-  const openLibraryEntryWithTransition = (entry: LibraryEntry, cardElement: HTMLElement, editUrl: string, image = "") => {
-    const rect = cardElement.getBoundingClientRect();
-    setLibraryCardTransition({
-      isOpen: true,
-      rect: {
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
-      },
-      image,
-      title: entry.title || entry.id,
-    });
-    window.setTimeout(() => {
-      window.location.href = editUrl;
-    }, 720);
+    void sourceElement;
+    setIsLibraryOpen(false);
+    setCurrentLibraryEntry(null);
+    setGeneratedPreviewUrl("");
+    setIsLinkBannerOpen(false);
+    setCopyStatus("");
+    setPreviewNote("");
+    setPreviewNoteStatus("");
+    setSelectedCardSize("auto");
+    setError("");
+    setStatus("Choose files for a new library card.");
+    publishedKeysRef.current.clear();
+    uploadInputRef.current?.click();
   };
 
   const updateOwnerPortfolioMode = async (nextMode: boolean) => {
@@ -3560,8 +3518,8 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 const shouldIgnoreCardOpen = (target: EventTarget | null) =>
                   target instanceof HTMLElement &&
                   Boolean(target.closest(".library-card-actions, .library-card-order-actions, .portfolio-like-button"));
-                const openEntryEditor = (cardElement: HTMLElement) => {
-                  openLibraryEntryWithTransition(entry, cardElement, editUrl, thumbnailForCard || safePoster || safeThumbnail || "");
+                const openEntryEditor = () => {
+                  window.location.href = editUrl;
                 };
                 return (
                   <div
@@ -3571,13 +3529,13 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                     onClickCapture={(event) => {
                       if (shouldIgnoreCardOpen(event.target)) return;
                       event.preventDefault();
-                      openEntryEditor(event.currentTarget);
+                      openEntryEditor();
                     }}
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
                       if (shouldIgnoreCardOpen(event.target)) return;
                       event.preventDefault();
-                      openEntryEditor(event.currentTarget);
+                      openEntryEditor();
                     }}
                     style={{
                       "--library-card-offset": `${(index % 4) * 18}px`,
@@ -3654,30 +3612,6 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
               })}
             </div>
           )}
-        </div>
-      )}
-      {libraryCardTransition?.isOpen && (
-        <div className="library-transition-overlay" aria-hidden="true">
-          <div className="library-transition-wash" />
-          <div
-            className="library-transition-card"
-            style={
-              {
-                "--transition-top": `${libraryCardTransition.rect.top}px`,
-                "--transition-left": `${libraryCardTransition.rect.left}px`,
-                "--transition-width": `${libraryCardTransition.rect.width}px`,
-                "--transition-height": `${libraryCardTransition.rect.height}px`,
-                ...(libraryCardTransition.image ? { "--transition-image": `url(${libraryCardTransition.image})` } : {}),
-              } as React.CSSProperties
-            }
-          >
-            <span>{libraryCardTransition.title}</span>
-          </div>
-          <div className="library-transition-rings">
-            <i />
-            <i />
-            <i />
-          </div>
         </div>
       )}
       <a className="site-credit" href="https://t.me/vladleopold" target="_blank" rel="noreferrer">
