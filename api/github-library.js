@@ -133,8 +133,8 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       const entryId = escapeHtml(String(entry.id || ''));
       const likeId = String(entry.id || itemTitle);
       const likeCount = baseLikeCount(likeId);
-      const thumbnailStyle = thumbnail || thumbnailPoster ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
-      const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''}${thumbnailPoster ? ` poster="${escapeHtml(thumbnailPoster)}"` : ''} muted playsinline preload="metadata" aria-hidden="true"></video>`;
+      const thumbnailStyle = !webmPreview && (thumbnail || thumbnailPoster) ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
+      const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''} muted playsinline preload="metadata" aria-hidden="true"></video>`;
       const likeButton = isLibraryMode ? '' : `<button class="portfolio-like-button" type="button" data-like-id="${escapeHtml(likeId)}" data-base-likes="${likeCount}" aria-pressed="false" title="Like"><span aria-hidden="true">♡</span><strong>${likeCount}</strong></button>`;
       return `<article class="library-card" data-entry-id="${entryId}"${thumbnailStyle}>
         ${likeButton}

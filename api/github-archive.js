@@ -179,7 +179,7 @@ function mediaHtml(entry, { origin = '', posterClass = '' } = {}) {
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
   const thumbnail = isGifThumbnail ? poster : safeImage(entry?.thumbnail || '');
   if (video) {
-    return `<video class="${posterClass}" src="${escapeHtml(video)}" data-video-src="${escapeHtml(video)}" ${poster ? `poster="${escapeHtml(poster)}"` : ''} muted playsinline preload="metadata"></video>`;
+    return `<video class="${posterClass}" src="${escapeHtml(video)}" data-video-src="${escapeHtml(video)}" muted playsinline preload="metadata"></video>`;
   }
   if (thumbnail) {
     return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="" loading="lazy" decoding="async" />`;

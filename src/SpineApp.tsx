@@ -1043,9 +1043,7 @@ async function createCanvasPreviewMedia(
     const frameTrack = stream.getVideoTracks()[0] as (MediaStreamTrack & { requestFrame?: () => void }) | undefined;
 
     await restartAnimation?.();
-    await waitAnimationFrames(8);
-    await restartAnimation?.();
-    await waitAnimationFrames(2);
+    await waitAnimationFrames(4);
     drawCanvasPreviewFrame(context, sourceCanvas, width, height);
     frameTrack?.requestFrame?.();
     const poster = canvas.toDataURL("image/webp", 0.94);
@@ -1055,7 +1053,10 @@ async function createCanvasPreviewMedia(
       mimeType,
       videoBitsPerSecond: width * height >= 900_000 ? 4_800_000 : 3_200_000,
     });
+    const framesPerSecond = 30;
     const captureDuration = Math.max(0.5, durationSeconds);
+    const totalFrames = Math.max(1, Math.ceil(captureDuration * framesPerSecond));
+    const frameDurationMs = 1000 / framesPerSecond;
 
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunks.push(event.data);
@@ -1078,20 +1079,22 @@ async function createCanvasPreviewMedia(
     });
 
     await restartAnimation?.();
-    await waitAnimationFrames(2);
+    await waitAnimationFrames(1);
     drawCanvasPreviewFrame(context, sourceCanvas, width, height);
+    recorder.start(250);
     frameTrack?.requestFrame?.();
     const startedAt = performance.now();
-    recorder.start(250);
 
-    while (performance.now() - startedAt < captureDuration * 1000) {
+    for (let frame = 1; frame <= totalFrames; frame += 1) {
+      const targetTime = startedAt + frame * frameDurationMs;
+      const delay = targetTime - performance.now();
+      if (delay > 0) await wait(delay);
       drawCanvasPreviewFrame(context, sourceCanvas, width, height);
       frameTrack?.requestFrame?.();
-      await waitAnimationFrames(1);
     }
     drawCanvasPreviewFrame(context, sourceCanvas, width, height);
     frameTrack?.requestFrame?.();
-    await wait(120);
+    await wait(180);
     recorder.stop();
     return stopped;
   } catch {
@@ -3388,7 +3391,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                     }}
                     style={{
                       "--library-card-offset": `${(index % 4) * 18}px`,
-                      ...(thumbnailForCard ? { "--library-thumbnail": `url(${thumbnailForCard})` } : {}),
+                      ...(!webmPreviewUrl && thumbnailForCard ? { "--library-thumbnail": `url(${thumbnailForCard})` } : {}),
                     } as React.CSSProperties}
                     tabIndex={0}
                   >
@@ -3415,7 +3418,6 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                       <video
                         className="library-card-webm"
                         src={webmPreviewUrl || undefined}
-                        poster={safePoster || thumbnailForCard || undefined}
                         muted
                         playsInline
                         preload="metadata"
