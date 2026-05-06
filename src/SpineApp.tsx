@@ -160,6 +160,13 @@ type AnonymousAccount = {
   fingerprint: string;
 };
 
+type LibraryCardTransition = {
+  isOpen: boolean;
+  rect: { top: number; left: number; width: number; height: number };
+  image: string;
+  title: string;
+};
+
 type GoogleCredentialResponse = {
   credential?: string;
 };
@@ -1556,6 +1563,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   const [previewNote, setPreviewNote] = useState("");
   const [previewNoteStatus, setPreviewNoteStatus] = useState("");
   const [currentLibraryEntry, setCurrentLibraryEntry] = useState<LibraryEntry | null>(null);
+  const [libraryCardTransition, setLibraryCardTransition] = useState<LibraryCardTransition | null>(null);
   const [status, setStatus] = useState("Drop three Spine files here: json, atlas, and texture.");
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -2528,6 +2536,24 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     window.setTimeout(() => uploadInputRef.current?.click(), 0);
   };
 
+  const openLibraryEntryWithTransition = (entry: LibraryEntry, cardElement: HTMLElement, editUrl: string, image = "") => {
+    const rect = cardElement.getBoundingClientRect();
+    setLibraryCardTransition({
+      isOpen: true,
+      rect: {
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      },
+      image,
+      title: entry.title || entry.id,
+    });
+    window.setTimeout(() => {
+      window.location.href = editUrl;
+    }, 720);
+  };
+
   const updateOwnerPortfolioMode = async (nextMode: boolean) => {
     setIsPortfolioMode(nextMode);
     setLibraryError("");
@@ -3416,8 +3442,8 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 const shouldIgnoreCardOpen = (target: EventTarget | null) =>
                   target instanceof HTMLElement &&
                   Boolean(target.closest(".library-card-actions, .library-card-order-actions, .portfolio-like-button"));
-                const openEntryEditor = () => {
-                  window.location.href = editUrl;
+                const openEntryEditor = (cardElement: HTMLElement) => {
+                  openLibraryEntryWithTransition(entry, cardElement, editUrl, thumbnailForCard || safePoster || safeThumbnail || "");
                 };
                 return (
                   <div
@@ -3426,13 +3452,13 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                     onClickCapture={(event) => {
                       if (shouldIgnoreCardOpen(event.target)) return;
                       event.preventDefault();
-                      openEntryEditor();
+                      openEntryEditor(event.currentTarget);
                     }}
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
                       if (shouldIgnoreCardOpen(event.target)) return;
                       event.preventDefault();
-                      openEntryEditor();
+                      openEntryEditor(event.currentTarget);
                     }}
                     style={{
                       "--library-card-offset": `${(index % 4) * 18}px`,
@@ -3508,6 +3534,30 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
               })}
             </div>
           )}
+        </div>
+      )}
+      {libraryCardTransition?.isOpen && (
+        <div className="library-transition-overlay" aria-hidden="true">
+          <div className="library-transition-wash" />
+          <div
+            className="library-transition-card"
+            style={
+              {
+                "--transition-top": `${libraryCardTransition.rect.top}px`,
+                "--transition-left": `${libraryCardTransition.rect.left}px`,
+                "--transition-width": `${libraryCardTransition.rect.width}px`,
+                "--transition-height": `${libraryCardTransition.rect.height}px`,
+                ...(libraryCardTransition.image ? { "--transition-image": `url(${libraryCardTransition.image})` } : {}),
+              } as React.CSSProperties
+            }
+          >
+            <span>{libraryCardTransition.title}</span>
+          </div>
+          <div className="library-transition-rings">
+            <i />
+            <i />
+            <i />
+          </div>
         </div>
       )}
       <a className="site-credit" href="https://t.me/vladleopold" target="_blank" rel="noreferrer">
