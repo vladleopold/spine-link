@@ -1545,6 +1545,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   const [activeTreeDrawer, setActiveTreeDrawer] = useState<"render" | "zoom" | null>(null);
   const [generatedPreviewUrl, setGeneratedPreviewUrl] = useState("");
   const [isPublishingLink, setIsPublishingLink] = useState(false);
+  const [publishProgress, setPublishProgress] = useState({ isOpen: false, value: 0, label: "" });
   const [isLinkBannerOpen, setIsLinkBannerOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const [previewNote, setPreviewNote] = useState("");
@@ -1596,6 +1597,29 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     }),
     [libraryEntries],
   );
+
+  useEffect(() => {
+    if (!publishProgress.isOpen || publishProgress.value >= 95) return;
+
+    const duration = 4000 + Math.random() * 4000;
+    const startedAt = performance.now();
+    const startedValue = publishProgress.value;
+    const targetValue = 95;
+    let animationFrame = 0;
+
+    const tick = (time: number) => {
+      const elapsed = Math.min(1, (time - startedAt) / duration);
+      const eased = 1 - Math.pow(1 - elapsed, 2.6);
+      setPublishProgress((current) => {
+        if (!current.isOpen || current.value >= targetValue) return current;
+        return { ...current, value: Math.max(current.value, Math.round(startedValue + (targetValue - startedValue) * eased)) };
+      });
+      if (elapsed < 1) animationFrame = window.requestAnimationFrame(tick);
+    };
+
+    animationFrame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [publishProgress.isOpen]);
   const publicLibraryOwnerId = useMemo(
     () => libraryEntries.find((entry) => entry.publicOwnerId)?.publicOwnerId || publicOwnerIdFor(googleUser, anonymousAccount),
     [anonymousAccount, googleUser, libraryEntries],
@@ -2625,6 +2649,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
 
       isPublishingRef.current = true;
       setIsPublishingLink(true);
+      setPublishProgress({ isOpen: true, value: 0, label: isEditingEntry ? "Updating Spine page" : "Converting Spine preview" });
       publishedKeysRef.current.add(publishKey);
 
       try {
@@ -2636,6 +2661,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         const note = limitWords(previewNote);
         const playerCanvas = (playerRef.current as unknown as { canvas?: HTMLCanvasElement | null } | null)?.canvas;
         const previewDuration = currentAnimationDurationSeconds(playerRef.current);
+        setPublishProgress((current) => ({ ...current, label: "Recording WebM preview" }));
         const previewMedia = await createCanvasPreviewMedia(playerCanvas, previewDuration, async () => {
           playAnimationWithLoopMode(playerRef.current, defaultAnimation, false, () => false);
           await waitAnimationFrames(1);
@@ -2663,6 +2689,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           throw new Error("Could not collect skeleton, atlas, and texture for publishing.");
         }
 
+        setPublishProgress((current) => ({ ...current, label: "Saving files to library" }));
         setStatus(`Files ready. Uploading: 0/${files.length}...`);
 
         for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
@@ -2691,6 +2718,11 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           if (!response.ok) {
             throw new Error(typeof result?.error === "string" ? result.error : `Upload API ${response.status}`);
           }
+          setPublishProgress((current) => ({
+            ...current,
+            label: `Saving files ${fileIndex + 1}/${files.length}`,
+            value: Math.max(current.value, Math.round(((fileIndex + 1) / Math.max(files.length + 1, 1)) * 88)),
+          }));
           setStatus(`Files ready. Uploading: ${fileIndex + 1}/${files.length}...`);
         }
 
@@ -2756,6 +2788,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           throw new Error(typeof indexResult?.error === "string" ? indexResult.error : `Library API ${indexResponse.status}`);
         }
 
+        setPublishProgress({ isOpen: true, value: 100, label: "Permanent link ready" });
         setLibraryEntries((currentEntries) => [entry, ...currentEntries.filter((currentEntry) => currentEntry.id !== entry.id)]);
         setCurrentLibraryEntry(entry);
         setPreviewNote(note);
@@ -2763,7 +2796,14 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         setIsLinkBannerOpen(true);
         setCopyStatus("Permanent link ready");
         setStatus(`Ready. Animations found: ${animationNames.length}. Uploaded.`);
+        window.setTimeout(() => {
+          setPublishProgress({ isOpen: false, value: 0, label: "" });
+        }, 650);
       } catch (nextError) {
+        setPublishProgress((current) => ({ ...current, isOpen: true, label: "Saving failed" }));
+        window.setTimeout(() => {
+          setPublishProgress({ isOpen: false, value: 0, label: "" });
+        }, 1200);
         publishedKeysRef.current.delete(publishKey);
         setStatus(
           `Ready. Animations found: ${animationNames.length}. Upload failed: ${
@@ -2804,6 +2844,21 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         </p>
       </section>
       <ParticleField />
+      {publishProgress.isOpen && (
+        <div className="publish-progress-overlay" role="status" aria-live="polite">
+          <div className="publish-progress-dialog">
+            <div className="publish-progress-kicker">{currentLibraryEntry ? "Saving page" : "Creating page"}</div>
+            <strong>{publishProgress.label || "Saving Spine preview"}</strong>
+            <div className="publish-progress-bar" aria-label="Conversion and save progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={publishProgress.value}>
+              <span style={{ width: `${Math.min(100, Math.max(0, publishProgress.value))}%` }} />
+            </div>
+            <div className="publish-progress-meta">
+              <span>Converting WebM / WebP</span>
+              <b>{Math.min(100, Math.max(0, publishProgress.value))}%</b>
+            </div>
+          </div>
+        </div>
+      )}
       <section className="workspace">
         <header className="topbar">
           <a className="brand-link" href="/" aria-label="Spine-Link home">
