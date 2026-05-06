@@ -1277,6 +1277,53 @@ h1 {
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.72), 0 0 42px rgba(140, 199, 255, 0.16);
 }
 
+.publish-progress-overlay.is-compact {
+  inset: auto auto 28px 28px;
+  z-index: 35;
+  display: block;
+  width: min(390px, calc(100vw - 56px));
+  padding: 0;
+  background: transparent;
+  pointer-events: none;
+  backdrop-filter: none;
+}
+
+.publish-progress-overlay.is-compact .publish-progress-dialog {
+  width: 100%;
+  padding: 16px;
+  border-color: rgba(140, 199, 255, 0.28);
+  background:
+    radial-gradient(circle at 18% 8%, rgba(140, 199, 255, 0.18), transparent 38%),
+    linear-gradient(180deg, rgba(24, 31, 38, 0.92), rgba(8, 12, 16, 0.92));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42), 0 0 28px rgba(140, 199, 255, 0.12);
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
+}
+
+.publish-progress-overlay.is-compact .publish-progress-kicker {
+  margin-bottom: 6px;
+  color: #8cc7ff;
+  font-size: 10px;
+}
+
+.publish-progress-overlay.is-compact .publish-progress-dialog strong {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.publish-progress-overlay.is-compact .publish-progress-bar {
+  height: 8px;
+  margin: 12px 0 8px;
+}
+
+.publish-progress-overlay.is-compact .publish-progress-meta {
+  font-size: 11px;
+}
+
+.publish-progress-overlay.is-compact .publish-progress-meta b {
+  font-size: 12px;
+}
+
 .publish-progress-kicker {
   margin-bottom: 10px;
   color: #ff6a28;

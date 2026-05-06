@@ -1632,6 +1632,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     () => new URL(`/u/${encodeURIComponent(publicLibraryOwnerId)}`, window.location.origin).toString(),
     [publicLibraryOwnerId],
   );
+  const isPublishProgressCompact = Boolean(preparedSpine && animations.length);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -2875,7 +2876,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
       </section>
       <ParticleField />
       {publishProgress.isOpen && (
-        <div className="publish-progress-overlay" role="status" aria-live="polite">
+        <div className={`publish-progress-overlay ${isPublishProgressCompact ? "is-compact" : ""}`} role="status" aria-live="polite">
           <div className="publish-progress-dialog">
             <div className="publish-progress-kicker">{currentLibraryEntry ? "Saving page" : "Creating page"}</div>
             <strong>{publishProgress.label || "Saving Spine preview"}</strong>
