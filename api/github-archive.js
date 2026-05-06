@@ -286,16 +286,12 @@ function archiveHtml({ origin, entries }) {
       }
       function stopArchiveVideo(video) {
         video.pause();
+        video.onended = null;
         try { video.currentTime = 0; } catch {}
       }
-      document.querySelectorAll(".tile").forEach((tile) => {
-        const video = tile.querySelector("video");
-        if (!video) return;
-        tile.addEventListener("mouseenter", () => playArchiveVideo(video));
-        tile.addEventListener("mouseleave", () => stopArchiveVideo(video));
-      });
       let archiveSequenceIndex = 0;
       let activeArchiveVideo = null;
+      let lastArchiveVideo = null;
       function sequenceArchivePulse() {
         const videos = Array.from(document.querySelectorAll(".tile video")).filter((video) => video.dataset.videoSrc || video.getAttribute("src"));
         if (!videos.length) {
@@ -306,8 +302,13 @@ function archiveHtml({ origin, entries }) {
           activeArchiveVideo.onended = null;
           stopArchiveVideo(activeArchiveVideo);
         }
-        const video = videos[archiveSequenceIndex % videos.length];
+        let video = videos[archiveSequenceIndex % videos.length];
         archiveSequenceIndex += 1;
+        if (videos.length > 1 && video === lastArchiveVideo) {
+          video = videos[archiveSequenceIndex % videos.length];
+          archiveSequenceIndex += 1;
+        }
+        lastArchiveVideo = video;
         activeArchiveVideo = video;
         video.onended = () => {
           stopArchiveVideo(video);

@@ -1662,6 +1662,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     let timeoutId = 0;
     let activeVideo: HTMLVideoElement | null = null;
     let videoIndex = 0;
+    let lastVideo: HTMLVideoElement | null = null;
 
     const stopVideo = (video: HTMLVideoElement | null) => {
       if (!video) return;
@@ -1682,8 +1683,13 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
       }
 
       stopVideo(activeVideo);
-      const video = videos[videoIndex % videos.length];
+      let video = videos[videoIndex % videos.length];
       videoIndex += 1;
+      if (videos.length > 1 && video === lastVideo) {
+        video = videos[videoIndex % videos.length];
+        videoIndex += 1;
+      }
+      lastVideo = video;
       activeVideo = video;
       video.muted = true;
       video.loop = false;
@@ -3379,29 +3385,6 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                       if (shouldIgnoreCardOpen(event.target)) return;
                       event.preventDefault();
                       openEntryEditor();
-                    }}
-                    onMouseEnter={(event) => {
-                      const video = event.currentTarget.querySelector<HTMLVideoElement>(".library-card-webm");
-                      if (!video || !video.src) return;
-                      video.muted = true;
-                      video.loop = false;
-                      video.playsInline = true;
-                      try {
-                        video.currentTime = 0;
-                      } catch {
-                        // Ignore browsers that block seeking before metadata is ready.
-                      }
-                      video.play().catch(() => {});
-                    }}
-                    onMouseLeave={(event) => {
-                      const video = event.currentTarget.querySelector<HTMLVideoElement>(".library-card-webm");
-                      if (!video) return;
-                      video.pause();
-                      try {
-                        video.currentTime = 0;
-                      } catch {
-                        // Ignore browsers that block seeking before metadata is ready.
-                      }
                     }}
                     style={{
                       "--library-card-offset": `${(index % 4) * 18}px`,

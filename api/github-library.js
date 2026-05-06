@@ -292,26 +292,9 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
         window.addEventListener("pagehide", () => window.cancelAnimationFrame(frame), { once: true });
       }
       startParticleField();
-      document.querySelectorAll(".library-card").forEach((card) => {
-        const video = card.querySelector(".library-card-webm");
-        if (!video) return;
-        card.addEventListener("mouseenter", () => {
-          const source = video.dataset.videoSrc || video.getAttribute("src") || "";
-          if (!source) return;
-          if (!video.getAttribute("src")) video.setAttribute("src", source);
-          video.muted = true;
-          video.loop = false;
-          video.playsInline = true;
-          try { video.currentTime = 0; } catch {}
-          video.play().catch(() => {});
-        });
-        card.addEventListener("mouseleave", () => {
-          video.pause();
-          try { video.currentTime = 0; } catch {}
-        });
-      });
       function stopVideo(video) {
         video.pause();
+        video.onended = null;
         try { video.currentTime = 0; } catch {}
       }
       function playVideo(video) {
@@ -327,6 +310,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       }
       let sequenceIndex = 0;
       let activeSequenceVideo = null;
+      let lastSequenceVideo = null;
       function sequenceVideoPulse() {
         const videos = Array.from(document.querySelectorAll(".library-card-webm")).filter((video) => video.dataset.videoSrc || video.getAttribute("src"));
         if (!videos.length) {
@@ -337,8 +321,13 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
           activeSequenceVideo.onended = null;
           stopVideo(activeSequenceVideo);
         }
-        const video = videos[sequenceIndex % videos.length];
+        let video = videos[sequenceIndex % videos.length];
         sequenceIndex += 1;
+        if (videos.length > 1 && video === lastSequenceVideo) {
+          video = videos[sequenceIndex % videos.length];
+          sequenceIndex += 1;
+        }
+        lastSequenceVideo = video;
         activeSequenceVideo = video;
         video.onended = () => {
           stopVideo(video);
