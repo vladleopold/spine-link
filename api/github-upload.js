@@ -225,6 +225,32 @@ function canEditEntry(entry, googlePayload, anonymousAccount) {
   return Boolean((userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId));
 }
 
+const archiveAdminEmails = new Set([
+  'vladyslavchaplygin@gmail.com',
+  'vladyslavchaplyрin@gmail.com',
+  'leopolds2010@gmail.com',
+]);
+
+function isArchiveAdmin(googlePayload) {
+  return archiveAdminEmails.has(String(googlePayload?.email || '').trim().toLowerCase());
+}
+
+function normalizeArchiveExclusionRules(value) {
+  const rules = Array.isArray(value) ? value : [];
+  return rules
+    .map((rule) => ({
+      enabled: rule?.enabled !== false,
+      type: rule?.type === 'regex' ? 'regex' : 'contains',
+      field: ['all', 'id', 'title', 'ownerEmail', 'ownerName', 'note', 'files', 'animations', 'path'].includes(String(rule?.field || ''))
+        ? String(rule.field)
+        : 'all',
+      pattern: String(rule?.pattern || '').trim().slice(0, 400),
+      flags: String(rule?.flags || 'i').replace(/[^dgimsuvy]/g, '').slice(0, 8) || 'i',
+    }))
+    .filter((rule) => rule.pattern)
+    .slice(0, 100);
+}
+
 function compareLibraryEntries(a, b) {
   const aOrder = Number(a?.libraryOrder);
   const bOrder = Number(b?.libraryOrder);
@@ -384,6 +410,27 @@ export default async function handler(request, response) {
     const uploadPath = cleanRepoPath(body?.uploadPath || '');
     const commitPrefix = String(body?.commitPrefix || 'Add Spine preview');
     const action = String(body?.action || '');
+
+    if (action === 'update-archive-exclusions') {
+      if (!googlePayload?.email) throw unauthorized('Sign in with Google before editing archive rules');
+      if (!isArchiveAdmin(googlePayload)) throw unauthorized('Only archive administrators can edit these rules', 403);
+      const rulesPath = joinRepoPath(settings.basePath, 'archive-exclusions.json');
+      const currentRules = await getGitHubContent(settings, rulesPath);
+      const nextRules = {
+        updatedAt: new Date().toISOString(),
+        updatedBy: String(googlePayload.email || ''),
+        rules: normalizeArchiveExclusionRules(body?.rules),
+      };
+      await putGitHubContent(
+        settings,
+        rulesPath,
+        textToBase64(JSON.stringify(nextRules, null, 2)),
+        `${commitPrefix}: update archive exclusions`,
+        currentRules?.sha,
+        origin,
+      );
+      return response.status(200).json({ ok: true, rules: nextRules.rules, updatedAt: nextRules.updatedAt });
+    }
 
     if (action === 'put-file') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');

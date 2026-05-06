@@ -30,6 +30,58 @@ function safeVideo(value = '') {
   return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
 }
 
+function textFromEntry(entry, field = 'all') {
+  if (!entry || typeof entry !== 'object') return '';
+  const files = Array.isArray(entry.files) ? entry.files.join(' ') : '';
+  const animations = Array.isArray(entry.animations) ? entry.animations.join(' ') : '';
+  const values = {
+    all: [
+      entry.id,
+      entry.title,
+      entry.ownerEmail,
+      entry.ownerName,
+      entry.note,
+      entry.skeleton,
+      entry.atlas,
+      files,
+      animations,
+      entry.previewPath,
+      entry.repositoryUrl,
+    ],
+    id: [entry.id],
+    title: [entry.title],
+    ownerEmail: [entry.ownerEmail],
+    ownerName: [entry.ownerName],
+    note: [entry.note],
+    files: [files],
+    animations: [animations],
+    path: [entry.previewPath, entry.repositoryUrl],
+  };
+  return (values[field] || values.all).filter(Boolean).join(' ');
+}
+
+function exclusionRuleMatches(entry, rule) {
+  if (!rule || rule.enabled === false) return false;
+  const pattern = String(rule.pattern || '').trim();
+  if (!pattern) return false;
+  const haystack = textFromEntry(entry, String(rule.field || 'all'));
+  if (!haystack) return false;
+  if (rule.type === 'regex') {
+    try {
+      const flags = String(rule.flags || 'i').replace(/[^dgimsuvy]/g, '') || 'i';
+      return new RegExp(pattern, flags).test(haystack);
+    } catch {
+      return false;
+    }
+  }
+  return haystack.toLowerCase().includes(pattern.toLowerCase());
+}
+
+function entryExcludedFromArchive(entry, exclusions) {
+  const rules = Array.isArray(exclusions?.rules) ? exclusions.rules : [];
+  return rules.some((rule) => exclusionRuleMatches(entry, rule));
+}
+
 function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
   const poster = String(entry?.thumbnailPoster || '');
@@ -211,7 +263,7 @@ function baseStyles() {
   `;
 }
 
-function archiveHtml({ origin, entries }) {
+function archiveHtml({ origin, entries, exclusions }) {
   const cards = entries
     .map((entry) => {
       const title = escapeHtml(entry?.title || entry?.id || 'Spine preview');
@@ -231,6 +283,13 @@ function archiveHtml({ origin, entries }) {
       </a>`;
     })
     .join('');
+
+  const googleClientId = escapeHtml(process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '');
+  const archiveRulesJson = JSON.stringify({
+    updatedAt: exclusions?.updatedAt || '',
+    updatedBy: exclusions?.updatedBy || '',
+    rules: Array.isArray(exclusions?.rules) ? exclusions.rules : [],
+  }).replace(/</g, '\\u003c');
 
   return `<!doctype html>
 <html lang="en">
@@ -257,13 +316,29 @@ function archiveHtml({ origin, entries }) {
       .tile-stat { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 0 8px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: rgba(237,245,255,.9); background: rgba(5,7,9,.58); box-shadow: 0 10px 24px rgba(0,0,0,.22); font-size: 12px; font-weight: 900; line-height: 1; backdrop-filter: blur(10px); }
       .tile-stat:first-child { color: #ffd6e7; border-color: rgba(255,185,214,.24); }
       .media-fallback { display: grid; place-items: center; width: 100%; height: 100%; color: #fff; font-size: 60px; font-weight: 950; background: radial-gradient(circle, rgba(140,199,255,.15), rgba(0,0,0,.92)); }
+      .archive-admin-toggle { position: fixed; right: 14px; bottom: 14px; z-index: 20; min-height: 42px; padding: 0 14px; border: 1px solid rgba(179,255,64,.58); border-radius: 8px; color: #eaffc2; background: rgba(7,10,12,.84); font-weight: 900; cursor: pointer; backdrop-filter: blur(10px); }
+      .archive-admin { display: none; position: fixed; right: 14px; bottom: 68px; z-index: 21; width: min(520px, calc(100vw - 28px)); max-height: min(720px, calc(100vh - 96px)); overflow: auto; padding: 14px; border: 1px solid rgba(140,199,255,.32); border-radius: 8px; background: rgba(8,10,12,.96); box-shadow: 0 24px 70px rgba(0,0,0,.48); }
+      .archive-admin.is-open { display: grid; gap: 12px; }
+      .archive-admin h2 { margin: 0; font-size: 18px; line-height: 1.2; }
+      .archive-admin p { margin: 0; color: rgba(237,245,255,.66); font-size: 12px; line-height: 1.45; }
+      .archive-admin-row { display: grid; grid-template-columns: 120px 104px minmax(0, 1fr) 66px 36px; gap: 8px; align-items: center; }
+      .archive-admin-row select,
+      .archive-admin-row input { min-width: 0; height: 36px; border: 1px solid rgba(255,255,255,.14); border-radius: 6px; color: #edf5ff; background: rgba(255,255,255,.06); }
+      .archive-admin-row input[type="checkbox"] { width: 18px; height: 18px; justify-self: center; }
+      .archive-admin button { min-height: 36px; border: 1px solid rgba(255,255,255,.16); border-radius: 6px; color: #edf5ff; background: rgba(255,255,255,.07); font-weight: 800; cursor: pointer; }
+      .archive-admin-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .archive-admin-actions button:first-child { border-color: rgba(179,255,64,.58); color: #eaffc2; background: rgba(179,255,64,.12); }
+      .archive-admin-status { min-height: 18px; color: rgba(237,245,255,.72); font-size: 12px; }
       @media (max-width: 700px) {
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
         .tile, .tile--wide, .tile--tall, .tile--square { min-height: 230px; grid-column: span 1; grid-row: span 1; }
         .tile-overlay { grid-template-columns: 1fr; align-items: start; gap: 8px; }
         .tile-stats { justify-self: start; }
+        .archive-admin-row { grid-template-columns: 1fr 90px; }
+        .archive-admin-row input[type="text"] { grid-column: 1 / -1; }
       }
     </style>
+    ${googleClientId ? '<script src="https://accounts.google.com/gsi/client" async defer></script>' : ''}
   </head>
   <body>
     <main class="page">
@@ -273,7 +348,107 @@ function archiveHtml({ origin, entries }) {
       </header>
       ${entries.length ? `<section class="grid">${cards}</section>` : '<p class="muted">No public previews yet.</p>'}
     </main>
+    <button class="archive-admin-toggle" type="button" id="archive-admin-toggle">Archive rules</button>
+    <section class="archive-admin" id="archive-admin" aria-label="Archive exclusion rules">
+      <h2>Archive exclusion rules</h2>
+      <p>Available for archive administrators. Matching cards are excluded from this page and item URLs.</p>
+      <div id="archive-admin-rules"></div>
+      <div class="archive-admin-actions">
+        <button type="button" id="archive-admin-save">Save rules</button>
+        <button type="button" id="archive-admin-add">Add rule</button>
+        <button type="button" id="archive-admin-signin">Sign in with Google</button>
+      </div>
+      <div class="archive-admin-status" id="archive-admin-status"></div>
+    </section>
     <script>
+      const archiveRulesState = ${archiveRulesJson};
+      const archiveGoogleClientId = "${googleClientId}";
+      let archiveGoogleToken = "";
+      const archiveAdmin = document.getElementById("archive-admin");
+      const archiveRulesRoot = document.getElementById("archive-admin-rules");
+      const archiveStatus = document.getElementById("archive-admin-status");
+      function setArchiveStatus(message) {
+        if (archiveStatus) archiveStatus.textContent = message || "";
+      }
+      function blankArchiveRule() {
+        return { enabled: true, type: "contains", field: "all", pattern: "", flags: "i" };
+      }
+      function renderArchiveRules() {
+        if (!archiveRulesRoot) return;
+        const rules = Array.isArray(archiveRulesState.rules) ? archiveRulesState.rules : [];
+        archiveRulesRoot.innerHTML = "";
+        rules.concat(rules.length ? [] : [blankArchiveRule()]).forEach((rule, index) => {
+          if (!rules.length) archiveRulesState.rules = [rule];
+          const row = document.createElement("div");
+          row.className = "archive-admin-row";
+          row.innerHTML = '<select data-key="field"><option value="all">All text</option><option value="id">ID</option><option value="title">Title</option><option value="ownerEmail">Owner email</option><option value="ownerName">Owner name</option><option value="note">Note</option><option value="files">Files</option><option value="animations">Animations</option><option value="path">Path</option></select><select data-key="type"><option value="contains">Rule</option><option value="regex">Regex</option></select><input data-key="pattern" type="text" placeholder="Text or regular expression" /><input data-key="flags" type="text" placeholder="flags" /><button type="button" data-remove title="Remove rule">x</button>';
+          row.querySelector('[data-key="field"]').value = rule.field || "all";
+          row.querySelector('[data-key="type"]').value = rule.type === "regex" ? "regex" : "contains";
+          row.querySelector('[data-key="pattern"]').value = rule.pattern || "";
+          row.querySelector('[data-key="flags"]').value = rule.flags || "i";
+          row.querySelectorAll("[data-key]").forEach((control) => {
+            control.addEventListener("input", () => {
+              archiveRulesState.rules[index] = { ...archiveRulesState.rules[index], [control.dataset.key]: control.value };
+            });
+          });
+          row.querySelector("[data-remove]").addEventListener("click", () => {
+            archiveRulesState.rules.splice(index, 1);
+            renderArchiveRules();
+          });
+          archiveRulesRoot.appendChild(row);
+        });
+      }
+      document.getElementById("archive-admin-toggle")?.addEventListener("click", () => {
+        archiveAdmin?.classList.toggle("is-open");
+        renderArchiveRules();
+      });
+      document.getElementById("archive-admin-add")?.addEventListener("click", () => {
+        archiveRulesState.rules = Array.isArray(archiveRulesState.rules) ? archiveRulesState.rules : [];
+        archiveRulesState.rules.push(blankArchiveRule());
+        renderArchiveRules();
+      });
+      document.getElementById("archive-admin-signin")?.addEventListener("click", () => {
+        if (!archiveGoogleClientId || !window.google?.accounts?.oauth2) {
+          setArchiveStatus("Google sign in is not configured.");
+          return;
+        }
+        const client = window.google.accounts.oauth2.initTokenClient({
+          client_id: archiveGoogleClientId,
+          scope: "openid email profile",
+          callback: (response) => {
+            archiveGoogleToken = response.access_token || "";
+            setArchiveStatus(archiveGoogleToken ? "Signed in. Save rules when ready." : "Google sign in failed.");
+          },
+        });
+        client.requestAccessToken({ prompt: archiveGoogleToken ? "" : "consent" });
+      });
+      document.getElementById("archive-admin-save")?.addEventListener("click", async () => {
+        if (!archiveGoogleToken) {
+          document.getElementById("archive-admin-signin")?.click();
+          return;
+        }
+        setArchiveStatus("Saving...");
+        try {
+          const rules = (archiveRulesState.rules || []).map((rule) => ({
+            enabled: rule.enabled !== false,
+            type: rule.type === "regex" ? "regex" : "contains",
+            field: rule.field || "all",
+            pattern: String(rule.pattern || "").trim(),
+            flags: String(rule.flags || "i").trim() || "i",
+          })).filter((rule) => rule.pattern);
+          const result = await fetch("/api/github-upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: "Bearer " + archiveGoogleToken },
+            body: JSON.stringify({ action: "update-archive-exclusions", rules, commitPrefix: "Update World Spine Archive rules" }),
+          });
+          const payload = await result.json().catch(() => ({}));
+          if (!result.ok) throw new Error(payload.error || "Could not save rules.");
+          setArchiveStatus("Saved. Refreshing...");
+          window.location.reload();
+        } catch (error) {
+          setArchiveStatus(error instanceof Error ? error.message : "Could not save rules.");
+        }
+      });
       function playArchiveVideo(video) {
         const source = video.dataset.videoSrc || video.getAttribute("src") || "";
         if (!source) return;
@@ -387,9 +562,15 @@ export default async function handler(request, response) {
 
   try {
     const indexText = await githubText(settings, `${settings.basePath}/index.json`);
+    const exclusionsText = await githubText(settings, `${settings.basePath}/archive-exclusions.json`);
+    const exclusions = exclusionsText ? JSON.parse(exclusionsText) : { rules: [] };
     const allEntries = indexText ? JSON.parse(indexText) : [];
     const entries = Array.isArray(allEntries)
-      ? allEntries.filter((entry) => entry?.hiddenFromPublicLibrary !== true && (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster))
+      ? allEntries.filter((entry) => (
+          entry?.hiddenFromPublicLibrary !== true &&
+          (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster) &&
+          !entryExcludedFromArchive(entry, exclusions)
+        ))
       : [];
     entries.sort(compareArchiveEntries);
     const layoutEntries = await enrichArchiveLayout(settings, origin, entries);
@@ -402,7 +583,7 @@ export default async function handler(request, response) {
       return response.status(entry ? 200 : 404).send(entry ? archiveItemHtml({ origin, entry }) : 'Archive item not found');
     }
 
-    return response.status(200).send(archiveHtml({ origin, entries: layoutEntries }));
+    return response.status(200).send(archiveHtml({ origin, entries: layoutEntries, exclusions }));
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Archive failed');
   }
