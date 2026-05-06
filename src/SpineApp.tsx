@@ -3284,19 +3284,26 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 const likeStorageKey = `spine-link-like:${entry.id}`;
                 const likedEntry = typeof window !== "undefined" && window.localStorage.getItem(likeStorageKey) === "true";
                 const likeCount = baseLikeCount(entry.id) + (likedEntry ? 1 : 0);
+                const shouldIgnoreCardOpen = (target: EventTarget | null) =>
+                  target instanceof HTMLElement &&
+                  Boolean(target.closest(".library-card-actions, .library-card-order-actions, .portfolio-like-button"));
+                const openEntryEditor = () => {
+                  window.location.href = editUrl;
+                };
                 return (
                   <div
                     className={`library-card${entry.hiddenFromPublicLibrary ? " is-hidden" : ""}`}
                     key={entry.id}
-                    onClick={(event) => {
-                      if ((event.target as HTMLElement | null)?.closest("a, button")) return;
-                      window.location.assign(editUrl);
+                    onClickCapture={(event) => {
+                      if (shouldIgnoreCardOpen(event.target)) return;
+                      event.preventDefault();
+                      openEntryEditor();
                     }}
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
-                      if ((event.target as HTMLElement | null)?.closest("a, button")) return;
+                      if (shouldIgnoreCardOpen(event.target)) return;
                       event.preventDefault();
-                      window.location.assign(editUrl);
+                      openEntryEditor();
                     }}
                     onMouseEnter={(event) => {
                       const video = event.currentTarget.querySelector<HTMLVideoElement>(".library-card-webm");
@@ -3340,7 +3347,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                         <span>{likeCount}</span>
                       </button>
                     )}
-                    <a className="library-card-link" href={editUrl} aria-label={`Edit ${entry.title || entry.id}`}>
+                    <div className="library-card-link" role="link" aria-label={`Edit ${entry.title || entry.id}`}>
                     <div className="library-card-visual">
                       <video
                         className="library-card-webm"
@@ -3370,7 +3377,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                         <span>{entry.files?.length ?? 0} files</span>
                       </div>
                     </div>
-                    </a>
+                    </div>
                     <div className="library-card-actions" aria-label={`${entry.title || entry.id} actions`}>
                       <a href={editUrl}>Edit</a>
                       <button type="button" onClick={() => void updateLibraryEntryVisibility(entry, !entry.hiddenFromPublicLibrary)}>
