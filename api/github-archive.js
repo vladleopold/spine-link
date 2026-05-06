@@ -224,8 +224,8 @@ function tileClassForRatio(ratio) {
   if (ratio >= 1.8) return 'tile--wide';
   if (ratio >= 1.35) return 'tile--horizontal';
   if (ratio >= 1.12) return 'tile--medium-wide';
-  if (ratio <= 0.55) return 'tile--vertical';
-  if (ratio <= 0.78) return 'tile--medium-narrow';
+  if (ratio <= 0.84) return 'tile--vertical';
+  if (ratio <= 0.98) return 'tile--medium-narrow';
   return 'tile--square';
 }
 
@@ -536,8 +536,8 @@ function archiveHtml({ origin, entries, exclusions }) {
         if (ratio >= 1.8) return "tile--wide";
         if (ratio >= 1.35) return "tile--horizontal";
         if (ratio >= 1.12) return "tile--medium-wide";
-        if (ratio <= 0.55) return "tile--vertical";
-        if (ratio <= 0.78) return "tile--medium-narrow";
+        if (ratio <= 0.84) return "tile--vertical";
+        if (ratio <= 0.98) return "tile--medium-narrow";
         return "tile--square";
       }
       function applyArchiveVideoAspectClass(video) {

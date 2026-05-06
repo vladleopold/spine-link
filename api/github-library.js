@@ -109,8 +109,8 @@ function libraryCardSizeClassForRatio(ratio) {
   if (ratio >= 1.8) return 'library-card--wide';
   if (ratio >= 1.35) return 'library-card--horizontal';
   if (ratio >= 1.12) return 'library-card--medium-wide';
-  if (ratio <= 0.55) return 'library-card--vertical';
-  if (ratio <= 0.78) return 'library-card--medium-narrow';
+  if (ratio <= 0.84) return 'library-card--vertical';
+  if (ratio <= 0.98) return 'library-card--medium-narrow';
   return 'library-card--square';
 }
 
@@ -340,8 +340,8 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
         if (ratio >= 1.8) return "library-card--wide";
         if (ratio >= 1.35) return "library-card--horizontal";
         if (ratio >= 1.12) return "library-card--medium-wide";
-        if (ratio <= 0.55) return "library-card--vertical";
-        if (ratio <= 0.78) return "library-card--medium-narrow";
+        if (ratio <= 0.84) return "library-card--vertical";
+        if (ratio <= 0.98) return "library-card--medium-narrow";
         return "library-card--square";
       }
       function applyVideoAspectCardClass(video) {
