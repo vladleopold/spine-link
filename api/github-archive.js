@@ -296,9 +296,27 @@ function archiveHtml({ origin, entries, exclusions }) {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>World Spine Archive</title>
+    <title>World Spine Archive - Spine Portfolio Library</title>
+    <meta name="description" content="Browse World Spine Archive, a growing Spine portfolio library with animation work from beginner, intermediate and professional Spine animators." />
+    <meta name="keywords" content="spine portfolio, portfolio spine, spine animation portfolio, spine animator portfolio, world spine archive, spine library" />
     <meta name="robots" content="index,follow" />
     <link rel="canonical" href="${origin}/world-spine-archive" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="World Spine Archive - Spine Portfolio Library" />
+    <meta property="og:description" content="A growing public archive of Spine animation portfolios and preview cards from many animator levels." />
+    <meta property="og:url" content="${origin}/world-spine-archive" />
+    <script type="application/ld+json">
+      ${JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: 'World Spine Archive',
+        url: `${origin}/world-spine-archive`,
+        description:
+          'A growing public portfolio Spine library with animation preview cards from beginner, intermediate, senior and professional Spine animators.',
+        keywords:
+          'spine portfolio, portfolio spine, spine animation portfolio, spine animator portfolio, world spine archive, spine library',
+      }).replace(/</g, '\\u003c')}
+    </script>
     <style>
       ${baseStyles()}
       .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); grid-auto-flow: dense; gap: 10px; }
@@ -343,9 +361,13 @@ function archiveHtml({ origin, entries, exclusions }) {
   <body>
     <main class="page">
       <header class="top">
-        <h1 class="brand"><span>Spine-Link</span>WORLD SPINE ARCHIVE</h1>
+        <h1 class="brand"><span>Spine portfolio library</span>WORLD SPINE ARCHIVE</h1>
         <a class="back" href="/">Create preview</a>
       </header>
+      <p class="muted">
+        Browse a growing portfolio Spine library with public animation preview cards from beginners, freelancers,
+        technical artists, studio animators, and professional Spine-animation creators.
+      </p>
       ${entries.length ? `<section class="grid">${cards}</section>` : '<p class="muted">No public previews yet.</p>'}
     </main>
     <button class="archive-admin-toggle" type="button" id="archive-admin-toggle">Archive rules</button>

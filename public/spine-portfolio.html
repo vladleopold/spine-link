@@ -3,20 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Spine Portfolio - Share Spine Animation Work Online</title>
+    <title>Spine Portfolio - Portfolio Spine Animation Library by Spine-Link</title>
     <meta
       name="description"
-      content="Create a Spine portfolio with Spine-Link. Turn saved Spine animations into a clean media gallery with share links, hidden items, and curated ordering."
+      content="Create and discover Spine portfolios with Spine-Link, a growing world portfolio library for Spine animators from beginners to professional animation artists."
     />
-    <meta name="keywords" content="spine portfolio, spine animator, spine animations, spine work, spine library, spine link" />
+    <meta name="keywords" content="spine portfolio, portfolio spine, spine animator portfolio, spine animation portfolio, spine animations, spine work, spine library, spine link" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="application-name" content="Share your animation" />
     <meta name="apple-mobile-web-app-title" content="Share your animation" />
     <link rel="canonical" href="https://spine-link.vercel.app/spine-portfolio.html" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://spine-link.vercel.app/spine-portfolio.html" />
-    <meta property="og:title" content="Spine Portfolio - Spine-Link" />
-    <meta property="og:description" content="Share Spine animation work online as a portfolio media gallery." />
+    <meta property="og:title" content="Spine Portfolio - Portfolio Spine Animation Library" />
+    <meta property="og:description" content="Build a Spine portfolio and browse a growing library of Spine animation portfolios from many skill levels." />
     <meta property="og:site_name" content="Share your animation" />
     <meta property="og:image" content="https://spine-link.vercel.app/og-image.svg" />
     <script type="application/ld+json">
@@ -25,13 +25,50 @@
         "@type": "WebPage",
         "name": "Spine portfolio",
         "url": "https://spine-link.vercel.app/spine-portfolio.html",
-        "description": "Spine-Link portfolio mode turns saved Spine animation previews into a shareable portfolio media gallery.",
-        "keywords": "spine portfolio, spine animator, spine animations, spine work, spine library, spine link",
+        "description": "Spine-Link portfolio mode turns saved Spine animation previews into a shareable portfolio media gallery and a growing public library of Spine animation portfolios.",
+        "keywords": "spine portfolio, portfolio spine, spine animator portfolio, spine animation portfolio, spine animations, spine work, spine library, spine link",
         "mainEntity": {
-          "@type": "CreativeWork",
-          "name": "Spine animation portfolio",
-          "about": "Spine animation preview links and portfolio media gallery"
+          "@type": "CollectionPage",
+          "name": "Spine portfolio library",
+          "about": "Spine animation portfolios from beginner, intermediate, senior and professional Spine animators",
+          "isPartOf": {
+            "@type": "WebSite",
+            "name": "Spine-Link",
+            "url": "https://spine-link.vercel.app/"
+          }
         }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is a Spine portfolio?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A Spine portfolio is a public collection of Spine animation previews that shows an animator's work, style, technical range and production experience."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can beginner Spine animators publish a portfolio?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Spine-Link is built for portfolios from all levels, from beginners building first animation examples to professional Spine animators presenting market-ready work."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Spine-Link a portfolio Spine library?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Spine-Link combines preview links, personal galleries and a world archive, so it can work as a growing portfolio Spine library for animators and teams."
+            }
+          }
+        ]
       }
     </script>
     <script type="application/ld+json">
@@ -70,12 +107,20 @@
   <body>
     <main>
       <div class="brand">Portfolio mode</div>
-      <h1>Spine portfolio</h1>
+      <h1>Spine portfolio library</h1>
       <p>
-        Spine-Link portfolio mode helps Spine animators present animation work as a media gallery. It keeps the useful
-        library tools while adding a cleaner public view for sharing selected previews.
+        Spine-Link portfolio mode helps Spine animators present animation work as a media gallery. It is also a growing
+        world portfolio library for Spine animation: a place where beginners, intermediate artists, senior animators,
+        technical artists, game teams, freelancers, and professional market-level Spine animators can publish selected
+        work and share a clean portfolio link.
       </p>
-      <a class="cta" href="/">Open portfolio mode</a>
+      <p>
+        If someone searches for <strong>spine portfolio</strong> or <strong>portfolio spine</strong>, this page explains
+        the Spine-Link approach: every saved animation can become part of a personal public gallery, while the broader
+        archive grows into a searchable library of animation work from different styles and skill levels.
+      </p>
+      <a class="cta" href="/">Create a Spine portfolio</a>
+      <a class="cta" href="/world-spine-archive">Browse World Spine Archive</a>
       <nav aria-label="Related Spine pages">
         <a href="/spine-library.html">Spine library</a>
         <a href="/spine-animator.html">Spine animator</a>
@@ -83,13 +128,42 @@
         <a href="/spine-animation-preview.html">Spine animation preview</a>
       </nav>
       <section>
-        <h2>Portfolio features</h2>
+        <h2>Portfolio features for Spine animators</h2>
         <ul>
-          <li>Share a portfolio link for selected Spine animations.</li>
-          <li>Hide private works and show public works in a gallery.</li>
-          <li>Search, filter, and sort saved animation previews.</li>
+          <li>Create a portfolio Spine gallery from selected animation previews.</li>
+          <li>Show public works and hide private drafts or client-only animation files.</li>
+          <li>Search, filter, and sort saved Spine animation previews.</li>
           <li>Move works up or down for curated portfolio order.</li>
+          <li>Share a public portfolio link for hiring, review, client approval, production feedback, or community discovery.</li>
         </ul>
+      </section>
+      <section>
+        <h2>A portfolio library for many levels</h2>
+        <p>
+          Spine animation portfolios are useful at every stage. A beginner can publish first walk cycles and simple
+          game-ready idles. A mid-level animator can show character sets, attacks, UI effects, transitions, and exported
+          production tests. A senior Spine animator can show polished game animation, technical setup quality, clean
+          playback, and reusable animation systems. Spine-Link is designed to hold all of those portfolios in one online
+          place.
+        </p>
+      </section>
+      <section>
+        <h2>Spine portfolio FAQ</h2>
+        <h3>What is a Spine portfolio?</h3>
+        <p>
+          A Spine portfolio is a public collection of Spine animation previews that shows an animator's work, style,
+          technical range, and production experience.
+        </p>
+        <h3>Can beginner Spine animators publish a portfolio?</h3>
+        <p>
+          Yes. Spine-Link is built for portfolios from all levels, from beginners building first animation examples to
+          professional Spine animators presenting market-ready work.
+        </p>
+        <h3>Is Spine-Link a portfolio Spine library?</h3>
+        <p>
+          Yes. Spine-Link combines preview links, personal galleries, and the World Spine Archive, so it can work as a
+          growing portfolio Spine library for animators and teams.
+        </p>
       </section>
     </main>
   </body>

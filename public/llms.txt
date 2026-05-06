@@ -2,7 +2,7 @@
 
 > Spine-Link is an online Spine animation preview, library, and portfolio tool for animators, game developers, and technical artists.
 
-Spine-Link opens Spine JSON, SKEL, atlas, PNG, JPG, JPEG, and WEBP files in a browser-based Spine web viewer. It helps users preview Spine animations online, create permanent preview links, organize a Spine library, and present selected animation work in portfolio mode.
+Spine-Link opens Spine JSON, SKEL, atlas, PNG, JPG, JPEG, and WEBP files in a browser-based Spine web viewer. It helps users preview Spine animations online, create permanent preview links, organize a Spine library, and present selected animation work in portfolio mode. Spine-Link also positions the World Spine Archive as a growing portfolio Spine library for animators at many levels, from beginners to professional Spine-animation artists.
 
 ## Primary Pages
 
@@ -16,7 +16,8 @@ Spine-Link opens Spine JSON, SKEL, atlas, PNG, JPG, JPEG, and WEBP files in a br
 ## Library And Portfolio
 
 - [Spine library](https://spine-link.vercel.app/spine-library.html): Saved Spine preview links and animation library.
-- [Spine portfolio](https://spine-link.vercel.app/spine-portfolio.html): Portfolio media gallery for shared Spine animation work.
+- [Spine portfolio](https://spine-link.vercel.app/spine-portfolio.html): Portfolio media gallery and portfolio Spine library for shared Spine animation work.
+- [World Spine Archive](https://spine-link.vercel.app/world-spine-archive): Public archive of Spine animation preview cards and portfolio examples.
 - [Spine animator](https://spine-link.vercel.app/spine-animator.html): Tool page for Spine animators.
 - [Spine animations](https://spine-link.vercel.app/spine-animations.html): Spine animations preview and sharing page.
 - [Spine work](https://spine-link.vercel.app/spine-work.html): Share Spine animation work online.
@@ -29,7 +30,7 @@ Spine-Link opens Spine JSON, SKEL, atlas, PNG, JPG, JPEG, and WEBP files in a br
 
 ## Keywords
 
-spine, spine library, spine portfolio, spine animator, spine animations, spine work, spne lib, spine link, spine preview, spine online, spine web viewer, spine animation preview, online Spine viewer, Spine web player.
+spine, spine library, spine portfolio, portfolio spine, spine animator portfolio, spine animation portfolio, spine animator, spine animations, spine work, spne lib, spine link, spine preview, spine online, spine web viewer, spine animation preview, online Spine viewer, Spine web player.
 
 ## Technical Notes
 
