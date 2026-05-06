@@ -107,12 +107,14 @@ function libraryCardSizeClass(entry, index = 0) {
   const width = Number(entry?.previewWidth || 0);
   const height = Number(entry?.previewHeight || 0);
   const ratio = width > 0 && height > 0 ? width / height : 0;
-  if (index > 0 && index % 13 === 0) return 'library-card--full';
-  if (index > 0 && index % 11 === 0) return 'library-card--large-rect';
-  if (Number.isFinite(ratio) && ratio >= 1.55) return 'library-card--wide';
-  if (Number.isFinite(ratio) && ratio > 0 && ratio <= 0.72) return 'library-card--vertical';
-  const variants = ['library-card--square', 'library-card--small-square', 'library-card--horizontal', 'library-card--vertical', 'library-card--medium-wide', 'library-card--medium-narrow', 'library-card--large-rect'];
-  return variants[index % variants.length];
+  if (!Number.isFinite(ratio) || ratio <= 0) return 'library-card--square';
+  if (ratio >= 2.6) return 'library-card--full';
+  if (ratio >= 1.8) return 'library-card--wide';
+  if (ratio >= 1.35) return 'library-card--horizontal';
+  if (ratio >= 1.12) return 'library-card--medium-wide';
+  if (ratio <= 0.55) return 'library-card--vertical';
+  if (ratio <= 0.78) return 'library-card--medium-narrow';
+  return 'library-card--square';
 }
 
 function createLibraryHtml({ origin, publicOwnerId, entries }) {
@@ -211,11 +213,11 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       .is-library-page .creator-card { border-color: rgba(140,199,255,.24); box-shadow: inset 0 0 0 1px rgba(140,199,255,.05), 0 22px 70px rgba(0,0,0,.32); }
       .is-library-page .library-card { border-color: rgba(140,199,255,.58); box-shadow: 0 0 0 1px rgba(140,199,255,.14), 0 20px 56px rgba(0,0,0,.34); }
       .is-library-page .library-card:hover { border-color: rgba(179,255,64,.9); }
-      .library-card::before { content: ""; position: absolute; inset: 0; z-index: 0; background-image: var(--library-thumbnail); background-position: center; background-repeat: no-repeat; background-size: cover; opacity: .92; transform: scale(1.18); transform-origin: center; }
+      .library-card::before { content: ""; position: absolute; inset: 0; z-index: 0; background-image: var(--library-thumbnail); background-position: center; background-repeat: no-repeat; background-size: contain; opacity: .92; transform: none; transform-origin: center; }
       .library-card::after { content: ""; position: absolute; inset: 0; z-index: 0; background: linear-gradient(rgba(8,10,12,.34), rgba(8,10,12,.52)), radial-gradient(circle at 22% 22%, rgba(255,106,40,.14), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.18), transparent 32%); pointer-events: none; }
       .library-card-link { position: relative; z-index: 1; display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; color: inherit; text-decoration: none; }
       .library-card-visual { position: relative; display: flex; flex: 1 1 auto; align-items: flex-end; justify-content: space-between; min-height: 0; padding: 24px; color: #fff; background: linear-gradient(rgba(9,11,13,.05), rgba(9,11,13,.18)); overflow: hidden; }
-      .library-card-webm { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; opacity: .96; transform: scale(1.08); transform-origin: center; pointer-events: none; }
+      .library-card-webm { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: contain; opacity: .96; transform: none; transform-origin: center; pointer-events: none; }
       .portfolio-like-button { position: absolute; top: 14px; right: 14px; z-index: 3; display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 10px; border: 1px solid rgba(255,185,214,.42); border-radius: 999px; color: #ffe4ef; background: rgba(8,9,11,.68); box-shadow: 0 12px 30px rgba(0,0,0,.32); backdrop-filter: blur(10px); cursor: pointer; }
       .portfolio-like-button span { color: currentColor; font-size: 20px; line-height: 1; transform: translateY(-1px); }
       .portfolio-like-button strong { color: currentColor; font-size: 12px; font-weight: 950; line-height: 1; }

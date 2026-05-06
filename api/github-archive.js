@@ -220,12 +220,14 @@ async function enrichArchiveLayout(settings, origin, entries) {
 
 function tileClassForEntry(entry, index = 0) {
   const ratio = Number(entry?.mediaAspectRatio || 0);
-  if (index > 0 && index % 13 === 0) return 'tile tile--full';
-  if (index > 0 && index % 11 === 0) return 'tile tile--large-rect';
-  if (Number.isFinite(ratio) && ratio >= 1.55) return 'tile tile--wide';
-  if (Number.isFinite(ratio) && ratio > 0 && ratio <= 0.72) return 'tile tile--vertical';
-  const variants = ['tile--square', 'tile--small-square', 'tile--horizontal', 'tile--vertical', 'tile--medium-wide', 'tile--medium-narrow', 'tile--large-rect'];
-  return `tile ${variants[index % variants.length]}`;
+  if (!Number.isFinite(ratio) || ratio <= 0) return 'tile tile--square';
+  if (ratio >= 2.6) return 'tile tile--full';
+  if (ratio >= 1.8) return 'tile tile--wide';
+  if (ratio >= 1.35) return 'tile tile--horizontal';
+  if (ratio >= 1.12) return 'tile tile--medium-wide';
+  if (ratio <= 0.55) return 'tile tile--vertical';
+  if (ratio <= 0.78) return 'tile tile--medium-narrow';
+  return 'tile tile--square';
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '' } = {}) {
@@ -335,7 +337,7 @@ function archiveHtml({ origin, entries, exclusions }) {
       .tile--full { grid-column: 1 / -1; grid-row: span 3; }
       .tile:hover { border-color: rgba(179,255,64,.68); }
       .tile-media, .tile-media img, .tile-media video { position: absolute; inset: 0; width: 100%; height: 100%; }
-      .tile-media img, .tile-media video { object-fit: cover; transform: scale(1.08); background: #050607; }
+      .tile-media img, .tile-media video { object-fit: contain; transform: none; background: #050607; }
       .tile::after { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,.72), rgba(0,0,0,.12) 35%, rgba(0,0,0,.22)); pointer-events: none; }
       .tile-overlay { position: absolute; top: 10px; right: 10px; left: 10px; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
       .tile-title { min-width: 0; overflow: hidden; color: #fff; font-size: 14px; font-weight: 950; text-overflow: ellipsis; text-shadow: 0 2px 14px rgba(0,0,0,.86); white-space: nowrap; }

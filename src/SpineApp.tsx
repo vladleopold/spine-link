@@ -235,20 +235,14 @@ function libraryCardSizeClass(entry: LibraryEntry, index: number) {
   const width = Number(entry.previewWidth || 0);
   const height = Number(entry.previewHeight || 0);
   const ratio = width > 0 && height > 0 ? width / height : 0;
-  if (index > 0 && index % 13 === 0) return "library-card--full";
-  if (index > 0 && index % 11 === 0) return "library-card--large-rect";
-  if (Number.isFinite(ratio) && ratio >= 1.55) return "library-card--wide";
-  if (Number.isFinite(ratio) && ratio > 0 && ratio <= 0.72) return "library-card--vertical";
-  const variants = [
-    "library-card--square",
-    "library-card--small-square",
-    "library-card--horizontal",
-    "library-card--vertical",
-    "library-card--medium-wide",
-    "library-card--medium-narrow",
-    "library-card--large-rect",
-  ];
-  return variants[index % variants.length];
+  if (!Number.isFinite(ratio) || ratio <= 0) return "library-card--square";
+  if (ratio >= 2.6) return "library-card--full";
+  if (ratio >= 1.8) return "library-card--wide";
+  if (ratio >= 1.35) return "library-card--horizontal";
+  if (ratio >= 1.12) return "library-card--medium-wide";
+  if (ratio <= 0.55) return "library-card--vertical";
+  if (ratio <= 0.78) return "library-card--medium-narrow";
+  return "library-card--square";
 }
 
 const googleClientId =
