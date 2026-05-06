@@ -141,6 +141,9 @@ type LibraryEntry = {
   thumbnailPath?: string;
   thumbnailPosterPath?: string;
   webmPreviewPath?: string;
+  previewWidth?: number;
+  previewHeight?: number;
+  previewDuration?: number;
 };
 
 type UploadResponse = {
@@ -226,6 +229,26 @@ function moveLibraryEntryInList(entries: LibraryEntry[], entryId: string, direct
   const [movedEntry] = nextEntries.splice(currentPosition, 1);
   nextEntries.splice(nextPosition, 0, movedEntry);
   return nextEntries.map((currentEntry, index) => ({ ...currentEntry, libraryOrder: index + 1 }));
+}
+
+function libraryCardSizeClass(entry: LibraryEntry, index: number) {
+  const width = Number(entry.previewWidth || 0);
+  const height = Number(entry.previewHeight || 0);
+  const ratio = width > 0 && height > 0 ? width / height : 0;
+  if (index > 0 && index % 13 === 0) return "library-card--full";
+  if (index > 0 && index % 11 === 0) return "library-card--large-rect";
+  if (Number.isFinite(ratio) && ratio >= 1.55) return "library-card--wide";
+  if (Number.isFinite(ratio) && ratio > 0 && ratio <= 0.72) return "library-card--vertical";
+  const variants = [
+    "library-card--square",
+    "library-card--small-square",
+    "library-card--horizontal",
+    "library-card--vertical",
+    "library-card--medium-wide",
+    "library-card--medium-narrow",
+    "library-card--large-rect",
+  ];
+  return variants[index % variants.length];
 }
 
 const googleClientId =
@@ -3464,7 +3487,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 };
                 return (
                   <div
-                    className={`library-card${entry.hiddenFromPublicLibrary ? " is-hidden" : ""}`}
+                    className={`library-card ${libraryCardSizeClass(entry, index)}${entry.hiddenFromPublicLibrary ? " is-hidden" : ""}`}
                     key={entry.id}
                     onClickCapture={(event) => {
                       if (shouldIgnoreCardOpen(event.target)) return;

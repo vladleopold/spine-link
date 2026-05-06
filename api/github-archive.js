@@ -218,11 +218,14 @@ async function enrichArchiveLayout(settings, origin, entries) {
   return enriched;
 }
 
-function tileClassForEntry(entry) {
+function tileClassForEntry(entry, index = 0) {
   const ratio = Number(entry?.mediaAspectRatio || 0);
-  if (Number.isFinite(ratio) && ratio >= 1.28) return 'tile tile--wide';
-  if (Number.isFinite(ratio) && ratio <= 0.78) return 'tile tile--tall';
-  return 'tile tile--square';
+  if (index > 0 && index % 13 === 0) return 'tile tile--full';
+  if (index > 0 && index % 11 === 0) return 'tile tile--large-rect';
+  if (Number.isFinite(ratio) && ratio >= 1.55) return 'tile tile--wide';
+  if (Number.isFinite(ratio) && ratio > 0 && ratio <= 0.72) return 'tile tile--vertical';
+  const variants = ['tile--square', 'tile--small-square', 'tile--horizontal', 'tile--vertical', 'tile--medium-wide', 'tile--medium-narrow', 'tile--large-rect'];
+  return `tile ${variants[index % variants.length]}`;
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '' } = {}) {
@@ -265,13 +268,13 @@ function baseStyles() {
 
 function archiveHtml({ origin, entries, exclusions }) {
   const cards = entries
-    .map((entry) => {
+    .map((entry, index) => {
       const title = escapeHtml(entry?.title || entry?.id || 'Spine preview');
       const spineUrl = previewUrl(entry);
       const metricId = String(entry?.id || entry?.title || '');
       const likes = stableMetric(metricId, 12, 87);
       const views = stableMetric(`${metricId}:views`, 140, 2860);
-      return `<a class="${tileClassForEntry(entry)}" href="${escapeHtml(spineUrl)}" aria-label="Open ${title}">
+      return `<a class="${tileClassForEntry(entry, index)}" href="${escapeHtml(spineUrl)}" aria-label="Open ${title}">
         <div class="tile-media">${mediaHtml(entry, { origin })}</div>
         <div class="tile-overlay">
           <strong class="tile-title">${title}</strong>
@@ -319,11 +322,15 @@ function archiveHtml({ origin, entries, exclusions }) {
     </script>
     <style>
       ${baseStyles()}
-      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); grid-auto-flow: dense; gap: 10px; }
-      .tile { position: relative; min-height: 220px; overflow: hidden; border: 1px solid rgba(140,199,255,.18); border-radius: 8px; color: inherit; background: #090b0d; text-decoration: none; }
-      .tile--wide { grid-column: span 2; min-height: 220px; }
-      .tile--tall { grid-row: span 2; min-height: 450px; }
-      .tile--square { min-height: 220px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-flow: dense; grid-auto-rows: 118px; gap: 10px; }
+      .tile { position: relative; min-height: 0; overflow: hidden; border: 1px solid rgba(140,199,255,.18); border-radius: 8px; color: inherit; background: #090b0d; text-decoration: none; }
+      .tile--small-square { grid-column: span 1; grid-row: span 2; }
+      .tile--square { grid-column: span 2; grid-row: span 3; }
+      .tile--horizontal, .tile--wide { grid-column: span 3; grid-row: span 3; }
+      .tile--vertical, .tile--medium-narrow { grid-column: span 2; grid-row: span 4; }
+      .tile--medium-wide { grid-column: span 4; grid-row: span 3; }
+      .tile--large-rect { grid-column: span 4; grid-row: span 4; }
+      .tile--full { grid-column: 1 / -1; grid-row: span 4; }
       .tile:hover { border-color: rgba(179,255,64,.68); }
       .tile-media, .tile-media img, .tile-media video { position: absolute; inset: 0; width: 100%; height: 100%; }
       .tile-media img, .tile-media video { object-fit: cover; transform: scale(1.08); background: #050607; }
@@ -362,8 +369,9 @@ function archiveHtml({ origin, entries, exclusions }) {
       .archive-admin-actions button:first-child { border-color: rgba(179,255,64,.58); color: #eaffc2; background: rgba(179,255,64,.12); }
       .archive-admin-status { min-height: 18px; color: rgba(237,245,255,.72); font-size: 12px; }
       @media (max-width: 700px) {
-        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        .tile, .tile--wide, .tile--tall, .tile--square { min-height: 230px; grid-column: span 1; grid-row: span 1; }
+        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 112px; gap: 8px; }
+        .tile, .tile--wide, .tile--horizontal, .tile--medium-wide, .tile--large-rect, .tile--full { grid-column: 1 / -1; }
+        .tile--small-square, .tile--square, .tile--vertical, .tile--medium-narrow { grid-column: span 1; }
         .tile-overlay { grid-template-columns: 1fr; align-items: start; gap: 8px; }
         .tile-stats { justify-self: start; }
         .archive-admin-row { grid-template-columns: 1fr 90px; }

@@ -103,6 +103,18 @@ function baseLikeCount(value = '') {
   return 12 + (hash % 87);
 }
 
+function libraryCardSizeClass(entry, index = 0) {
+  const width = Number(entry?.previewWidth || 0);
+  const height = Number(entry?.previewHeight || 0);
+  const ratio = width > 0 && height > 0 ? width / height : 0;
+  if (index > 0 && index % 13 === 0) return 'library-card--full';
+  if (index > 0 && index % 11 === 0) return 'library-card--large-rect';
+  if (Number.isFinite(ratio) && ratio >= 1.55) return 'library-card--wide';
+  if (Number.isFinite(ratio) && ratio > 0 && ratio <= 0.72) return 'library-card--vertical';
+  const variants = ['library-card--square', 'library-card--small-square', 'library-card--horizontal', 'library-card--vertical', 'library-card--medium-wide', 'library-card--medium-narrow', 'library-card--large-rect'];
+  return variants[index % variants.length];
+}
+
 function createLibraryHtml({ origin, publicOwnerId, entries }) {
   const firstEntry = entries[0] || {};
   const showOwnerName = firstEntry.showOwnerLibrary !== false;
@@ -115,7 +127,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
   const publicPageClass = isLibraryMode ? 'is-library-page' : 'is-portfolio-page';
   const title = `${ownerName} - Spine ${publicPageLabelLower} media gallery`;
   const cards = entries
-    .map((entry) => {
+    .map((entry, index) => {
       const itemTitle = escapeHtml(entry.title || entry.id || 'Spine preview');
       const previewUrl = `/p/${encodeURIComponent(String(entry.id || ''))}`;
       const rawThumbnail = safeImage(entry.thumbnail || '');
@@ -136,7 +148,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       const thumbnailStyle = !webmPreview && (thumbnail || thumbnailPoster) ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
       const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''} muted playsinline preload="metadata" aria-hidden="true"></video>`;
       const likeButton = isLibraryMode ? '' : `<button class="portfolio-like-button" type="button" data-like-id="${escapeHtml(likeId)}" data-base-likes="${likeCount}" aria-pressed="false" title="Like"><span aria-hidden="true">♡</span><strong>${likeCount}</strong></button>`;
-      return `<article class="library-card" data-entry-id="${entryId}"${thumbnailStyle}>
+      return `<article class="library-card ${libraryCardSizeClass(entry, index)}" data-entry-id="${entryId}"${thumbnailStyle}>
         ${likeButton}
         <a class="library-card-link" href="${previewUrl}" aria-label="Open ${itemTitle}">
           <div class="library-card-visual">
@@ -184,16 +196,23 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       .creator-name-line { display: flex; align-items: baseline; gap: 40px; min-width: 0; }
       .creator-name { color: #fff; font-size: clamp(24px, 3.2vw, 34px); font-weight: 950; line-height: 1.05; white-space: nowrap; }
       .creator-count { color: rgba(237,245,255,.62); font-size: clamp(16px, 2vw, 22px); font-weight: 900; letter-spacing: .05em; white-space: nowrap; text-transform: uppercase; }
-      .library-grid { column-count: 3; column-gap: 18px; }
-      .library-card { position: relative; display: inline-block; width: 100%; margin: 0 0 18px; overflow: hidden; break-inside: avoid; border: 2px solid rgba(255,185,214,.72); border-radius: 8px; color: inherit; background: radial-gradient(circle at 22% 22%, rgba(255,106,40,.28), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.32), transparent 32%), linear-gradient(135deg, rgba(32,35,38,.98), rgba(20,22,25,.98)); box-shadow: 0 0 0 1px rgba(255,185,214,.2), 0 20px 56px rgba(0,0,0,.34); transition: transform 150ms ease, border-color 150ms ease; }
+      .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); grid-auto-flow: dense; grid-auto-rows: 128px; gap: 18px; }
+      .library-card { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; margin: 0; overflow: hidden; border: 2px solid rgba(255,185,214,.72); border-radius: 8px; color: inherit; background: radial-gradient(circle at 22% 22%, rgba(255,106,40,.28), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.32), transparent 32%), linear-gradient(135deg, rgba(32,35,38,.98), rgba(20,22,25,.98)); box-shadow: 0 0 0 1px rgba(255,185,214,.2), 0 20px 56px rgba(0,0,0,.34); transition: transform 150ms ease, border-color 150ms ease; }
+      .library-card--small-square { grid-column: span 1; grid-row: span 2; }
+      .library-card--square { grid-column: span 2; grid-row: span 3; }
+      .library-card--horizontal, .library-card--wide { grid-column: span 3; grid-row: span 3; }
+      .library-card--vertical, .library-card--medium-narrow { grid-column: span 2; grid-row: span 4; }
+      .library-card--medium-wide { grid-column: span 4; grid-row: span 3; }
+      .library-card--large-rect { grid-column: span 4; grid-row: span 4; }
+      .library-card--full { grid-column: 1 / -1; grid-row: span 4; }
       .library-card:hover { transform: translateY(-3px); border-color: #ffe4ef; }
       .is-library-page .creator-card { border-color: rgba(140,199,255,.24); box-shadow: inset 0 0 0 1px rgba(140,199,255,.05), 0 22px 70px rgba(0,0,0,.32); }
       .is-library-page .library-card { border-color: rgba(140,199,255,.58); box-shadow: 0 0 0 1px rgba(140,199,255,.14), 0 20px 56px rgba(0,0,0,.34); }
       .is-library-page .library-card:hover { border-color: rgba(179,255,64,.9); }
       .library-card::before { content: ""; position: absolute; inset: 0; z-index: 0; background-image: var(--library-thumbnail); background-position: center; background-repeat: no-repeat; background-size: cover; opacity: .92; transform: scale(1.18); transform-origin: center; }
       .library-card::after { content: ""; position: absolute; inset: 0; z-index: 0; background: linear-gradient(rgba(8,10,12,.34), rgba(8,10,12,.52)), radial-gradient(circle at 22% 22%, rgba(255,106,40,.14), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.18), transparent 32%); pointer-events: none; }
-      .library-card-link { position: relative; z-index: 1; display: block; color: inherit; text-decoration: none; }
-      .library-card-visual { position: relative; display: flex; align-items: flex-end; justify-content: space-between; min-height: 230px; padding: 24px; color: #fff; background: linear-gradient(rgba(9,11,13,.05), rgba(9,11,13,.18)); overflow: hidden; }
+      .library-card-link { position: relative; z-index: 1; display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; color: inherit; text-decoration: none; }
+      .library-card-visual { position: relative; display: flex; flex: 1 1 auto; align-items: flex-end; justify-content: space-between; min-height: 0; padding: 24px; color: #fff; background: linear-gradient(rgba(9,11,13,.05), rgba(9,11,13,.18)); overflow: hidden; }
       .library-card-webm { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; opacity: .96; transform: scale(1.08); transform-origin: center; pointer-events: none; }
       .portfolio-like-button { position: absolute; top: 14px; right: 14px; z-index: 3; display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 10px; border: 1px solid rgba(255,185,214,.42); border-radius: 999px; color: #ffe4ef; background: rgba(8,9,11,.68); box-shadow: 0 12px 30px rgba(0,0,0,.32); backdrop-filter: blur(10px); cursor: pointer; }
       .portfolio-like-button span { color: currentColor; font-size: 20px; line-height: 1; transform: translateY(-1px); }
@@ -223,8 +242,8 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       @keyframes transitionShine { 0% { opacity: 0; transform: translateX(-80%); } 42% { opacity: 1; } 100% { opacity: 0; transform: translateX(82%); } }
       @keyframes transitionTitle { 0% { opacity: 0; transform: translateY(16px); } 38% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-18px); } }
       @keyframes transitionRing { 0% { opacity: 0; border-color: rgba(140,199,255,0); transform: scale(.4); } 36% { opacity: .9; border-color: rgba(179,255,64,.42); } 100% { opacity: 0; border-color: rgba(140,199,255,0); transform: scale(7); } }
-      @media (max-width: 900px) { .library-grid { column-count: 2; } }
-      @media (max-width: 640px) { * { scrollbar-width: none; } *::-webkit-scrollbar { width: 0; height: 0; display: none; } .creator-card { grid-template-columns: 1fr; gap: 22px; padding: 20px; } .creator-row { align-items: center; justify-self: stretch; flex-direction: row; gap: 14px; } .creator-avatar { width: clamp(44px, 15vw, 56px); height: clamp(44px, 15vw, 56px); } .creator-name-line { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, max-content); column-gap: 40px; row-gap: 7px; } .creator-name { max-width: calc(100vw - 140px); font-size: clamp(18px, 6.2vw, 30px); white-space: nowrap; } .creator-count { font-size: clamp(14px, 4.4vw, 18px); } .library-grid { column-count: 1; } .library-card-visual { min-height: 210px; } }
+      @media (max-width: 900px) { .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 118px; } .library-card--horizontal, .library-card--wide, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; } }
+      @media (max-width: 640px) { * { scrollbar-width: none; } *::-webkit-scrollbar { width: 0; height: 0; display: none; } .creator-card { grid-template-columns: 1fr; gap: 22px; padding: 20px; } .creator-row { align-items: center; justify-self: stretch; flex-direction: row; gap: 14px; } .creator-avatar { width: clamp(44px, 15vw, 56px); height: clamp(44px, 15vw, 56px); } .creator-name-line { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, max-content); column-gap: 40px; row-gap: 7px; } .creator-name { max-width: calc(100vw - 140px); font-size: clamp(18px, 6.2vw, 30px); white-space: nowrap; } .creator-count { font-size: clamp(14px, 4.4vw, 18px); } .library-grid { grid-template-columns: 1fr; grid-auto-rows: 118px; } .library-card, .library-card--small-square, .library-card--square, .library-card--horizontal, .library-card--wide, .library-card--vertical, .library-card--medium-narrow, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; grid-row: span 3; } }
     </style>
   </head>
   <body class="${publicPageClass}">
