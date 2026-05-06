@@ -334,6 +334,20 @@ function archiveHtml({ origin, entries, exclusions }) {
       .tile-stat { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 0 8px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: rgba(237,245,255,.9); background: rgba(5,7,9,.58); box-shadow: 0 10px 24px rgba(0,0,0,.22); font-size: 12px; font-weight: 900; line-height: 1; backdrop-filter: blur(10px); }
       .tile-stat:first-child { color: #ffd6e7; border-color: rgba(255,185,214,.24); }
       .media-fallback { display: grid; place-items: center; width: 100%; height: 100%; color: #fff; font-size: 60px; font-weight: 950; background: radial-gradient(circle, rgba(140,199,255,.15), rgba(0,0,0,.92)); }
+      .page-transition { position: fixed; inset: 0; z-index: 80; overflow: hidden; pointer-events: none; }
+      .page-transition::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 46%, rgba(140,199,255,.24), transparent 28%), radial-gradient(circle at 50% 52%, rgba(255,185,214,.2), transparent 34%), rgba(2,4,7,.34); animation: transitionWash 720ms cubic-bezier(.18,.86,.26,1) both; backdrop-filter: blur(2px); }
+      .page-transition-card { position: fixed; top: var(--transition-top); left: var(--transition-left); width: var(--transition-width); height: var(--transition-height); overflow: hidden; border: 2px solid rgba(255,185,214,.86); border-radius: 8px; background: linear-gradient(rgba(7,9,12,.18), rgba(7,9,12,.46)), var(--transition-image, radial-gradient(circle at 50% 42%, rgba(255,185,214,.28), transparent 34%)), radial-gradient(circle at 50% 48%, rgba(140,199,255,.22), rgba(0,0,0,.92)); background-position: center; background-size: cover; box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 30px 90px rgba(0,0,0,.54), 0 0 70px rgba(140,199,255,.32); animation: transitionCardPortal 720ms cubic-bezier(.18,.86,.26,1) both; }
+      .page-transition-card::before { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 0 34%, rgba(255,255,255,.42) 48%, transparent 62% 100%); animation: transitionShine 720ms ease both; }
+      .page-transition-card span { position: absolute; right: 18px; bottom: 16px; left: 18px; z-index: 1; overflow: hidden; color: #fff; font-size: clamp(24px,5vw,56px); font-weight: 950; line-height: .96; text-overflow: ellipsis; text-shadow: 0 4px 26px rgba(0,0,0,.82); white-space: nowrap; animation: transitionTitle 720ms ease both; }
+      .page-transition-ring { position: absolute; inset: 0; display: grid; place-items: center; }
+      .page-transition-ring i { position: absolute; width: 16vmin; height: 16vmin; border: 1px solid rgba(140,199,255,0); border-radius: 999px; animation: transitionRing 720ms ease-out both; }
+      .page-transition-ring i:nth-child(2) { animation-delay: 90ms; }
+      .page-transition-ring i:nth-child(3) { animation-delay: 170ms; }
+      @keyframes transitionCardPortal { 0% { opacity: .98; transform: scale(1); } 58% { top: max(22px, 9vh); left: max(22px, 8vw); width: min(84vw, 980px); height: min(74vh, 720px); opacity: 1; transform: scale(1.015); } 100% { top: 0; left: 0; width: 100vw; height: 100vh; opacity: 0; border-radius: 0; transform: scale(1.04); } }
+      @keyframes transitionWash { 0% { opacity: 0; } 48% { opacity: 1; } 100% { opacity: .82; } }
+      @keyframes transitionShine { 0% { opacity: 0; transform: translateX(-80%); } 42% { opacity: 1; } 100% { opacity: 0; transform: translateX(82%); } }
+      @keyframes transitionTitle { 0% { opacity: 0; transform: translateY(16px); } 38% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-18px); } }
+      @keyframes transitionRing { 0% { opacity: 0; border-color: rgba(140,199,255,0); transform: scale(.4); } 36% { opacity: .9; border-color: rgba(179,255,64,.42); } 100% { opacity: 0; border-color: rgba(140,199,255,0); transform: scale(7); } }
       .archive-admin-toggle { position: fixed; right: 14px; bottom: 14px; z-index: 20; min-height: 42px; padding: 0 14px; border: 1px solid rgba(179,255,64,.58); border-radius: 8px; color: #eaffc2; background: rgba(7,10,12,.84); font-weight: 900; cursor: pointer; backdrop-filter: blur(10px); }
       .archive-admin { display: none; position: fixed; right: 14px; bottom: 68px; z-index: 21; width: min(520px, calc(100vw - 28px)); max-height: min(720px, calc(100vh - 96px)); overflow: auto; padding: 14px; border: 1px solid rgba(140,199,255,.32); border-radius: 8px; background: rgba(8,10,12,.96); box-shadow: 0 24px 70px rgba(0,0,0,.48); }
       .archive-admin.is-open { display: grid; gap: 12px; }
@@ -470,6 +484,35 @@ function archiveHtml({ origin, entries, exclusions }) {
         } catch (error) {
           setArchiveStatus(error instanceof Error ? error.message : "Could not save rules.");
         }
+      });
+      function startPageTransition(card, href) {
+        if (!card || !href || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+          window.location.href = href;
+          return;
+        }
+        const rect = card.getBoundingClientRect();
+        const title = card.querySelector(".tile-title")?.textContent || "Spine preview";
+        const media = card.querySelector("img, video");
+        const image = media?.currentSrc || media?.src || "";
+        const overlay = document.createElement("div");
+        overlay.className = "page-transition";
+        overlay.innerHTML = '<div class="page-transition-card"><span></span></div><div class="page-transition-ring"><i></i><i></i><i></i></div>';
+        const transitionCard = overlay.querySelector(".page-transition-card");
+        overlay.querySelector(".page-transition-card span").textContent = title;
+        transitionCard.style.setProperty("--transition-top", rect.top + "px");
+        transitionCard.style.setProperty("--transition-left", rect.left + "px");
+        transitionCard.style.setProperty("--transition-width", rect.width + "px");
+        transitionCard.style.setProperty("--transition-height", rect.height + "px");
+        if (image) transitionCard.style.setProperty("--transition-image", "url(" + JSON.stringify(image) + ")");
+        document.body.appendChild(overlay);
+        window.setTimeout(() => { window.location.href = href; }, 720);
+      }
+      document.querySelectorAll(".tile").forEach((link) => {
+        link.addEventListener("click", (event) => {
+          if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button) return;
+          event.preventDefault();
+          startPageTransition(link, link.href);
+        });
       });
       function playArchiveVideo(video) {
         const source = video.dataset.videoSrc || video.getAttribute("src") || "";

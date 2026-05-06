@@ -2522,18 +2522,35 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     openLibrary();
   }, [loadLibrary]);
 
-  const startNewLibraryEntry = () => {
-    setIsLibraryOpen(false);
-    setCurrentLibraryEntry(null);
-    setGeneratedPreviewUrl("");
-    setIsLinkBannerOpen(false);
-    setCopyStatus("");
-    setPreviewNote("");
-    setPreviewNoteStatus("");
-    setError("");
-    setStatus("Choose files for a new library card.");
-    publishedKeysRef.current.clear();
-    window.setTimeout(() => uploadInputRef.current?.click(), 0);
+  const startNewLibraryEntry = (sourceElement?: HTMLElement | null) => {
+    if (sourceElement) {
+      const rect = sourceElement.getBoundingClientRect();
+      setLibraryCardTransition({
+        isOpen: true,
+        rect: {
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+        },
+        image: "",
+        title: "Setup",
+      });
+    }
+    window.setTimeout(() => {
+      setIsLibraryOpen(false);
+      setCurrentLibraryEntry(null);
+      setGeneratedPreviewUrl("");
+      setIsLinkBannerOpen(false);
+      setCopyStatus("");
+      setPreviewNote("");
+      setPreviewNoteStatus("");
+      setError("");
+      setStatus("Choose files for a new library card.");
+      publishedKeysRef.current.clear();
+      setLibraryCardTransition(null);
+      uploadInputRef.current?.click();
+    }, sourceElement ? 520 : 0);
   };
 
   const openLibraryEntryWithTransition = (entry: LibraryEntry, cardElement: HTMLElement, editUrl: string, image = "") => {
@@ -2950,7 +2967,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
             </span>
           </a>
           <div className="site-menu-group">
-            <button className="site-add-button" type="button" onClick={startNewLibraryEntry} aria-label="Add new animation card" title="Add new animation card">
+            <button className="site-add-button" type="button" onClick={(event) => startNewLibraryEntry(event.currentTarget)} aria-label="Add new animation card" title="Add new animation card">
               <Plus size={24} />
             </button>
             <details className="site-menu">
@@ -3323,7 +3340,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
               <h2>{isPortfolioMode ? "MEDIA GALLERY" : "YOUR"}</h2>
             </div>
             <div className="library-modal-actions">
-              <button className="library-add-button" type="button" onClick={startNewLibraryEntry} title="Add new animation card">
+              <button className="library-add-button" type="button" onClick={(event) => startNewLibraryEntry(event.currentTarget)} title="Add new animation card">
                 <Plus size={18} />
               </button>
               <button type="button" onClick={loadLibrary} disabled={isLibraryLoading} title="Refresh library">
