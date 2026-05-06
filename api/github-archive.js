@@ -229,8 +229,15 @@ function tileClassForRatio(ratio) {
   return 'tile--square';
 }
 
+function tileClassForManualSize(size = '') {
+  if (!size || size === 'auto') return '';
+  return `tile--${size}`;
+}
+
 function tileClassForEntry(entry, index = 0) {
   void index;
+  const manualClass = tileClassForManualSize(entry?.cardSize);
+  if (manualClass) return `tile ${manualClass}`;
   const ratio = Number(entry?.mediaAspectRatio || 0);
   return `tile ${tileClassForRatio(ratio)}`;
 }
@@ -281,7 +288,8 @@ function archiveHtml({ origin, entries, exclusions }) {
       const metricId = String(entry?.id || entry?.title || '');
       const likes = stableMetric(metricId, 12, 87);
       const views = stableMetric(`${metricId}:views`, 140, 2860);
-      return `<a class="${tileClassForEntry(entry, index)}" href="${escapeHtml(spineUrl)}" aria-label="Open ${title}">
+      const cardSizeMode = entry?.cardSize && entry.cardSize !== 'auto' ? 'manual' : 'auto';
+      return `<a class="${tileClassForEntry(entry, index)}" data-card-size-mode="${cardSizeMode}" href="${escapeHtml(spineUrl)}" aria-label="Open ${title}">
         <div class="tile-media">${mediaHtml(entry, { origin })}</div>
         <div class="tile-overlay">
           <strong class="tile-title">${title}</strong>
@@ -543,6 +551,7 @@ function archiveHtml({ origin, entries, exclusions }) {
       function applyArchiveVideoAspectClass(video) {
         const tile = video.closest(".tile");
         if (!tile || !video.videoWidth || !video.videoHeight) return;
+        if (tile.dataset.cardSizeMode === "manual") return;
         tile.classList.remove(
           "tile--small-square",
           "tile--square",

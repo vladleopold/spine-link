@@ -144,6 +144,7 @@ type LibraryEntry = {
   previewWidth?: number;
   previewHeight?: number;
   previewDuration?: number;
+  cardSize?: LibraryCardSize;
 };
 
 type UploadResponse = {
@@ -151,6 +152,25 @@ type UploadResponse = {
   repositoryUrl?: string;
   error?: string;
 };
+
+type LibraryCardSize =
+  | "auto"
+  | "square"
+  | "small-square"
+  | "horizontal"
+  | "vertical"
+  | "medium-wide"
+  | "medium-narrow";
+
+const libraryCardSizeOptions: Array<{ value: LibraryCardSize; label: string; dimensions: string }> = [
+  { value: "auto", label: "Auto from WebM", dimensions: "video ratio" },
+  { value: "square", label: "square", dimensions: "415x324" },
+  { value: "small-square", label: "small-square", dimensions: "270x210" },
+  { value: "horizontal", label: "horizontal", dimensions: "415x210" },
+  { value: "vertical", label: "vertical", dimensions: "270x438" },
+  { value: "medium-wide", label: "medium-wide", dimensions: "559x324" },
+  { value: "medium-narrow", label: "medium-narrow", dimensions: "270x324" },
+];
 
 type GoogleUser = {
   email: string;
@@ -242,8 +262,15 @@ function libraryCardSizeClassForRatio(ratio: number) {
   return "library-card--square";
 }
 
+function libraryCardSizeClassForManualSize(size?: string) {
+  if (!size || size === "auto") return "";
+  return `library-card--${size}`;
+}
+
 function libraryCardSizeClass(entry: LibraryEntry, index: number) {
   void index;
+  const manualClass = libraryCardSizeClassForManualSize(entry.cardSize);
+  if (manualClass) return manualClass;
   const width = Number(entry.previewWidth || 0);
   const height = Number(entry.previewHeight || 0);
   const ratio = width > 0 && height > 0 ? width / height : 0;
@@ -253,6 +280,7 @@ function libraryCardSizeClass(entry: LibraryEntry, index: number) {
 function applyLibraryCardVideoAspect(video: HTMLVideoElement) {
   const card = video.closest(".library-card");
   if (!card || !video.videoWidth || !video.videoHeight) return;
+  if (card instanceof HTMLElement && card.dataset.cardSizeMode === "manual") return;
   const nextClass = libraryCardSizeClassForRatio(video.videoWidth / video.videoHeight);
   card.classList.remove(
     "library-card--small-square",
@@ -1600,6 +1628,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   const [isLinkBannerOpen, setIsLinkBannerOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const [selectedPreviewImage, setSelectedPreviewImage] = useState("");
+  const [selectedCardSize, setSelectedCardSize] = useState<LibraryCardSize>("auto");
   const [previewNote, setPreviewNote] = useState("");
   const [previewNoteStatus, setPreviewNoteStatus] = useState("");
   const [currentLibraryEntry, setCurrentLibraryEntry] = useState<LibraryEntry | null>(null);
@@ -1705,6 +1734,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         generatedPosterUrlForEntry(currentLibraryEntry) ||
         "",
     );
+    setSelectedCardSize(currentLibraryEntry.cardSize || "auto");
   }, [currentLibraryEntry]);
 
   useEffect(() => {
@@ -1914,6 +1944,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         setIsLinkBannerOpen(false);
         setCopyStatus("");
         setPreviewNoteStatus("");
+        setSelectedCardSize("auto");
         setCurrentLibraryEntry(null);
         publishedKeysRef.current.clear();
         setSpineOptions(nextSpineOptions);
@@ -2010,6 +2041,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         setCurrentLibraryEntry(entry);
         setLibraryEntries((currentEntries) => [entry, ...currentEntries.filter((currentEntry) => currentEntry.id !== entry.id)]);
         setPreviewNote(entry.note || "");
+        setSelectedCardSize(entry.cardSize || "auto");
         setGeneratedPreviewUrl(previewUrlForEntry(entry.id, entry.defaultAnimation || nextSpine?.defaultAnimation || ""));
         setIsLinkBannerOpen(false);
         setCopyStatus("");
@@ -2585,6 +2617,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
       setCopyStatus("");
       setPreviewNote("");
       setPreviewNoteStatus("");
+      setSelectedCardSize("auto");
       setError("");
       setStatus("Choose files for a new library card.");
       publishedKeysRef.current.clear();
@@ -2884,7 +2917,8 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 thumbnailPosterPath,
                 previewWidth: previewMedia.width || undefined,
                 previewHeight: previewMedia.height || undefined,
-                previewDuration: previewMedia.duration || undefined,
+          previewDuration: previewMedia.duration || undefined,
+          cardSize: selectedCardSize === "auto" ? undefined : selectedCardSize,
               }
             : existingEntry?.thumbnailPoster && /^https:\/\//i.test(existingEntry.thumbnailPoster)
               ? { thumbnailPoster: existingEntry.thumbnailPoster, ...(existingEntry.thumbnailPosterPath ? { thumbnailPosterPath: existingEntry.thumbnailPosterPath } : {}) }
@@ -2921,6 +2955,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         setLibraryEntries((currentEntries) => [entry, ...currentEntries.filter((currentEntry) => currentEntry.id !== entry.id)]);
         setCurrentLibraryEntry(entry);
         setPreviewNote(note);
+        setSelectedCardSize(entry.cardSize || "auto");
         setGeneratedPreviewUrl(permanentPreviewUrl);
         setIsLinkBannerOpen(true);
         setCopyStatus("Permanent link ready");
@@ -3214,9 +3249,13 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
               />
               {isEditPage && selectedPreviewImage ? (
                 <div className="selected-preview-card">
-                  <img src={selectedPreviewImage} alt="" />
+                  {currentLibraryEntry?.webmPreview ? (
+                    <video src={currentLibraryEntry.webmPreview} poster={selectedPreviewImage} muted loop playsInline preload="metadata" />
+                  ) : (
+                    <img src={selectedPreviewImage} alt="" />
+                  )}
                   <div>
-                    <strong>Preview</strong>
+                    <strong>video webm</strong>
                     <span>{activeAnimation || "selected animation"}</span>
                   </div>
                 </div>
@@ -3308,6 +3347,29 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
               </div>
               <p className="link-note">{copyStatus || "Permanent links work without Google sign-in."}</p>
             </div>
+
+            {isEditPage && (
+              <div className="card-size-panel">
+                <div className="section-title">Size</div>
+                <div className="card-size-grid">
+                  {libraryCardSizeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={selectedCardSize === option.value ? "is-selected" : ""}
+                      onClick={() => setSelectedCardSize(option.value)}
+                      aria-pressed={selectedCardSize === option.value}
+                    >
+                      <strong>{option.label}</strong>
+                      <span>{option.dimensions}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="link-note">
+                  Save selected preview writes this size to the portfolio card. Auto uses the real WebM aspect ratio.
+                </p>
+              </div>
+            )}
 
             <div className="note-panel">
               <div className="section-title">Text</div>
@@ -3506,6 +3568,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                   <div
                     className={`library-card ${libraryCardSizeClass(entry, index)}${entry.hiddenFromPublicLibrary ? " is-hidden" : ""}`}
                     key={entry.id}
+                    data-card-size-mode={entry.cardSize && entry.cardSize !== "auto" ? "manual" : "auto"}
                     onClickCapture={(event) => {
                       if (shouldIgnoreCardOpen(event.target)) return;
                       event.preventDefault();

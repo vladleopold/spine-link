@@ -114,8 +114,15 @@ function libraryCardSizeClassForRatio(ratio) {
   return 'library-card--square';
 }
 
+function libraryCardSizeClassForManualSize(size = '') {
+  if (!size || size === 'auto') return '';
+  return `library-card--${size}`;
+}
+
 function libraryCardSizeClass(entry, index = 0) {
   void index;
+  const manualClass = libraryCardSizeClassForManualSize(entry?.cardSize);
+  if (manualClass) return manualClass;
   const width = Number(entry?.previewWidth || 0);
   const height = Number(entry?.previewHeight || 0);
   const ratio = width > 0 && height > 0 ? width / height : 0;
@@ -155,7 +162,8 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       const thumbnailStyle = !webmPreview && (thumbnail || thumbnailPoster) ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
       const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''} muted playsinline preload="metadata" aria-hidden="true"></video>`;
       const likeButton = isLibraryMode ? '' : `<button class="portfolio-like-button" type="button" data-like-id="${escapeHtml(likeId)}" data-base-likes="${likeCount}" aria-pressed="false" title="Like"><span aria-hidden="true">♡</span><strong>${likeCount}</strong></button>`;
-      return `<article class="library-card ${libraryCardSizeClass(entry, index)}" data-entry-id="${entryId}"${thumbnailStyle}>
+      const cardSizeMode = entry.cardSize && entry.cardSize !== 'auto' ? 'manual' : 'auto';
+      return `<article class="library-card ${libraryCardSizeClass(entry, index)}" data-entry-id="${entryId}" data-card-size-mode="${cardSizeMode}"${thumbnailStyle}>
         ${likeButton}
         <a class="library-card-link" href="${previewUrl}" aria-label="Open ${itemTitle}">
           <div class="library-card-visual">
@@ -347,6 +355,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       function applyVideoAspectCardClass(video) {
         const card = video.closest(".library-card");
         if (!card || !video.videoWidth || !video.videoHeight) return;
+        if (card.dataset.cardSizeMode === "manual") return;
         card.classList.remove(
           "library-card--small-square",
           "library-card--square",
