@@ -179,7 +179,7 @@ function mediaHtml(entry, { origin = '', posterClass = '' } = {}) {
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
   const thumbnail = isGifThumbnail ? poster : safeImage(entry?.thumbnail || '');
   if (video) {
-    return `<video class="${posterClass}" src="${escapeHtml(video)}" data-video-src="${escapeHtml(video)}" ${poster ? `poster="${escapeHtml(poster)}"` : ''} muted loop playsinline preload="metadata"></video>`;
+    return `<video class="${posterClass}" src="${escapeHtml(video)}" data-video-src="${escapeHtml(video)}" ${poster ? `poster="${escapeHtml(poster)}"` : ''} muted playsinline preload="metadata"></video>`;
   }
   if (thumbnail) {
     return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="" loading="lazy" decoding="async" />`;
@@ -279,8 +279,9 @@ function archiveHtml({ origin, entries }) {
         if (!source) return;
         if (!video.getAttribute("src")) video.setAttribute("src", source);
         video.muted = true;
-        video.loop = true;
+        video.loop = false;
         video.playsInline = true;
+        try { video.currentTime = 0; } catch {}
         video.play().catch(() => {});
       }
       function stopArchiveVideo(video) {
@@ -293,22 +294,28 @@ function archiveHtml({ origin, entries }) {
         tile.addEventListener("mouseenter", () => playArchiveVideo(video));
         tile.addEventListener("mouseleave", () => stopArchiveVideo(video));
       });
-      function randomArchivePulse() {
+      let archiveSequenceIndex = 0;
+      let activeArchiveVideo = null;
+      function sequenceArchivePulse() {
         const videos = Array.from(document.querySelectorAll(".tile video")).filter((video) => video.dataset.videoSrc || video.getAttribute("src"));
         if (!videos.length) {
-          window.setTimeout(randomArchivePulse, 4200);
+          window.setTimeout(sequenceArchivePulse, 1200);
           return;
         }
-        const sample = videos.sort(() => Math.random() - 0.5).slice(0, Math.max(1, Math.min(4, Math.ceil(videos.length * 0.22))));
-        sample.forEach((video) => {
-          playArchiveVideo(video);
-          window.setTimeout(() => {
-            if (!video.matches(":hover")) stopArchiveVideo(video);
-          }, 1800 + Math.random() * 1700);
-        });
-        window.setTimeout(randomArchivePulse, 3600 + Math.random() * 2600);
+        if (activeArchiveVideo) {
+          activeArchiveVideo.onended = null;
+          stopArchiveVideo(activeArchiveVideo);
+        }
+        const video = videos[archiveSequenceIndex % videos.length];
+        archiveSequenceIndex += 1;
+        activeArchiveVideo = video;
+        video.onended = () => {
+          stopArchiveVideo(video);
+          window.setTimeout(sequenceArchivePulse, 420);
+        };
+        playArchiveVideo(video);
       }
-      window.setTimeout(randomArchivePulse, 900);
+      window.setTimeout(sequenceArchivePulse, 900);
     </script>
   </body>
 </html>`;

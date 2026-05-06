@@ -1660,33 +1660,53 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   useEffect(() => {
     if (!isLibraryOpen) return;
     let timeoutId = 0;
-    const playRandomCards = () => {
+    let activeVideo: HTMLVideoElement | null = null;
+    let videoIndex = 0;
+
+    const stopVideo = (video: HTMLVideoElement | null) => {
+      if (!video) return;
+      video.pause();
+      video.onended = null;
+      try {
+        video.currentTime = 0;
+      } catch {
+        // Ignore browsers that block seeking before metadata is ready.
+      }
+    };
+
+    const playNextCard = () => {
       const videos = Array.from(document.querySelectorAll<HTMLVideoElement>(".library-card-webm")).filter((video) => video.src);
       if (videos.length === 0) {
-        timeoutId = window.setTimeout(playRandomCards, 4200);
+        timeoutId = window.setTimeout(playNextCard, 1200);
         return;
       }
-      const sampleSize = Math.max(1, Math.min(3, Math.ceil(videos.length * 0.28)));
-      const shuffledVideos = videos.sort(() => Math.random() - 0.5).slice(0, sampleSize);
-      shuffledVideos.forEach((video) => {
-        video.muted = true;
-        video.loop = true;
-        video.playsInline = true;
-        video.play().catch(() => {});
-        window.setTimeout(() => {
-          if (video.matches(":hover")) return;
-          video.pause();
-          try {
-            video.currentTime = 0;
-          } catch {
-            // Ignore browsers that block seeking before metadata is ready.
-          }
-        }, 1800 + Math.random() * 1500);
+
+      stopVideo(activeVideo);
+      const video = videos[videoIndex % videos.length];
+      videoIndex += 1;
+      activeVideo = video;
+      video.muted = true;
+      video.loop = false;
+      video.playsInline = true;
+      try {
+        video.currentTime = 0;
+      } catch {
+        // Ignore browsers that block seeking before metadata is ready.
+      }
+      video.onended = () => {
+        stopVideo(video);
+        timeoutId = window.setTimeout(playNextCard, 420);
+      };
+      video.play().catch(() => {
+        stopVideo(video);
+        timeoutId = window.setTimeout(playNextCard, 1200);
       });
-      timeoutId = window.setTimeout(playRandomCards, 3600 + Math.random() * 2600);
     };
-    timeoutId = window.setTimeout(playRandomCards, 900);
-    return () => window.clearTimeout(timeoutId);
+    timeoutId = window.setTimeout(playNextCard, 900);
+    return () => {
+      window.clearTimeout(timeoutId);
+      stopVideo(activeVideo);
+    };
   }, [isLibraryOpen, libraryEntries.length]);
 
   const fileSummary = useMemo(() => {
@@ -3364,8 +3384,13 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                       const video = event.currentTarget.querySelector<HTMLVideoElement>(".library-card-webm");
                       if (!video || !video.src) return;
                       video.muted = true;
-                      video.loop = true;
+                      video.loop = false;
                       video.playsInline = true;
+                      try {
+                        video.currentTime = 0;
+                      } catch {
+                        // Ignore browsers that block seeking before metadata is ready.
+                      }
                       video.play().catch(() => {});
                     }}
                     onMouseLeave={(event) => {
@@ -3410,7 +3435,6 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                         poster={safePoster || thumbnailForCard || undefined}
                         muted
                         playsInline
-                        loop
                         preload="metadata"
                         aria-hidden="true"
                       />

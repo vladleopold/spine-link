@@ -134,7 +134,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       const likeId = String(entry.id || itemTitle);
       const likeCount = baseLikeCount(likeId);
       const thumbnailStyle = thumbnail || thumbnailPoster ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
-      const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''}${thumbnailPoster ? ` poster="${escapeHtml(thumbnailPoster)}"` : ''} muted playsinline loop preload="metadata" aria-hidden="true"></video>`;
+      const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''}${thumbnailPoster ? ` poster="${escapeHtml(thumbnailPoster)}"` : ''} muted playsinline preload="metadata" aria-hidden="true"></video>`;
       const likeButton = isLibraryMode ? '' : `<button class="portfolio-like-button" type="button" data-like-id="${escapeHtml(likeId)}" data-base-likes="${likeCount}" aria-pressed="false" title="Like"><span aria-hidden="true">♡</span><strong>${likeCount}</strong></button>`;
       return `<article class="library-card" data-entry-id="${entryId}"${thumbnailStyle}>
         ${likeButton}
@@ -300,8 +300,9 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
           if (!source) return;
           if (!video.getAttribute("src")) video.setAttribute("src", source);
           video.muted = true;
-          video.loop = true;
+          video.loop = false;
           video.playsInline = true;
+          try { video.currentTime = 0; } catch {}
           video.play().catch(() => {});
         });
         card.addEventListener("mouseleave", () => {
@@ -315,29 +316,37 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       }
       function playVideo(video) {
         const source = video.dataset.videoSrc || video.getAttribute("src") || "";
-        if (!source) return;
+        if (!source) return false;
         if (!video.getAttribute("src")) video.setAttribute("src", source);
         video.muted = true;
-        video.loop = true;
+        video.loop = false;
         video.playsInline = true;
+        try { video.currentTime = 0; } catch {}
         video.play().catch(() => {});
+        return true;
       }
-      function randomVideoPulse() {
+      let sequenceIndex = 0;
+      let activeSequenceVideo = null;
+      function sequenceVideoPulse() {
         const videos = Array.from(document.querySelectorAll(".library-card-webm")).filter((video) => video.dataset.videoSrc || video.getAttribute("src"));
         if (!videos.length) {
-          window.setTimeout(randomVideoPulse, 4200);
+          window.setTimeout(sequenceVideoPulse, 1200);
           return;
         }
-        const sample = videos.sort(() => Math.random() - 0.5).slice(0, Math.max(1, Math.min(3, Math.ceil(videos.length * 0.3))));
-        sample.forEach((video) => {
-          playVideo(video);
-          window.setTimeout(() => {
-            if (!video.matches(":hover")) stopVideo(video);
-          }, 1800 + Math.random() * 1600);
-        });
-        window.setTimeout(randomVideoPulse, 3600 + Math.random() * 2600);
+        if (activeSequenceVideo) {
+          activeSequenceVideo.onended = null;
+          stopVideo(activeSequenceVideo);
+        }
+        const video = videos[sequenceIndex % videos.length];
+        sequenceIndex += 1;
+        activeSequenceVideo = video;
+        video.onended = () => {
+          stopVideo(video);
+          window.setTimeout(sequenceVideoPulse, 420);
+        };
+        if (!playVideo(video)) window.setTimeout(sequenceVideoPulse, 1200);
       }
-      window.setTimeout(randomVideoPulse, 900);
+      window.setTimeout(sequenceVideoPulse, 900);
       document.querySelectorAll(".portfolio-like-button").forEach((button) => {
         const id = button.dataset.likeId || "";
         const base = Number(button.dataset.baseLikes || "0") || 0;
