@@ -322,15 +322,15 @@ function archiveHtml({ origin, entries, exclusions }) {
     </script>
     <style>
       ${baseStyles()}
-      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-flow: dense; grid-auto-rows: 118px; gap: 10px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); grid-auto-flow: dense; grid-auto-rows: 68px; gap: 10px; }
       .tile { position: relative; min-height: 0; overflow: hidden; border: 1px solid rgba(140,199,255,.18); border-radius: 8px; color: inherit; background: #090b0d; text-decoration: none; }
-      .tile--small-square { grid-column: span 1; grid-row: span 2; }
-      .tile--square { grid-column: span 2; grid-row: span 3; }
-      .tile--horizontal, .tile--wide { grid-column: span 3; grid-row: span 3; }
-      .tile--vertical, .tile--medium-narrow { grid-column: span 2; grid-row: span 4; }
-      .tile--medium-wide { grid-column: span 4; grid-row: span 3; }
-      .tile--large-rect { grid-column: span 4; grid-row: span 4; }
-      .tile--full { grid-column: 1 / -1; grid-row: span 4; }
+      .tile--small-square { grid-column: span 2; grid-row: span 3; }
+      .tile--square { grid-column: span 3; grid-row: span 4; }
+      .tile--horizontal, .tile--wide { grid-column: span 5; grid-row: span 4; }
+      .tile--vertical, .tile--medium-narrow { grid-column: span 3; grid-row: span 6; }
+      .tile--medium-wide { grid-column: span 6; grid-row: span 4; }
+      .tile--large-rect { grid-column: span 6; grid-row: span 6; }
+      .tile--full { grid-column: 1 / -1; grid-row: span 5; }
       .tile:hover { border-color: rgba(179,255,64,.68); }
       .tile-media, .tile-media img, .tile-media video { position: absolute; inset: 0; width: 100%; height: 100%; }
       .tile-media img, .tile-media video { object-fit: cover; transform: scale(1.08); background: #050607; }
@@ -369,7 +369,7 @@ function archiveHtml({ origin, entries, exclusions }) {
       .archive-admin-actions button:first-child { border-color: rgba(179,255,64,.58); color: #eaffc2; background: rgba(179,255,64,.12); }
       .archive-admin-status { min-height: 18px; color: rgba(237,245,255,.72); font-size: 12px; }
       @media (max-width: 700px) {
-        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 112px; gap: 8px; }
+        .grid { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: 60px; gap: 8px; }
         .tile, .tile--wide, .tile--horizontal, .tile--medium-wide, .tile--large-rect, .tile--full { grid-column: 1 / -1; }
         .tile--small-square, .tile--square, .tile--vertical, .tile--medium-narrow { grid-column: span 1; }
         .tile-overlay { grid-template-columns: 1fr; align-items: start; gap: 8px; }

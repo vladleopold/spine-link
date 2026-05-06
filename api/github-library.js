@@ -196,15 +196,15 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       .creator-name-line { display: flex; align-items: baseline; gap: 40px; min-width: 0; }
       .creator-name { color: #fff; font-size: clamp(24px, 3.2vw, 34px); font-weight: 950; line-height: 1.05; white-space: nowrap; }
       .creator-count { color: rgba(237,245,255,.62); font-size: clamp(16px, 2vw, 22px); font-weight: 900; letter-spacing: .05em; white-space: nowrap; text-transform: uppercase; }
-      .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); grid-auto-flow: dense; grid-auto-rows: 128px; gap: 18px; }
+      .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); grid-auto-flow: dense; grid-auto-rows: 68px; gap: 18px; }
       .library-card { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; margin: 0; overflow: hidden; border: 2px solid rgba(255,185,214,.72); border-radius: 8px; color: inherit; background: radial-gradient(circle at 22% 22%, rgba(255,106,40,.28), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.32), transparent 32%), linear-gradient(135deg, rgba(32,35,38,.98), rgba(20,22,25,.98)); box-shadow: 0 0 0 1px rgba(255,185,214,.2), 0 20px 56px rgba(0,0,0,.34); transition: transform 150ms ease, border-color 150ms ease; }
-      .library-card--small-square { grid-column: span 1; grid-row: span 2; }
-      .library-card--square { grid-column: span 2; grid-row: span 3; }
-      .library-card--horizontal, .library-card--wide { grid-column: span 3; grid-row: span 3; }
-      .library-card--vertical, .library-card--medium-narrow { grid-column: span 2; grid-row: span 4; }
-      .library-card--medium-wide { grid-column: span 4; grid-row: span 3; }
-      .library-card--large-rect { grid-column: span 4; grid-row: span 4; }
-      .library-card--full { grid-column: 1 / -1; grid-row: span 4; }
+      .library-card--small-square { grid-column: span 2; grid-row: span 3; }
+      .library-card--square { grid-column: span 3; grid-row: span 4; }
+      .library-card--horizontal, .library-card--wide { grid-column: span 5; grid-row: span 4; }
+      .library-card--vertical, .library-card--medium-narrow { grid-column: span 3; grid-row: span 6; }
+      .library-card--medium-wide { grid-column: span 6; grid-row: span 4; }
+      .library-card--large-rect { grid-column: span 6; grid-row: span 6; }
+      .library-card--full { grid-column: 1 / -1; grid-row: span 5; }
       .library-card:hover { transform: translateY(-3px); border-color: #ffe4ef; }
       .is-library-page .creator-card { border-color: rgba(140,199,255,.24); box-shadow: inset 0 0 0 1px rgba(140,199,255,.05), 0 22px 70px rgba(0,0,0,.32); }
       .is-library-page .library-card { border-color: rgba(140,199,255,.58); box-shadow: 0 0 0 1px rgba(140,199,255,.14), 0 20px 56px rgba(0,0,0,.34); }
@@ -242,8 +242,8 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       @keyframes transitionShine { 0% { opacity: 0; transform: translateX(-80%); } 42% { opacity: 1; } 100% { opacity: 0; transform: translateX(82%); } }
       @keyframes transitionTitle { 0% { opacity: 0; transform: translateY(16px); } 38% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-18px); } }
       @keyframes transitionRing { 0% { opacity: 0; border-color: rgba(140,199,255,0); transform: scale(.4); } 36% { opacity: .9; border-color: rgba(179,255,64,.42); } 100% { opacity: 0; border-color: rgba(140,199,255,0); transform: scale(7); } }
-      @media (max-width: 900px) { .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 118px; } .library-card--horizontal, .library-card--wide, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; } }
-      @media (max-width: 640px) { * { scrollbar-width: none; } *::-webkit-scrollbar { width: 0; height: 0; display: none; } .creator-card { grid-template-columns: 1fr; gap: 22px; padding: 20px; } .creator-row { align-items: center; justify-self: stretch; flex-direction: row; gap: 14px; } .creator-avatar { width: clamp(44px, 15vw, 56px); height: clamp(44px, 15vw, 56px); } .creator-name-line { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, max-content); column-gap: 40px; row-gap: 7px; } .creator-name { max-width: calc(100vw - 140px); font-size: clamp(18px, 6.2vw, 30px); white-space: nowrap; } .creator-count { font-size: clamp(14px, 4.4vw, 18px); } .library-grid { grid-template-columns: 1fr; grid-auto-rows: 118px; } .library-card, .library-card--small-square, .library-card--square, .library-card--horizontal, .library-card--wide, .library-card--vertical, .library-card--medium-narrow, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; grid-row: span 3; } }
+      @media (max-width: 900px) { .library-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: 60px; } .library-card--horizontal, .library-card--wide, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; } }
+      @media (max-width: 640px) { * { scrollbar-width: none; } *::-webkit-scrollbar { width: 0; height: 0; display: none; } .creator-card { grid-template-columns: 1fr; gap: 22px; padding: 20px; } .creator-row { align-items: center; justify-self: stretch; flex-direction: row; gap: 14px; } .creator-avatar { width: clamp(44px, 15vw, 56px); height: clamp(44px, 15vw, 56px); } .creator-name-line { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, max-content); column-gap: 40px; row-gap: 7px; } .creator-name { max-width: calc(100vw - 140px); font-size: clamp(18px, 6.2vw, 30px); white-space: nowrap; } .creator-count { font-size: clamp(14px, 4.4vw, 18px); } .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 88px; } .library-card, .library-card--small-square, .library-card--square, .library-card--horizontal, .library-card--wide, .library-card--vertical, .library-card--medium-narrow, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; grid-row: span 3; } }
     </style>
   </head>
   <body class="${publicPageClass}">
