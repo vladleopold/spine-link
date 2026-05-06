@@ -103,10 +103,7 @@ function baseLikeCount(value = '') {
   return 12 + (hash % 87);
 }
 
-function libraryCardSizeClass(entry, index = 0) {
-  const width = Number(entry?.previewWidth || 0);
-  const height = Number(entry?.previewHeight || 0);
-  const ratio = width > 0 && height > 0 ? width / height : 0;
+function libraryCardSizeClassForRatio(ratio) {
   if (!Number.isFinite(ratio) || ratio <= 0) return 'library-card--square';
   if (ratio >= 2.6) return 'library-card--full';
   if (ratio >= 1.8) return 'library-card--wide';
@@ -115,6 +112,14 @@ function libraryCardSizeClass(entry, index = 0) {
   if (ratio <= 0.55) return 'library-card--vertical';
   if (ratio <= 0.78) return 'library-card--medium-narrow';
   return 'library-card--square';
+}
+
+function libraryCardSizeClass(entry, index = 0) {
+  void index;
+  const width = Number(entry?.previewWidth || 0);
+  const height = Number(entry?.previewHeight || 0);
+  const ratio = width > 0 && height > 0 ? width / height : 0;
+  return libraryCardSizeClassForRatio(ratio);
 }
 
 function createLibraryHtml({ origin, publicOwnerId, entries }) {
@@ -329,6 +334,36 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
         window.addEventListener("pagehide", () => window.cancelAnimationFrame(frame), { once: true });
       }
       startParticleField();
+      function cardClassForAspectRatio(ratio) {
+        if (!Number.isFinite(ratio) || ratio <= 0) return "library-card--square";
+        if (ratio >= 2.6) return "library-card--full";
+        if (ratio >= 1.8) return "library-card--wide";
+        if (ratio >= 1.35) return "library-card--horizontal";
+        if (ratio >= 1.12) return "library-card--medium-wide";
+        if (ratio <= 0.55) return "library-card--vertical";
+        if (ratio <= 0.78) return "library-card--medium-narrow";
+        return "library-card--square";
+      }
+      function applyVideoAspectCardClass(video) {
+        const card = video.closest(".library-card");
+        if (!card || !video.videoWidth || !video.videoHeight) return;
+        card.classList.remove(
+          "library-card--small-square",
+          "library-card--square",
+          "library-card--horizontal",
+          "library-card--wide",
+          "library-card--vertical",
+          "library-card--medium-narrow",
+          "library-card--medium-wide",
+          "library-card--large-rect",
+          "library-card--full"
+        );
+        card.classList.add(cardClassForAspectRatio(video.videoWidth / video.videoHeight));
+      }
+      document.querySelectorAll(".library-card-webm").forEach((video) => {
+        video.addEventListener("loadedmetadata", () => applyVideoAspectCardClass(video));
+        if (video.readyState >= 1) applyVideoAspectCardClass(video);
+      });
       function stopVideo(video) {
         video.pause();
         video.onended = null;

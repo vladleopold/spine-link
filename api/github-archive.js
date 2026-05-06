@@ -218,16 +218,21 @@ async function enrichArchiveLayout(settings, origin, entries) {
   return enriched;
 }
 
+function tileClassForRatio(ratio) {
+  if (!Number.isFinite(ratio) || ratio <= 0) return 'tile--square';
+  if (ratio >= 2.6) return 'tile--full';
+  if (ratio >= 1.8) return 'tile--wide';
+  if (ratio >= 1.35) return 'tile--horizontal';
+  if (ratio >= 1.12) return 'tile--medium-wide';
+  if (ratio <= 0.55) return 'tile--vertical';
+  if (ratio <= 0.78) return 'tile--medium-narrow';
+  return 'tile--square';
+}
+
 function tileClassForEntry(entry, index = 0) {
+  void index;
   const ratio = Number(entry?.mediaAspectRatio || 0);
-  if (!Number.isFinite(ratio) || ratio <= 0) return 'tile tile--square';
-  if (ratio >= 2.6) return 'tile tile--full';
-  if (ratio >= 1.8) return 'tile tile--wide';
-  if (ratio >= 1.35) return 'tile tile--horizontal';
-  if (ratio >= 1.12) return 'tile tile--medium-wide';
-  if (ratio <= 0.55) return 'tile tile--vertical';
-  if (ratio <= 0.78) return 'tile tile--medium-narrow';
-  return 'tile tile--square';
+  return `tile ${tileClassForRatio(ratio)}`;
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '' } = {}) {
@@ -524,6 +529,36 @@ function archiveHtml({ origin, entries, exclusions }) {
           event.preventDefault();
           startPageTransition(link, link.href);
         });
+      });
+      function tileClassForAspectRatio(ratio) {
+        if (!Number.isFinite(ratio) || ratio <= 0) return "tile--square";
+        if (ratio >= 2.6) return "tile--full";
+        if (ratio >= 1.8) return "tile--wide";
+        if (ratio >= 1.35) return "tile--horizontal";
+        if (ratio >= 1.12) return "tile--medium-wide";
+        if (ratio <= 0.55) return "tile--vertical";
+        if (ratio <= 0.78) return "tile--medium-narrow";
+        return "tile--square";
+      }
+      function applyArchiveVideoAspectClass(video) {
+        const tile = video.closest(".tile");
+        if (!tile || !video.videoWidth || !video.videoHeight) return;
+        tile.classList.remove(
+          "tile--small-square",
+          "tile--square",
+          "tile--horizontal",
+          "tile--wide",
+          "tile--vertical",
+          "tile--medium-narrow",
+          "tile--medium-wide",
+          "tile--large-rect",
+          "tile--full"
+        );
+        tile.classList.add(tileClassForAspectRatio(video.videoWidth / video.videoHeight));
+      }
+      document.querySelectorAll(".tile video").forEach((video) => {
+        video.addEventListener("loadedmetadata", () => applyArchiveVideoAspectClass(video));
+        if (video.readyState >= 1) applyArchiveVideoAspectClass(video);
       });
       function playArchiveVideo(video) {
         const source = video.dataset.videoSrc || video.getAttribute("src") || "";

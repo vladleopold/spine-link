@@ -231,10 +231,7 @@ function moveLibraryEntryInList(entries: LibraryEntry[], entryId: string, direct
   return nextEntries.map((currentEntry, index) => ({ ...currentEntry, libraryOrder: index + 1 }));
 }
 
-function libraryCardSizeClass(entry: LibraryEntry, index: number) {
-  const width = Number(entry.previewWidth || 0);
-  const height = Number(entry.previewHeight || 0);
-  const ratio = width > 0 && height > 0 ? width / height : 0;
+function libraryCardSizeClassForRatio(ratio: number) {
   if (!Number.isFinite(ratio) || ratio <= 0) return "library-card--square";
   if (ratio >= 2.6) return "library-card--full";
   if (ratio >= 1.8) return "library-card--wide";
@@ -243,6 +240,32 @@ function libraryCardSizeClass(entry: LibraryEntry, index: number) {
   if (ratio <= 0.55) return "library-card--vertical";
   if (ratio <= 0.78) return "library-card--medium-narrow";
   return "library-card--square";
+}
+
+function libraryCardSizeClass(entry: LibraryEntry, index: number) {
+  void index;
+  const width = Number(entry.previewWidth || 0);
+  const height = Number(entry.previewHeight || 0);
+  const ratio = width > 0 && height > 0 ? width / height : 0;
+  return libraryCardSizeClassForRatio(ratio);
+}
+
+function applyLibraryCardVideoAspect(video: HTMLVideoElement) {
+  const card = video.closest(".library-card");
+  if (!card || !video.videoWidth || !video.videoHeight) return;
+  const nextClass = libraryCardSizeClassForRatio(video.videoWidth / video.videoHeight);
+  card.classList.remove(
+    "library-card--small-square",
+    "library-card--square",
+    "library-card--horizontal",
+    "library-card--wide",
+    "library-card--vertical",
+    "library-card--medium-narrow",
+    "library-card--medium-wide",
+    "library-card--large-rect",
+    "library-card--full",
+  );
+  card.classList.add(nextClass);
 }
 
 const googleClientId =
@@ -3527,6 +3550,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                         playsInline
                         preload="metadata"
                         aria-hidden="true"
+                        onLoadedMetadata={(event) => applyLibraryCardVideoAspect(event.currentTarget)}
                       />
                       <Layers size={24} />
                       <span>{entry.animations?.length ?? 0}</span>
