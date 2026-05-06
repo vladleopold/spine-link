@@ -3095,7 +3095,6 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           <div
             className="preview-panel"
             ref={previewPanelRef}
-            style={{ "--preview-pattern-size": `${140 * zoom}px` } as React.CSSProperties}
           >
             {!preparedSpine && (
               <div className="empty-state">
