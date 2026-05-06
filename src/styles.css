@@ -1613,6 +1613,10 @@ h1 {
   border-color: #8cc7ff;
 }
 
+.library-card {
+  cursor: pointer;
+}
+
 .library-modal.is-portfolio-mode .library-card:hover {
   border-color: #ffe4ef;
 }

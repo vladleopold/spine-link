@@ -3288,6 +3288,16 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                   <div
                     className={`library-card${entry.hiddenFromPublicLibrary ? " is-hidden" : ""}`}
                     key={entry.id}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement | null)?.closest("a, button")) return;
+                      window.location.assign(editUrl);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      if ((event.target as HTMLElement | null)?.closest("a, button")) return;
+                      event.preventDefault();
+                      window.location.assign(editUrl);
+                    }}
                     onMouseEnter={(event) => {
                       const video = event.currentTarget.querySelector<HTMLVideoElement>(".library-card-webm");
                       if (!video || !video.src) return;
@@ -3310,6 +3320,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                       "--library-card-offset": `${(index % 4) * 18}px`,
                       ...(thumbnailForCard ? { "--library-thumbnail": `url(${thumbnailForCard})` } : {}),
                     } as React.CSSProperties}
+                    tabIndex={0}
                   >
                     {isPortfolioMode && (
                       <button
