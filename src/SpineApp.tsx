@@ -1521,6 +1521,7 @@ function ParticleField() {
 }
 
 export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
+  const isEditPage = Boolean(editEntryIdFromLocation());
   const playerRef = useRef<SpinePlayerInstance | null>(null);
   const previewPanelRef = useRef<HTMLDivElement | null>(null);
   const playerHostRef = useRef<HTMLDivElement | null>(null);
@@ -2854,7 +2855,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
 
   return (
     <main
-      className={`app-shell ${!preparedSpine ? "is-empty" : ""} ${isIntroDocking ? "is-docking" : ""}`}
+      className={`app-shell ${!preparedSpine ? "is-empty" : ""} ${isIntroDocking ? "is-docking" : ""} ${isEditPage ? "is-edit-page" : ""}`}
       onDragOver={(event) => {
         event.preventDefault();
         setIsDragging(true);
@@ -3222,7 +3223,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
             </div>
 
             <div className="animation-list">
-              <div className="section-title">Animations</div>
+              <div className="section-title">{isEditPage ? "select card preview/this video in Google Video Search shows" : "Animations"}</div>
               {animations.length === 0 ? (
                 <p className="muted">Clickable skeleton animations will appear here after upload.</p>
               ) : (
