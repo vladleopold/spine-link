@@ -44,6 +44,10 @@ function renderBootShell(isDragging = false) {
                 <strong>Animation Preview</strong>
                 <span>Preview Spine animations</span>
               </a>
+              <a href="/share-spine-animation-link.html">
+                <strong>Share Link Guide</strong>
+                <span>Create and share Spine animation URL</span>
+              </a>
             </nav>
           </details>
           <div class="auth-panel">

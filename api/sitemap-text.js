@@ -6,6 +6,8 @@ export default function handler(_request, response) {
     'https://spine-link.vercel.app/amp.html',
     'https://spine-link.vercel.app/spine-preview.html',
     'https://spine-link.vercel.app/spine-animation-dataset.html',
+    'https://spine-link.vercel.app/spine-portfolio.html',
+    'https://spine-link.vercel.app/share-spine-animation-link.html',
     'https://spine-link.vercel.app/spine-link-video.html',
     'https://spine-link.vercel.app/spine-online-video.html',
     'https://spine-link.vercel.app/sitemap.xml',

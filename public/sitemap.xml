@@ -61,6 +61,12 @@
     <priority>0.85</priority>
   </url>
   <url>
+    <loc>https://spine-link.vercel.app/share-spine-animation-link.html</loc>
+    <lastmod>2026-05-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.86</priority>
+  </url>
+  <url>
     <loc>https://spine-link.vercel.app/spine-animator.html</loc>
     <lastmod>2026-05-03</lastmod>
     <changefreq>weekly</changefreq>

@@ -8,6 +8,7 @@ https://spine-link.vercel.app/spine-animation-preview.html
 https://spine-link.vercel.app/spine-animation-dataset.html
 https://spine-link.vercel.app/spine-library.html
 https://spine-link.vercel.app/spine-portfolio.html
+https://spine-link.vercel.app/share-spine-animation-link.html
 https://spine-link.vercel.app/spine-animator.html
 https://spine-link.vercel.app/spine-animations.html
 https://spine-link.vercel.app/spine-work.html
