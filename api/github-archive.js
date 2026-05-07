@@ -555,6 +555,7 @@ function archiveHtml({ origin, entries, exclusions }) {
         const videoRatio = video.videoWidth / video.videoHeight;
         const contentRatio = mediaContentAspectRatio(video);
         if (!contentRatio) return videoRatio;
+        if (videoRatio >= 0.8 && videoRatio <= 1.15 && contentRatio >= 0.95) return 1.36;
         if (videoRatio >= 0.85 && videoRatio <= 1.15 && contentRatio > 0.55 && contentRatio < 1.35) return videoRatio;
         return contentRatio;
       }
