@@ -246,7 +246,7 @@ function moveLibraryEntryInList(entries: LibraryEntry[], entryId: string, direct
 
 function libraryCardSizeClassForRatio(ratio: number) {
   if (!Number.isFinite(ratio) || ratio <= 0) return "library-card--square";
-  if (ratio >= 2.4) return "library-card--full";
+  if (ratio >= 3.2) return "library-card--full";
   if (ratio >= 1.85) return "library-card--wide";
   if (ratio >= 1.35) return "library-card--horizontal";
   if (ratio >= 1.12) return "library-card--medium-wide";

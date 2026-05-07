@@ -220,7 +220,7 @@ async function enrichArchiveLayout(settings, origin, entries) {
 
 function tileClassForRatio(ratio) {
   if (!Number.isFinite(ratio) || ratio <= 0) return 'tile--square';
-  if (ratio >= 2.4) return 'tile--full';
+  if (ratio >= 3.2) return 'tile--full';
   if (ratio >= 1.85) return 'tile--wide';
   if (ratio >= 1.35) return 'tile--horizontal';
   if (ratio >= 1.12) return 'tile--medium-wide';
@@ -497,7 +497,7 @@ function archiveHtml({ origin, entries, exclusions }) {
       });
       function tileClassForAspectRatio(ratio) {
         if (!Number.isFinite(ratio) || ratio <= 0) return "tile--square";
-        if (ratio >= 2.4) return "tile--full";
+        if (ratio >= 3.2) return "tile--full";
         if (ratio >= 1.85) return "tile--wide";
         if (ratio >= 1.35) return "tile--horizontal";
         if (ratio >= 1.12) return "tile--medium-wide";
