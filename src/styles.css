@@ -1836,6 +1836,16 @@ h1 {
   gap: 18px;
 }
 
+.library-card-shell {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  color: inherit;
+}
+
 .library-card {
   position: relative;
   display: flex;
@@ -1859,6 +1869,30 @@ h1 {
     transform 150ms ease,
     border-color 150ms ease,
     background 150ms ease;
+}
+
+.library-modal:not(.is-portfolio-mode) .library-card-shell.library-card--small-square,
+.library-modal:not(.is-portfolio-mode) .library-card-shell.library-card--horizontal,
+.library-modal:not(.is-portfolio-mode) .library-card-shell.library-card--medium-narrow,
+.library-modal:not(.is-portfolio-mode) .library-card-shell.library-card--full {
+  grid-row: span 3;
+}
+
+.library-modal:not(.is-portfolio-mode) .library-card-shell.library-card--square,
+.library-modal:not(.is-portfolio-mode) .library-card-shell.library-card--medium-wide {
+  grid-row: span 4;
+}
+
+.library-modal:not(.is-portfolio-mode) .library-card-shell.library-card--wide {
+  grid-row: span 3;
+}
+
+.library-modal:not(.is-portfolio-mode) .library-card-shell.library-card--large-rect {
+  grid-row: span 5;
+}
+
+.library-modal:not(.is-portfolio-mode) .library-card-shell.library-card--vertical {
+  grid-row: span 8;
 }
 
 .library-card--small-square {
@@ -1987,20 +2021,23 @@ h1 {
   line-height: 1;
 }
 
-.library-card.is-hidden {
+.library-card-shell.is-hidden .library-card {
   border-color: rgba(231, 237, 244, 0.32);
   filter: saturate(0.62);
 }
 
+.library-card-shell:hover .library-card,
 .library-card:hover {
   transform: translateY(-3px);
   border-color: #8cc7ff;
 }
 
-.library-card {
+.library-card,
+.library-card-shell {
   cursor: pointer;
 }
 
+.library-modal.is-portfolio-mode .library-card-shell:hover .library-card,
 .library-modal.is-portfolio-mode .library-card:hover {
   border-color: #ffe4ef;
 }
@@ -2082,7 +2119,8 @@ h1 {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 7px;
-  margin: 0 14px 8px;
+  margin: 0;
+  cursor: default;
 }
 
 .library-card-order-actions {
@@ -2091,7 +2129,8 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin: 0 14px 14px;
+  margin: 0;
+  cursor: default;
 }
 
 .library-card-actions a,

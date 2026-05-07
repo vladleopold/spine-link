@@ -305,7 +305,7 @@ function selectLibraryVideoAspectRatio(video: HTMLVideoElement) {
 }
 
 function applyLibraryCardVideoAspect(video: HTMLVideoElement) {
-  const card = video.closest(".library-card");
+  const card = video.closest(".library-card-shell") || video.closest(".library-card");
   if (!card || !video.videoWidth || !video.videoHeight) return;
   if (card instanceof HTMLElement && card.dataset.cardSizeMode === "manual") return;
   const nextClass = libraryCardSizeClassForRatio(selectLibraryVideoAspectRatio(video));
@@ -3666,9 +3666,16 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 };
                 return (
                   <div
-                    className={`library-card ${libraryCardSizeClass(entry, index)}${entry.hiddenFromPublicLibrary ? " is-hidden" : ""}`}
+                    className={`library-card-shell ${libraryCardSizeClass(entry, index)}${entry.hiddenFromPublicLibrary ? " is-hidden" : ""}`}
                     key={entry.id}
                     data-card-size-mode={entry.cardSize && entry.cardSize !== "auto" ? "manual" : "auto"}
+                    style={{
+                      "--library-card-offset": `${(index % 4) * 18}px`,
+                      ...(!webmPreviewUrl && thumbnailForCard ? { "--library-thumbnail": `url(${thumbnailForCard})` } : {}),
+                    } as React.CSSProperties}
+                  >
+                    <div
+                      className="library-card"
                     onClickCapture={(event) => {
                       if (shouldIgnoreCardOpen(event.target)) return;
                       event.preventDefault();
@@ -3680,10 +3687,6 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                       event.preventDefault();
                       openEntryEditor();
                     }}
-                    style={{
-                      "--library-card-offset": `${(index % 4) * 18}px`,
-                      ...(!webmPreviewUrl && thumbnailForCard ? { "--library-thumbnail": `url(${thumbnailForCard})` } : {}),
-                    } as React.CSSProperties}
                     tabIndex={0}
                   >
                     {isPortfolioMode && (
@@ -3733,6 +3736,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                       <div className="library-card-meta">
                         <span>{entry.files?.length ?? 0} files</span>
                       </div>
+                    </div>
                     </div>
                     </div>
                     <div className="library-card-actions" aria-label={`${entry.title || entry.id} actions`}>
