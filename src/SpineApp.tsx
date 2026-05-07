@@ -251,7 +251,7 @@ function libraryCardSizeClassForRatio(ratio: number) {
   if (ratio >= 1.35) return "library-card--horizontal";
   if (ratio >= 1.12) return "library-card--medium-wide";
   if (ratio <= 0.62) return "library-card--vertical";
-  if (ratio <= 0.82) return "library-card--medium-narrow";
+  if (ratio <= 0.78) return "library-card--medium-narrow";
   return "library-card--square";
 }
 
