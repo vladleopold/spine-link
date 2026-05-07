@@ -48,6 +48,10 @@ function renderBootShell(isDragging = false) {
                 <strong>Share Link Guide</strong>
                 <span>Create and share Spine animation URL</span>
               </a>
+              <a href="/site-map.html">
+                <strong>Site Map</strong>
+                <span>All SEO pages in one list</span>
+              </a>
             </nav>
           </details>
           <div class="auth-panel">

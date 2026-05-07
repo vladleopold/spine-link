@@ -9,6 +9,7 @@ const urls = [
   { loc: 'https://spine-link.vercel.app/spine-library.html', lastmod: '2026-05-07', changefreq: 'weekly', priority: '0.85' },
   { loc: 'https://spine-link.vercel.app/spine-portfolio.html', lastmod: '2026-05-07', changefreq: 'weekly', priority: '0.85' },
   { loc: 'https://spine-link.vercel.app/share-spine-animation-link.html', lastmod: '2026-05-07', changefreq: 'weekly', priority: '0.86' },
+  { loc: 'https://spine-link.vercel.app/spine-portfolio-link.html', lastmod: '2026-05-07', changefreq: 'weekly', priority: '0.84' },
   { loc: 'https://spine-link.vercel.app/spine-animator.html', lastmod: '2026-05-07', changefreq: 'weekly', priority: '0.8' },
   { loc: 'https://spine-link.vercel.app/spine-animations.html', lastmod: '2026-05-07', changefreq: 'weekly', priority: '0.8' },
   { loc: 'https://spine-link.vercel.app/spine-work.html', lastmod: '2026-05-07', changefreq: 'weekly', priority: '0.8' },
