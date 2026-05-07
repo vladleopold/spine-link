@@ -1883,7 +1883,7 @@ h1 {
 
 .library-card--vertical {
   grid-column: span 2;
-  grid-row: span 4;
+  grid-row: span 7;
 }
 
 .library-card--medium-narrow {

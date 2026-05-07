@@ -343,7 +343,7 @@ function archiveHtml({ origin, entries, exclusions }) {
       .tile--square { grid-column: span 3; grid-row: span 3; }
       .tile--horizontal { grid-column: span 3; grid-row: span 2; }
       .tile--wide { grid-column: span 4; grid-row: span 2; }
-      .tile--vertical { grid-column: span 2; grid-row: span 4; }
+      .tile--vertical { grid-column: span 2; grid-row: span 7; }
       .tile--medium-narrow { grid-column: span 2; grid-row: span 3; }
       .tile--medium-wide { grid-column: span 4; grid-row: span 3; }
       .tile--large-rect { grid-column: span 4; grid-row: span 4; }

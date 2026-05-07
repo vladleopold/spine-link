@@ -217,7 +217,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       .library-card--square { grid-column: span 3; grid-row: span 3; }
       .library-card--horizontal { grid-column: span 3; grid-row: span 2; }
       .library-card--wide { grid-column: span 4; grid-row: span 2; }
-      .library-card--vertical { grid-column: span 2; grid-row: span 4; }
+      .library-card--vertical { grid-column: span 2; grid-row: span 7; }
       .library-card--medium-narrow { grid-column: span 2; grid-row: span 3; }
       .library-card--medium-wide { grid-column: span 4; grid-row: span 3; }
       .library-card--large-rect { grid-column: span 4; grid-row: span 4; }
