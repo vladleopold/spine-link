@@ -1872,12 +1872,12 @@ h1 {
 }
 
 .library-card--horizontal {
-  grid-column: span 3;
+  grid-column: span 4;
   grid-row: span 2;
 }
 
 .library-card--wide {
-  grid-column: span 4;
+  grid-column: span 6;
   grid-row: span 2;
 }
 

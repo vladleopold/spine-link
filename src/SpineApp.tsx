@@ -246,12 +246,12 @@ function moveLibraryEntryInList(entries: LibraryEntry[], entryId: string, direct
 
 function libraryCardSizeClassForRatio(ratio: number) {
   if (!Number.isFinite(ratio) || ratio <= 0) return "library-card--square";
-  if (ratio >= 2.6) return "library-card--full";
-  if (ratio >= 1.8) return "library-card--wide";
+  if (ratio >= 2.4) return "library-card--full";
+  if (ratio >= 1.85) return "library-card--wide";
   if (ratio >= 1.35) return "library-card--horizontal";
   if (ratio >= 1.12) return "library-card--medium-wide";
-  if (ratio <= 0.84) return "library-card--vertical";
-  if (ratio <= 0.98) return "library-card--medium-narrow";
+  if (ratio <= 0.62) return "library-card--vertical";
+  if (ratio <= 0.82) return "library-card--medium-narrow";
   return "library-card--square";
 }
 
@@ -291,12 +291,21 @@ function videoContentAspectRatio(video: HTMLVideoElement) {
   }
 }
 
+function selectLibraryVideoAspectRatio(video: HTMLVideoElement) {
+  const videoRatio = video.videoWidth / video.videoHeight;
+  const contentRatio = videoContentAspectRatio(video);
+  if (!contentRatio) return videoRatio;
+  if (videoRatio >= 0.85 && videoRatio <= 1.15 && contentRatio > 0.55 && contentRatio < 1.35) {
+    return videoRatio;
+  }
+  return contentRatio;
+}
+
 function applyLibraryCardVideoAspect(video: HTMLVideoElement) {
   const card = video.closest(".library-card");
   if (!card || !video.videoWidth || !video.videoHeight) return;
   if (card instanceof HTMLElement && card.dataset.cardSizeMode === "manual") return;
-  const contentRatio = videoContentAspectRatio(video);
-  const nextClass = libraryCardSizeClassForRatio(contentRatio || video.videoWidth / video.videoHeight);
+  const nextClass = libraryCardSizeClassForRatio(selectLibraryVideoAspectRatio(video));
   card.classList.remove(
     "library-card--small-square",
     "library-card--square",
@@ -1124,6 +1133,7 @@ function detectImageDataContentBounds(imageData: ImageData): CanvasContentBounds
   if (!width || !height) return fullBounds;
 
   const background = sampleCanvasCornerBackground(data, width, height);
+  const backgroundLuma = background[0] * 0.2126 + background[1] * 0.7152 + background[2] * 0.0722;
   let minX = width;
   let minY = height;
   let maxX = -1;
@@ -1132,13 +1142,21 @@ function detectImageDataContentBounds(imageData: ImageData): CanvasContentBounds
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const index = (y * width + x) * 4;
+      const red = data[index];
+      const green = data[index + 1];
+      const blue = data[index + 2];
       const alpha = data[index + 3];
-      const colorDistance =
-        Math.abs(data[index] - background[0]) +
-        Math.abs(data[index + 1] - background[1]) +
-        Math.abs(data[index + 2] - background[2]) +
-        Math.abs(alpha - background[3]);
-      if (alpha > 12 && colorDistance > 34) {
+      const rgbDistance =
+        Math.abs(red - background[0]) +
+        Math.abs(green - background[1]) +
+        Math.abs(blue - background[2]);
+      const alphaDistance = Math.abs(alpha - background[3]);
+      const luma = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+      const chroma = Math.max(red, green, blue) - Math.min(red, green, blue);
+      const isTransparentContent = background[3] < 32 ? alpha > 18 : alphaDistance > 80;
+      const isVisibleVideoContent =
+        alpha > 12 && rgbDistance > 72 && (luma > backgroundLuma + 24 || chroma > 28 || rgbDistance > 120);
+      if (isTransparentContent || isVisibleVideoContent) {
         minX = Math.min(minX, x);
         minY = Math.min(minY, y);
         maxX = Math.max(maxX, x);

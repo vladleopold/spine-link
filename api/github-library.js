@@ -105,12 +105,12 @@ function baseLikeCount(value = '') {
 
 function libraryCardSizeClassForRatio(ratio) {
   if (!Number.isFinite(ratio) || ratio <= 0) return 'library-card--square';
-  if (ratio >= 2.6) return 'library-card--full';
-  if (ratio >= 1.8) return 'library-card--wide';
+  if (ratio >= 2.4) return 'library-card--full';
+  if (ratio >= 1.85) return 'library-card--wide';
   if (ratio >= 1.35) return 'library-card--horizontal';
   if (ratio >= 1.12) return 'library-card--medium-wide';
-  if (ratio <= 0.84) return 'library-card--vertical';
-  if (ratio <= 0.98) return 'library-card--medium-narrow';
+  if (ratio <= 0.62) return 'library-card--vertical';
+  if (ratio <= 0.82) return 'library-card--medium-narrow';
   return 'library-card--square';
 }
 
@@ -215,8 +215,8 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       .library-card { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; margin: 0; overflow: hidden; border: 2px solid rgba(255,185,214,.72); border-radius: 8px; color: inherit; background: radial-gradient(circle at 22% 22%, rgba(255,106,40,.28), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.32), transparent 32%), linear-gradient(135deg, rgba(32,35,38,.98), rgba(20,22,25,.98)); box-shadow: 0 0 0 1px rgba(255,185,214,.2), 0 20px 56px rgba(0,0,0,.34); transition: transform 150ms ease, border-color 150ms ease; }
       .library-card--small-square { grid-column: span 2; grid-row: span 2; }
       .library-card--square { grid-column: span 3; grid-row: span 3; }
-      .library-card--horizontal { grid-column: span 3; grid-row: span 2; }
-      .library-card--wide { grid-column: span 4; grid-row: span 2; }
+      .library-card--horizontal { grid-column: span 4; grid-row: span 2; }
+      .library-card--wide { grid-column: span 6; grid-row: span 2; }
       .library-card--vertical { grid-column: span 2; grid-row: span 7; }
       .library-card--medium-narrow { grid-column: span 2; grid-row: span 3; }
       .library-card--medium-wide { grid-column: span 4; grid-row: span 3; }
@@ -330,12 +330,12 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       startParticleField();
       function cardClassForAspectRatio(ratio) {
         if (!Number.isFinite(ratio) || ratio <= 0) return "library-card--square";
-        if (ratio >= 2.6) return "library-card--full";
-        if (ratio >= 1.8) return "library-card--wide";
+        if (ratio >= 2.4) return "library-card--full";
+        if (ratio >= 1.85) return "library-card--wide";
         if (ratio >= 1.35) return "library-card--horizontal";
         if (ratio >= 1.12) return "library-card--medium-wide";
-        if (ratio <= 0.84) return "library-card--vertical";
-        if (ratio <= 0.98) return "library-card--medium-narrow";
+        if (ratio <= 0.62) return "library-card--vertical";
+        if (ratio <= 0.82) return "library-card--medium-narrow";
         return "library-card--square";
       }
       function mediaContentAspectRatio(video) {
@@ -361,12 +361,19 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
             }
           }
           const bg = [red / count, green / count, blue / count, alpha / count];
+          const bgLuma = bg[0] * 0.2126 + bg[1] * 0.7152 + bg[2] * 0.0722;
           let minX = image.width, minY = image.height, maxX = -1, maxY = -1;
           for (let y = 0; y < image.height; y += 1) {
             for (let x = 0; x < image.width; x += 1) {
               const index = (y * image.width + x) * 4;
-              const colorDistance = Math.abs(data[index] - bg[0]) + Math.abs(data[index + 1] - bg[1]) + Math.abs(data[index + 2] - bg[2]) + Math.abs(data[index + 3] - bg[3]);
-              if (data[index + 3] > 12 && colorDistance > 34) {
+              const r = data[index], g = data[index + 1], b = data[index + 2], a = data[index + 3];
+              const rgbDistance = Math.abs(r - bg[0]) + Math.abs(g - bg[1]) + Math.abs(b - bg[2]);
+              const alphaDistance = Math.abs(a - bg[3]);
+              const luma = r * 0.2126 + g * 0.7152 + b * 0.0722;
+              const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+              const isTransparentContent = bg[3] < 32 ? a > 18 : alphaDistance > 80;
+              const isVisibleVideoContent = a > 12 && rgbDistance > 72 && (luma > bgLuma + 24 || chroma > 28 || rgbDistance > 120);
+              if (isTransparentContent || isVisibleVideoContent) {
                 minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
               }
             }
@@ -376,6 +383,13 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
         } catch {
           return 0;
         }
+      }
+      function selectedVideoAspectRatio(video) {
+        const videoRatio = video.videoWidth / video.videoHeight;
+        const contentRatio = mediaContentAspectRatio(video);
+        if (!contentRatio) return videoRatio;
+        if (videoRatio >= 0.85 && videoRatio <= 1.15 && contentRatio > 0.55 && contentRatio < 1.35) return videoRatio;
+        return contentRatio;
       }
       function applyVideoAspectCardClass(video) {
         const card = video.closest(".library-card");
@@ -392,7 +406,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
           "library-card--large-rect",
           "library-card--full"
         );
-        card.classList.add(cardClassForAspectRatio(mediaContentAspectRatio(video) || video.videoWidth / video.videoHeight));
+        card.classList.add(cardClassForAspectRatio(selectedVideoAspectRatio(video)));
       }
       document.querySelectorAll(".library-card-webm").forEach((video) => {
         video.addEventListener("loadedmetadata", () => applyVideoAspectCardClass(video));

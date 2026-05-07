@@ -220,12 +220,12 @@ async function enrichArchiveLayout(settings, origin, entries) {
 
 function tileClassForRatio(ratio) {
   if (!Number.isFinite(ratio) || ratio <= 0) return 'tile--square';
-  if (ratio >= 2.6) return 'tile--full';
-  if (ratio >= 1.8) return 'tile--wide';
+  if (ratio >= 2.4) return 'tile--full';
+  if (ratio >= 1.85) return 'tile--wide';
   if (ratio >= 1.35) return 'tile--horizontal';
   if (ratio >= 1.12) return 'tile--medium-wide';
-  if (ratio <= 0.84) return 'tile--vertical';
-  if (ratio <= 0.98) return 'tile--medium-narrow';
+  if (ratio <= 0.62) return 'tile--vertical';
+  if (ratio <= 0.82) return 'tile--medium-narrow';
   return 'tile--square';
 }
 
@@ -341,8 +341,8 @@ function archiveHtml({ origin, entries, exclusions }) {
       .tile { position: relative; min-height: 0; overflow: hidden; border: 1px solid rgba(140,199,255,.18); border-radius: 8px; color: inherit; background: #090b0d; text-decoration: none; }
       .tile--small-square { grid-column: span 2; grid-row: span 2; }
       .tile--square { grid-column: span 3; grid-row: span 3; }
-      .tile--horizontal { grid-column: span 3; grid-row: span 2; }
-      .tile--wide { grid-column: span 4; grid-row: span 2; }
+      .tile--horizontal { grid-column: span 4; grid-row: span 2; }
+      .tile--wide { grid-column: span 6; grid-row: span 2; }
       .tile--vertical { grid-column: span 2; grid-row: span 7; }
       .tile--medium-narrow { grid-column: span 2; grid-row: span 3; }
       .tile--medium-wide { grid-column: span 4; grid-row: span 3; }
@@ -497,12 +497,12 @@ function archiveHtml({ origin, entries, exclusions }) {
       });
       function tileClassForAspectRatio(ratio) {
         if (!Number.isFinite(ratio) || ratio <= 0) return "tile--square";
-        if (ratio >= 2.6) return "tile--full";
-        if (ratio >= 1.8) return "tile--wide";
+        if (ratio >= 2.4) return "tile--full";
+        if (ratio >= 1.85) return "tile--wide";
         if (ratio >= 1.35) return "tile--horizontal";
         if (ratio >= 1.12) return "tile--medium-wide";
-        if (ratio <= 0.84) return "tile--vertical";
-        if (ratio <= 0.98) return "tile--medium-narrow";
+        if (ratio <= 0.62) return "tile--vertical";
+        if (ratio <= 0.82) return "tile--medium-narrow";
         return "tile--square";
       }
       function mediaContentAspectRatio(video) {
@@ -528,12 +528,19 @@ function archiveHtml({ origin, entries, exclusions }) {
             }
           }
           const bg = [red / count, green / count, blue / count, alpha / count];
+          const bgLuma = bg[0] * 0.2126 + bg[1] * 0.7152 + bg[2] * 0.0722;
           let minX = image.width, minY = image.height, maxX = -1, maxY = -1;
           for (let y = 0; y < image.height; y += 1) {
             for (let x = 0; x < image.width; x += 1) {
               const index = (y * image.width + x) * 4;
-              const colorDistance = Math.abs(data[index] - bg[0]) + Math.abs(data[index + 1] - bg[1]) + Math.abs(data[index + 2] - bg[2]) + Math.abs(data[index + 3] - bg[3]);
-              if (data[index + 3] > 12 && colorDistance > 34) {
+              const r = data[index], g = data[index + 1], b = data[index + 2], a = data[index + 3];
+              const rgbDistance = Math.abs(r - bg[0]) + Math.abs(g - bg[1]) + Math.abs(b - bg[2]);
+              const alphaDistance = Math.abs(a - bg[3]);
+              const luma = r * 0.2126 + g * 0.7152 + b * 0.0722;
+              const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+              const isTransparentContent = bg[3] < 32 ? a > 18 : alphaDistance > 80;
+              const isVisibleVideoContent = a > 12 && rgbDistance > 72 && (luma > bgLuma + 24 || chroma > 28 || rgbDistance > 120);
+              if (isTransparentContent || isVisibleVideoContent) {
                 minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
               }
             }
@@ -543,6 +550,13 @@ function archiveHtml({ origin, entries, exclusions }) {
         } catch {
           return 0;
         }
+      }
+      function selectedVideoAspectRatio(video) {
+        const videoRatio = video.videoWidth / video.videoHeight;
+        const contentRatio = mediaContentAspectRatio(video);
+        if (!contentRatio) return videoRatio;
+        if (videoRatio >= 0.85 && videoRatio <= 1.15 && contentRatio > 0.55 && contentRatio < 1.35) return videoRatio;
+        return contentRatio;
       }
       function applyArchiveVideoAspectClass(video) {
         const tile = video.closest(".tile");
@@ -559,7 +573,7 @@ function archiveHtml({ origin, entries, exclusions }) {
           "tile--large-rect",
           "tile--full"
         );
-        tile.classList.add(tileClassForAspectRatio(mediaContentAspectRatio(video) || video.videoWidth / video.videoHeight));
+        tile.classList.add(tileClassForAspectRatio(selectedVideoAspectRatio(video)));
       }
       document.querySelectorAll(".tile video").forEach((video) => {
         video.addEventListener("loadedmetadata", () => applyArchiveVideoAspectClass(video));
