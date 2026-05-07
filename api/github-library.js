@@ -338,6 +338,45 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
         if (ratio <= 0.98) return "library-card--medium-narrow";
         return "library-card--square";
       }
+      function mediaContentAspectRatio(video) {
+        if (!video.videoWidth || !video.videoHeight || video.readyState < 2) return 0;
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) return 0;
+        try {
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const image = context.getImageData(0, 0, canvas.width, canvas.height);
+          const data = image.data;
+          const sample = Math.max(2, Math.min(16, Math.floor(Math.min(image.width, image.height) / 8)));
+          let red = 0, green = 0, blue = 0, alpha = 0, count = 0;
+          function add(x, y) {
+            const index = (y * image.width + x) * 4;
+            red += data[index]; green += data[index + 1]; blue += data[index + 2]; alpha += data[index + 3]; count += 1;
+          }
+          for (let y = 0; y < sample; y += 1) {
+            for (let x = 0; x < sample; x += 1) {
+              add(x, y); add(image.width - 1 - x, y); add(x, image.height - 1 - y); add(image.width - 1 - x, image.height - 1 - y);
+            }
+          }
+          const bg = [red / count, green / count, blue / count, alpha / count];
+          let minX = image.width, minY = image.height, maxX = -1, maxY = -1;
+          for (let y = 0; y < image.height; y += 1) {
+            for (let x = 0; x < image.width; x += 1) {
+              const index = (y * image.width + x) * 4;
+              const colorDistance = Math.abs(data[index] - bg[0]) + Math.abs(data[index + 1] - bg[1]) + Math.abs(data[index + 2] - bg[2]) + Math.abs(data[index + 3] - bg[3]);
+              if (data[index + 3] > 12 && colorDistance > 34) {
+                minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+              }
+            }
+          }
+          if (maxX < minX || maxY < minY) return 0;
+          return (maxX - minX + 1) / (maxY - minY + 1);
+        } catch {
+          return 0;
+        }
+      }
       function applyVideoAspectCardClass(video) {
         const card = video.closest(".library-card");
         if (!card || !video.videoWidth || !video.videoHeight) return;
@@ -353,10 +392,11 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
           "library-card--large-rect",
           "library-card--full"
         );
-        card.classList.add(cardClassForAspectRatio(video.videoWidth / video.videoHeight));
+        card.classList.add(cardClassForAspectRatio(mediaContentAspectRatio(video) || video.videoWidth / video.videoHeight));
       }
       document.querySelectorAll(".library-card-webm").forEach((video) => {
         video.addEventListener("loadedmetadata", () => applyVideoAspectCardClass(video));
+        video.addEventListener("loadeddata", () => applyVideoAspectCardClass(video));
         if (video.readyState >= 1) applyVideoAspectCardClass(video);
       });
       function stopVideo(video) {

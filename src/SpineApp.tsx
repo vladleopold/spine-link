@@ -270,11 +270,33 @@ function libraryCardSizeClass(entry: LibraryEntry, index: number) {
   return libraryCardSizeClassForRatio(ratio);
 }
 
+function videoContentAspectRatio(video: HTMLVideoElement) {
+  const width = video.videoWidth;
+  const height = video.videoHeight;
+  if (!width || !height || video.readyState < 2) return 0;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return 0;
+
+  try {
+    context.drawImage(video, 0, 0, width, height);
+    const imageData = context.getImageData(0, 0, width, height);
+    const bounds = detectImageDataContentBounds(imageData);
+    return bounds.width / bounds.height;
+  } catch {
+    return 0;
+  }
+}
+
 function applyLibraryCardVideoAspect(video: HTMLVideoElement) {
   const card = video.closest(".library-card");
   if (!card || !video.videoWidth || !video.videoHeight) return;
   if (card instanceof HTMLElement && card.dataset.cardSizeMode === "manual") return;
-  const nextClass = libraryCardSizeClassForRatio(video.videoWidth / video.videoHeight);
+  const contentRatio = videoContentAspectRatio(video);
+  const nextClass = libraryCardSizeClassForRatio(contentRatio || video.videoWidth / video.videoHeight);
   card.classList.remove(
     "library-card--small-square",
     "library-card--square",
@@ -1096,29 +1118,11 @@ function sampleCanvasCornerBackground(data: Uint8ClampedArray, width: number, he
   return [red / count, green / count, blue / count, alpha / count];
 }
 
-function detectCanvasContentBounds(sourceCanvas: HTMLCanvasElement): CanvasContentBounds {
-  const width = sourceCanvas.width;
-  const height = sourceCanvas.height;
+function detectImageDataContentBounds(imageData: ImageData): CanvasContentBounds {
+  const { width, height, data } = imageData;
   const fullBounds = { x: 0, y: 0, width, height };
   if (!width || !height) return fullBounds;
 
-  const probeCanvas = document.createElement("canvas");
-  probeCanvas.width = width;
-  probeCanvas.height = height;
-  const probeContext = probeCanvas.getContext("2d", { willReadFrequently: true });
-  if (!probeContext) return fullBounds;
-
-  probeContext.clearRect(0, 0, width, height);
-  probeContext.drawImage(sourceCanvas, 0, 0);
-
-  let imageData: ImageData;
-  try {
-    imageData = probeContext.getImageData(0, 0, width, height);
-  } catch {
-    return fullBounds;
-  }
-
-  const data = imageData.data;
   const background = sampleCanvasCornerBackground(data, width, height);
   let minX = width;
   let minY = height;
@@ -1153,6 +1157,31 @@ function detectCanvasContentBounds(sourceCanvas: HTMLCanvasElement): CanvasConte
   const right = Math.min(width, maxX + padding + 1);
   const bottom = Math.min(height, maxY + padding + 1);
   return { x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) };
+}
+
+function detectCanvasContentBounds(sourceCanvas: HTMLCanvasElement): CanvasContentBounds {
+  const width = sourceCanvas.width;
+  const height = sourceCanvas.height;
+  const fullBounds = { x: 0, y: 0, width, height };
+  if (!width || !height) return fullBounds;
+
+  const probeCanvas = document.createElement("canvas");
+  probeCanvas.width = width;
+  probeCanvas.height = height;
+  const probeContext = probeCanvas.getContext("2d", { willReadFrequently: true });
+  if (!probeContext) return fullBounds;
+
+  probeContext.clearRect(0, 0, width, height);
+  probeContext.drawImage(sourceCanvas, 0, 0);
+
+  let imageData: ImageData;
+  try {
+    imageData = probeContext.getImageData(0, 0, width, height);
+  } catch {
+    return fullBounds;
+  }
+
+  return detectImageDataContentBounds(imageData);
 }
 
 function drawCanvasPreviewFrame(
@@ -3664,6 +3693,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                         preload="metadata"
                         aria-hidden="true"
                         onLoadedMetadata={(event) => applyLibraryCardVideoAspect(event.currentTarget)}
+                        onLoadedData={(event) => applyLibraryCardVideoAspect(event.currentTarget)}
                       />
                       <Layers size={24} />
                       <span>{entry.animations?.length ?? 0}</span>
