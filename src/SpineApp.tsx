@@ -3330,46 +3330,46 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 </div>
               )}
             </div>
-            <label
-              className={`drop-zone ${isDragging ? "is-dragging" : ""}`}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setIsDragging(true);
-              }}
-              onDragLeave={(event) => {
-                event.stopPropagation();
-                setIsDragging(false);
-              }}
-              onDrop={handleDrop}
-            >
-              <input
-                ref={uploadInputRef}
-                type="file"
-                multiple
-                accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
-                onChange={(event) => event.target.files && void prepareFromFiles(event.target.files)}
-              />
-              {isEditPage && selectedPreviewImage ? (
-                <div className="selected-preview-card">
-                  {currentLibraryEntry?.webmPreview ? (
-                    <video src={currentLibraryEntry.webmPreview} poster={selectedPreviewImage} muted loop playsInline preload="metadata" />
-                  ) : (
-                    <img src={selectedPreviewImage} alt="" />
-                  )}
-                  <div>
-                    <strong>video webm</strong>
-                    <span>{activeAnimation || "selected animation"}</span>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <Upload size={22} />
-                  <strong>Drag files here</strong>
-                  <span>json/skel, atlas, and one or more texture images</span>
-                </>
-              )}
-            </label>
+            {isEditPage && selectedPreviewImage ? (
+              <div className="preview-card seo-video-card is-visible" id="seo-video-card">
+                <div className="section-title">Video preview</div>
+                <video
+                  className="seo-video-preview"
+                  src={currentLibraryEntry?.webmPreview || undefined}
+                  poster={selectedPreviewImage}
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  controls
+                />
+              </div>
+            ) : (
+              <label
+                className={`drop-zone ${isDragging ? "is-dragging" : ""}`}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsDragging(true);
+                }}
+                onDragLeave={(event) => {
+                  event.stopPropagation();
+                  setIsDragging(false);
+                }}
+                onDrop={handleDrop}
+              >
+                <input
+                  ref={uploadInputRef}
+                  type="file"
+                  multiple
+                  accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
+                  onChange={(event) => event.target.files && void prepareFromFiles(event.target.files)}
+                />
+                <Upload size={22} />
+                <strong>Drag files here</strong>
+                <span>json/skel, atlas, and one or more texture images</span>
+              </label>
+            )}
 
             {shouldShowStatus && (
               <div className="status-line" data-state={error ? "error" : "ready"}>
