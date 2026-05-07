@@ -18,6 +18,7 @@ Spine-Link opens Spine JSON, SKEL, atlas, PNG, JPG, JPEG, and WEBP files in a br
 - [Spine library](https://spine-link.vercel.app/spine-library.html): Saved Spine preview links and animation library.
 - [Spine portfolio](https://spine-link.vercel.app/spine-portfolio.html): Portfolio media gallery and portfolio Spine library for shared Spine animation work.
 - [Share Spine animation link](https://spine-link.vercel.app/share-spine-animation-link.html): Guide page for creating a Spine preview URL and sharing it with a friend or team.
+- [Spine portfolio guide](https://spine-link.vercel.app/spine-portfolio-link.html): Supporting page about creating and sharing a spine portfolio / portfolio spine page.
 - [World Spine Archive](https://spine-link.vercel.app/world-spine-archive): Public archive of Spine animation preview cards and portfolio examples.
 - [Spine animator](https://spine-link.vercel.app/spine-animator.html): Tool page for Spine animators.
 - [Spine animations](https://spine-link.vercel.app/spine-animations.html): Spine animations preview and sharing page.
