@@ -237,6 +237,10 @@ function tileClassForManualSize(size = '') {
 function tileClassForEntry(entry, index = 0) {
   void index;
   const manualClass = tileClassForManualSize(entry?.cardSize);
+  const fallbackWidth = Number(entry?.previewWidth || entry?.thumbnailWidth || entry?.mediaWidth || 0);
+  const fallbackHeight = Number(entry?.previewHeight || entry?.thumbnailHeight || entry?.mediaHeight || 0);
+  const fallbackRatio = fallbackWidth > 0 && fallbackHeight > 0 ? fallbackWidth / fallbackHeight : 0;
+  if (manualClass === 'tile--medium-narrow' && fallbackRatio >= 0.75 && fallbackRatio <= 1.15) return 'tile tile--square';
   if (manualClass) return `tile ${manualClass}`;
   const ratio = Number(entry?.mediaAspectRatio || 0);
   return `tile ${tileClassForRatio(ratio)}`;

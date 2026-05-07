@@ -263,10 +263,13 @@ function libraryCardSizeClassForManualSize(size?: string) {
 function libraryCardSizeClass(entry: LibraryEntry, index: number) {
   void index;
   const manualClass = libraryCardSizeClassForManualSize(entry.cardSize);
-  if (manualClass) return manualClass;
   const width = Number(entry.previewWidth || 0);
   const height = Number(entry.previewHeight || 0);
   const ratio = width > 0 && height > 0 ? width / height : 0;
+  if (manualClass === "library-card--medium-narrow" && ratio >= 0.75 && ratio <= 1.15) {
+    return "library-card--square";
+  }
+  if (manualClass) return manualClass;
   return libraryCardSizeClassForRatio(ratio);
 }
 
