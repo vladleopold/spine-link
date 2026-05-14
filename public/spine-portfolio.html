@@ -8,17 +8,17 @@
       name="description"
       content="Create and discover Spine portfolios with Spine-Link, a growing world portfolio library for Spine animators from beginners to professional animation artists."
     />
-    <meta name="keywords" content="spine portfolio, portfolio spine, spine animator portfolio, spine animation portfolio, spine animations, spine work, spine library, spine link" />
-    <meta name="robots" content="index, follow, max-image-preview:large" />
-    <meta name="application-name" content="Share your animation" />
-    <meta name="apple-mobile-web-app-title" content="Share your animation" />
+    <meta name="keywords" content="spine portfolio, portfolio spine, spine, animation, skeleton, json animation, atlas, game animation, spine 2d, spine2d, skeletal animation, bone animation, rig animation, mesh animation, ffd animation, slot animation, skin animation, ik animation, fk animation, runtime animation, spine runtime, spineboy, .skel, .atlas, .json, atlas texture, texturepacker, sprite animation, keyframe animation, loop animation, idle animation, walk cycle, run cycle, attack animation, ui animation, unity spine, godot spine, phaser spine, pixi spine, cocos spine, libgdx spine, spine project, skeleton data" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-video-preview:-1, max-snippet:-1" />
+    <meta name="application-name" content="Spine Portfolio" />
+    <meta name="apple-mobile-web-app-title" content="Spine Portfolio" />
     <link rel="canonical" href="https://spine-link.vercel.app/spine-portfolio.html" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://spine-link.vercel.app/spine-portfolio.html" />
     <meta property="og:title" content="Spine Portfolio - Portfolio Spine Animation Library" />
     <meta property="og:description" content="Build a Spine portfolio and browse a growing library of Spine animation portfolios from many skill levels." />
-    <meta property="og:site_name" content="Share your animation" />
-    <meta property="og:image" content="https://spine-link.vercel.app/og-image.svg" />
+    <meta property="og:site_name" content="Spine Portfolio" />
+    <meta property="og:image" content="https://spine-link.vercel.app/spine-link-video-thumbnail.png" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -26,14 +26,15 @@
         "name": "Spine portfolio",
         "url": "https://spine-link.vercel.app/spine-portfolio.html",
         "description": "Spine-Link portfolio mode turns saved Spine animation previews into a shareable portfolio media gallery and a growing public library of Spine animation portfolios.",
-        "keywords": "spine portfolio, portfolio spine, spine animator portfolio, spine animation portfolio, spine animations, spine work, spine library, spine link",
+        "keywords": "spine portfolio, portfolio spine, spine, animation, skeleton, json animation, atlas, game animation, spine 2d, spine2d, skeletal animation, bone animation, rig animation, mesh animation, ffd animation, slot animation, skin animation, ik animation, fk animation, runtime animation, spine runtime, spineboy, .skel, .atlas, .json, atlas texture, texturepacker, sprite animation, keyframe animation, loop animation, idle animation, walk cycle, run cycle, attack animation, ui animation, unity spine, godot spine, phaser spine, pixi spine, cocos spine, libgdx spine, spine project, skeleton data",
         "mainEntity": {
           "@type": "CollectionPage",
           "name": "Spine portfolio library",
           "about": "Spine animation portfolios from beginner, intermediate, senior and professional Spine animators",
           "isPartOf": {
             "@type": "WebSite",
-            "name": "Spine-Link",
+            "name": "Spine Portfolio",
+            "alternateName": "Spine-Link",
             "url": "https://spine-link.vercel.app/"
           }
         }
@@ -91,6 +92,8 @@
         ]
       }
     </script>
+    <link rel="stylesheet" href="/page-transitions.css" />
+    <script src="/page-transitions.js" defer></script>
     <style>
       :root { color: #f7fbff; background: #050607; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       body { margin: 0; min-width: 320px; background: #050607; }
@@ -102,10 +105,85 @@
       .cta { display: inline-flex; margin: 12px 12px 0 0; padding: 13px 18px; border: 1px solid rgba(255, 190, 218, 0.78); border-radius: 8px; background: rgba(255, 190, 218, 0.14); color: #fff; font-weight: 800; text-decoration: none; }
       nav { display: flex; flex-wrap: wrap; gap: 14px 18px; margin: 28px 0 6px; }
       nav a { color: #dff1ff; font-weight: 700; }
+      .static-logo {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin: 0 0 24px;
+        color: #f7fbff;
+        font-size: clamp(25px, 4.8vw, 46px);
+        font-weight: 500;
+        letter-spacing: 0.2em;
+        line-height: 0.78;
+        text-decoration: none;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .static-logo-mark {
+        display: inline-grid;
+        gap: 3px;
+        width: 13px;
+        margin: 0 -3px 0 -4px;
+      }
+
+      .static-logo-mark i {
+        display: block;
+        width: 13px;
+        height: 6px;
+        border-radius: 999px;
+        background: #ff5a1f;
+      }
+
+      .static-logo-mark i:nth-child(2) {
+        width: 12px;
+        transform: translateX(2px);
+      }
+
+      .static-logo-mark i:nth-child(3) {
+        width: 10px;
+        transform: translateX(4px);
+      }
+
+      .static-logo-link {
+        margin-left: -2px;
+        color: #ff6a28;
+        font-size: 0.74em;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+      }
+
+      @media (max-width: 560px) {
+        .static-logo {
+          gap: 5px;
+          margin-bottom: 20px;
+          font-size: clamp(22px, 8.4vw, 34px);
+          letter-spacing: 0.15em;
+        }
+
+        .static-logo-mark {
+          gap: 2px;
+          width: 10px;
+        }
+
+        .static-logo-mark i {
+          width: 10px;
+          height: 4px;
+        }
+
+        .static-logo-mark i:nth-child(2) {
+          width: 9px;
+        }
+
+        .static-logo-mark i:nth-child(3) {
+          width: 8px;
+        }
+      }
     </style>
   </head>
   <body>
     <main>
+      <a class="static-logo" href="/" aria-label="Spine-Link home"><span>s</span><span>p</span><span class="static-logo-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="static-logo-link">link</span></a>
       <div class="brand">Portfolio mode</div>
       <h1>Spine portfolio library</h1>
       <p>
@@ -120,7 +198,7 @@
         archive grows into a searchable library of animation work from different styles and skill levels.
       </p>
       <a class="cta" href="/">Create a Spine portfolio</a>
-      <a class="cta" href="/world-spine-archive">Browse World Spine Archive</a>
+      <a class="cta" href="/world-spine-archive">Browse World SPINE ARCHIVE</a>
       <nav aria-label="Related Spine pages">
         <a href="/spine-library.html">Spine library</a>
         <a href="/share-spine-animation-link.html">Share Spine animation link</a>
@@ -163,7 +241,7 @@
         </p>
         <h3>Is Spine-Link a portfolio Spine library?</h3>
         <p>
-          Yes. Spine-Link combines preview links, personal galleries, and the World Spine Archive, so it can work as a
+          Yes. Spine-Link combines preview links, personal galleries, and World SPINE ARCHIVE, so it can work as a
           growing portfolio Spine library for animators and teams.
         </p>
       </section>

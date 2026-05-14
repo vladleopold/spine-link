@@ -1,3 +1,6 @@
+import { cacheProfiles, setCacheHeaders } from '../lib/cache-headers.js';
+import { cachedGithubText } from '../lib/github-content-cache.js';
+
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
@@ -24,13 +27,7 @@ function githubHeaders(token) {
 }
 
 async function githubText(settings, path) {
-  const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
-  const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`, {
-    headers: githubHeaders(settings.token),
-  });
-  if (!response.ok) return '';
-  const data = await response.json();
-  return data?.content ? base64ToText(data.content) : '';
+  return cachedGithubText(settings, path);
 }
 
 export default async function handler(request, response) {
@@ -61,10 +58,14 @@ export default async function handler(request, response) {
     const match = poster.match(/^data:image\/webp;base64,([\s\S]+)$/i);
     if (!match) return response.status(404).send('Generated thumbnail not found');
 
+    const thumbnail = base64ToBuffer(match[1]);
     response.setHeader('Content-Type', 'image/webp');
-    response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    if (request.method === 'HEAD') return response.status(200).end();
-    return response.status(200).send(base64ToBuffer(match[1]));
+    response.setHeader('Content-Length', String(thumbnail.length));
+    setCacheHeaders(response, cacheProfiles.immutable, cacheProfiles.immutableCdn);
+    if (request.method === 'HEAD') {
+      return response.status(200).end();
+    }
+    return response.status(200).send(thumbnail);
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Generated thumbnail failed');
   }

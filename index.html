@@ -3,45 +3,47 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Spine-Link — Online Spine Preview and Spine Web Viewer</title>
+    <title>Spine-Link — Animation Portfolio Platform with Google Login</title>
     <meta
       name="description"
-      content="Preview Spine animations online with Spine-Link. Open Spine JSON, SKEL, atlas, PNG, JPG, and WEBP files in a browser-based Spine web viewer and share permanent preview links."
+      content="Spine-Link is an animation portfolio platform with World SPINE ARCHIVE, anonymous Create preview uploads, Google sign-in, account-backed profiles, public portfolio mode, private library mode, likes, views, and searchable Spine animation work pages."
     />
     <meta
       name="keywords"
-      content="spine, spine library, spine portfolio, portfolio spine, spine animator, spine animations, spine work, spne lib, spine link, spine preview, spine online, spine web, spine webview, preview spine, spine viewer, spine animation preview, spine json viewer, spine atlas preview, online spine viewer, spine web player, spine preview tool"
+      content="Spine Portfolio, World SPINE ARCHIVE, Spine-Link, Spine animation portfolio, public Spine animation archive, user animation portfolio, Spine preview online, Spine web viewer, Create preview, Google login, upload Spine work, Spine JSON, Spine SKEL, atlas, texture, game animation, spine 2d, spine2d, skeleton data"
     />
-    <meta name="robots" content="index, follow, max-image-preview:large" />
-    <meta name="googlebot" content="index, follow, max-image-preview:large" />
-    <meta name="application-name" content="Share your animation" />
-    <meta name="apple-mobile-web-app-title" content="Share your animation" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-video-preview:-1, max-snippet:-1" />
+    <meta name="googlebot" content="index, follow, max-image-preview:large, max-video-preview:-1, max-snippet:-1" />
+    <meta name="application-name" content="Spine Portfolio" />
+    <meta name="apple-mobile-web-app-title" content="Spine Portfolio" />
     <link rel="canonical" href="https://spine-link.vercel.app/" />
     <link rel="amphtml" href="https://spine-link.vercel.app/amp.html" />
     <meta name="theme-color" content="#000000" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://spine-link.vercel.app/" />
-    <meta property="og:title" content="Spine-Link — Online Spine Preview & Spine Web Viewer" />
+    <meta property="og:title" content="Spine-Link — Animation Portfolio Platform" />
     <meta
       property="og:description"
-      content="Preview Spine animations online. Upload JSON/SKEL, atlas, and textures, then share a permanent Spine web preview link."
+      content="Sign in with Google, upload Spine animation work, save it to an account-backed portfolio database, and publish animation portfolio links."
     />
-    <meta property="og:site_name" content="Share your animation" />
-    <meta property="og:image" content="https://spine-link.vercel.app/og-image.svg" />
+    <meta property="og:site_name" content="Spine Portfolio" />
+    <meta property="og:image" content="https://spine-link.vercel.app/spine-link-video-thumbnail.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Spine-Link — Online Spine Preview & Spine Web Viewer" />
+    <meta name="twitter:title" content="Spine-Link — Animation Portfolio Platform" />
     <meta
       name="twitter:description"
-      content="Drag and drop Spine files to preview animations online and generate permanent web preview links."
+      content="Google login, account database, upload panel, and public portfolio pages for Spine animation work."
     />
-    <meta name="twitter:image" content="https://spine-link.vercel.app/og-image.svg" />
+    <meta name="twitter:image" content="https://spine-link.vercel.app/spine-link-video-thumbnail.png" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "WebSite",
-        "name": "Spine-Link",
+        "name": "Spine Portfolio",
+        "alternateName": ["Spine-Link", "Spine Link", "World SPINE ARCHIVE", "Spine preview online", "Spine web viewer"],
         "url": "https://spine-link.vercel.app/",
-        "description": "Online Spine preview, Spine portfolio, and portfolio spine gallery platform.",
+        "description": "Spine-Link is an animation portfolio platform with World SPINE ARCHIVE, a public archive of user Spine animation works. Users can create anonymous previews, sign in with Google, choose a public portfolio profile with likes and views, or keep a private library profile that is not listed on the site or in Google.",
+        "keywords": "Spine Portfolio, World SPINE ARCHIVE, Spine animation portfolio, public Spine animation archive, Spine preview online, Spine web viewer, Create preview, Google login, upload Spine work, Spine JSON, Spine SKEL, atlas texture files",
         "potentialAction": {
           "@type": "SearchAction",
           "target": "https://spine-link.vercel.app/?q={search_term_string}",
@@ -52,16 +54,86 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Spine Portfolio",
+        "url": "https://spine-link.vercel.app/",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Any",
+        "description": "A platform for animation portfolios with Google account login, user registration, upload panel, portfolio database, saved Spine work, and public portfolio pages.",
+        "featureList": [
+          "World SPINE ARCHIVE public user work archive",
+          "Anonymous Create preview upload flow",
+          "Google account sign-in and registration",
+          "Account-backed profile database",
+          "Public portfolio mode with likes, views, showcase, archive publishing, and search indexing",
+          "Private library mode that is private by default and not listed through the site or Google",
+          "Upload panel for Spine JSON, SKEL, atlas, and texture files",
+          "Saved animation work cards",
+          "Source-origin proof files with SHA-256 hashes, GitHub commit receipts, browser/account evidence hashes, and optional EVM blockchain anchors",
+          "Public portfolio links",
+          "Editable portfolio entries"
+        ],
+        "potentialAction": [
+          {
+            "@type": "RegisterAction",
+            "name": "Sign in with Google",
+            "target": "https://spine-link.vercel.app/?login=google"
+          },
+          {
+            "@type": "CreateAction",
+            "name": "Upload animation work",
+            "target": "https://spine-link.vercel.app/?upload=work"
+          },
+          {
+            "@type": "ViewAction",
+            "name": "Open portfolio profile database",
+            "target": "https://spine-link.vercel.app/?portfolio=1"
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
         "@type": "Organization",
-        "name": "Spine-Link",
+        "name": "Spine Portfolio",
+        "alternateName": "Spine-Link",
         "url": "https://spine-link.vercel.app/",
         "logo": "https://spine-link.vercel.app/favicon-64.png",
         "sameAs": ["https://t.me/vladleopold"]
       }
     </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "World SPINE ARCHIVE",
+        "url": "https://spine-link.vercel.app/world-spine-archive",
+        "description": "World SPINE ARCHIVE is a public archive of Spine animation works uploaded by users. Anyone can add a Spine animation anonymously with Create preview, or sign in with Google to publish through a portfolio profile.",
+        "isPartOf": {
+          "@type": "WebSite",
+          "name": "Spine Portfolio",
+          "url": "https://spine-link.vercel.app/"
+        },
+        "potentialAction": [
+          {
+            "@type": "CreateAction",
+            "name": "Create preview",
+            "target": "https://spine-link.vercel.app/?upload=work"
+          },
+          {
+            "@type": "RegisterAction",
+            "name": "Sign in with Google",
+            "target": "https://spine-link.vercel.app/?login=google"
+          }
+        ]
+      }
+    </script>
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/page-transitions.css" />
+    <script src="/page-transitions.js" defer></script>
     <style>
       :root {
         color: #e7edf4;
@@ -110,14 +182,12 @@
       }
 
       .seo-intro {
-        position: fixed;
-        left: 12px;
-        bottom: 8px;
-        z-index: 30;
-        max-width: min(460px, calc(50vw - 90px));
-        color: rgba(205, 210, 218, 0.28);
-        font-size: 8px;
-        line-height: 1.25;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
         pointer-events: none;
       }
 
@@ -142,9 +212,13 @@
         align-items: center;
         justify-content: space-between;
         gap: 18px;
+        min-width: 0;
       }
 
       .brand-link {
+        display: inline-flex;
+        flex: 0 1 auto;
+        min-width: 0;
         color: #f7fbff;
         text-decoration: none;
       }
@@ -153,6 +227,7 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
+        min-width: 0;
         color: #f7fbff;
         font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif;
         font-size: clamp(38px, 4.7vw, 68px);
@@ -163,6 +238,7 @@
         text-shadow:
           0 0 1px rgba(255, 255, 255, 0.86),
           0 6px 18px rgba(0, 0, 0, 0.42);
+        white-space: nowrap;
       }
 
       .brand-plus {
@@ -291,6 +367,14 @@
         gap: 10px;
       }
 
+      .top-actions-row {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        min-width: 0;
+      }
+
       .my-library-button,
       .google-fallback-button {
         border: 1px solid rgba(255, 255, 255, 0.18);
@@ -405,15 +489,13 @@
       }
 
       .world-archive-link {
-        position: fixed;
-        right: 14px;
-        bottom: 12px;
-        z-index: 35;
         display: inline-flex;
+        flex: 0 0 auto;
         align-items: center;
         justify-content: center;
-        min-height: 48px;
-        padding: 0 16px;
+        min-height: 44px;
+        max-width: min(260px, 24vw);
+        padding: 0 clamp(14px, 2vw, 24px);
         border: 1px solid rgba(179, 255, 64, 0.72);
         border-radius: 8px;
         color: #eaffc2;
@@ -424,7 +506,10 @@
         font-size: 11px;
         font-weight: 900;
         letter-spacing: 0.08em;
+        line-height: 1;
         text-decoration: none;
+        text-align: center;
+        white-space: nowrap;
         backdrop-filter: blur(10px);
       }
 
@@ -438,11 +523,20 @@
         }
 
         .topbar {
-          gap: 10px;
+          gap: 6px 8px;
+          align-items: flex-start;
+          flex-wrap: wrap;
         }
 
-        .google-fallback-button {
-          display: none;
+        .brand-link {
+          order: 1;
+          flex: 1 1 calc(100% - 48px);
+          max-width: calc(100% - 48px);
+        }
+
+        .site-menu-group {
+          order: 2;
+          margin-left: auto;
         }
 
         .boot-drop-zone {
@@ -456,53 +550,70 @@
         }
 
         .world-archive-link {
-          right: 10px;
-          bottom: 10px;
-          max-width: calc(100vw - 20px);
+          order: 3;
+          flex: 1 1 0;
+          width: auto;
+          min-width: 0;
+          max-width: none;
+          min-height: 34px;
+          padding: 0 6px;
+          overflow: hidden;
+          font-size: clamp(7.5px, 2.2vw, 9px);
+          letter-spacing: 0.04em;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .auth-panel {
+          display: contents;
+        }
+
+        .auth-panel .my-library-button,
+        .auth-panel .google-fallback-button {
+          justify-content: center;
+          width: 100%;
+          min-width: 0;
+          max-width: none;
+          min-height: 34px;
+          padding: 0 5px;
+          overflow: hidden;
+          font-size: clamp(7.5px, 2.35vw, 10px);
+          text-overflow: ellipsis;
+        }
+
+        .auth-panel .google-fallback-button {
+          gap: 4px;
+        }
+
+        .auth-panel .google-fallback-button svg {
+          width: 13px;
+          height: 13px;
+          flex: 0 0 13px;
+        }
+
+        .top-actions-row {
+          order: 3;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 4px;
+          width: 100%;
+          min-width: 0;
+          margin-left: 0;
+        }
+
+        .top-actions-row .world-archive-link {
+          order: 1;
+        }
+
+        .top-actions-row .my-library-button {
+          order: 2;
+        }
+
+        .top-actions-row .google-fallback-button {
+          order: 3;
         }
       }
     </style>
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "WebSite",
-        "name": "Share your animation",
-        "alternateName": ["Spine-Link", "Spine Link", "spine library", "spine portfolio"],
-        "url": "https://spine-link.vercel.app/"
-      }
-    </script>
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "Share your animation",
-        "alternateName": ["Spine Link", "Spine preview online", "Spine web viewer", "spine library", "spine portfolio"],
-        "url": "https://spine-link.vercel.app/",
-        "inLanguage": "en",
-        "applicationCategory": "MultimediaApplication",
-        "operatingSystem": "Any",
-        "description": "Online Spine preview and Spine web viewer for JSON, SKEL, atlas, PNG, JPG, and WEBP texture files.",
-        "browserRequirements": "Requires a modern browser with JavaScript and WebGL support.",
-        "featureList": [
-          "Preview Spine JSON and SKEL animation files online",
-          "Open atlas files and PNG, JPG, or WEBP textures",
-          "Generate permanent Spine web preview links",
-          "Switch animation sets and preview PMA or blend settings"
-        ],
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        },
-        "creator": {
-          "@type": "Person",
-          "name": "leopold",
-          "url": "https://t.me/vladleopold"
-        },
-        "sameAs": ["https://t.me/vladleopold"],
-        "keywords": "spine, spine library, spine portfolio, spine animator, spine animations, spine work, spne lib, spine link, spine preview, spine online, spine web, spine webview, preview spine, spine viewer, spine animation preview"
-      }
-    </script>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -529,13 +640,12 @@
     </script>
     <style>
       .search-content {
-        position: fixed;
-        left: 12px;
-        bottom: 10px;
-        z-index: 0;
-        max-width: 520px;
-        color: rgba(231, 237, 244, 0.46);
-        font: 10px/1.35 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
         pointer-events: none;
       }
 
@@ -554,28 +664,152 @@
       }
 
       .search-content a {
+        color: inherit;
+      }
+
+      .nojs-platform {
+        min-height: 100vh;
+        padding: 28px;
+        background: #000;
+        color: #f7fbff;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .nojs-platform-inner {
+        display: grid;
+        gap: 18px;
+        width: min(940px, 100%);
+        margin: 0 auto;
+      }
+
+      .nojs-brand-link {
+        width: fit-content;
+        color: #f7fbff;
+        text-decoration: none;
+      }
+
+      .nojs-brand-link .brand-logo {
+        font-size: clamp(30px, 7vw, 56px);
+      }
+
+      .nojs-platform h1 {
+        margin: 0;
+        color: #fff;
+        font-size: clamp(42px, 9vw, 96px);
+        line-height: 0.9;
+      }
+
+      .nojs-platform h2 {
+        margin: 18px 0 0;
+        color: #b3ff40;
+        font-size: 20px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .nojs-platform p,
+      .nojs-platform li {
+        color: rgba(231, 237, 244, 0.78);
+        font-size: 18px;
+        line-height: 1.55;
+      }
+
+      .nojs-platform-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .nojs-platform-actions a {
         display: inline-flex;
         align-items: center;
-        min-width: 48px;
-        min-height: 48px;
-        margin: 0 12px 0 0;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 14px;
+        border: 1px solid rgba(179, 255, 64, 0.58);
+        border-radius: 8px;
+        color: #eaffc2;
+        background: rgba(179, 255, 64, 0.1);
+        font-weight: 900;
+        text-decoration: none;
       }
     </style>
   </head>
   <body>
+    <noscript>
+      <main class="nojs-platform" aria-label="Spine-Link static platform description">
+        <div class="nojs-platform-inner">
+          <a class="nojs-brand-link" href="/" aria-label="Spine-Link home">
+            <span class="brand-logo" aria-hidden="true">
+              <span>s</span><span>p</span><span class="brand-spine-mark"><i></i><i></i><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="brand-plus">link</span>
+            </span>
+          </a>
+          <h1>Spine Portfolio</h1>
+          <p>
+            Spine-Link is an animation portfolio platform for Spine animators. It supports Google account login,
+            anonymous Create preview uploads, account-backed portfolio profiles, private library profiles, real likes
+            and views, and public animation pages that can be indexed by search engines and ChatGPT.
+          </p>
+          <h2>World SPINE ARCHIVE</h2>
+          <p>
+            World SPINE ARCHIVE is the public worldwide archive of user Spine animation works. Anyone can add a Spine
+            animation anonymously with Create preview, or sign in with Google to publish through a portfolio profile.
+            Public portfolio profiles are searchable and can appear in the archive; private library profiles are private
+            by default and are not listed through the site or Google.
+          </p>
+          <ul>
+            <li>Upload Spine JSON, SKEL, atlas, texture, and WebM preview files.</li>
+            <li>Save uploaded works into an account-backed portfolio database.</li>
+            <li>Publish indexable portfolio work pages with VideoObject metadata for Google Video Search.</li>
+            <li>Create source-origin proof records with file SHA-256 hashes, GitHub commit receipts, and optional blockchain anchors.</li>
+            <li>Uploaded animation files can be analyzed as learning, testing, and reference material for AI animator agents under the Spine-Link Manifesto.</li>
+          </ul>
+          <nav class="nojs-platform-actions" aria-label="Static Spine-Link actions">
+            <a href="/world-spine-archive">World SPINE ARCHIVE</a>
+            <a href="/?upload=work">Create preview</a>
+            <a href="/?login=google">Sign in with Google</a>
+            <a href="/?portfolio=1">Portfolio database</a>
+            <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>
+          </nav>
+        </div>
+      </main>
+    </noscript>
     <section class="search-content" aria-label="Spine-Link search description">
-      <h1>Spine-Link online Spine preview and Spine web viewer.</h1>
+      <h1>Spine-Link is an animation portfolio platform with Google login and uploads.</h1>
       <p>
-        Preview Spine animations online from JSON, SKEL, atlas, PNG, JPG, and WEBP files. Spine-Link helps artists,
-        animators, and game developers inspect Spine files in the browser, test animation playback, and create permanent
-        web preview links.
+        Spine-Link is a platform where users register or sign in with Google, upload Spine animation work, save it in an
+        account-backed profile database, edit portfolio cards, and publish public animation portfolio links.
       </p>
-      <h2>Spine preview features.</h2>
+      <h2>World SPINE ARCHIVE.</h2>
+      <p>
+        World SPINE ARCHIVE is the public archive of user Spine animation works. Anyone can add their own Spine
+        animation anonymously with the Create preview button on the archive page, or sign in with Google to create a
+        profile. A profile can be a public portfolio with likes, views, showcase and archive publishing, or a private
+        library that is private by default and cannot be found through the site or Google unlike public portfolios.
+      </p>
+      <h2>Spine portfolio platform and upload features.</h2>
       <ul>
+        <li><a href="/world-spine-archive">World SPINE ARCHIVE</a>.</li>
+        <li><a href="/?upload=work">Create preview anonymously</a>.</li>
+        <li>Google account registration and login.</li>
+        <li>Database with user accounts, public portfolio profiles, private library profiles, and uploaded works.</li>
+        <li>Public portfolios are searchable and can appear in the showcase and archive.</li>
+        <li>Private libraries are private by default and are not listed through the site or Google.</li>
+        <li>Upload panel for animation work.</li>
+        <li>Add your own portfolio after sign-in.</li>
+        <li>Source-origin proof records with file SHA-256 hashes, GitHub commit receipts, browser/account evidence hashes, and optional blockchain anchors.</li>
+        <li><a href="/spine-link-manifesto.html">Spine-Link Manifesto and upload agreement</a>: uploaded public animation files may be analyzed and used as training, testing, and reference material for AI animator agents.</li>
+        <li>Indexable portfolio work pages include VideoObject metadata for Google Video Search.</li>
+        <li><a href="/?login=google">Sign in with Google</a>.</li>
+        <li><a href="/?portfolio=1">Open or create portfolio profile</a>.</li>
+        <li><a href="/?upload=work">Upload animation work</a>.</li>
+        <li>Optional Spine animation dataset reference page for studios and technical artists.</li>
         <li>Browser-based Spine viewer.</li>
         <li>Spine JSON and SKEL preview.</li>
         <li>Atlas and texture loading.</li>
         <li>Permanent Spine web links.</li>
+        <li><a href="/spine-animation-dataset.html">Spine animation dataset reference</a>.</li>
         <li><a href="/spine-link.html">Spine-Link</a>.</li>
         <li><a href="/spine-preview-online.html">Spine preview online</a>.</li>
         <li><a href="/spine-web-viewer.html">Spine web viewer</a>.</li>
@@ -587,6 +821,18 @@
         <li><a href="/spine-work.html">Spine work</a>.</li>
         <li><a href="/spne-lib.html">Spne lib</a>.</li>
       </ul>
+      <form action="/?upload=work" method="get" aria-label="Upload animation work to portfolio">
+        <label>Account <a href="/?login=google">Sign in with Google</a></label>
+        <label>Portfolio profile <a href="/?portfolio=1">Open or create portfolio profile</a></label>
+        <label>Spine project files <input name="spine-files" type="file" multiple accept=".json,.skel,.atlas,.txt,.png,.jpg,.jpeg,.webp" /></label>
+        <button type="submit">Upload work to portfolio</button>
+        <p>
+          Upload agreement: by uploading Spine animation files, you agree to the
+          <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public uploaded works may be processed,
+          indexed, studied, and used to build educational datasets, evaluation material, and training examples for AI
+          animator agents.
+        </p>
+      </form>
     </section>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

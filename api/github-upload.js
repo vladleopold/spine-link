@@ -2,7 +2,10 @@ const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
 const defaultBasePath = 'library';
+import { createHash } from 'node:crypto';
 import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-science.js';
+import { metricCountsForIds, parseMetricsJson, sanitizeMetricId, sanitizeMetricIds } from '../lib/spine-metrics.js';
+import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 
 function cleanRepoPath(value = '') {
   return String(value).trim().replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
@@ -20,6 +23,39 @@ function base64ToText(base64) {
   return Buffer.from(String(base64).replace(/\s/g, ''), 'base64').toString('utf8');
 }
 
+function sha256Hex(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function sha256HexFromBase64(base64 = '') {
+  return createHash('sha256').update(Buffer.from(String(base64).replace(/\s/g, ''), 'base64')).digest('hex');
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function sanitizeSha256(value = '') {
+  const hash = String(value || '').trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(hash) ? hash : '';
+}
+
+function publicGitHubWrite(result) {
+  return {
+    contentSha: String(result?.content?.sha || ''),
+    commitSha: String(result?.commit?.sha || ''),
+    commitUrl: String(result?.commit?.html_url || ''),
+    downloadUrl: String(result?.content?.download_url || ''),
+  };
+}
+
 function encodeRepoPath(path) {
   return cleanRepoPath(path)
     .split('/')
@@ -32,8 +68,12 @@ function isExternalAsset(value) {
   return /^https?:\/\//i.test(String(value)) || /^data:/i.test(String(value));
 }
 
-function assetUrlForRepoPath(origin, path) {
-  return `${origin}/assets/${encodeRepoPath(path)}`;
+function assetUrlForRepoPath(origin, path, version = '') {
+  return appendAssetVersion(`${origin}/assets/${encodeRepoPath(path)}`, version);
+}
+
+function assetFileName(value = '') {
+  return cleanRepoPath(value).split('/').filter(Boolean).pop() || '';
 }
 
 function safeHttpAsset(value = '') {
@@ -41,18 +81,183 @@ function safeHttpAsset(value = '') {
   return /^https?:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
 }
 
+function sourceProofHashFor(sourceProof) {
+  if (!sourceProof || typeof sourceProof !== 'object') return '';
+  const provided = sanitizeSha256(sourceProof.proofHash);
+  const payload = JSON.parse(JSON.stringify(sourceProof));
+  delete payload.proofHash;
+  if (payload.blockchain && typeof payload.blockchain === 'object') {
+    payload.blockchain.recommendedAnchorPayload = '';
+  }
+  const calculated = sha256Hex(canonicalJson(payload));
+  if (provided && calculated !== provided) throw new Error('Source proof hash mismatch');
+  return provided || calculated;
+}
+
+function normalizeUploadedProofFiles(value = []) {
+  const files = Array.isArray(value) ? value : [];
+  return files
+    .map((file) => ({
+      name: String(file?.name || '').trim().slice(0, 260),
+      path: cleanRepoPath(file?.path || ''),
+      bytes: Math.max(0, Math.round(Number(file?.bytes || 0) || 0)),
+      sha256: sanitizeSha256(file?.sha256),
+      github: {
+        contentSha: String(file?.github?.contentSha || '').trim().slice(0, 80),
+        commitSha: String(file?.github?.commitSha || '').trim().slice(0, 80),
+        commitUrl: safeHttpAsset(file?.github?.commitUrl || ''),
+        downloadUrl: safeHttpAsset(file?.github?.downloadUrl || ''),
+      },
+    }))
+    .filter((file) => file.name && file.path && file.sha256)
+    .slice(0, 250);
+}
+
+function cleanProofString(value = '', maxLength = 260) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+
+function normalizeProofNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizeBrowserEnvironment(value) {
+  if (!value || typeof value !== 'object') return null;
+  const languages = Array.isArray(value.languages)
+    ? value.languages.map((language) => cleanProofString(language, 32)).filter(Boolean).slice(0, 8)
+    : [];
+  const screen = value.screen && typeof value.screen === 'object' ? value.screen : {};
+  return {
+    userAgent: cleanProofString(value.userAgent, 360),
+    platform: cleanProofString(value.platform, 120),
+    language: cleanProofString(value.language, 32),
+    languages,
+    hardwareConcurrency: normalizeProofNumber(value.hardwareConcurrency),
+    ...(Number.isFinite(Number(value.deviceMemory)) ? { deviceMemory: normalizeProofNumber(value.deviceMemory) } : {}),
+    screen: {
+      width: normalizeProofNumber(screen.width),
+      height: normalizeProofNumber(screen.height),
+      colorDepth: normalizeProofNumber(screen.colorDepth),
+      pixelRatio: normalizeProofNumber(screen.pixelRatio, 1),
+    },
+    timezone: cleanProofString(value.timezone, 80),
+    timezoneOffset: normalizeProofNumber(value.timezoneOffset),
+    maxTouchPoints: normalizeProofNumber(value.maxTouchPoints),
+    cookieEnabled: Boolean(value.cookieEnabled),
+  };
+}
+
+async function maybeAnchorOnEvm(anchorHash) {
+  const rpcUrl = String(process.env.BLOCKCHAIN_RPC_URL || '').trim();
+  const privateKey = String(process.env.BLOCKCHAIN_PRIVATE_KEY || '').trim();
+  const providedTo = String(process.env.BLOCKCHAIN_ANCHOR_TO || '').trim();
+  const explorerBaseUrl = String(process.env.BLOCKCHAIN_EXPLORER_TX_URL || '').trim().replace(/\/+$/g, '');
+  const transactionData = `0x${anchorHash}`;
+
+  if (!rpcUrl || !privateKey) {
+    return {
+      status: 'ready-to-anchor',
+      chain: 'evm',
+      transactionData,
+      message: 'Set BLOCKCHAIN_RPC_URL and BLOCKCHAIN_PRIVATE_KEY in the server environment to write this proof hash to an EVM blockchain transaction.',
+    };
+  }
+
+  try {
+    const { JsonRpcProvider, Wallet } = await import('ethers');
+    const provider = new JsonRpcProvider(rpcUrl);
+    const wallet = new Wallet(privateKey, provider);
+    const network = await provider.getNetwork();
+    const to = /^0x[a-f0-9]{40}$/i.test(providedTo) ? providedTo : wallet.address;
+    const tx = await wallet.sendTransaction({ to, value: 0n, data: transactionData });
+    return {
+      status: 'submitted',
+      chain: 'evm',
+      chainId: Number(network.chainId),
+      network: network.name,
+      from: wallet.address,
+      to,
+      transactionHash: tx.hash,
+      transactionData,
+      ...(explorerBaseUrl ? { explorerUrl: `${explorerBaseUrl}/${tx.hash}` } : {}),
+    };
+  } catch (error) {
+    return {
+      status: 'failed',
+      chain: 'evm',
+      transactionData,
+      message: error instanceof Error ? error.message : 'Blockchain transaction failed',
+    };
+  }
+}
+
+async function createBlockchainAnchor({ sourceProof, uploadedFiles, body, settings, googlePayload, anonymousAccount, origin }) {
+  const sourceProofHash = sourceProofHashFor(sourceProof);
+  if (!sourceProofHash) throw new Error('Invalid source proof hash');
+
+  const uploadedAt = String(sourceProof?.uploadedAt || body?.uploadedAt || new Date().toISOString());
+  const uploadPath = cleanRepoPath(body?.uploadPath || sourceProof?.github?.previewPath || '');
+  const proofPath = cleanRepoPath(sourceProof?.proofPath || body?.proofPath || '');
+  const proofUrl = safeHttpAsset(sourceProof?.proofUrl || body?.proofUrl || (proofPath ? assetUrlForRepoPath(origin, proofPath) : ''));
+  const userEmail = String(googlePayload?.email || '').trim().toLowerCase();
+  const browserEnvironment = normalizeBrowserEnvironment(sourceProof?.uploader?.browserEnvironment);
+  const anchorBase = {
+    type: 'SpineLinkGitHubBlockchainAnchor',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    entryId: String(body?.entryId || sourceProof?.entryId || '').trim().slice(0, 220),
+    title: cleanPublicProfileText(body?.title || sourceProof?.title || '', 180),
+    uploadedAt,
+    sourceProofHash,
+    sourceProofPath: proofPath,
+    sourceProofUrl: proofUrl,
+    uploader: {
+      mode: userEmail ? 'google-account' : 'anonymous-browser',
+      ...(sourceProof?.uploader?.googleEmailSha256 ? { googleEmailSha256: sanitizeSha256(sourceProof.uploader.googleEmailSha256) } : {}),
+      ...(anonymousAccount?.id ? { anonymousAccountId: anonymousAccount.id } : {}),
+      ...(anonymousAccount?.fingerprint ? { anonymousFingerprint: anonymousAccount.fingerprint } : {}),
+      ...(sourceProof?.uploader?.browserFingerprintSha256 ? { browserFingerprintSha256: sanitizeSha256(sourceProof.uploader.browserFingerprintSha256) } : {}),
+      ...(sourceProof?.uploader?.browserEnvironmentHashSha256 ? { browserEnvironmentHashSha256: sanitizeSha256(sourceProof.uploader.browserEnvironmentHashSha256) } : {}),
+      ...(browserEnvironment ? { browserEnvironment } : {}),
+    },
+    github: {
+      owner: settings.owner,
+      repo: settings.repo,
+      branch: settings.branch,
+      repositoryUrl: `https://github.com/${settings.owner}/${settings.repo}`,
+      uploadPath,
+      files: normalizeUploadedProofFiles(uploadedFiles),
+    },
+    legalEvidence: {
+      statement:
+        'This record links file SHA-256 hashes, browser/account identity hashes, browser environment evidence, GitHub repository writes, and an optional EVM transaction payload for source-origin evidence.',
+      privacy:
+        'Email is stored only as SHA-256 in the proof. Anonymous browser/account identifiers are pseudonymous and should be treated as evidence metadata, not personal identity by themselves.',
+    },
+  };
+  const anchorHash = sha256Hex(canonicalJson(anchorBase));
+  const blockchain = await maybeAnchorOnEvm(anchorHash);
+  return {
+    ...anchorBase,
+    anchorHash,
+    recommendedAnchorPayload: `sha256:${anchorHash}`,
+    blockchain,
+  };
+}
+
 function derivedMediaFromFiles(origin, entry, extensions) {
   const previewPath = cleanRepoPath(entry?.previewPath || '');
   const files = Array.isArray(entry?.files) ? entry.files : [];
   const file = files.find((item) => extensions.some((extension) => String(item || '').toLowerCase().endsWith(extension)));
-  return previewPath && file ? assetUrlForRepoPath(origin, joinRepoPath(previewPath, String(file))) : '';
+  return previewPath && file ? assetUrlForRepoPath(origin, joinRepoPath(previewPath, String(file)), assetVersionForEntry(entry, file)) : '';
 }
 
 function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
   const poster = String(entry?.thumbnailPoster || '');
   return id && /^data:image\/webp;base64,/i.test(poster)
-    ? `${origin}/assets/library/${encodeURIComponent(id)}/generated-preview.webp`
+    ? assetUrlForRepoPath(origin, `library/${id}/generated-preview.webp`, assetVersionForEntry(entry, 'generated-preview'))
     : '';
 }
 
@@ -64,13 +269,14 @@ function generatedPreviewWebmUrl(origin, entry) {
 function publicLibraryEntry(origin, entry) {
   if (!entry || typeof entry !== 'object') return entry;
   const next = { ...entry };
-  next.thumbnail = safeHttpAsset(next.thumbnail);
+  const version = assetVersionForEntry(entry);
+  next.thumbnail = appendAssetVersion(safeHttpAsset(next.thumbnail), version);
   next.thumbnailPoster =
-    safeHttpAsset(next.thumbnailPoster) ||
+    appendAssetVersion(safeHttpAsset(next.thumbnailPoster), version) ||
     generatedThumbnailUrl(origin, entry) ||
     derivedMediaFromFiles(origin, entry, ['.webp', '.png', '.jpg', '.jpeg']);
   next.webmPreview = /\.webm(?:[?#].*)?$/i.test(String(next.webmPreview || ''))
-    ? safeHttpAsset(next.webmPreview)
+    ? appendAssetVersion(safeHttpAsset(next.webmPreview), version)
     : '';
   next.webmPreview = next.webmPreview || derivedMediaFromFiles(origin, entry, ['.webm']) || generatedPreviewWebmUrl(origin, entry);
   return next;
@@ -101,9 +307,12 @@ function normalizePreviewHtml(settings, path, contentBase64, origin) {
 
       if (set.rawDataURIs && typeof set.rawDataURIs === 'object') {
         for (const key of Object.keys(set.rawDataURIs)) {
+          const canonicalKey = assetFileName(key);
           if (!isExternalAsset(set.rawDataURIs[key]) || String(set.rawDataURIs[key]).startsWith('data:') || String(set.rawDataURIs[key]).includes('raw.githubusercontent.com')) {
-            set.rawDataURIs[key] = setAssetUrl(key);
+            set.rawDataURIs[key] = setAssetUrl(canonicalKey || key);
           }
+          if (canonicalKey && canonicalKey !== key) delete set.rawDataURIs[key];
+          if (canonicalKey) set.rawDataURIs[canonicalKey] = setAssetUrl(canonicalKey);
         }
       }
     }
@@ -248,7 +457,81 @@ function normalizeArchiveExclusionRules(value) {
       flags: String(rule?.flags || 'i').replace(/[^dgimsuvy]/g, '').slice(0, 8) || 'i',
     }))
     .filter((rule) => rule.pattern)
-    .slice(0, 100);
+    .slice(0, 3000);
+}
+
+function normalizeArchiveEntryIds(value) {
+  const ids = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  const normalized = [];
+  for (const id of ids) {
+    const entryId = String(id || '').trim();
+    if (!entryId || entryId.length > 220 || /[<>"'\\/\0]/.test(entryId) || seen.has(entryId)) continue;
+    seen.add(entryId);
+    normalized.push(entryId);
+    if (normalized.length >= 1000) break;
+  }
+  return normalized;
+}
+
+function metricsVisitorHash(request, body = {}) {
+  const provided = String(body?.visitorId || '').trim();
+  const fallback = [
+    request.headers['x-forwarded-for'] || request.socket?.remoteAddress || '',
+    request.headers['user-agent'] || '',
+  ].join('|');
+  return createHash('sha256').update(provided || fallback || 'anonymous').digest('hex').slice(0, 32);
+}
+
+function normalizeMetrics(metrics) {
+  const next = metrics && typeof metrics === 'object' ? metrics : {};
+  if (!next.entries || typeof next.entries !== 'object' || Array.isArray(next.entries)) next.entries = {};
+  return next;
+}
+
+function normalizeEntryMetric(metrics, id) {
+  const metricId = sanitizeMetricId(id);
+  if (!metricId) return null;
+  const current = metrics.entries[metricId] && typeof metrics.entries[metricId] === 'object' ? metrics.entries[metricId] : {};
+  current.likes = Math.max(0, Number(current.likes || 0) || 0);
+  current.views = Math.max(0, Number(current.views || 0) || 0);
+  if (!current.likedBy || typeof current.likedBy !== 'object' || Array.isArray(current.likedBy)) current.likedBy = {};
+  if (!current.recentViews || typeof current.recentViews !== 'object' || Array.isArray(current.recentViews)) current.recentViews = {};
+  metrics.entries[metricId] = current;
+  return current;
+}
+
+function pruneRecentViews(entry, now) {
+  const cutoff = now - 32 * 24 * 60 * 60 * 1000;
+  const pairs = Object.entries(entry.recentViews || {})
+    .map(([key, value]) => [key, Date.parse(String(value || '')) || 0])
+    .filter(([, time]) => time >= cutoff)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2000);
+  entry.recentViews = Object.fromEntries(pairs.map(([key, time]) => [key, new Date(time).toISOString()]));
+}
+
+async function readMetrics(settings, metricsPath) {
+  const current = await getGitHubContent(settings, metricsPath);
+  const text = current?.content && current.encoding === 'base64' ? base64ToText(current.content) : '';
+  return { current, metrics: normalizeMetrics(parseMetricsJson(text)) };
+}
+
+async function mutateMetrics(settings, metricsPath, message, mutate, origin = '') {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { current, metrics } = await readMetrics(settings, metricsPath);
+    const changed = mutate(metrics);
+    if (!changed) return { metrics, changed: false };
+    metrics.updatedAt = new Date().toISOString();
+    try {
+      await putGitHubContent(settings, metricsPath, textToBase64(JSON.stringify(metrics, null, 2)), message, current?.sha, origin);
+      return { metrics, changed: true };
+    } catch (error) {
+      if (String(error?.message || '').includes('sha') && attempt < 2) continue;
+      throw error;
+    }
+  }
+  throw new Error('Could not update metrics after retries');
 }
 
 function compareLibraryEntries(a, b) {
@@ -411,6 +694,63 @@ export default async function handler(request, response) {
     const commitPrefix = String(body?.commitPrefix || 'Add Spine preview');
     const action = String(body?.action || '');
 
+    if (action === 'get-metrics') {
+      const ids = sanitizeMetricIds(body?.ids);
+      const hash = metricsVisitorHash(request, body);
+      const metricsPath = joinRepoPath(settings.basePath, 'metrics.json');
+      const { metrics } = await readMetrics(settings, metricsPath);
+      response.setHeader('Cache-Control', 'no-store');
+      return response.status(200).json({ ok: true, metrics: metricCountsForIds(metrics, ids, hash) });
+    }
+
+    if (action === 'track-metric') {
+      const metricAction = String(body?.metricAction || '').trim();
+      const entryId = sanitizeMetricId(body?.entryId);
+      if (!entryId) return response.status(400).json({ error: 'Invalid metrics entry id' });
+      const hash = metricsVisitorHash(request, body);
+      const metricsPath = joinRepoPath(settings.basePath, 'metrics.json');
+      response.setHeader('Cache-Control', 'no-store');
+
+      if (metricAction === 'view') {
+        const now = Date.now();
+        const day = new Date(now).toISOString().slice(0, 10);
+        const viewKey = `${hash}:${day}`;
+        const { metrics } = await mutateMetrics(settings, metricsPath, `Track Spine preview view ${entryId}`, (draft) => {
+          const metricEntry = normalizeEntryMetric(draft, entryId);
+          if (!metricEntry) return false;
+          pruneRecentViews(metricEntry, now);
+          if (metricEntry.recentViews[viewKey]) return false;
+          metricEntry.recentViews[viewKey] = new Date(now).toISOString();
+          metricEntry.views += 1;
+          return true;
+        }, origin);
+        return response.status(200).json({ ok: true, entryId, metric: metricCountsForIds(metrics, [entryId], hash)[entryId] });
+      }
+
+      if (metricAction === 'like') {
+        const liked = Boolean(body?.liked);
+        const { metrics } = await mutateMetrics(settings, metricsPath, `${liked ? 'Like' : 'Unlike'} Spine preview ${entryId}`, (draft) => {
+          const metricEntry = normalizeEntryMetric(draft, entryId);
+          if (!metricEntry) return false;
+          const currentlyLiked = Boolean(metricEntry.likedBy[hash]);
+          if (liked && !currentlyLiked) {
+            metricEntry.likedBy[hash] = new Date().toISOString();
+            metricEntry.likes += 1;
+            return true;
+          }
+          if (!liked && currentlyLiked) {
+            delete metricEntry.likedBy[hash];
+            metricEntry.likes = Math.max(0, metricEntry.likes - 1);
+            return true;
+          }
+          return false;
+        }, origin);
+        return response.status(200).json({ ok: true, entryId, metric: metricCountsForIds(metrics, [entryId], hash)[entryId] });
+      }
+
+      return response.status(400).json({ error: 'Invalid metrics action' });
+    }
+
     if (action === 'update-archive-exclusions') {
       if (!googlePayload?.email) throw unauthorized('Sign in with Google before editing archive rules');
       if (!isArchiveAdmin(googlePayload)) throw unauthorized('Only archive administrators can edit these rules', 403);
@@ -432,6 +772,76 @@ export default async function handler(request, response) {
       return response.status(200).json({ ok: true, rules: nextRules.rules, updatedAt: nextRules.updatedAt });
     }
 
+    if (action === 'delete-archive-entries') {
+      if (!googlePayload?.email) throw unauthorized('Sign in with Google before deleting archive entries');
+      if (!isArchiveAdmin(googlePayload)) throw unauthorized('Only archive administrators can delete archive entries', 403);
+      const entryIds = normalizeArchiveEntryIds(body?.entryIds);
+      if (!entryIds.length) return response.status(400).json({ error: 'Select at least one archive entry' });
+      const entryIdSet = new Set(entryIds);
+      const indexPath = joinRepoPath(settings.basePath, 'index.json');
+      const currentIndex = await getGitHubContent(settings, indexPath);
+      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
+      const deletedEntries = [];
+      const nextEntries = currentEntries.filter((currentEntry) => {
+        const id = String(currentEntry?.id || '');
+        if (!entryIdSet.has(id)) return true;
+        deletedEntries.push(id);
+        return false;
+      });
+      if (!deletedEntries.length) return response.status(404).json({ error: 'Selected archive entries were not found' });
+      await putGitHubContent(
+        settings,
+        indexPath,
+        textToBase64(JSON.stringify(nextEntries, null, 2)),
+        `${commitPrefix}: delete archive entries`,
+        currentIndex?.sha,
+        origin,
+      );
+      return response.status(200).json({ ok: true, deleted: deletedEntries, indexed: nextEntries.length });
+    }
+
+    if (action === 'anchor-source-proof') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const sourceProof = body?.sourceProof && typeof body.sourceProof === 'object' ? body.sourceProof : null;
+      if (!sourceProof) return response.status(400).json({ error: 'Invalid source proof payload' });
+      const anchorPath = cleanRepoPath(body?.anchorPath || joinRepoPath(body?.uploadPath || sourceProof?.github?.previewPath || '', 'blockchain-anchor.json'));
+      if (!anchorPath) return response.status(400).json({ error: 'Invalid blockchain anchor path' });
+
+      const anchor = await createBlockchainAnchor({
+        sourceProof,
+        uploadedFiles: body?.uploadedFiles,
+        body,
+        settings,
+        googlePayload,
+        anonymousAccount,
+        origin,
+      });
+      const currentAnchor = await getGitHubContent(settings, anchorPath);
+      const writeResult = await putGitHubContent(
+        settings,
+        anchorPath,
+        textToBase64(JSON.stringify(anchor, null, 2)),
+        `${commitPrefix}: blockchain source proof anchor`,
+        currentAnchor?.sha,
+        origin,
+      );
+      return response.status(200).json({
+        ok: true,
+        anchor: {
+          ...anchor,
+          anchorPath,
+          anchorUrl: assetUrlForRepoPath(origin, anchorPath),
+          github: {
+            ...anchor.github,
+            anchorPath,
+            anchorUrl: assetUrlForRepoPath(origin, anchorPath),
+            anchorCommitSha: String(writeResult?.commit?.sha || ''),
+            anchorCommitUrl: String(writeResult?.commit?.html_url || ''),
+          },
+        },
+      });
+    }
+
     if (action === 'put-file') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const path = cleanRepoPath(file?.path || body?.path || '');
@@ -439,8 +849,14 @@ export default async function handler(request, response) {
       const message = String(body?.message || `${commitPrefix}: ${path.split('/').pop() || 'file'}`);
       if (!path || !contentBase64) return response.status(400).json({ error: 'Invalid file payload' });
       const existingFile = await getGitHubContent(settings, path);
-      await putGitHubContent(settings, path, contentBase64, message, existingFile?.sha, origin);
-      return response.status(200).json({ ok: true, path });
+      const writeResult = await putGitHubContent(settings, path, contentBase64, message, existingFile?.sha, origin);
+      return response.status(200).json({
+        ok: true,
+        path,
+        bytes: Buffer.from(contentBase64.replace(/\s/g, ''), 'base64').byteLength,
+        sha256: sha256HexFromBase64(contentBase64),
+        github: publicGitHubWrite(writeResult),
+      });
     }
 
     if (action === 'update-index') {
@@ -452,8 +868,8 @@ export default async function handler(request, response) {
       const nextEntry = {
         ...entry,
         ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
-        ...(googlePayload?.name || entry?.ownerName ? { ownerName: cleanPublicProfileText(googlePayload?.name || entry?.ownerName) } : {}),
-        ...(googlePayload?.picture || entry?.ownerPicture ? { ownerPicture: cleanPublicProfileImage(googlePayload?.picture || entry?.ownerPicture) } : {}),
+        ...(entry?.ownerName || googlePayload?.name ? { ownerName: cleanPublicProfileText(entry?.ownerName || googlePayload?.name) } : {}),
+        ...(entry?.ownerPicture || googlePayload?.picture ? { ownerPicture: cleanPublicProfileImage(entry?.ownerPicture || googlePayload?.picture) } : {}),
         ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id, ownerAnonFingerprint: anonymousAccount.fingerprint } : {}),
         publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
         showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
@@ -541,6 +957,48 @@ export default async function handler(request, response) {
       });
     }
 
+    if (action === 'update-profile-name') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const indexPath = joinRepoPath(settings.basePath, 'index.json');
+      const currentIndex = await getGitHubContent(settings, indexPath);
+      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
+      const userEmail = String(googlePayload?.email || '').toLowerCase();
+      const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
+      const ownerName = cleanPublicProfileText(body?.ownerName || googlePayload?.name || '', 80);
+      const ownerPicture = cleanPublicProfileImage(body?.ownerPicture || googlePayload?.picture || '');
+      const publicOwnerId = publicOwnerIdFor(googlePayload, anonymousAccount, body?.publicOwnerId);
+      if (!ownerName) return response.status(400).json({ error: 'Account name is required' });
+
+      let changed = false;
+      const nextEntries = currentEntries.map((currentEntry) => {
+        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
+        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
+        const isOwner = (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
+        if (!isOwner) return currentEntry;
+        const nextEntry = { ...currentEntry, ownerName, publicOwnerId };
+        if (googlePayload?.email) nextEntry.ownerEmail = googlePayload.email;
+        if (ownerPicture) nextEntry.ownerPicture = ownerPicture;
+        changed =
+          changed ||
+          currentEntry.ownerName !== nextEntry.ownerName ||
+          currentEntry.publicOwnerId !== nextEntry.publicOwnerId ||
+          currentEntry.ownerEmail !== nextEntry.ownerEmail ||
+          currentEntry.ownerPicture !== nextEntry.ownerPicture;
+        return nextEntry;
+      });
+
+      if (changed && currentIndex?.sha) {
+        await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update account name`, currentIndex?.sha, origin);
+      }
+
+      const entries = nextEntries.filter((currentEntry) => {
+        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
+        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
+        return (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
+      }).sort(compareLibraryEntries);
+      return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, entries), changed });
+    }
+
     if (action === 'update-profile-visibility') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const indexPath = joinRepoPath(settings.basePath, 'index.json');
@@ -549,8 +1007,8 @@ export default async function handler(request, response) {
       const showOwnerLibrary = Boolean(body?.showOwnerLibrary);
       const userEmail = String(googlePayload?.email || '').toLowerCase();
       const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
-      const ownerName = cleanPublicProfileText(googlePayload?.name || body?.ownerName || '');
-      const ownerPicture = cleanPublicProfileImage(googlePayload?.picture || body?.ownerPicture || '');
+      const ownerName = cleanPublicProfileText(body?.ownerName || googlePayload?.name || '');
+      const ownerPicture = cleanPublicProfileImage(body?.ownerPicture || googlePayload?.picture || '');
       const publicOwnerId = publicOwnerIdFor(googlePayload, anonymousAccount, body?.publicOwnerId);
       let changed = false;
       const nextEntries = currentEntries.map((currentEntry) => {
@@ -584,8 +1042,8 @@ export default async function handler(request, response) {
       const portfolioMode = Boolean(body?.portfolioMode);
       const userEmail = String(googlePayload?.email || '').toLowerCase();
       const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
-      const ownerName = cleanPublicProfileText(googlePayload?.name || body?.ownerName || '');
-      const ownerPicture = cleanPublicProfileImage(googlePayload?.picture || body?.ownerPicture || '');
+      const ownerName = cleanPublicProfileText(body?.ownerName || googlePayload?.name || '');
+      const ownerPicture = cleanPublicProfileImage(body?.ownerPicture || googlePayload?.picture || '');
       const publicOwnerId = publicOwnerIdFor(googlePayload, anonymousAccount, body?.publicOwnerId);
       let changed = false;
       const nextEntries = currentEntries.map((currentEntry) => {
@@ -672,8 +1130,12 @@ export default async function handler(request, response) {
           ...currentEntry,
           ownerEmail: googlePayload.email,
           publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, currentEntry?.publicOwnerId),
-          ...(googlePayload.name ? { ownerName: cleanPublicProfileText(googlePayload.name) } : {}),
-          ...(googlePayload.picture ? { ownerPicture: cleanPublicProfileImage(googlePayload.picture) } : {}),
+          ...(body?.ownerName || currentEntry?.ownerName || googlePayload.name
+            ? { ownerName: cleanPublicProfileText(body?.ownerName || currentEntry?.ownerName || googlePayload.name) }
+            : {}),
+          ...(body?.ownerPicture || currentEntry?.ownerPicture || googlePayload.picture
+            ? { ownerPicture: cleanPublicProfileImage(body?.ownerPicture || currentEntry?.ownerPicture || googlePayload.picture) }
+            : {}),
         };
       });
       if (changed) {
@@ -712,8 +1174,8 @@ export default async function handler(request, response) {
     const nextEntry = {
       ...entry,
       ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
-      ...(googlePayload?.name || entry?.ownerName ? { ownerName: cleanPublicProfileText(googlePayload?.name || entry?.ownerName) } : {}),
-      ...(googlePayload?.picture || entry?.ownerPicture ? { ownerPicture: cleanPublicProfileImage(googlePayload?.picture || entry?.ownerPicture) } : {}),
+      ...(entry?.ownerName || googlePayload?.name ? { ownerName: cleanPublicProfileText(entry?.ownerName || googlePayload?.name) } : {}),
+      ...(entry?.ownerPicture || googlePayload?.picture ? { ownerPicture: cleanPublicProfileImage(entry?.ownerPicture || googlePayload?.picture) } : {}),
       ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id, ownerAnonFingerprint: anonymousAccount.fingerprint } : {}),
       publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
       showOwnerLibrary: Boolean(entry?.showOwnerLibrary),

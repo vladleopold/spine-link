@@ -1,3 +1,8 @@
+import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
+import { cacheProfiles, setCacheHeaders } from '../lib/cache-headers.js';
+import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
+import { cachedGithubText } from '../lib/github-content-cache.js';
+
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
@@ -20,6 +25,14 @@ function escapeHtml(value = '') {
     .replace(/'/g, '&#39;');
 }
 
+function jsonScript(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
+function cleanPublicText(value = '', maxLength = 240) {
+  return String(value).replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+
 function safeImage(value = '') {
   const url = String(value).trim();
   return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
@@ -28,6 +41,37 @@ function safeImage(value = '') {
 function safeVideo(value = '') {
   const url = String(value).trim();
   return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
+}
+
+function entryImageAsset(value = '', entry = {}, fallback = '') {
+  return appendAssetVersion(safeImage(value), assetVersionForEntry(entry, fallback));
+}
+
+function entryVideoAsset(value = '', entry = {}, fallback = '') {
+  return appendAssetVersion(safeVideo(value), assetVersionForEntry(entry, fallback));
+}
+
+function safeAsset(value = '') {
+  const url = String(value).trim();
+  return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
+}
+
+function encodeRepoPath(path) {
+  return cleanRepoPath(path)
+    .split('/')
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+}
+
+function sanitizeSha256(value = '') {
+  const hash = String(value || '').trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(hash) ? hash : '';
+}
+
+function shortHash(value = '') {
+  const hash = String(value || '').trim();
+  return hash.length > 22 ? `${hash.slice(0, 12)}...${hash.slice(-8)}` : hash;
 }
 
 function textFromEntry(entry, field = 'all') {
@@ -86,8 +130,24 @@ function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
   const poster = String(entry?.thumbnailPoster || '');
   return origin && id && /^data:image\/webp;base64,/i.test(poster)
-    ? `${origin}/assets/library/${encodeURIComponent(id)}/generated-preview.webp`
+    ? appendAssetVersion(`${origin}/assets/library/${encodeURIComponent(id)}/generated-preview.webp`, assetVersionForEntry(entry, 'generated-preview'))
     : '';
+}
+
+function isoDate(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : '';
+}
+
+function durationToIso8601(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return '';
+  return `PT${Math.max(1, Math.round(seconds))}S`;
+}
+
+function positiveInteger(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
 }
 
 function githubHeaders(token) {
@@ -99,13 +159,7 @@ function githubHeaders(token) {
 }
 
 async function githubText(settings, path) {
-  const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
-  const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`, {
-    headers: githubHeaders(settings.token),
-  });
-  if (!response.ok) return '';
-  const data = await response.json();
-  return data?.content ? base64ToText(data.content) : '';
+  return cachedGithubText(settings, path);
 }
 
 async function githubBuffer(settings, path) {
@@ -136,10 +190,136 @@ function previewUrl(entry) {
   return animation ? `/p/${id}?animation=${encodeURIComponent(animation)}` : `/p/${id}`;
 }
 
-function stableMetric(value = '', min = 1, range = 99) {
-  let hash = 0;
-  for (const character of String(value)) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return min + (hash % range);
+function archiveItemUrl(entry) {
+  return `/world-spine-archive/${encodeURIComponent(String(entry?.id || ''))}`;
+}
+
+function videoWatchUrl(entry) {
+  return `/video/${encodeURIComponent(String(entry?.id || ''))}`;
+}
+
+function entryHasFile(entry, fileName = '') {
+  const name = String(fileName || '').trim().toLowerCase();
+  return Array.isArray(entry?.files) && entry.files.some((file) => String(file || '').trim().toLowerCase() === name);
+}
+
+function sourceProofUrlForEntry(origin, entry) {
+  const direct = safeAsset(entry?.sourceProofUrl || entry?.sourceProof?.proofUrl);
+  if (direct) return direct;
+  const path = cleanRepoPath(entry?.sourceProofPath || entry?.sourceProof?.proofPath || '');
+  if (path) return `${origin}/assets/${encodeRepoPath(path)}`;
+  if (entryHasFile(entry, 'source-proof.json') && entry?.previewPath) {
+    return `${origin}/assets/${encodeRepoPath(`${entry.previewPath}/source-proof.json`)}`;
+  }
+  return '';
+}
+
+function blockchainAnchorUrlForEntry(origin, entry) {
+  const direct = safeAsset(entry?.blockchainAnchor?.anchorUrl || entry?.blockchainAnchor?.github?.anchorUrl);
+  if (direct) return direct;
+  const path = cleanRepoPath(entry?.blockchainAnchor?.anchorPath || entry?.blockchainAnchor?.github?.anchorPath || '');
+  if (path) return `${origin}/assets/${encodeRepoPath(path)}`;
+  if (entryHasFile(entry, 'blockchain-anchor.json') && entry?.previewPath) {
+    return `${origin}/assets/${encodeRepoPath(`${entry.previewPath}/blockchain-anchor.json`)}`;
+  }
+  return '';
+}
+
+function proofDocumentsForEntry(origin, entry, pageUrl) {
+  const sourceProofUrl = sourceProofUrlForEntry(origin, entry);
+  const blockchainAnchorUrl = blockchainAnchorUrlForEntry(origin, entry);
+  const proofHash = sanitizeSha256(entry?.sourceProof?.proofHash || entry?.blockchainAnchor?.sourceProofHash);
+  const anchorHash = sanitizeSha256(entry?.blockchainAnchor?.anchorHash);
+  const documents = [];
+  if (sourceProofUrl) {
+    documents.push({
+      '@type': 'DigitalDocument',
+      '@id': `${pageUrl}#source-proof`,
+      name: 'Spine-Link source origin proof',
+      url: sourceProofUrl,
+      encodingFormat: 'application/json',
+      description:
+        'Source-origin proof JSON linking uploaded Spine files to SHA-256 hashes, account/browser evidence, and the GitHub repository path.',
+      ...(proofHash
+        ? {
+            identifier: {
+              '@type': 'PropertyValue',
+              propertyID: 'SHA-256',
+              value: proofHash,
+            },
+          }
+        : {}),
+    });
+  }
+  if (blockchainAnchorUrl) {
+    documents.push({
+      '@type': 'DigitalDocument',
+      '@id': `${pageUrl}#blockchain-anchor`,
+      name: 'Spine-Link GitHub blockchain anchor',
+      url: blockchainAnchorUrl,
+      encodingFormat: 'application/json',
+      description:
+        'Blockchain anchor JSON linking the source proof hash, GitHub commit receipts, browser/account evidence, and optional EVM transaction data.',
+      ...(anchorHash
+        ? {
+            identifier: {
+              '@type': 'PropertyValue',
+              propertyID: 'SHA-256',
+              value: anchorHash,
+            },
+          }
+        : {}),
+    });
+  }
+  return documents;
+}
+
+function shuffleEntries(entries) {
+  return entries
+    .map((entry) => ({ entry, sort: Math.random() }))
+    .sort((a, b) => a.sort - b.sort)
+    .map(({ entry }) => entry);
+}
+
+function feedScore(entry, metrics) {
+  const metric = metricCountsForId(metrics, String(entry?.id || ''));
+  const uploadedAt = Date.parse(String(entry?.uploadedAt || '')) || 0;
+  const recency = uploadedAt ? Math.max(0, 60 - Math.floor((Date.now() - uploadedAt) / 86400000)) : 0;
+  return metric.likes * 12 + metric.views * 3 + recency;
+}
+
+function homepageFeedEntries(origin, entries, metrics) {
+  const scoredEntries = entries
+    .filter((entry) => entry?.hiddenFromPublicLibrary !== true && (entry?.webmPreview || entry?.thumbnailPoster || entry?.thumbnail))
+    .map((entry) => ({ entry, score: feedScore(entry, metrics) }))
+    .sort((a, b) => b.score - a.score || compareArchiveEntries(a.entry, b.entry));
+  const topPool = scoredEntries.slice(0, Math.min(96, Math.max(24, scoredEntries.length))).map(({ entry }) => entry);
+  const randomEntries = shuffleEntries(topPool).slice(0, 32);
+  return randomEntries.map((entry) => {
+    const id = String(entry?.id || '');
+    const metric = metricCountsForId(metrics, id);
+    const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
+    const thumbnail = isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
+    const poster = entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || thumbnail;
+    return {
+      id,
+      title: String(entry?.title || id || 'Spine preview'),
+      ownerName: String(entry?.ownerName || 'Spine creator'),
+      ownerUrl: entry?.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
+      previewUrl: `${origin}${previewUrl(entry)}`,
+      webmPreview: entryVideoAsset(entry?.webmPreview || '', entry, 'webm'),
+      thumbnailPoster: poster,
+      thumbnail,
+      thumbnailType: isGifThumbnail ? 'gif' : 'image',
+      previewWidth: Number(entry?.previewWidth || 0) || undefined,
+      previewHeight: Number(entry?.previewHeight || 0) || undefined,
+      mediaAspectRatio: Number(entry?.mediaAspectRatio || 0) || undefined,
+      animations: Array.isArray(entry?.animations) ? entry.animations.length : 0,
+      uploadedAt: entry?.uploadedAt || '',
+      pageMode: entry?.portfolioMode === true ? 'Portfolio' : 'Library',
+      metrics: metric,
+    };
+  });
 }
 
 function imageSizeFromBuffer(buffer) {
@@ -204,7 +384,7 @@ async function enrichArchiveEntryLayout(settings, origin, entry) {
     return { ...entry, mediaAspectRatio: width / height };
   }
 
-  const posterUrl = safeImage(entry.thumbnailPoster || '') || generatedThumbnailUrl(origin, entry) || safeImage(entry.thumbnail || '');
+  const posterUrl = entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail');
   const repoPath = repoPathFromAssetUrl(entry, posterUrl);
   if (!repoPath || repoPath.includes('/generated-preview.webp')) return entry;
   const buffer = await githubBuffer(settings, repoPath);
@@ -234,25 +414,45 @@ function tileClassForManualSize(size = '') {
   return `tile--${size}`;
 }
 
+function fallbackTileClass(index = 0) {
+  const fallbackSizes = [
+    'tile--horizontal',
+    'tile--square',
+    'tile--medium-wide',
+    'tile--vertical',
+    'tile--large-rect',
+    'tile--wide',
+    'tile--medium-narrow',
+    'tile--square',
+  ];
+  return fallbackSizes[Math.abs(index) % fallbackSizes.length];
+}
+
 function tileClassForEntry(entry, index = 0) {
-  void index;
   const manualClass = tileClassForManualSize(entry?.cardSize);
   const fallbackWidth = Number(entry?.previewWidth || entry?.thumbnailWidth || entry?.mediaWidth || 0);
   const fallbackHeight = Number(entry?.previewHeight || entry?.thumbnailHeight || entry?.mediaHeight || 0);
   const fallbackRatio = fallbackWidth > 0 && fallbackHeight > 0 ? fallbackWidth / fallbackHeight : 0;
   if (manualClass === 'tile--medium-narrow' && fallbackRatio >= 0.75 && fallbackRatio <= 1.15) return 'tile tile--square';
   if (manualClass) return `tile ${manualClass}`;
-  const ratio = Number(entry?.mediaAspectRatio || 0);
-  return `tile ${tileClassForRatio(ratio)}`;
+  const ratio = Number(entry?.mediaAspectRatio || 0) || fallbackRatio;
+  return `tile ${ratio ? tileClassForRatio(ratio) : fallbackTileClass(index)}`;
 }
 
-function mediaHtml(entry, { origin = '', posterClass = '' } = {}) {
-  const video = safeVideo(entry?.webmPreview || '');
-  const poster = safeImage(entry?.thumbnailPoster || '') || generatedThumbnailUrl(origin, entry);
+function entryImageUrl(origin, entry) {
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-  const thumbnail = isGifThumbnail ? poster : safeImage(entry?.thumbnail || '');
+  return entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || (isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'));
+}
+
+function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false } = {}) {
+  const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const poster = entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
+  const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
+  const thumbnail = isGifThumbnail ? poster : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
   if (video) {
-    return `<video class="${posterClass}" src="${escapeHtml(video)}" data-video-src="${escapeHtml(video)}" muted playsinline preload="metadata"></video>`;
+    const videoSource = eagerVideo ? ` src="${escapeHtml(video)}" controls` : ` data-video-src="${escapeHtml(video)}"`;
+    const preload = eagerVideo ? 'metadata' : 'none';
+    return `<video class="${posterClass}"${poster || thumbnail ? ` poster="${escapeHtml(poster || thumbnail)}"` : ''}${videoSource} muted playsinline preload="${preload}"></video>`;
   }
   if (thumbnail) {
     return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="" loading="lazy" decoding="async" />`;
@@ -269,37 +469,58 @@ function baseStyles() {
       *::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(74,78,84,.72); background-clip: content-box; }
       html, body { min-height: 100%; margin: 0; }
       body { color: #edf5ff; background: #050607; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .page { width: min(1440px, calc(100% - 28px)); margin: 0 auto; padding: 26px 0 46px; }
-      .top { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+      .page { width: 100%; margin: 0; padding: 26px 14px 46px; }
+      .top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; gap: 18px; margin-bottom: 22px; }
+      .archive-title-block { min-width: 0; }
       .brand { color: #fff; text-decoration: none; font-size: clamp(32px, 5vw, 72px); font-weight: 950; letter-spacing: .02em; line-height: .9; }
       .brand span { display: block; color: #ff6a28; font-size: 12px; letter-spacing: .32em; text-transform: uppercase; }
-      .back { color: #b3ff40; font-weight: 800; text-decoration: none; }
+      .archive-header-right { display: grid; justify-items: end; gap: 12px; }
+      .archive-logo { display: inline-flex; align-items: center; gap: 8px; color: #f7fbff; font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif; font-size: clamp(30px, 3.6vw, 54px); font-weight: 500; line-height: .78; letter-spacing: .18em; text-decoration: none; text-transform: uppercase; text-shadow: 0 0 1px rgba(255,255,255,.86), 0 6px 18px rgba(0,0,0,.42); }
+      .archive-logo-mark { display: inline-grid; gap: 4px; width: 16px; margin: 0 -3px 0 -5px; transform: translateY(1px); }
+      .archive-logo-mark i { display: block; width: 16px; height: 7px; border-radius: 999px; background: #ff5a1f; box-shadow: 0 0 8px rgba(255,90,31,.22); }
+      .archive-logo-mark i:nth-child(1) { transform: translateX(-1px); }
+      .archive-logo-mark i:nth-child(2) { width: 14px; transform: translateX(2px); }
+      .archive-logo-mark i:nth-child(3) { width: 12px; transform: translateX(4px); }
+      .archive-logo-mark i:nth-child(4) { width: 10px; transform: translateX(6px); }
+      .archive-logo-mark i:nth-child(5) { width: 8px; transform: translateX(8px); }
+      .archive-logo-link { margin-left: 8px; color: #ff6a28; font-size: .72em; font-weight: 800; letter-spacing: .22em; line-height: 1; transform: translate(-15px, .18em); }
+      .item-header-title { display: grid; gap: 8px; min-width: 0; }
+      .item-header-title span { display: block; max-width: 100%; overflow: hidden; color: #fff; font-size: clamp(20px, 3vw, 34px); font-weight: 950; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
+      .back { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 14px; border: 1px solid rgba(179,255,64,.62); border-radius: 8px; color: #eaffc2; background: rgba(179,255,64,.1); box-shadow: 0 12px 28px rgba(0,0,0,.24), inset 0 0 18px rgba(179,255,64,.08); font-size: 13px; font-weight: 950; text-decoration: none; white-space: nowrap; }
+      .back:hover { border-color: rgba(140,199,255,.78); color: #fff; background: rgba(140,199,255,.12); }
       .muted { color: rgba(237,245,255,.62); }
       @media (max-width: 700px) {
         * { scrollbar-width: none; }
         *::-webkit-scrollbar { width: 0; height: 0; display: none; }
-        .page { width: min(100% - 18px, 1440px); padding-top: 18px; }
-        .top { align-items: flex-start; flex-direction: column; }
+        .page { width: 100%; padding: 18px 9px 46px; }
+        .top { grid-template-columns: 1fr; align-items: start; }
+        .archive-header-right { justify-items: start; width: 100%; }
+        .archive-logo { font-size: clamp(30px, 13vw, 46px); }
+        .item-header-title span { max-width: 100%; white-space: normal; }
       }
   `;
 }
 
-function archiveHtml({ origin, entries, exclusions }) {
+function archiveHtml({ origin, entries, exclusions, metrics }) {
   const cards = entries
     .map((entry, index) => {
       const title = escapeHtml(entry?.title || entry?.id || 'Spine preview');
-      const spineUrl = previewUrl(entry);
+      const itemUrl = previewUrl(entry);
+      const archiveUrl = archiveItemUrl(entry);
       const metricId = String(entry?.id || entry?.title || '');
-      const likes = stableMetric(metricId, 12, 87);
-      const views = stableMetric(`${metricId}:views`, 140, 2860);
+      const metric = metricCountsForId(metrics, metricId);
+      const likes = metric.likes;
+      const views = metric.views;
       const cardSizeMode = entry?.cardSize && entry.cardSize !== 'auto' ? 'manual' : 'auto';
-      return `<a class="${tileClassForEntry(entry, index)}" data-card-size-mode="${cardSizeMode}" href="${escapeHtml(spineUrl)}" aria-label="Open ${title}">
+      const entryId = escapeHtml(String(entry?.id || ''));
+      return `<a class="${tileClassForEntry(entry, index)}" data-entry-id="${entryId}" data-archive-url="${escapeHtml(archiveUrl)}" data-card-size-mode="${cardSizeMode}" href="${escapeHtml(itemUrl)}" aria-label="Open ${title} in the interactive Spine player">
         <div class="tile-media">${mediaHtml(entry, { origin })}</div>
+        <span class="tile-select-check" aria-hidden="true">✓</span>
         <div class="tile-overlay">
           <strong class="tile-title">${title}</strong>
-          <span class="tile-stats" aria-label="${likes} likes and ${views} views">
-            <span class="tile-stat"><span aria-hidden="true">♡</span>${likes}</span>
-            <span class="tile-stat"><span aria-hidden="true">◉</span>${views}</span>
+          <span class="tile-stats" data-metric-id="${entryId}" data-metric-label="stats" aria-label="${likes} likes and ${views} views">
+            <span class="tile-stat tile-like-button" data-metric-id="${entryId}" data-metric-like data-metric-current-likes="${likes}" data-metric-current-views="${views}" role="button" tabindex="0" aria-pressed="false" title="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${likes}</strong></span>
+            <span class="tile-stat" data-metric-id="${entryId}" data-metric-current-likes="${likes}" data-metric-current-views="${views}"><span aria-hidden="true">◉</span><strong data-metric-views>${views}</strong></span>
           </span>
         </div>
       </a>`;
@@ -312,37 +533,113 @@ function archiveHtml({ origin, entries, exclusions }) {
     updatedBy: exclusions?.updatedBy || '',
     rules: Array.isArray(exclusions?.rules) ? exclusions.rules : [],
   }).replace(/</g, '\\u003c');
+  const archiveImage = entries.map((entry) => entryImageUrl(origin, entry)).find(Boolean) || `${origin}/spine-link-video-thumbnail.png`;
+  const itemListElements = entries.slice(0, 24).map((entry, index) => {
+    const id = String(entry?.id || '').trim();
+    const itemUrl = `${origin}/world-spine-archive/${encodeURIComponent(id)}`;
+    const title = cleanPublicText(entry?.title || id || 'Spine animation work', 120);
+    const image = entryImageUrl(origin, entry);
+    const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+    const work = {
+      '@type': video ? 'VideoObject' : 'CreativeWork',
+      '@id': `${itemUrl}${video ? '#video' : '#work'}`,
+      name: title,
+      url: itemUrl,
+      description: cleanPublicText(entry?.note || `${title} public Spine animation work in World SPINE ARCHIVE.`, 260),
+      ...(image ? { image, thumbnailUrl: video ? [image] : image } : {}),
+      ...(video
+        ? {
+            contentUrl: video,
+            embedUrl: `${origin}${previewUrl(entry)}`,
+            uploadDate: isoDate(entry?.uploadedAt) || '2026-05-12T00:00:00.000Z',
+            ...(durationToIso8601(entry?.previewDuration) ? { duration: durationToIso8601(entry.previewDuration) } : {}),
+            ...(positiveInteger(entry?.previewWidth) ? { width: positiveInteger(entry.previewWidth) } : {}),
+            ...(positiveInteger(entry?.previewHeight) ? { height: positiveInteger(entry.previewHeight) } : {}),
+          }
+        : {}),
+    };
+    return {
+      '@type': 'ListItem',
+      position: index + 1,
+      url: itemUrl,
+      name: title,
+      item: work,
+    };
+  });
+  const archiveStructuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'CollectionPage',
+        '@id': `${origin}/world-spine-archive#collection`,
+        name: 'World SPINE ARCHIVE',
+        url: `${origin}/world-spine-archive`,
+        description:
+          'World SPINE ARCHIVE is a public archive of user Spine animation works. Anyone can add a Spine animation anonymously with Create preview, or sign in with Google to publish through a public portfolio profile with likes and views. Google account profiles can be public portfolios that are searchable and appear in the showcase/archive, or private libraries that are private by default and not listed through the site or Google.',
+        image: archiveImage,
+        keywords:
+          'spine portfolio, portfolio spine, spine animation portfolio, spine animator portfolio, world spine archive, spine library',
+        mainEntity: {
+          '@id': `${origin}/world-spine-archive#works`,
+        },
+        potentialAction: [
+          {
+            '@type': 'CreateAction',
+            name: 'Create preview',
+            target: `${origin}/?upload=work`,
+          },
+          {
+            '@type': 'RegisterAction',
+            name: 'Sign in with Google',
+            target: `${origin}/?login=google`,
+          },
+        ],
+      },
+      {
+        '@type': 'ItemList',
+        '@id': `${origin}/world-spine-archive#works`,
+        name: 'Public user Spine animation works',
+        url: `${origin}/world-spine-archive`,
+        numberOfItems: entries.length,
+        itemListElement: itemListElements,
+      },
+    ],
+  };
 
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>World Spine Archive - Spine Portfolio Library</title>
-    <meta name="description" content="Browse World Spine Archive, a growing Spine portfolio library with animation work from beginner, intermediate and professional Spine animators." />
+    <title>World SPINE ARCHIVE - Public Spine Portfolio Library</title>
+    <meta name="description" content="World SPINE ARCHIVE is a public archive of user Spine animation works. Anyone can add a Spine animation anonymously with Create preview, or sign in with Google to publish through a public portfolio profile with likes and views." />
     <meta name="keywords" content="spine portfolio, portfolio spine, spine animation portfolio, spine animator portfolio, world spine archive, spine library" />
-    <meta name="robots" content="index,follow" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
+    <meta name="googlebot" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
     <link rel="canonical" href="${origin}/world-spine-archive" />
+    <link rel="stylesheet" href="/page-transitions.css" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="World Spine Archive - Spine Portfolio Library" />
-    <meta property="og:description" content="A growing public archive of Spine animation portfolios and preview cards from many animator levels." />
+    <meta property="og:title" content="World SPINE ARCHIVE - Public Spine Portfolio Library" />
+    <meta property="og:description" content="Public user Spine animation works, anonymous Create preview uploads, and Google-account portfolio profiles with likes, views, showcase, and archive publishing." />
     <meta property="og:url" content="${origin}/world-spine-archive" />
-    <script type="application/ld+json">
-      ${JSON.stringify({
-        '@context': 'https://schema.org',
-        '@type': 'CollectionPage',
-        name: 'World Spine Archive',
-        url: `${origin}/world-spine-archive`,
-        description:
-          'A growing public portfolio Spine library with animation preview cards from beginner, intermediate, senior and professional Spine animators.',
-        keywords:
-          'spine portfolio, portfolio spine, spine animation portfolio, spine animator portfolio, world spine archive, spine library',
-      }).replace(/</g, '\\u003c')}
-    </script>
+    <meta property="og:site_name" content="Spine Portfolio" />
+    <meta property="og:image" content="${escapeHtml(archiveImage)}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="World SPINE ARCHIVE - Public Spine Portfolio Library" />
+    <meta name="twitter:description" content="Public user Spine animation works, anonymous Create preview uploads, and Google-account portfolio profiles." />
+    <meta name="twitter:image" content="${escapeHtml(archiveImage)}" />
+    <script type="application/ld+json">${jsonScript(archiveStructuredData)}</script>
+    <script src="/page-transitions.js" defer></script>
     <style>
       ${baseStyles()}
-      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); grid-auto-flow: dense; grid-auto-rows: 74px; gap: 10px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(74px, 4.6vw, 96px), 1fr)); grid-auto-flow: dense; grid-auto-rows: clamp(62px, 3.7vw, 78px); gap: 10px; width: 100%; margin: 0; }
       .tile { position: relative; min-height: 0; overflow: hidden; border: 1px solid rgba(140,199,255,.18); border-radius: 8px; color: inherit; background: #090b0d; text-decoration: none; }
+      body.is-archive-selecting .tile { cursor: pointer; }
+      body.is-archive-selecting .tile:hover { border-color: rgba(255,214,96,.78); }
+      .tile.is-selected { border-color: rgba(179,255,64,.92); box-shadow: 0 0 0 2px rgba(179,255,64,.42), 0 18px 60px rgba(179,255,64,.12); }
+      .tile-select-check { position: absolute; right: 10px; bottom: 10px; z-index: 4; display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid rgba(179,255,64,.72); border-radius: 999px; color: #071009; background: #b3ff40; font-size: 18px; font-weight: 950; opacity: 0; transform: scale(.82); transition: opacity 140ms ease, transform 140ms ease; pointer-events: none; }
+      body.is-archive-selecting .tile-select-check { opacity: .42; }
+      body.is-archive-selecting .tile.is-selected .tile-select-check { opacity: 1; transform: scale(1); }
       .tile--small-square { grid-column: span 2; grid-row: span 2; }
       .tile--square { grid-column: span 3; grid-row: span 3; }
       .tile--horizontal { grid-column: span 4; grid-row: span 2; }
@@ -354,34 +651,29 @@ function archiveHtml({ origin, entries, exclusions }) {
       .tile--full { grid-column: 1 / -1; grid-row: span 3; }
       .tile:hover { border-color: rgba(179,255,64,.68); }
       .tile-media, .tile-media img, .tile-media video { position: absolute; inset: 0; width: 100%; height: 100%; }
-      .tile-media img, .tile-media video { object-fit: cover; transform: none; background: #050607; }
+      .tile-media img, .tile-media video { object-fit: contain; transform: none; background: #050607; }
       .tile::after { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(0,0,0,.72), rgba(0,0,0,.12) 35%, rgba(0,0,0,.22)); pointer-events: none; }
       .tile-overlay { position: absolute; top: 10px; right: 10px; left: 10px; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
       .tile-title { min-width: 0; overflow: hidden; color: #fff; font-size: 14px; font-weight: 950; text-overflow: ellipsis; text-shadow: 0 2px 14px rgba(0,0,0,.86); white-space: nowrap; }
       .tile-stats { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
       .tile-stat { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 0 8px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: rgba(237,245,255,.9); background: rgba(5,7,9,.58); box-shadow: 0 10px 24px rgba(0,0,0,.22); font-size: 12px; font-weight: 900; line-height: 1; backdrop-filter: blur(10px); }
       .tile-stat:first-child { color: #ffd6e7; border-color: rgba(255,185,214,.24); }
+      .tile-stat strong { color: currentColor; font-size: 12px; line-height: 1; }
+      .tile-like-button { cursor: pointer; user-select: none; }
+      .tile-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.16); }
       .media-fallback { display: grid; place-items: center; width: 100%; height: 100%; color: #fff; font-size: 60px; font-weight: 950; background: radial-gradient(circle, rgba(140,199,255,.15), rgba(0,0,0,.92)); }
-      .archive-admin-toggle { position: fixed; right: 14px; bottom: 14px; z-index: 20; min-height: 42px; padding: 0 14px; border: 1px solid rgba(179,255,64,.58); border-radius: 8px; color: #eaffc2; background: rgba(7,10,12,.84); font-weight: 900; cursor: pointer; backdrop-filter: blur(10px); }
-      .archive-admin { display: none; position: fixed; right: 14px; bottom: 68px; z-index: 21; width: min(520px, calc(100vw - 28px)); max-height: min(720px, calc(100vh - 96px)); overflow: auto; padding: 14px; border: 1px solid rgba(140,199,255,.32); border-radius: 8px; background: rgba(8,10,12,.96); box-shadow: 0 24px 70px rgba(0,0,0,.48); }
-      .archive-admin.is-open { display: grid; gap: 12px; }
-      .archive-admin h2 { margin: 0; font-size: 18px; line-height: 1.2; }
-      .archive-admin p { margin: 0; color: rgba(237,245,255,.66); font-size: 12px; line-height: 1.45; }
-      .archive-admin-row { display: grid; grid-template-columns: 120px 104px minmax(0, 1fr) 66px 36px; gap: 8px; align-items: center; }
-      .archive-admin-row select,
-      .archive-admin-row input { min-width: 0; height: 36px; border: 1px solid rgba(255,255,255,.14); border-radius: 6px; color: #edf5ff; background: rgba(255,255,255,.06); }
-      .archive-admin-row input[type="checkbox"] { width: 18px; height: 18px; justify-self: center; }
-      .archive-admin button { min-height: 36px; border: 1px solid rgba(255,255,255,.16); border-radius: 6px; color: #edf5ff; background: rgba(255,255,255,.07); font-weight: 800; cursor: pointer; }
-      .archive-admin-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-      .archive-admin-actions button:first-child { border-color: rgba(179,255,64,.58); color: #eaffc2; background: rgba(179,255,64,.12); }
-      .archive-admin-status { min-height: 18px; color: rgba(237,245,255,.72); font-size: 12px; }
+      .archive-select-control { display: grid; justify-items: end; gap: 8px; pointer-events: none; }
+      .archive-select-actions { display: flex; justify-content: flex-end; gap: 8px; pointer-events: auto; }
+      .archive-select-control button { min-width: 92px; min-height: 42px; padding: 0 16px; border: 1px solid rgba(179,255,64,.58); border-radius: 8px; color: #eaffc2; background: rgba(7,10,12,.84); font-weight: 950; cursor: pointer; backdrop-filter: blur(10px); pointer-events: auto; }
+      .archive-select-control button.is-save { color: #071009; background: #b3ff40; }
+      .archive-select-control button.is-delete { border-color: rgba(255,87,87,.72); color: #fff; background: rgba(148,22,22,.88); }
+      .archive-select-control button:disabled { cursor: wait; opacity: .7; }
+      .archive-select-status { max-width: min(420px, calc(100vw - 28px)); min-height: 18px; padding: 6px 9px; border-radius: 7px; color: rgba(237,245,255,.78); background: rgba(7,10,12,.78); font-size: 12px; line-height: 1.35; text-align: right; pointer-events: none; backdrop-filter: blur(10px); }
       @media (max-width: 700px) {
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 92px; gap: 8px; }
         .tile, .tile--small-square, .tile--square, .tile--horizontal, .tile--wide, .tile--vertical, .tile--medium-narrow, .tile--medium-wide, .tile--large-rect, .tile--full { grid-column: 1 / -1; grid-row: span 3; }
         .tile-overlay { grid-template-columns: 1fr; align-items: start; gap: 8px; }
         .tile-stats { justify-self: start; }
-        .archive-admin-row { grid-template-columns: 1fr 90px; }
-        .archive-admin-row input[type="text"] { grid-column: 1 / -1; }
       }
     </style>
     ${googleClientId ? '<script src="https://accounts.google.com/gsi/client" async defer></script>' : ''}
@@ -389,75 +681,75 @@ function archiveHtml({ origin, entries, exclusions }) {
   <body>
     <main class="page">
       <header class="top">
-        <h1 class="brand"><span>Spine portfolio library</span>WORLD SPINE ARCHIVE</h1>
-        <a class="back" href="/">Create preview</a>
+        <a class="archive-logo" href="/" aria-label="Spine-Link home">
+          <span>s</span><span>p</span><span class="archive-logo-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="archive-logo-link">link</span>
+        </a>
+        <div class="archive-title-block">
+          <h1 class="brand"><span>Public user Spine works</span>World SPINE ARCHIVE</h1>
+        </div>
+        <div class="archive-header-right">
+          <a class="back" href="/">Create preview</a>
+          <div class="archive-select-control" aria-live="polite">
+            <div class="archive-select-actions">
+              <button type="button" id="archive-select-button">Select</button>
+              <button type="button" class="is-delete" id="archive-delete-button" hidden>Delete</button>
+            </div>
+            <div class="archive-select-status" id="archive-select-status"></div>
+          </div>
+        </div>
       </header>
       <p class="muted">
-        Browse a growing portfolio Spine library with public animation preview cards from beginners, freelancers,
-        technical artists, studio animators, and professional Spine-animation creators.
+        Browse public Spine animation works from the worldwide archive. Anyone can add a work anonymously with
+        Create preview, or sign in with Google and publish through a profile. Portfolio profiles are public,
+        searchable, and show likes and views; library profiles are private by default and are not listed through
+        the site or Google unlike portfolios.
       </p>
       ${entries.length ? `<section class="grid">${cards}</section>` : '<p class="muted">No public previews yet.</p>'}
     </main>
-    <button class="archive-admin-toggle" type="button" id="archive-admin-toggle">Archive rules</button>
-    <section class="archive-admin" id="archive-admin" aria-label="Archive exclusion rules">
-      <h2>Archive exclusion rules</h2>
-      <p>Available for archive administrators. Matching cards are excluded from this page and item URLs.</p>
-      <div id="archive-admin-rules"></div>
-      <div class="archive-admin-actions">
-        <button type="button" id="archive-admin-save">Save rules</button>
-        <button type="button" id="archive-admin-add">Add rule</button>
-        <button type="button" id="archive-admin-signin">Sign in with Google</button>
-      </div>
-      <div class="archive-admin-status" id="archive-admin-status"></div>
-    </section>
+    <script>window.SpineLinkMetricsConfig = {};</script>
+    <script src="/spine-metrics.js" defer></script>
     <script>
       const archiveRulesState = ${archiveRulesJson};
       const archiveGoogleClientId = "${googleClientId}";
       let archiveGoogleToken = "";
-      const archiveAdmin = document.getElementById("archive-admin");
-      const archiveRulesRoot = document.getElementById("archive-admin-rules");
-      const archiveStatus = document.getElementById("archive-admin-status");
+      let archiveSelectMode = false;
+      let archivePendingAction = "";
+      let archiveBusy = false;
+      const archiveSelectedIds = new Set();
+      const archiveSelectButton = document.getElementById("archive-select-button");
+      const archiveDeleteButton = document.getElementById("archive-delete-button");
+      const archiveStatus = document.getElementById("archive-select-status");
       function setArchiveStatus(message) {
         if (archiveStatus) archiveStatus.textContent = message || "";
       }
-      function blankArchiveRule() {
-        return { enabled: true, type: "contains", field: "all", pattern: "", flags: "i" };
+      function escapeRegex(value) {
+        const specialCodes = new Set([92, 94, 36, 46, 124, 63, 42, 43, 40, 41, 91, 93, 123, 125]);
+        return String(value || "").split("").map((character) => specialCodes.has(character.charCodeAt(0)) ? String.fromCharCode(92) + character : character).join("");
       }
-      function renderArchiveRules() {
-        if (!archiveRulesRoot) return;
-        const rules = Array.isArray(archiveRulesState.rules) ? archiveRulesState.rules : [];
-        archiveRulesRoot.innerHTML = "";
-        rules.concat(rules.length ? [] : [blankArchiveRule()]).forEach((rule, index) => {
-          if (!rules.length) archiveRulesState.rules = [rule];
-          const row = document.createElement("div");
-          row.className = "archive-admin-row";
-          row.innerHTML = '<select data-key="field"><option value="all">All text</option><option value="id">ID</option><option value="title">Title</option><option value="ownerEmail">Owner email</option><option value="ownerName">Owner name</option><option value="note">Note</option><option value="files">Files</option><option value="animations">Animations</option><option value="path">Path</option></select><select data-key="type"><option value="contains">Rule</option><option value="regex">Regex</option></select><input data-key="pattern" type="text" placeholder="Text or regular expression" /><input data-key="flags" type="text" placeholder="flags" /><button type="button" data-remove title="Remove rule">x</button>';
-          row.querySelector('[data-key="field"]').value = rule.field || "all";
-          row.querySelector('[data-key="type"]').value = rule.type === "regex" ? "regex" : "contains";
-          row.querySelector('[data-key="pattern"]').value = rule.pattern || "";
-          row.querySelector('[data-key="flags"]').value = rule.flags || "i";
-          row.querySelectorAll("[data-key]").forEach((control) => {
-            control.addEventListener("input", () => {
-              archiveRulesState.rules[index] = { ...archiveRulesState.rules[index], [control.dataset.key]: control.value };
-            });
-          });
-          row.querySelector("[data-remove]").addEventListener("click", () => {
-            archiveRulesState.rules.splice(index, 1);
-            renderArchiveRules();
-          });
-          archiveRulesRoot.appendChild(row);
+      function selectedRuleForId(id) {
+        return { enabled: true, type: "regex", field: "id", pattern: "^" + escapeRegex(id) + "$", flags: "i" };
+      }
+      function updateSelectUi() {
+        document.body.classList.toggle("is-archive-selecting", archiveSelectMode);
+        archiveSelectButton.textContent = archiveSelectMode ? "Save" : "Select";
+        archiveSelectButton.classList.toggle("is-save", archiveSelectMode);
+        archiveSelectButton.disabled = archiveBusy;
+        if (archiveDeleteButton) {
+          archiveDeleteButton.hidden = !archiveSelectMode;
+          archiveDeleteButton.disabled = archiveBusy;
+        }
+        document.querySelectorAll(".tile").forEach((tile) => {
+          const selected = archiveSelectedIds.has(tile.dataset.entryId || "");
+          tile.classList.toggle("is-selected", selected);
+          tile.setAttribute("aria-selected", String(selected));
         });
+        if (archiveSelectMode) {
+          setArchiveStatus(archiveSelectedIds.size ? archiveSelectedIds.size + " selected" : "Choose cards to hide from this archive page.");
+        } else {
+          setArchiveStatus("");
+        }
       }
-      document.getElementById("archive-admin-toggle")?.addEventListener("click", () => {
-        archiveAdmin?.classList.toggle("is-open");
-        renderArchiveRules();
-      });
-      document.getElementById("archive-admin-add")?.addEventListener("click", () => {
-        archiveRulesState.rules = Array.isArray(archiveRulesState.rules) ? archiveRulesState.rules : [];
-        archiveRulesState.rules.push(blankArchiveRule());
-        renderArchiveRules();
-      });
-      document.getElementById("archive-admin-signin")?.addEventListener("click", () => {
+      function requestArchiveSignIn() {
         if (!archiveGoogleClientId || !window.google?.accounts?.oauth2) {
           setArchiveStatus("Google sign in is not configured.");
           return;
@@ -467,38 +759,131 @@ function archiveHtml({ origin, entries, exclusions }) {
           scope: "openid email profile",
           callback: (response) => {
             archiveGoogleToken = response.access_token || "";
-            setArchiveStatus(archiveGoogleToken ? "Signed in. Save rules when ready." : "Google sign in failed.");
+            if (!archiveGoogleToken) {
+              setArchiveStatus("Google sign in failed.");
+              return;
+            }
+            const pendingAction = archivePendingAction;
+            archivePendingAction = "";
+            if (pendingAction === "delete") {
+              deleteArchiveSelection();
+            } else if (pendingAction === "save") {
+              saveArchiveSelection();
+            } else {
+              setArchiveStatus("Signed in. Press Save.");
+            }
           },
         });
         client.requestAccessToken({ prompt: archiveGoogleToken ? "" : "consent" });
-      });
-      document.getElementById("archive-admin-save")?.addEventListener("click", async () => {
-        if (!archiveGoogleToken) {
-          document.getElementById("archive-admin-signin")?.click();
+      }
+      async function saveArchiveSelection() {
+        if (!archiveSelectedIds.size) {
+          setArchiveStatus("Select at least one card.");
           return;
         }
-        setArchiveStatus("Saving...");
+        if (!archiveGoogleToken) {
+          archivePendingAction = "save";
+          setArchiveStatus("Sign in with Google to save.");
+          requestArchiveSignIn();
+          return;
+        }
+        archiveBusy = true;
+        updateSelectUi();
+        setArchiveStatus("Saving selection...");
         try {
-          const rules = (archiveRulesState.rules || []).map((rule) => ({
+          const currentRules = (Array.isArray(archiveRulesState.rules) ? archiveRulesState.rules : []).map((rule) => ({
             enabled: rule.enabled !== false,
             type: rule.type === "regex" ? "regex" : "contains",
             field: rule.field || "all",
             pattern: String(rule.pattern || "").trim(),
             flags: String(rule.flags || "i").trim() || "i",
           })).filter((rule) => rule.pattern);
+          const existingKeys = new Set(currentRules.map((rule) => [rule.type, rule.field, rule.pattern, rule.flags].join("\\n")));
+          const rules = currentRules.slice();
+          Array.from(archiveSelectedIds).forEach((id) => {
+            const rule = selectedRuleForId(id);
+            const key = [rule.type, rule.field, rule.pattern, rule.flags].join("\\n");
+            if (!existingKeys.has(key)) {
+              existingKeys.add(key);
+              rules.push(rule);
+            }
+          });
           const result = await fetch("/api/github-upload", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: "Bearer " + archiveGoogleToken },
-            body: JSON.stringify({ action: "update-archive-exclusions", rules, commitPrefix: "Update World Spine Archive rules" }),
+            body: JSON.stringify({ action: "update-archive-exclusions", rules, commitPrefix: "Hide selected World SPINE ARCHIVE cards" }),
           });
           const payload = await result.json().catch(() => ({}));
           if (!result.ok) throw new Error(payload.error || "Could not save rules.");
           setArchiveStatus("Saved. Refreshing...");
           window.location.reload();
         } catch (error) {
-          setArchiveStatus(error instanceof Error ? error.message : "Could not save rules.");
+          setArchiveStatus(error instanceof Error ? error.message : "Could not save selection.");
+        } finally {
+          archiveBusy = false;
+          updateSelectUi();
         }
+      }
+      async function deleteArchiveSelection() {
+        if (!archiveSelectedIds.size) {
+          setArchiveStatus("Select at least one card.");
+          return;
+        }
+        if (!archiveGoogleToken) {
+          archivePendingAction = "delete";
+          setArchiveStatus("Sign in with Google to delete.");
+          requestArchiveSignIn();
+          return;
+        }
+        const selectedIds = Array.from(archiveSelectedIds);
+        const confirmed = window.confirm("Delete " + selectedIds.length + " selected cards from the archive index?");
+        if (!confirmed) {
+          setArchiveStatus(selectedIds.length + " selected");
+          return;
+        }
+        archiveBusy = true;
+        updateSelectUi();
+        setArchiveStatus("Deleting selected cards...");
+        try {
+          const result = await fetch("/api/github-upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: "Bearer " + archiveGoogleToken },
+            body: JSON.stringify({ action: "delete-archive-entries", entryIds: selectedIds, commitPrefix: "Delete selected World SPINE ARCHIVE cards" }),
+          });
+          const payload = await result.json().catch(() => ({}));
+          if (!result.ok) throw new Error(payload.error || "Could not delete selected cards.");
+          setArchiveStatus("Deleted " + (Array.isArray(payload.deleted) ? payload.deleted.length : selectedIds.length) + ". Refreshing...");
+          window.location.reload();
+        } catch (error) {
+          setArchiveStatus(error instanceof Error ? error.message : "Could not delete selected cards.");
+        } finally {
+          archiveBusy = false;
+          updateSelectUi();
+        }
+      }
+      document.querySelectorAll(".tile").forEach((tile) => {
+        tile.addEventListener("click", (event) => {
+          if (!archiveSelectMode) return;
+          event.preventDefault();
+          const id = tile.dataset.entryId || "";
+          if (!id) return;
+          if (archiveSelectedIds.has(id)) archiveSelectedIds.delete(id);
+          else archiveSelectedIds.add(id);
+          updateSelectUi();
+        });
       });
+      archiveSelectButton?.addEventListener("click", () => {
+        if (!archiveSelectMode) {
+          archiveSelectMode = true;
+          updateSelectUi();
+          return;
+        }
+        saveArchiveSelection();
+      });
+      archiveDeleteButton?.addEventListener("click", () => {
+        deleteArchiveSelection();
+      });
+      updateSelectUi();
       function tileClassForAspectRatio(ratio) {
         if (!Number.isFinite(ratio) || ratio <= 0) return "tile--square";
         if (ratio >= 3.2) return "tile--full";
@@ -556,12 +941,7 @@ function archiveHtml({ origin, entries, exclusions }) {
         }
       }
       function selectedVideoAspectRatio(video) {
-        const videoRatio = video.videoWidth / video.videoHeight;
-        const contentRatio = mediaContentAspectRatio(video);
-        if (!contentRatio) return videoRatio;
-        if (videoRatio >= 0.8 && videoRatio <= 1.15 && contentRatio >= 0.95) return 1.36;
-        if (videoRatio >= 0.8 && videoRatio <= 1.15 && contentRatio > 0.45 && contentRatio < 1.35) return videoRatio;
-        return contentRatio;
+        return video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 0;
       }
       function applyArchiveVideoAspectClass(video) {
         const tile = video.closest(".tile");
@@ -582,8 +962,6 @@ function archiveHtml({ origin, entries, exclusions }) {
       }
       document.querySelectorAll(".tile video").forEach((video) => {
         video.addEventListener("loadedmetadata", () => applyArchiveVideoAspectClass(video));
-        video.addEventListener("loadeddata", () => applyArchiveVideoAspectClass(video));
-        if (video.readyState >= 1) applyArchiveVideoAspectClass(video);
       });
       function playArchiveVideo(video) {
         const source = video.dataset.videoSrc || video.getAttribute("src") || "";
@@ -600,87 +978,579 @@ function archiveHtml({ origin, entries, exclusions }) {
         video.onended = null;
         try { video.currentTime = 0; } catch {}
       }
-      let archiveSequenceIndex = 0;
-      let activeArchiveVideo = null;
-      let lastArchiveVideo = null;
-      function sequenceArchivePulse() {
-        const videos = Array.from(document.querySelectorAll(".tile video")).filter((video) => video.dataset.videoSrc || video.getAttribute("src"));
-        if (!videos.length) {
-          window.setTimeout(sequenceArchivePulse, 1200);
-          return;
+      function installChaoticArchivePlayback() {
+        const visibleVideos = new Set();
+        const manualVideos = new WeakSet();
+        const hoverTimers = new WeakMap();
+        let chaosTimer = 0;
+        function clearHoverTimer(video) {
+          const timer = hoverTimers.get(video);
+          if (timer) window.clearTimeout(timer);
+          hoverTimers.delete(video);
         }
-        if (activeArchiveVideo) {
-          activeArchiveVideo.onended = null;
-          stopArchiveVideo(activeArchiveVideo);
+        function startHoverLoop(video) {
+          manualVideos.add(video);
+          clearHoverTimer(video);
+          video.onended = () => {
+            const timer = window.setTimeout(() => {
+              if (!manualVideos.has(video)) return;
+              try { video.currentTime = 0; } catch {}
+              playArchiveVideo(video);
+            }, 1000);
+            hoverTimers.set(video, timer);
+          };
+          playArchiveVideo(video);
         }
-        let video = videos[archiveSequenceIndex % videos.length];
-        archiveSequenceIndex += 1;
-        if (videos.length > 1 && video === lastArchiveVideo) {
-          video = videos[archiveSequenceIndex % videos.length];
-          archiveSequenceIndex += 1;
-        }
-        lastArchiveVideo = video;
-        activeArchiveVideo = video;
-        video.onended = () => {
+        function stopHoverLoop(video) {
+          manualVideos.delete(video);
+          clearHoverTimer(video);
           stopArchiveVideo(video);
-          window.setTimeout(sequenceArchivePulse, 420);
-        };
-        playArchiveVideo(video);
+        }
+        function scheduleChaos() {
+          window.clearTimeout(chaosTimer);
+          if (document.hidden) return;
+          chaosTimer = window.setTimeout(runChaos, 520 + Math.random() * 1280);
+        }
+        function randomSample(items, count) {
+          return items
+            .map((item) => ({ item, sort: Math.random() }))
+            .sort((a, b) => a.sort - b.sort)
+            .slice(0, count)
+            .map((entry) => entry.item);
+        }
+        function runChaos() {
+          const videos = Array.from(visibleVideos).filter((video) => video.isConnected && (video.dataset.videoSrc || video.getAttribute("src")));
+          if (!videos.length) {
+            scheduleChaos();
+            return;
+          }
+          const activeLimit = Math.min(2, Math.max(1, Math.ceil(videos.length * 0.2)));
+          randomSample(videos.filter((video) => !video.paused && !manualVideos.has(video)), videos.length).slice(activeLimit).forEach(stopArchiveVideo);
+          randomSample(videos.filter((video) => video.paused && !manualVideos.has(video)), activeLimit).forEach((video) => {
+            if (Math.random() < 0.76) {
+              playArchiveVideo(video);
+              window.setTimeout(() => {
+                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.88) stopArchiveVideo(video);
+              }, 460 + Math.random() * 2100);
+            }
+          });
+          videos.forEach((video) => {
+            if (!manualVideos.has(video) && !video.paused && Math.random() < 0.28) stopArchiveVideo(video);
+          });
+          scheduleChaos();
+        }
+        document.querySelectorAll(".tile").forEach((tile) => {
+          const video = tile.querySelector("video");
+          if (!video) return;
+          tile.addEventListener("pointerenter", () => startHoverLoop(video));
+          tile.addEventListener("focusin", () => startHoverLoop(video));
+          tile.addEventListener("pointerleave", () => stopHoverLoop(video));
+          tile.addEventListener("focusout", () => stopHoverLoop(video));
+        });
+        if ("IntersectionObserver" in window) {
+          const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+              const video = entry.target.querySelector("video");
+              if (!video) return;
+              if (entry.isIntersecting && entry.intersectionRatio >= 0.42) {
+                visibleVideos.add(video);
+              } else {
+                visibleVideos.delete(video);
+                if (!manualVideos.has(video)) stopArchiveVideo(video);
+              }
+            });
+            scheduleChaos();
+          }, { threshold: [0, 0.42, 0.68, 1] });
+          document.querySelectorAll(".tile").forEach((tile) => observer.observe(tile));
+        } else {
+          document.querySelectorAll(".tile video").forEach((video) => visibleVideos.add(video));
+        }
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            window.clearTimeout(chaosTimer);
+            visibleVideos.forEach((video) => { if (!manualVideos.has(video)) stopArchiveVideo(video); });
+          } else {
+            scheduleChaos();
+          }
+        });
+        window.addEventListener("pagehide", () => {
+          window.clearTimeout(chaosTimer);
+          visibleVideos.forEach(stopArchiveVideo);
+        }, { once: true });
+        scheduleChaos();
       }
-      window.setTimeout(sequenceArchivePulse, 900);
+      installChaoticArchivePlayback();
     </script>
   </body>
 </html>`;
 }
 
-function archiveItemHtml({ origin, entry }) {
-  const title = escapeHtml(entry?.title || entry?.id || 'Spine preview');
+function archiveItemHtml({ origin, entry, metrics }) {
+  const rawTitle = cleanPublicText(entry?.title || entry?.id || 'Spine preview', 120);
+  const title = escapeHtml(rawTitle);
   const animations = Array.isArray(entry?.animations) ? entry.animations.length : 0;
   const spineUrl = previewUrl(entry);
+  const absoluteSpineUrl = `${origin}${spineUrl}`;
+  const entryId = String(entry?.id || '');
+  const safeEntryId = escapeHtml(entryId);
+  const metric = metricCountsForId(metrics, entryId);
+  const pageUrl = `${origin}/world-spine-archive/${encodeURIComponent(entryId)}`;
+  const videoPageUrl = `${origin}${videoWatchUrl(entry)}`;
+  const playerPageUrl = absoluteSpineUrl;
+  const mediaImage = entryImageUrl(origin, entry) || `${origin}/spine-link-video-thumbnail.png`;
+  const mediaVideo = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const ownerName = cleanPublicText(entry?.ownerName || 'Spine creator', 100);
+  const description = cleanPublicText(
+    entry?.note ||
+      `${rawTitle} is a public Spine animation work in World SPINE ARCHIVE. Open the interactive Spine player, watch the WebM preview, and view real likes and views on Spine Portfolio.`,
+    280,
+  );
+  const uploadedAt = isoDate(entry?.uploadedAt) || '2026-05-12T00:00:00.000Z';
+  const proofDocuments = proofDocumentsForEntry(origin, entry, pageUrl);
+  const sourceProofUrl = sourceProofUrlForEntry(origin, entry);
+  const blockchainAnchorUrl = blockchainAnchorUrlForEntry(origin, entry);
+  const proofHash = sanitizeSha256(entry?.sourceProof?.proofHash || entry?.blockchainAnchor?.sourceProofHash);
+  const anchorHash = sanitizeSha256(entry?.blockchainAnchor?.anchorHash);
+  const workStructuredData = mediaVideo
+    ? {
+        '@type': 'VideoObject',
+        '@id': `${pageUrl}#video`,
+        name: rawTitle,
+        description,
+        thumbnailUrl: [mediaImage],
+        contentUrl: mediaVideo,
+        embedUrl: playerPageUrl,
+        url: playerPageUrl,
+        mainEntityOfPage: playerPageUrl,
+        uploadDate: uploadedAt,
+        isFamilyFriendly: true,
+        ...(durationToIso8601(entry?.previewDuration) ? { duration: durationToIso8601(entry.previewDuration) } : {}),
+        ...(positiveInteger(entry?.previewWidth) ? { width: positiveInteger(entry.previewWidth) } : {}),
+        ...(positiveInteger(entry?.previewHeight) ? { height: positiveInteger(entry.previewHeight) } : {}),
+        ...(proofDocuments.length ? { subjectOf: proofDocuments.map((document) => ({ '@id': document['@id'] })) } : {}),
+        interactionStatistic: [
+          {
+            '@type': 'InteractionCounter',
+            interactionType: { '@type': 'LikeAction' },
+            userInteractionCount: metric.likes,
+          },
+          {
+            '@type': 'InteractionCounter',
+            interactionType: { '@type': 'WatchAction' },
+            userInteractionCount: metric.views,
+          },
+        ],
+        creator: {
+          '@type': 'Person',
+          name: ownerName,
+        },
+        publisher: {
+          '@type': 'Organization',
+          name: 'Spine Portfolio',
+          alternateName: 'Spine-Link',
+          url: origin,
+          logo: {
+            '@type': 'ImageObject',
+            url: `${origin}/favicon-64.png`,
+            width: 64,
+            height: 64,
+          },
+        },
+        potentialAction: {
+          '@type': 'WatchAction',
+          target: playerPageUrl,
+        },
+      }
+    : {
+        '@type': 'CreativeWork',
+        '@id': `${pageUrl}#work`,
+        name: rawTitle,
+        description,
+        image: mediaImage,
+        url: pageUrl,
+        datePublished: uploadedAt,
+        ...(proofDocuments.length ? { subjectOf: proofDocuments.map((document) => ({ '@id': document['@id'] })) } : {}),
+        creator: {
+          '@type': 'Person',
+          name: ownerName,
+        },
+      };
+  const itemStructuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebPage',
+        '@id': `${pageUrl}#webpage`,
+        name: `${rawTitle} - World SPINE ARCHIVE`,
+        description,
+        url: pageUrl,
+        isPartOf: {
+          '@type': 'CollectionPage',
+          '@id': `${origin}/world-spine-archive#collection`,
+          name: 'World SPINE ARCHIVE',
+          url: `${origin}/world-spine-archive`,
+        },
+        primaryImageOfPage: {
+          '@type': 'ImageObject',
+          url: mediaImage,
+        },
+        mainEntity: {
+          '@id': workStructuredData['@id'],
+        },
+      },
+      workStructuredData,
+      ...proofDocuments,
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${pageUrl}#breadcrumbs`,
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: 'Spine Portfolio',
+            item: origin,
+          },
+          {
+            '@type': 'ListItem',
+            position: 2,
+            name: 'World SPINE ARCHIVE',
+            item: `${origin}/world-spine-archive`,
+          },
+          {
+            '@type': 'ListItem',
+            position: 3,
+            name: rawTitle,
+            item: pageUrl,
+          },
+        ],
+      },
+    ],
+  };
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title} - World Spine Archive</title>
-    <meta name="robots" content="index,follow" />
-    <link rel="canonical" href="${origin}/world-spine-archive/${encodeURIComponent(String(entry?.id || ''))}" />
+    <title>${title} - World SPINE ARCHIVE</title>
+    <meta name="description" content="${escapeHtml(description)}" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
+    <meta name="googlebot" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
+    <link rel="canonical" href="${escapeHtml(pageUrl)}" />
+    <link rel="alternate" href="${escapeHtml(playerPageUrl)}" title="${title} interactive Spine player video page" />
+    ${mediaVideo ? `<link rel="alternate" href="${escapeHtml(videoPageUrl)}" title="${title} dedicated WebM watch page" />` : ''}
+    <link rel="stylesheet" href="/page-transitions.css" />
+    <meta property="og:type" content="${mediaVideo ? 'video.other' : 'article'}" />
+    <meta property="og:title" content="${title} - World SPINE ARCHIVE" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:url" content="${escapeHtml(pageUrl)}" />
+    <meta property="og:site_name" content="Spine Portfolio" />
+    <meta property="og:image" content="${escapeHtml(mediaImage)}" />${mediaVideo ? `
+    <meta property="og:video" content="${escapeHtml(mediaVideo)}" />
+    <meta property="og:video:secure_url" content="${escapeHtml(mediaVideo)}" />
+    <meta property="og:video:type" content="video/webm" />` : ''}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${title} - World SPINE ARCHIVE" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${escapeHtml(mediaImage)}" />
+    <script type="application/ld+json">${jsonScript(itemStructuredData)}</script>
+    <script src="/page-transitions.js" defer></script>
     <style>
       ${baseStyles()}
       .viewer { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: stretch; }
       .media-panel { min-height: min(74vh, 760px); overflow: hidden; border: 1px solid rgba(140,199,255,.2); border-radius: 8px; background: #050607; }
       .media-panel img, .media-panel video { width: 100%; height: 100%; min-height: min(74vh, 760px); object-fit: contain; background: #050607; }
       .side { display: flex; flex-direction: column; justify-content: space-between; gap: 18px; padding: 18px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(255,255,255,.045); }
+      .metric-row { display: flex; flex-wrap: wrap; gap: 8px; }
+      .metric-pill { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 12px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: rgba(237,245,255,.9); background: rgba(5,7,9,.58); font-weight: 950; }
+      .metric-pill strong { color: currentColor; font-size: 13px; }
+      .metric-like-button { border-color: rgba(255,185,214,.32); color: #ffe4ef; cursor: pointer; user-select: none; }
+      .metric-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.16); }
       h1 { margin: 0 0 8px; font-size: clamp(30px, 5vw, 56px); line-height: .95; }
       .spine-link { display: inline-flex; justify-content: center; align-items: center; min-height: 48px; padding: 0 16px; border: 1px solid rgba(179,255,64,.72); border-radius: 8px; color: #eaffc2; font-weight: 900; text-decoration: none; background: rgba(179,255,64,.12); }
+      .proof-panel { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.1); }
+      .proof-panel a { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; padding: 0 10px; border: 1px solid rgba(140,199,255,.2); border-radius: 8px; color: #dff1ff; background: rgba(140,199,255,.08); font-size: 12px; font-weight: 850; text-decoration: none; }
+      .proof-panel a:hover { border-color: rgba(179,255,64,.58); color: #fff; }
+      .proof-panel code { overflow: hidden; max-width: 148px; color: rgba(237,245,255,.68); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
       @media (max-width: 860px) { .viewer { grid-template-columns: 1fr; } .media-panel, .media-panel img, .media-panel video { min-height: 58vh; } }
     </style>
   </head>
   <body>
     <main class="page">
       <header class="top">
-        <a class="back" href="/world-spine-archive">WORLD SPINE ARCHIVE</a>
-        <a class="back" href="/">Create preview</a>
+        <a class="archive-logo" href="/" aria-label="Spine-Link home">
+          <span>s</span><span>p</span><span class="archive-logo-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="archive-logo-link">link</span>
+        </a>
+        <div class="item-header-title">
+          <a class="back" href="/world-spine-archive">World SPINE ARCHIVE</a>
+          <span>${title}</span>
+        </div>
+        <div class="archive-header-right">
+          <a class="back" href="/">Create preview</a>
+        </div>
       </header>
       <section class="viewer">
-        <div class="media-panel">${mediaHtml(entry, { origin, posterClass: 'media-main' })}</div>
+        <div class="media-panel">${mediaHtml(entry, { origin, posterClass: 'media-main', eagerVideo: true })}</div>
         <aside class="side">
           <div>
             <p class="muted">Spine media preview</p>
             <h1>${title}</h1>
             <p class="muted">${animations} animations</p>
+            <div class="metric-row" data-metric-id="${safeEntryId}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views">
+              <span class="metric-pill metric-like-button" data-metric-id="${safeEntryId}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" role="button" tabindex="0" aria-pressed="false" title="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></span>
+              <span class="metric-pill" data-metric-id="${safeEntryId}" data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong></span>
+            </div>
           </div>
-          <a class="spine-link" href="${spineUrl}">Open Spine animation</a>
+          ${sourceProofUrl || blockchainAnchorUrl ? `<div class="proof-panel">
+            <p class="muted">Origin proof</p>
+            ${sourceProofUrl ? `<a href="${escapeHtml(sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${proofHash ? `<code>${escapeHtml(shortHash(proofHash))}</code>` : ''}</a>` : ''}
+            ${blockchainAnchorUrl ? `<a href="${escapeHtml(blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${anchorHash ? `<code>${escapeHtml(shortHash(anchorHash))}</code>` : ''}</a>` : ''}
+          </div>` : ''}
+          <a class="spine-link" href="${spineUrl}">Open interactive Spine player</a>
+          ${mediaVideo ? `<a class="spine-link" href="${videoWatchUrl(entry)}">Dedicated WebM page</a>` : ''}
         </aside>
       </section>
     </main>
+    <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(entryId)} };</script>
+    <script src="/spine-metrics.js" defer></script>
+  </body>
+</html>`;
+}
+
+function archiveVideoHtml({ origin, entry, metrics }) {
+  const rawTitle = cleanPublicText(entry?.title || entry?.id || 'Spine animation video', 120);
+  const title = escapeHtml(rawTitle);
+  const entryId = String(entry?.id || '');
+  const safeEntryId = escapeHtml(entryId);
+  const metric = metricCountsForId(metrics, entryId);
+  const pageUrl = `${origin}${videoWatchUrl(entry)}`;
+  const archivePageUrl = `${origin}${archiveItemUrl(entry)}`;
+  const playerPageUrl = `${origin}${previewUrl(entry)}`;
+  const mediaImage = entryImageUrl(origin, entry) || `${origin}/spine-link-video-thumbnail.png`;
+  const mediaVideo = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const ownerName = cleanPublicText(entry?.ownerName || 'Spine creator', 100);
+  const description = cleanPublicText(
+    entry?.note ||
+      `${rawTitle} is a dedicated Spine animation video watch page from World SPINE ARCHIVE on Spine Portfolio.`,
+    300,
+  );
+  const uploadedAt = isoDate(entry?.uploadedAt) || '2026-05-12T00:00:00.000Z';
+  const proofDocuments = proofDocumentsForEntry(origin, entry, pageUrl);
+  const sourceProofUrl = sourceProofUrlForEntry(origin, entry);
+  const blockchainAnchorUrl = blockchainAnchorUrlForEntry(origin, entry);
+  const proofHash = sanitizeSha256(entry?.sourceProof?.proofHash || entry?.blockchainAnchor?.sourceProofHash);
+  const anchorHash = sanitizeSha256(entry?.blockchainAnchor?.anchorHash);
+  const videoRatio =
+    positiveInteger(entry?.previewWidth) && positiveInteger(entry?.previewHeight)
+      ? `${positiveInteger(entry.previewWidth)} / ${positiveInteger(entry.previewHeight)}`
+      : '16 / 9';
+  const videoStructuredData = mediaVideo
+    ? {
+        '@type': 'VideoObject',
+        '@id': `${pageUrl}#video`,
+        name: rawTitle,
+        description,
+        thumbnailUrl: [mediaImage],
+        contentUrl: mediaVideo,
+        embedUrl: pageUrl,
+        url: pageUrl,
+        mainEntityOfPage: pageUrl,
+        uploadDate: uploadedAt,
+        isFamilyFriendly: true,
+        ...(durationToIso8601(entry?.previewDuration) ? { duration: durationToIso8601(entry.previewDuration) } : {}),
+        ...(positiveInteger(entry?.previewWidth) ? { width: positiveInteger(entry.previewWidth) } : {}),
+        ...(positiveInteger(entry?.previewHeight) ? { height: positiveInteger(entry.previewHeight) } : {}),
+        ...(proofDocuments.length ? { subjectOf: proofDocuments.map((document) => ({ '@id': document['@id'] })) } : {}),
+        interactionStatistic: [
+          {
+            '@type': 'InteractionCounter',
+            interactionType: { '@type': 'LikeAction' },
+            userInteractionCount: metric.likes,
+          },
+          {
+            '@type': 'InteractionCounter',
+            interactionType: { '@type': 'WatchAction' },
+            userInteractionCount: metric.views,
+          },
+        ],
+        creator: {
+          '@type': 'Person',
+          name: ownerName,
+        },
+        publisher: {
+          '@type': 'Organization',
+          name: 'Spine Portfolio',
+          alternateName: 'Spine-Link',
+          url: origin,
+          logo: {
+            '@type': 'ImageObject',
+            url: `${origin}/favicon-64.png`,
+            width: 64,
+            height: 64,
+          },
+        },
+        potentialAction: {
+          '@type': 'WatchAction',
+          target: pageUrl,
+        },
+      }
+    : {
+        '@type': 'CreativeWork',
+        '@id': `${pageUrl}#work`,
+        name: rawTitle,
+        description,
+        image: mediaImage,
+        url: pageUrl,
+        datePublished: uploadedAt,
+        ...(proofDocuments.length ? { subjectOf: proofDocuments.map((document) => ({ '@id': document['@id'] })) } : {}),
+      };
+  const videoPageStructuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebPage',
+        '@id': `${pageUrl}#webpage`,
+        name: `${rawTitle} - Spine animation video`,
+        description,
+        url: pageUrl,
+        mainEntity: { '@id': videoStructuredData['@id'] },
+        primaryImageOfPage: {
+          '@type': 'ImageObject',
+          url: mediaImage,
+        },
+        isPartOf: {
+          '@type': 'CollectionPage',
+          '@id': `${origin}/world-spine-archive#collection`,
+          name: 'World SPINE ARCHIVE',
+          url: `${origin}/world-spine-archive`,
+        },
+      },
+      videoStructuredData,
+      ...proofDocuments,
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${pageUrl}#breadcrumbs`,
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: 'Spine Portfolio',
+            item: origin,
+          },
+          {
+            '@type': 'ListItem',
+            position: 2,
+            name: 'World SPINE ARCHIVE',
+            item: `${origin}/world-spine-archive`,
+          },
+          {
+            '@type': 'ListItem',
+            position: 3,
+            name: `${rawTitle} video`,
+            item: pageUrl,
+          },
+        ],
+      },
+    ],
+  };
+  const noVideoHtml = '<p class="muted">This Spine work does not have a crawlable WebM video preview yet.</p>';
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${title} - Spine animation video</title>
+    <meta name="description" content="${escapeHtml(description)}" />
+    <meta name="robots" content="${mediaVideo ? 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1' : 'noindex,follow'}" />
+    <meta name="googlebot" content="${mediaVideo ? 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1' : 'noindex,follow'}" />
+    <link rel="canonical" href="${escapeHtml(pageUrl)}" />
+    <link rel="alternate" href="${escapeHtml(archivePageUrl)}" title="${title} archive detail page" />
+    <link rel="alternate" href="${escapeHtml(playerPageUrl)}" title="${title} interactive Spine player" />
+    <link rel="stylesheet" href="/page-transitions.css" />
+    <meta property="og:type" content="${mediaVideo ? 'video.other' : 'article'}" />
+    <meta property="og:title" content="${title} - Spine animation video" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:url" content="${escapeHtml(pageUrl)}" />
+    <meta property="og:site_name" content="Spine Portfolio" />
+    <meta property="og:image" content="${escapeHtml(mediaImage)}" />
+    ${mediaVideo ? `<meta property="og:video" content="${escapeHtml(mediaVideo)}" />
+    <meta property="og:video:secure_url" content="${escapeHtml(mediaVideo)}" />
+    <meta property="og:video:type" content="video/webm" />` : ''}
+    <meta name="twitter:card" content="player" />
+    <meta name="twitter:title" content="${title} - Spine animation video" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${escapeHtml(mediaImage)}" />
+    ${mediaVideo ? `<meta name="twitter:player" content="${escapeHtml(pageUrl)}" />` : ''}
+    <script type="application/ld+json">${jsonScript(videoPageStructuredData)}</script>
+    <script src="/page-transitions.js" defer></script>
+    <style>
+      ${baseStyles()}
+      .watch { display: grid; gap: 16px; max-width: 1180px; margin: 0 auto; }
+      .watch-player { display: grid; gap: 10px; }
+      .video-frame { display: flex; align-items: center; justify-content: center; width: 100%; min-height: min(62vh, 760px); overflow: hidden; border: 1px solid rgba(255,185,214,.42); border-radius: 8px; background: #000; box-shadow: 0 22px 72px rgba(0,0,0,.44); }
+      .video-frame video { display: block; width: auto; height: auto; max-width: 100%; max-height: min(72vh, 820px); aspect-ratio: ${escapeHtml(videoRatio)}; object-fit: contain; background: #000; }
+      h1 { margin: 0; color: #fff; font-size: clamp(32px, 7vw, 82px); line-height: .9; }
+      .watch-copy { display: grid; gap: 10px; }
+      .watch-copy p { max-width: 860px; margin: 0; color: rgba(237,245,255,.74); font-size: 16px; line-height: 1.45; }
+      .watch-actions, .metric-row, .proof-panel { display: flex; flex-wrap: wrap; gap: 8px; }
+      .watch-actions a, .metric-pill, .proof-panel a { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 13px; border: 1px solid rgba(140,199,255,.28); border-radius: 8px; color: #dff1ff; background: rgba(140,199,255,.08); font-size: 13px; font-weight: 900; text-decoration: none; }
+      .watch-actions a.is-primary { border-color: rgba(179,255,64,.64); color: #eaffc2; background: rgba(179,255,64,.11); }
+      .metric-pill { border-radius: 999px; color: rgba(237,245,255,.9); background: rgba(5,7,9,.58); }
+      .metric-like-button { border-color: rgba(255,185,214,.32); color: #ffe4ef; cursor: pointer; user-select: none; }
+      .metric-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.16); }
+      .proof-panel { padding-top: 4px; }
+      .proof-panel a { min-height: 36px; font-size: 12px; }
+      .proof-panel code { margin-left: 8px; color: rgba(237,245,255,.66); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; }
+      @media (max-width: 700px) {
+        .video-frame { min-height: 54vh; }
+        .video-frame video { max-height: 62vh; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page watch">
+      <header class="top">
+        <a class="archive-logo" href="/" aria-label="Spine-Link home">
+          <span>s</span><span>p</span><span class="archive-logo-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="archive-logo-link">link</span>
+        </a>
+        <div class="item-header-title">
+          <a class="back" href="/world-spine-archive">World SPINE ARCHIVE</a>
+          <span>Dedicated video watch page</span>
+        </div>
+        <div class="archive-header-right">
+          <a class="back" href="/">Create preview</a>
+        </div>
+      </header>
+      <section class="watch-player" aria-label="${title} video watch page">
+        <div class="video-frame">
+          ${mediaVideo ? `<video src="${escapeHtml(mediaVideo)}" poster="${escapeHtml(mediaImage)}" controls playsinline preload="metadata"></video>` : noVideoHtml}
+        </div>
+        <div class="watch-copy">
+          <h1>${title}</h1>
+          <p>${escapeHtml(description)}</p>
+          <div class="metric-row" data-metric-id="${safeEntryId}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views">
+            <span class="metric-pill metric-like-button" data-metric-id="${safeEntryId}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" role="button" tabindex="0" aria-pressed="false" title="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></span>
+            <span class="metric-pill" data-metric-id="${safeEntryId}" data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span> views</span></span>
+          </div>
+          ${sourceProofUrl || blockchainAnchorUrl ? `<div class="proof-panel">
+            ${sourceProofUrl ? `<a href="${escapeHtml(sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${proofHash ? `<code>${escapeHtml(shortHash(proofHash))}</code>` : ''}</a>` : ''}
+            ${blockchainAnchorUrl ? `<a href="${escapeHtml(blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${anchorHash ? `<code>${escapeHtml(shortHash(anchorHash))}</code>` : ''}</a>` : ''}
+          </div>` : ''}
+          <nav class="watch-actions" aria-label="${title} related pages">
+            <a class="is-primary" href="${previewUrl(entry)}">Open interactive Spine player</a>
+            <a href="${archiveItemUrl(entry)}">Archive detail</a>
+          </nav>
+        </div>
+      </section>
+    </main>
+    <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(entryId)} };</script>
+    <script src="/spine-metrics.js" defer></script>
   </body>
 </html>`;
 }
 
 export default async function handler(request, response) {
-  if (request.method !== 'GET') {
-    response.setHeader('Allow', 'GET');
+  if (!['GET', 'HEAD'].includes(request.method)) {
+    response.setHeader('Allow', 'GET, HEAD');
     return response.status(405).send('Method not allowed');
   }
 
@@ -699,7 +1569,9 @@ export default async function handler(request, response) {
   try {
     const indexText = await githubText(settings, `${settings.basePath}/index.json`);
     const exclusionsText = await githubText(settings, `${settings.basePath}/archive-exclusions.json`);
+    const metricsText = await githubText(settings, `${settings.basePath}/metrics.json`);
     const exclusions = exclusionsText ? JSON.parse(exclusionsText) : { rules: [] };
+    const metrics = parseMetricsJson(metricsText);
     const allEntries = indexText ? JSON.parse(indexText) : [];
     const entries = Array.isArray(allEntries)
       ? allEntries.filter((entry) => (
@@ -709,17 +1581,49 @@ export default async function handler(request, response) {
         ))
       : [];
     entries.sort(compareArchiveEntries);
+
+    if (request.query?.feed === 'home') {
+      response.setHeader('Content-Type', 'application/json; charset=utf-8');
+      setCacheHeaders(response, cacheProfiles.listBrowser, cacheProfiles.listCdn);
+      if (request.method === 'HEAD') {
+        return response.status(200).send('');
+      }
+      return response.status(200).json({
+        ok: true,
+        generatedAt: new Date().toISOString(),
+        entries: homepageFeedEntries(origin, entries, metrics),
+      });
+    }
+
     const layoutEntries = await enrichArchiveLayout(settings, origin, entries);
 
     const archiveId = String(request.query?.id || '').trim();
     response.setHeader('Content-Type', 'text/html; charset=utf-8');
-    response.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    response.setHeader('X-Robots-Tag', 'index, follow, max-image-preview:large, max-video-preview:-1, max-snippet:-1');
     if (archiveId) {
       const entry = layoutEntries.find((item) => String(item?.id || '') === archiveId);
-      return response.status(entry ? 200 : 404).send(entry ? archiveItemHtml({ origin, entry }) : 'Archive item not found');
+      setCacheHeaders(response, cacheProfiles.dynamicHtmlBrowser, cacheProfiles.dynamicHtmlCdn);
+      if (request.method === 'HEAD') {
+        return response.status(entry ? 200 : 404).send('');
+      }
+      const isVideoWatchPage = request.query?.view === 'video' || request.query?.video === '1';
+      if (isVideoWatchPage && (!entry || !entryVideoAsset(entry?.webmPreview || '', entry, 'webm'))) {
+        response.setHeader('X-Robots-Tag', 'noindex, follow');
+      }
+      return response.status(entry ? 200 : 404).send(
+        entry
+          ? isVideoWatchPage
+            ? archiveVideoHtml({ origin, entry, metrics })
+            : archiveItemHtml({ origin, entry, metrics })
+          : 'Archive item not found',
+      );
     }
 
-    return response.status(200).send(archiveHtml({ origin, entries: layoutEntries, exclusions }));
+    setCacheHeaders(response, cacheProfiles.dynamicHtmlBrowser, cacheProfiles.dynamicHtmlCdn);
+    if (request.method === 'HEAD') {
+      return response.status(200).send('');
+    }
+    return response.status(200).send(archiveHtml({ origin, entries: layoutEntries, exclusions, metrics }));
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Archive failed');
   }

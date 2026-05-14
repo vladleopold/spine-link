@@ -1,3 +1,8 @@
+import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
+import { cacheProfiles, setCacheHeaders } from '../lib/cache-headers.js';
+import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
+import { cachedGithubText } from '../lib/github-content-cache.js';
+
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
@@ -22,8 +27,25 @@ function encodeRepoPath(path) {
     .join('/');
 }
 
-function assetUrlForRepoPath(origin, path) {
-  return `${origin}/assets/${encodeRepoPath(path)}`;
+function assetUrlForRepoPath(origin, path, version = '') {
+  return appendAssetVersion(`${origin}/assets/${encodeRepoPath(path)}`, version);
+}
+
+function archiveItemPath(entry) {
+  const id = String(entry?.id || '').trim();
+  return id ? `/world-spine-archive/${encodeURIComponent(id)}` : '';
+}
+
+function playerPathForEntry(entry) {
+  const id = String(entry?.id || '').trim();
+  if (!id) return '';
+  const animation = String(entry?.defaultAnimation || '').trim();
+  const basePath = `/p/${encodeURIComponent(id)}`;
+  return animation ? `${basePath}?animation=${encodeURIComponent(animation)}` : basePath;
+}
+
+function absoluteUrlForPath(origin, path) {
+  return path ? `${origin}${path}` : origin;
 }
 
 function base64ToText(base64) {
@@ -39,6 +61,14 @@ function escapeHtml(value = '') {
     .replace(/'/g, '&#39;');
 }
 
+function jsonScript(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
+function cleanPublicText(value = '', maxLength = 280) {
+  return String(value).replace(/\s+/g, ' ').trim().slice(0, maxLength);
+}
+
 function safeImage(value = '') {
   const url = String(value).trim();
   return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
@@ -49,18 +79,42 @@ function safeVideo(value = '') {
   return /^https:\/\/[^\s"'<>]+\.webm(?:[?#][^\s"'<>]*)?$/i.test(url) ? url : '';
 }
 
+function entryImageAsset(value = '', entry = {}, fallback = '') {
+  return appendAssetVersion(safeImage(value), assetVersionForEntry(entry, fallback));
+}
+
+function entryVideoAsset(value = '', entry = {}, fallback = '') {
+  return appendAssetVersion(safeVideo(value), assetVersionForEntry(entry, fallback));
+}
+
+function isoDate(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : '';
+}
+
+function durationToIso8601(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return '';
+  return `PT${Math.max(1, Math.round(seconds))}S`;
+}
+
+function positiveInteger(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
+}
+
 function derivedMediaFromFiles(origin, entry, extensions) {
   const previewPath = cleanRepoPath(entry?.previewPath || '');
   const files = Array.isArray(entry?.files) ? entry.files : [];
   const file = files.find((item) => extensions.some((extension) => String(item || '').toLowerCase().endsWith(extension)));
-  return previewPath && file ? assetUrlForRepoPath(origin, joinRepoPath(previewPath, String(file))) : '';
+  return previewPath && file ? assetUrlForRepoPath(origin, joinRepoPath(previewPath, String(file)), assetVersionForEntry(entry, file)) : '';
 }
 
 function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
   const poster = String(entry?.thumbnailPoster || '');
   return id && /^data:image\/webp;base64,/i.test(poster)
-    ? `${origin}/assets/library/${encodeURIComponent(id)}/generated-preview.webp`
+    ? assetUrlForRepoPath(origin, `library/${id}/generated-preview.webp`, assetVersionForEntry(entry, 'generated-preview'))
     : '';
 }
 
@@ -78,13 +132,7 @@ function githubHeaders(token) {
 }
 
 async function githubText(settings, path) {
-  const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
-  const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`, {
-    headers: githubHeaders(settings.token),
-  });
-  if (!response.ok) return '';
-  const data = await response.json();
-  return data?.content ? base64ToText(data.content) : '';
+  return cachedGithubText(settings, path);
 }
 
 function compareLibraryEntries(a, b) {
@@ -95,12 +143,6 @@ function compareLibraryEntries(a, b) {
   if (hasAOrder && hasBOrder && aOrder !== bOrder) return aOrder - bOrder;
   if (hasAOrder !== hasBOrder) return hasAOrder ? -1 : 1;
   return String(b?.uploadedAt || '').localeCompare(String(a?.uploadedAt || ''));
-}
-
-function baseLikeCount(value = '') {
-  let hash = 0;
-  for (const character of String(value)) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return 12 + (hash % 87);
 }
 
 function libraryCardSizeClassForRatio(ratio) {
@@ -119,36 +161,65 @@ function libraryCardSizeClassForManualSize(size = '') {
   return `library-card--${size}`;
 }
 
+function fallbackLibraryCardSizeClass(index = 0) {
+  const fallbackSizes = [
+    'library-card--horizontal',
+    'library-card--square',
+    'library-card--medium-wide',
+    'library-card--vertical',
+    'library-card--large-rect',
+    'library-card--wide',
+    'library-card--medium-narrow',
+    'library-card--square',
+  ];
+  return fallbackSizes[Math.abs(index) % fallbackSizes.length];
+}
+
 function libraryCardSizeClass(entry, index = 0) {
-  void index;
   const manualClass = libraryCardSizeClassForManualSize(entry?.cardSize);
-  const width = Number(entry?.previewWidth || 0);
-  const height = Number(entry?.previewHeight || 0);
-  const ratio = width > 0 && height > 0 ? width / height : 0;
+  const mediaRatio = Number(entry?.mediaAspectRatio || 0);
+  const width = Number(entry?.previewWidth || entry?.thumbnailWidth || entry?.mediaWidth || 0);
+  const height = Number(entry?.previewHeight || entry?.thumbnailHeight || entry?.mediaHeight || 0);
+  const ratio = mediaRatio > 0 ? mediaRatio : width > 0 && height > 0 ? width / height : 0;
   if (manualClass === 'library-card--medium-narrow' && ratio >= 0.75 && ratio <= 1.15) return 'library-card--square';
   if (manualClass) return manualClass;
+  if (!ratio) return fallbackLibraryCardSizeClass(index);
   return libraryCardSizeClassForRatio(ratio);
 }
 
-function createLibraryHtml({ origin, publicOwnerId, entries }) {
-  const firstEntry = entries[0] || {};
+function indexablePortfolioState(entries) {
+  const visibleEntries = (Array.isArray(entries) ? entries : []).filter((entry) => !entry?.hiddenFromPublicLibrary);
+  return {
+    visibleEntries,
+    isPortfolioMode: (Array.isArray(entries) ? entries : []).some((entry) => entry?.portfolioMode === true),
+  };
+}
+
+function createLibraryHtml({ origin, publicOwnerId, entries, metrics }) {
+  const { visibleEntries, isPortfolioMode } = indexablePortfolioState(entries);
+  const firstEntry = visibleEntries[0] || entries[0] || {};
   const showOwnerName = firstEntry.showOwnerLibrary !== false;
   const ownerName = escapeHtml(showOwnerName ? firstEntry.ownerName || 'Spine-Link creator' : 'Spine-Link library');
+  const rawOwnerName = showOwnerName ? firstEntry.ownerName || 'Spine-Link creator' : 'Spine-Link library';
   const ownerPicture = showOwnerName ? safeImage(firstEntry.ownerPicture || '') : '';
   const ownerInitial = ownerName.replace(/&[^;]+;/g, '').slice(0, 1).toUpperCase() || 'S';
-  const isLibraryMode = entries.some((entry) => entry?.portfolioMode === true);
-  const publicPageLabel = isLibraryMode ? 'Library' : 'Portfolio';
+  const publicPageLabel = isPortfolioMode ? 'Portfolio' : 'Library';
   const publicPageLabelLower = publicPageLabel.toLowerCase();
-  const publicPageClass = isLibraryMode ? 'is-library-page' : 'is-portfolio-page';
-  const title = `${ownerName} - Spine ${publicPageLabelLower} media gallery`;
-  const cards = entries
+  const publicPageClass = isPortfolioMode ? 'is-portfolio-page' : 'is-library-page';
+  const indexablePortfolio = isPortfolioMode && visibleEntries.length > 0;
+  const title = `${rawOwnerName} - Spine animation ${publicPageLabelLower}`;
+  const description = indexablePortfolio
+    ? `${rawOwnerName} portfolio on Spine-Link with ${visibleEntries.length} uploaded Spine animation work${visibleEntries.length === 1 ? '' : 's'}, preview videos, files, and public animation cards.`
+    : `${rawOwnerName} Spine-Link library page.`;
+  const cards = visibleEntries
     .map((entry, index) => {
       const itemTitle = escapeHtml(entry.title || entry.id || 'Spine preview');
-      const previewUrl = `/p/${encodeURIComponent(String(entry.id || ''))}`;
-      const rawThumbnail = safeImage(entry.thumbnail || '');
+      const previewPath = isPortfolioMode ? archiveItemPath(entry) : playerPathForEntry(entry);
+      const previewUrl = previewPath || playerPathForEntry(entry) || '/';
+      const rawThumbnail = entryImageAsset(entry.thumbnail || '', entry, 'thumbnail');
       const derivedTexture = derivedMediaFromFiles(origin, entry, ['.png', '.jpg', '.jpeg', '.webp']);
-      const thumbnailPoster = safeImage(entry.thumbnailPoster || '') || generatedThumbnailUrl(origin, entry) || derivedTexture;
-      const webmPreview = safeVideo(entry.webmPreview || '') || derivedMediaFromFiles(origin, entry, ['.webm']) || generatedPreviewWebmUrl(origin, entry);
+      const thumbnailPoster = entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || derivedTexture;
+      const webmPreview = entryVideoAsset(entry.webmPreview || '', entry, 'webm') || derivedMediaFromFiles(origin, entry, ['.webm']) || generatedPreviewWebmUrl(origin, entry);
       const isGifPreview = entry.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(rawThumbnail);
       const thumbnail = isGifPreview ? '' : rawThumbnail;
       const date = entry.uploadedAt ? new Date(entry.uploadedAt) : null;
@@ -159,14 +230,16 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       const files = Array.isArray(entry.files) ? entry.files.length : 0;
       const entryId = escapeHtml(String(entry.id || ''));
       const likeId = String(entry.id || itemTitle);
-      const likeCount = baseLikeCount(likeId);
-      const thumbnailStyle = !webmPreview && (thumbnail || thumbnailPoster) ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
-      const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''} muted playsinline preload="metadata" aria-hidden="true"></video>`;
-      const likeButton = isLibraryMode ? '' : `<button class="portfolio-like-button" type="button" data-like-id="${escapeHtml(likeId)}" data-base-likes="${likeCount}" aria-pressed="false" title="Like"><span aria-hidden="true">♡</span><strong>${likeCount}</strong></button>`;
+      const metric = metricCountsForId(metrics, likeId);
+      const likeCount = metric.likes;
+      const viewCount = metric.views;
+      const thumbnailStyle = thumbnail || thumbnailPoster ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
+      const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''}${thumbnailPoster || thumbnail ? ` poster="${escapeHtml(thumbnailPoster || thumbnail)}"` : ''} muted playsinline preload="none" aria-label="${itemTitle} video preview"></video>`;
+      const likeButton = isPortfolioMode ? `<button class="portfolio-like-button" type="button" data-metric-id="${escapeHtml(likeId)}" data-metric-like data-metric-current-likes="${likeCount}" data-metric-current-views="${viewCount}" aria-pressed="false" title="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${likeCount}</strong></button>` : '';
       const cardSizeMode = entry.cardSize && entry.cardSize !== 'auto' ? 'manual' : 'auto';
       return `<article class="library-card ${libraryCardSizeClass(entry, index)}" data-entry-id="${entryId}" data-card-size-mode="${cardSizeMode}"${thumbnailStyle}>
         ${likeButton}
-        <a class="library-card-link" href="${previewUrl}" aria-label="Open ${itemTitle}">
+        <a class="library-card-link" href="${previewUrl}" aria-label="Open ${itemTitle}${isPortfolioMode ? ' in World SPINE ARCHIVE' : ''}">
           <div class="library-card-visual">
             ${previewMedia}
             <span class="stack-icon" aria-hidden="true"></span>
@@ -178,12 +251,99 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
               <span class="library-card-date">${escapeHtml(dateText)}</span>
             </div>
             ${entry.note ? `<p>${escapeHtml(entry.note)}</p>` : ''}
-            <div class="library-card-meta"><span>${files} files</span></div>
+            <div class="library-card-meta" data-metric-id="${entryId}" data-metric-label="stats" aria-label="${likeCount} likes and ${viewCount} views"><span><span aria-hidden="true">◉</span> <strong data-metric-views>${viewCount}</strong> views</span><span>${files} files</span></div>
           </div>
         </a>
       </article>`;
     })
     .join('');
+  const absoluteProfileUrl = `${origin}/u/${encodeURIComponent(publicOwnerId)}`;
+  const firstImage = visibleEntries
+    .map((entry) => entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail') || generatedThumbnailUrl(origin, entry) || derivedMediaFromFiles(origin, entry, ['.webp', '.png', '.jpg', '.jpeg']))
+    .find(Boolean) || `${origin}/spine-link-video-thumbnail.png`;
+  const itemListElements = visibleEntries.map((entry, index) => {
+    const name = cleanPublicText(entry.title || entry.id || 'Spine animation work', 120);
+    const canonicalPath = isPortfolioMode ? archiveItemPath(entry) : playerPathForEntry(entry);
+    const url = absoluteUrlForPath(origin, canonicalPath || playerPathForEntry(entry));
+    const embedUrl = absoluteUrlForPath(origin, playerPathForEntry(entry) || canonicalPath);
+    const image = entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail') || generatedThumbnailUrl(origin, entry) || derivedMediaFromFiles(origin, entry, ['.webp', '.png', '.jpg', '.jpeg']) || undefined;
+    const video = entryVideoAsset(entry.webmPreview || '', entry, 'webm') || derivedMediaFromFiles(origin, entry, ['.webm']) || undefined;
+    const work = {
+      '@type': video ? 'VideoObject' : 'CreativeWork',
+      ...(video ? { '@id': `${url}#video` } : {}),
+      name,
+      url,
+      description: cleanPublicText(entry.note || `${name} uploaded to ${rawOwnerName}'s Spine animation portfolio on Spine-Link.`, 260),
+      ...(image ? { image, thumbnailUrl: video ? [image] : image } : {}),
+      ...(video
+        ? {
+            contentUrl: video,
+            embedUrl,
+            mainEntityOfPage: url,
+            isFamilyFriendly: true,
+            ...(durationToIso8601(entry.previewDuration) ? { duration: durationToIso8601(entry.previewDuration) } : {}),
+            ...(positiveInteger(entry.previewWidth) ? { width: positiveInteger(entry.previewWidth) } : {}),
+            ...(positiveInteger(entry.previewHeight) ? { height: positiveInteger(entry.previewHeight) } : {}),
+            potentialAction: {
+              '@type': 'WatchAction',
+              target: embedUrl,
+            },
+          }
+        : {}),
+      ...(entry.uploadedAt ? { uploadDate: isoDate(entry.uploadedAt), datePublished: isoDate(entry.uploadedAt) } : {}),
+      creator: {
+        '@type': 'Person',
+        name: rawOwnerName,
+        url: absoluteProfileUrl,
+      },
+    };
+    return {
+      '@type': 'ListItem',
+      position: index + 1,
+      url,
+      name,
+      item: work,
+    };
+  });
+  const firstVideoEntry = visibleEntries.find((entry) => entryVideoAsset(entry.webmPreview || '', entry, 'webm') || derivedMediaFromFiles(origin, entry, ['.webm']));
+  const firstVideoUrl = firstVideoEntry ? entryVideoAsset(firstVideoEntry.webmPreview || '', firstVideoEntry, 'webm') || derivedMediaFromFiles(origin, firstVideoEntry, ['.webm']) : '';
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'ProfilePage',
+        '@id': `${absoluteProfileUrl}#profile`,
+        name: title,
+        url: absoluteProfileUrl,
+        description,
+        isPartOf: {
+          '@type': 'WebSite',
+          name: 'Spine Portfolio',
+          alternateName: 'Spine-Link',
+          url: origin,
+        },
+        about: {
+          '@type': 'Person',
+          '@id': `${absoluteProfileUrl}#person`,
+          name: rawOwnerName,
+          url: absoluteProfileUrl,
+          ...(ownerPicture ? { image: ownerPicture } : {}),
+          description: `${rawOwnerName} publishes Spine animation portfolio work on Spine-Link.`,
+        },
+        mainEntity: {
+          '@id': `${absoluteProfileUrl}#person`,
+        },
+      },
+      {
+        '@type': 'ItemList',
+        '@id': `${absoluteProfileUrl}#works`,
+        name: `${rawOwnerName} Spine animation portfolio works`,
+        url: absoluteProfileUrl,
+        numberOfItems: visibleEntries.length,
+        itemListElement: itemListElements,
+      },
+    ],
+  };
 
   return `<!doctype html>
 <html lang="en">
@@ -191,8 +351,27 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${escapeHtml(title)}</title>
-    <meta name="robots" content="index,follow" />
-    <link rel="canonical" href="${origin}/u/${encodeURIComponent(publicOwnerId)}" />
+    <meta name="description" content="${escapeHtml(description)}" />
+    <meta name="robots" content="${indexablePortfolio ? 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1' : 'noindex,follow'}" />
+    <meta name="application-name" content="Spine Portfolio" />
+    <meta name="apple-mobile-web-app-title" content="Spine Portfolio" />
+    <meta property="og:type" content="profile" />
+    <meta property="og:url" content="${escapeHtml(absoluteProfileUrl)}" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:site_name" content="Spine Portfolio" />
+    <meta property="og:image" content="${escapeHtml(firstImage)}" />
+    ${firstVideoUrl ? `<meta property="og:video" content="${escapeHtml(firstVideoUrl)}" />
+    <meta property="og:video:secure_url" content="${escapeHtml(firstVideoUrl)}" />
+    <meta property="og:video:type" content="video/webm" />` : ''}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${escapeHtml(firstImage)}" />
+    <link rel="canonical" href="${escapeHtml(absoluteProfileUrl)}" />
+    <link rel="stylesheet" href="/page-transitions.css" />
+    <script type="application/ld+json">${jsonScript(structuredData)}</script>
+    <script src="/page-transitions.js" defer></script>
     <style>
       * { box-sizing: border-box; }
       * { scrollbar-width: thin; scrollbar-color: rgba(74,78,84,.72) transparent; }
@@ -201,7 +380,6 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       *::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(74,78,84,.72); background-clip: content-box; }
       *::-webkit-scrollbar-thumb:hover { background: rgba(100,106,115,.78); background-clip: content-box; }
       body { min-height: 100vh; margin: 0; color: #edf5ff; background: #070809; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .particle-field { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; opacity: .78; }
       .page { position: relative; z-index: 1; width: min(1280px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
       .creator-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 28px; width: 100%; margin-bottom: 28px; padding: 24px 26px 26px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; background: rgba(8,9,10,.78); box-shadow: inset 0 0 0 1px rgba(255,255,255,.02), 0 22px 70px rgba(0,0,0,.32); backdrop-filter: blur(10px); }
       .creator-kicker { align-self: center; color: #ff6a28; font-size: clamp(16px, 2vw, 22px); font-weight: 950; letter-spacing: .18em; text-transform: uppercase; }
@@ -212,6 +390,9 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       .creator-name-line { display: flex; align-items: baseline; gap: 40px; min-width: 0; }
       .creator-name { color: #fff; font-size: clamp(24px, 3.2vw, 34px); font-weight: 950; line-height: 1.05; white-space: nowrap; }
       .creator-count { color: rgba(237,245,255,.62); font-size: clamp(16px, 2vw, 22px); font-weight: 900; letter-spacing: .05em; white-space: nowrap; text-transform: uppercase; }
+      .portfolio-search-copy { margin: -8px 0 24px; color: rgba(237,245,255,.76); }
+      .portfolio-search-copy h1 { margin: 0 0 8px; color: #fff; font-size: clamp(24px, 4vw, 46px); line-height: 1; letter-spacing: 0; }
+      .portfolio-search-copy p { max-width: 760px; margin: 0; font-size: 15px; line-height: 1.55; }
       .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); grid-auto-flow: dense; grid-auto-rows: 96px; gap: 18px; }
       .library-card { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; margin: 0; overflow: hidden; border: 2px solid rgba(255,185,214,.72); border-radius: 8px; color: inherit; background: radial-gradient(circle at 22% 22%, rgba(255,106,40,.28), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.32), transparent 32%), linear-gradient(135deg, rgba(32,35,38,.98), rgba(20,22,25,.98)); box-shadow: 0 0 0 1px rgba(255,185,214,.2), 0 20px 56px rgba(0,0,0,.34); transition: transform 150ms ease, border-color 150ms ease; }
       .library-card--small-square { grid-column: span 2; grid-row: span 2; }
@@ -245,13 +426,13 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
       .library-card-date { display: inline-flex; align-items: center; justify-content: flex-end; color: rgba(237,245,255,.58); font-size: 12px; white-space: nowrap; }
       .library-card-body p { display: -webkit-box; margin: 0; overflow: hidden; color: rgba(255,228,239,.78); font-size: 13px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
       .library-card-meta { display: flex; justify-content: flex-end; gap: 10px; color: rgba(237,245,255,.66); font-size: 12px; font-weight: 700; }
+      .library-card-meta strong { color: inherit; font-size: inherit; }
       .empty { padding: 34px; border: 1px dashed rgba(255,255,255,.16); border-radius: 8px; color: rgba(237,245,255,.68); text-align: center; }
       @media (max-width: 900px) { .library-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: 76px; } .library-card--horizontal, .library-card--wide, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; } }
       @media (max-width: 640px) { * { scrollbar-width: none; } *::-webkit-scrollbar { width: 0; height: 0; display: none; } .creator-card { grid-template-columns: 1fr; gap: 22px; padding: 20px; } .creator-row { align-items: center; justify-self: stretch; flex-direction: row; gap: 14px; } .creator-avatar { width: clamp(44px, 15vw, 56px); height: clamp(44px, 15vw, 56px); } .creator-name-line { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, max-content); column-gap: 40px; row-gap: 7px; } .creator-name { max-width: calc(100vw - 140px); font-size: clamp(18px, 6.2vw, 30px); white-space: nowrap; } .creator-count { font-size: clamp(14px, 4.4vw, 18px); } .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 98px; } .library-card, .library-card--small-square, .library-card--square, .library-card--horizontal, .library-card--wide, .library-card--vertical, .library-card--medium-narrow, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; grid-row: span 3; } }
     </style>
   </head>
   <body class="${publicPageClass}">
-    <canvas class="particle-field" id="particle-field" aria-hidden="true"></canvas>
     <main class="page">
       <section class="creator-card" aria-label="${publicPageLabel}">
         <div class="creator-kicker">${publicPageLabel}</div>
@@ -260,75 +441,18 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
             ${ownerPicture ? `<img src="${ownerPicture}" alt="" />` : `<div class="creator-avatar-fallback">${ownerInitial}</div>`}
           </div>
           <div class="creator-name-line">
-            <strong class="creator-name">${ownerName}</strong><span class="creator-count">${entries.length} SPINE WORK'S</span>
+            <strong class="creator-name">${ownerName}</strong><span class="creator-count">${visibleEntries.length} SPINE WORKS</span>
           </div>
         </div>
       </section>
-      ${entries.length ? `<section class="library-grid">${cards}</section>` : `<div class="empty">This public ${publicPageLabelLower} is empty or hidden.</div>`}
+      <section class="portfolio-search-copy" aria-label="Portfolio description">
+        <h1>${escapeHtml(rawOwnerName)} Spine animation portfolio</h1>
+        <p>${escapeHtml(description)}</p>
+      </section>
+      ${visibleEntries.length ? `<section class="library-grid" aria-label="${escapeHtml(rawOwnerName)} uploaded Spine animation works">${cards}</section>` : `<div class="empty">This public ${publicPageLabelLower} is empty or hidden.</div>`}
     </main>
     <script>
-      function startParticleField() {
-        const canvas = document.getElementById("particle-field");
-        const context = canvas?.getContext?.("2d");
-        if (!canvas || !context || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
-        const colors = ["255,255,255", "140,199,255", "255,106,40"];
-        const particles = [];
-        let width = 0;
-        let height = 0;
-        let pixelRatio = 1;
-        let frame = 0;
-        function resetParticle(particle, randomizePosition) {
-          particle.x = Math.random() * width;
-          particle.y = randomizePosition ? Math.random() * height : height + Math.random() * 60;
-          particle.radius = 0.55 + Math.random() * 1.8;
-          particle.speedX = (Math.random() - 0.5) * 0.16;
-          particle.speedY = -(0.08 + Math.random() * 0.34);
-          particle.alpha = 0.18 + Math.random() * 0.64;
-          particle.pulse = Math.random() * Math.PI * 2;
-          particle.color = colors[Math.floor(Math.random() * colors.length)];
-        }
-        function resizeParticles() {
-          width = window.innerWidth || 1;
-          height = window.innerHeight || 1;
-          pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-          canvas.width = Math.floor(width * pixelRatio);
-          canvas.height = Math.floor(height * pixelRatio);
-          canvas.style.width = width + "px";
-          canvas.style.height = height + "px";
-          context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-          const targetCount = Math.min(170, Math.max(72, Math.floor((width * height) / 9000)));
-          while (particles.length < targetCount) {
-            const particle = {};
-            resetParticle(particle, true);
-            particles.push(particle);
-          }
-          particles.length = targetCount;
-        }
-        function drawParticles(time) {
-          context.clearRect(0, 0, width, height);
-          for (const particle of particles) {
-            particle.x += particle.speedX + Math.sin(time * 0.00025 + particle.pulse) * 0.035;
-            particle.y += particle.speedY;
-            if (particle.y < -24 || particle.x < -32 || particle.x > width + 32) resetParticle(particle, false);
-            const alpha = particle.alpha * (0.68 + Math.sin(time * 0.0012 + particle.pulse) * 0.32);
-            const glowRadius = particle.radius * 5.5;
-            const gradient = context.createRadialGradient(particle.x, particle.y, 0, particle.x, particle.y, glowRadius);
-            gradient.addColorStop(0, "rgba(" + particle.color + ", " + alpha + ")");
-            gradient.addColorStop(0.42, "rgba(" + particle.color + ", " + (alpha * 0.24) + ")");
-            gradient.addColorStop(1, "rgba(" + particle.color + ", 0)");
-            context.fillStyle = gradient;
-            context.beginPath();
-            context.arc(particle.x, particle.y, glowRadius, 0, Math.PI * 2);
-            context.fill();
-          }
-          frame = window.requestAnimationFrame(drawParticles);
-        }
-        resizeParticles();
-        window.addEventListener("resize", resizeParticles, { passive: true });
-        frame = window.requestAnimationFrame(drawParticles);
-        window.addEventListener("pagehide", () => window.cancelAnimationFrame(frame), { once: true });
-      }
-      startParticleField();
+      // Keep the portfolio page static by default; motion starts only on card hover.
       function cardClassForAspectRatio(ratio) {
         if (!Number.isFinite(ratio) || ratio <= 0) return "library-card--square";
         if (ratio >= 3.2) return "library-card--full";
@@ -386,12 +510,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
         }
       }
       function selectedVideoAspectRatio(video) {
-        const videoRatio = video.videoWidth / video.videoHeight;
-        const contentRatio = mediaContentAspectRatio(video);
-        if (!contentRatio) return videoRatio;
-        if (videoRatio >= 0.8 && videoRatio <= 1.15 && contentRatio >= 0.95) return 1.36;
-        if (videoRatio >= 0.8 && videoRatio <= 1.15 && contentRatio > 0.45 && contentRatio < 1.35) return videoRatio;
-        return contentRatio;
+        return video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 0;
       }
       function applyVideoAspectCardClass(video) {
         const card = video.closest(".library-card");
@@ -410,10 +529,13 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
         );
         card.classList.add(cardClassForAspectRatio(selectedVideoAspectRatio(video)));
       }
+      function warmVideoMetadata(video) {
+        if (!video || video.readyState >= 1) return;
+        video.preload = "metadata";
+        try { video.load(); } catch {}
+      }
       document.querySelectorAll(".library-card-webm").forEach((video) => {
         video.addEventListener("loadedmetadata", () => applyVideoAspectCardClass(video));
-        video.addEventListener("loadeddata", () => applyVideoAspectCardClass(video));
-        if (video.readyState >= 1) applyVideoAspectCardClass(video);
       });
       function stopVideo(video) {
         video.pause();
@@ -431,63 +553,119 @@ function createLibraryHtml({ origin, publicOwnerId, entries }) {
         video.play().catch(() => {});
         return true;
       }
-      let sequenceIndex = 0;
-      let activeSequenceVideo = null;
-      let lastSequenceVideo = null;
-      function sequenceVideoPulse() {
-        const videos = Array.from(document.querySelectorAll(".library-card-webm")).filter((video) => video.dataset.videoSrc || video.getAttribute("src"));
-        if (!videos.length) {
-          window.setTimeout(sequenceVideoPulse, 1200);
-          return;
+      function installChaoticCardPlayback() {
+        const visibleVideos = new Set();
+        const manualVideos = new WeakSet();
+        const hoverTimers = new WeakMap();
+        let chaosTimer = 0;
+        function clearHoverTimer(video) {
+          const timer = hoverTimers.get(video);
+          if (timer) window.clearTimeout(timer);
+          hoverTimers.delete(video);
         }
-        if (activeSequenceVideo) {
-          activeSequenceVideo.onended = null;
-          stopVideo(activeSequenceVideo);
+        function startHoverLoop(video) {
+          manualVideos.add(video);
+          clearHoverTimer(video);
+          video.onended = () => {
+            const timer = window.setTimeout(() => {
+              if (!manualVideos.has(video)) return;
+              try { video.currentTime = 0; } catch {}
+              playVideo(video);
+            }, 1000);
+            hoverTimers.set(video, timer);
+          };
+          playVideo(video);
         }
-        let video = videos[sequenceIndex % videos.length];
-        sequenceIndex += 1;
-        if (videos.length > 1 && video === lastSequenceVideo) {
-          video = videos[sequenceIndex % videos.length];
-          sequenceIndex += 1;
-        }
-        lastSequenceVideo = video;
-        activeSequenceVideo = video;
-        video.onended = () => {
+        function stopHoverLoop(video) {
+          manualVideos.delete(video);
+          clearHoverTimer(video);
           stopVideo(video);
-          window.setTimeout(sequenceVideoPulse, 420);
-        };
-        if (!playVideo(video)) window.setTimeout(sequenceVideoPulse, 1200);
-      }
-      window.setTimeout(sequenceVideoPulse, 900);
-      document.querySelectorAll(".portfolio-like-button").forEach((button) => {
-        const id = button.dataset.likeId || "";
-        const base = Number(button.dataset.baseLikes || "0") || 0;
-        const key = "spine-link-like:" + id;
-        const count = button.querySelector("strong");
-        const icon = button.querySelector("span");
-        function syncLike() {
-          const liked = localStorage.getItem(key) === "true";
-          button.classList.toggle("is-liked", liked);
-          button.setAttribute("aria-pressed", String(liked));
-          if (count) count.textContent = String(base + (liked ? 1 : 0));
-          if (icon) icon.textContent = liked ? "♥" : "♡";
         }
-        button.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          localStorage.setItem(key, String(localStorage.getItem(key) !== "true"));
-          syncLike();
+        function scheduleChaos() {
+          window.clearTimeout(chaosTimer);
+          if (document.hidden) return;
+          chaosTimer = window.setTimeout(runChaos, 520 + Math.random() * 1280);
+        }
+        function randomSample(items, count) {
+          return items
+            .map((item) => ({ item, sort: Math.random() }))
+            .sort((a, b) => a.sort - b.sort)
+            .slice(0, count)
+            .map((entry) => entry.item);
+        }
+        function runChaos() {
+          const videos = Array.from(visibleVideos).filter((video) => video.isConnected && (video.dataset.videoSrc || video.getAttribute("src")));
+          if (!videos.length) {
+            scheduleChaos();
+            return;
+          }
+          const activeLimit = Math.min(2, Math.max(1, Math.ceil(videos.length * 0.2)));
+          randomSample(videos.filter((video) => !video.paused && !manualVideos.has(video)), videos.length).slice(activeLimit).forEach(stopVideo);
+          randomSample(videos.filter((video) => video.paused && !manualVideos.has(video)), activeLimit).forEach((video) => {
+            if (Math.random() < 0.76) {
+              playVideo(video);
+              window.setTimeout(() => {
+                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.88) stopVideo(video);
+              }, 460 + Math.random() * 2100);
+            }
+          });
+          videos.forEach((video) => {
+            if (!manualVideos.has(video) && !video.paused && Math.random() < 0.28) stopVideo(video);
+          });
+          scheduleChaos();
+        }
+        document.querySelectorAll(".library-card").forEach((card) => {
+          const video = card.querySelector(".library-card-webm");
+          if (!video) return;
+          card.addEventListener("pointerenter", () => startHoverLoop(video));
+          card.addEventListener("focusin", () => startHoverLoop(video));
+          card.addEventListener("pointerleave", () => stopHoverLoop(video));
+          card.addEventListener("focusout", () => stopHoverLoop(video));
         });
-        syncLike();
-      });
+        if ("IntersectionObserver" in window) {
+          const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+              const video = entry.target.querySelector(".library-card-webm");
+              if (!video) return;
+              if (entry.isIntersecting && entry.intersectionRatio >= 0.42) {
+                visibleVideos.add(video);
+                warmVideoMetadata(video);
+              } else {
+                visibleVideos.delete(video);
+                if (!manualVideos.has(video)) stopVideo(video);
+              }
+            });
+            scheduleChaos();
+          }, { threshold: [0, 0.42, 0.68, 1] });
+          document.querySelectorAll(".library-card").forEach((card) => observer.observe(card));
+        } else {
+          document.querySelectorAll(".library-card-webm").forEach((video) => visibleVideos.add(video));
+        }
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            window.clearTimeout(chaosTimer);
+            visibleVideos.forEach((video) => { if (!manualVideos.has(video)) stopVideo(video); });
+          } else {
+            scheduleChaos();
+          }
+        });
+        window.addEventListener("pagehide", () => {
+          window.clearTimeout(chaosTimer);
+          visibleVideos.forEach(stopVideo);
+        }, { once: true });
+        scheduleChaos();
+      }
+      installChaoticCardPlayback();
     </script>
+    <script>window.SpineLinkMetricsConfig = {};</script>
+    <script src="/spine-metrics.js" defer></script>
   </body>
 </html>`;
 }
 
 export default async function handler(request, response) {
-  if (request.method !== 'GET') {
-    response.setHeader('Allow', 'GET');
+  if (!['GET', 'HEAD'].includes(request.method)) {
+    response.setHeader('Allow', 'GET, HEAD');
     return response.status(405).send('Method not allowed');
   }
 
@@ -509,15 +687,25 @@ export default async function handler(request, response) {
 
   try {
     const indexText = await githubText(settings, `${settings.basePath}/index.json`);
+    const metricsText = await githubText(settings, `${settings.basePath}/metrics.json`);
+    const metrics = parseMetricsJson(metricsText);
     const allEntries = indexText ? JSON.parse(indexText) : [];
     const entries = Array.isArray(allEntries)
       ? allEntries.filter((entry) => String(entry?.publicOwnerId || '') === publicOwnerId)
       : [];
     entries.sort(compareLibraryEntries);
+    const { visibleEntries, isPortfolioMode } = indexablePortfolioState(entries);
+    const robotsTag = isPortfolioMode && visibleEntries.length > 0
+      ? 'index, follow, max-image-preview:large, max-video-preview:-1, max-snippet:-1'
+      : 'noindex, follow';
 
     response.setHeader('Content-Type', 'text/html; charset=utf-8');
-    response.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
-    return response.status(200).send(createLibraryHtml({ origin, publicOwnerId, entries }));
+    response.setHeader('X-Robots-Tag', robotsTag);
+    setCacheHeaders(response, cacheProfiles.dynamicHtmlBrowser, cacheProfiles.dynamicHtmlCdn);
+    if (request.method === 'HEAD') {
+      return response.status(200).send('');
+    }
+    return response.status(200).send(createLibraryHtml({ origin, publicOwnerId, entries, metrics }));
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Library failed');
   }
