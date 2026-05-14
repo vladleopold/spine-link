@@ -1,9 +1,20 @@
+import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
+
+import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
+import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
+import { cachedGithubText } from '../lib/github-content-cache.js';
+
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
+const defaultBasePath = 'library';
 
 function cleanRepoPath(value = '') {
   return String(value).trim().replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
+}
+
+function basename(value = '') {
+  return String(value).replace(/\\/g, '/').split('/').filter(Boolean).pop() || '';
 }
 
 function joinRepoPath(...parts) {
@@ -19,8 +30,11 @@ function encodeRepoPath(path) {
 }
 
 function versionedAssetUrl(origin, item, version) {
-  const url = `${origin}/assets/${encodeRepoPath(item.path)}`;
-  return version ? `${url}?v=${encodeURIComponent(version)}` : url;
+  return appendAssetVersion(`${origin}/assets/${encodeRepoPath(item.path)}`, version);
+}
+
+function assetUrlForRepoPath(origin, path, version = '') {
+  return appendAssetVersion(`${origin}/assets/${encodeRepoPath(path)}`, version);
 }
 
 function base64ToText(base64) {
@@ -49,17 +63,82 @@ function safePublicImage(value = '') {
   return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
 }
 
+function skinNamesFromSkeletonJson(skeletonJson) {
+  if (!skeletonJson || typeof skeletonJson !== 'object' || !('skins' in skeletonJson)) return [];
+  const skins = skeletonJson.skins;
+  if (Array.isArray(skins)) {
+    return skins
+      .map((skin) => {
+        if (typeof skin === 'string') return skin;
+        if (skin && typeof skin === 'object' && typeof skin.name === 'string') return skin.name;
+        return '';
+      })
+      .filter(Boolean);
+  }
+  if (skins && typeof skins === 'object') return Object.keys(skins).filter(Boolean);
+  return [];
+}
+
+function preferredSkinName(skinNames) {
+  if (!skinNames.length) return '';
+  return skinNames.includes('default') ? 'default' : skinNames[0] || '';
+}
+
+function extractAtlasPages(atlasText = '') {
+  return String(atlasText)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /\.(png|jpe?g|webp)$/i.test(line));
+}
+
+function canonicalAtlasPageName(pageName = '') {
+  return basename(String(pageName || '').replace(/\\/g, '/').trim());
+}
+
+function imageMatchesAtlasPage(imageName = '', pageName = '') {
+  const imageBase = basename(String(imageName || '').replace(/\\/g, '/').trim()).toLowerCase();
+  const pageBase = canonicalAtlasPageName(pageName).toLowerCase();
+  if (!imageBase || !pageBase) return false;
+  if (imageBase === pageBase) return true;
+  if (pageBase.endsWith(imageBase)) return true;
+  if (imageBase.endsWith(pageBase)) return true;
+  return false;
+}
+
 function safePublicVideo(value = '') {
   const url = String(value).trim();
   return /^https:\/\/[^\s"'<>]+\.webm(?:[?#][^\s"'<>]*)?$/i.test(url) ? url : '';
+}
+
+function safePublicAsset(value = '') {
+  const url = String(value).trim();
+  return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
+}
+
+function sanitizeSha256(value = '') {
+  const hash = String(value || '').trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(hash) ? hash : '';
+}
+
+function shortHash(value = '') {
+  const hash = String(value || '').trim();
+  return hash.length > 22 ? `${hash.slice(0, 12)}...${hash.slice(-8)}` : hash;
 }
 
 function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
   const poster = String(entry?.thumbnailPoster || '');
   return id && /^data:image\/webp;base64,/i.test(poster)
-    ? `${origin}/assets/library/${encodeURIComponent(id)}/generated-preview.webp`
+    ? assetUrlForRepoPath(origin, `library/${id}/generated-preview.webp`, assetVersionForEntry(entry, 'generated-preview'))
     : '';
+}
+
+function entryImageAsset(value = '', entry = {}, fallback = '') {
+  return appendAssetVersion(safePublicImage(value), assetVersionForEntry(entry, fallback));
+}
+
+function entryVideoAsset(value = '', entry = {}, fallback = '') {
+  return appendAssetVersion(safePublicVideo(value), assetVersionForEntry(entry, fallback));
 }
 
 function isoDate(value) {
@@ -67,17 +146,171 @@ function isoDate(value) {
   return date && !Number.isNaN(date.getTime()) ? date.toISOString() : '';
 }
 
+function durationToIso8601(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return '';
+  return `PT${Math.max(1, Math.round(seconds))}S`;
+}
+
+function positiveInteger(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
+}
+
 function pageUrlForEntry(origin, entryId) {
   return `${origin}/p/${encodeURIComponent(String(entryId || '').trim())}`;
 }
 
-function videoMetadataForEntry(origin, entry, entryId, note = '') {
+function playerUrlForEntry(origin, entry, entryId) {
+  const id = encodeURIComponent(String(entry?.id || entryId || '').trim());
+  const animation = String(entry?.defaultAnimation || '').trim();
+  return animation ? `${origin}/p/${id}?animation=${encodeURIComponent(animation)}` : `${origin}/p/${id}`;
+}
+
+function archiveUrlForEntry(origin, entry, entryId) {
   const id = String(entry?.id || entryId || '').trim();
-  const contentUrl = safePublicVideo(entry?.webmPreview || '');
+  return id ? `${origin}/world-spine-archive/${encodeURIComponent(id)}` : '';
+}
+
+function robotsHeaderValue(value = '') {
+  const robots = String(value || '').trim();
+  return robots
+    ? robots.split(',').map((part) => part.trim()).filter(Boolean).join(', ')
+    : 'index, follow, max-image-preview:large, max-video-preview:-1, max-snippet:-1';
+}
+
+function entryHasFile(entry, fileName = '') {
+  const name = String(fileName || '').trim().toLowerCase();
+  return Array.isArray(entry?.files) && entry.files.some((file) => String(file || '').trim().toLowerCase() === name);
+}
+
+function sourceProofUrlForEntry(origin, entry) {
+  const direct = safePublicAsset(entry?.sourceProofUrl || entry?.sourceProof?.proofUrl);
+  if (direct) return direct;
+  const path = cleanRepoPath(entry?.sourceProofPath || entry?.sourceProof?.proofPath || '');
+  if (path) return `${origin}/assets/${encodeRepoPath(path)}`;
+  if (entryHasFile(entry, 'source-proof.json') && entry?.previewPath) {
+    return `${origin}/assets/${encodeRepoPath(`${entry.previewPath}/source-proof.json`)}`;
+  }
+  return '';
+}
+
+function blockchainAnchorUrlForEntry(origin, entry) {
+  const direct = safePublicAsset(entry?.blockchainAnchor?.anchorUrl || entry?.blockchainAnchor?.github?.anchorUrl);
+  if (direct) return direct;
+  const path = cleanRepoPath(entry?.blockchainAnchor?.anchorPath || entry?.blockchainAnchor?.github?.anchorPath || '');
+  if (path) return `${origin}/assets/${encodeRepoPath(path)}`;
+  if (entryHasFile(entry, 'blockchain-anchor.json') && entry?.previewPath) {
+    return `${origin}/assets/${encodeRepoPath(`${entry.previewPath}/blockchain-anchor.json`)}`;
+  }
+  return '';
+}
+
+function proofDocumentsForEntry(origin, entry, pageUrl) {
+  const sourceProofUrl = sourceProofUrlForEntry(origin, entry);
+  const blockchainAnchorUrl = blockchainAnchorUrlForEntry(origin, entry);
+  const proofHash = sanitizeSha256(entry?.sourceProof?.proofHash || entry?.blockchainAnchor?.sourceProofHash);
+  const anchorHash = sanitizeSha256(entry?.blockchainAnchor?.anchorHash);
+  const documents = [];
+  if (sourceProofUrl) {
+    documents.push({
+      '@type': 'DigitalDocument',
+      '@id': `${pageUrl}#source-proof`,
+      name: 'Spine-Link source origin proof',
+      url: sourceProofUrl,
+      encodingFormat: 'application/json',
+      description:
+        'Source-origin proof JSON linking uploaded Spine files to SHA-256 hashes, account/browser evidence, and the GitHub repository path.',
+      ...(proofHash
+        ? {
+            identifier: {
+              '@type': 'PropertyValue',
+              propertyID: 'SHA-256',
+              value: proofHash,
+            },
+          }
+        : {}),
+    });
+  }
+  if (blockchainAnchorUrl) {
+    documents.push({
+      '@type': 'DigitalDocument',
+      '@id': `${pageUrl}#blockchain-anchor`,
+      name: 'Spine-Link GitHub blockchain anchor',
+      url: blockchainAnchorUrl,
+      encodingFormat: 'application/json',
+      description:
+        'Blockchain anchor JSON linking the source proof hash, GitHub commit receipts, browser/account evidence, and optional EVM transaction data.',
+      ...(anchorHash
+        ? {
+            identifier: {
+              '@type': 'PropertyValue',
+              propertyID: 'SHA-256',
+              value: anchorHash,
+            },
+          }
+        : {}),
+    });
+  }
+  return documents;
+}
+
+function textFromEntry(entry, field = 'all') {
+  if (!entry || typeof entry !== 'object') return '';
+  const files = Array.isArray(entry.files) ? entry.files.join(' ') : '';
+  const animations = Array.isArray(entry.animations) ? entry.animations.join(' ') : '';
+  const values = {
+    all: [entry.id, entry.title, entry.ownerEmail, entry.ownerName, entry.note, entry.skeleton, entry.atlas, files, animations, entry.previewPath, entry.repositoryUrl],
+    id: [entry.id],
+    title: [entry.title],
+    ownerEmail: [entry.ownerEmail],
+    ownerName: [entry.ownerName],
+    note: [entry.note],
+    files: [files],
+    animations: [animations],
+    path: [entry.previewPath, entry.repositoryUrl],
+  };
+  return (values[field] || values.all).filter(Boolean).join(' ');
+}
+
+function exclusionRuleMatches(entry, rule) {
+  if (!rule || rule.enabled === false) return false;
+  const pattern = String(rule.pattern || '').trim();
+  if (!pattern) return false;
+  const haystack = textFromEntry(entry, String(rule.field || 'all'));
+  if (!haystack) return false;
+  if (rule.type === 'regex') {
+    try {
+      const flags = String(rule.flags || 'i').replace(/[^dgimsuvy]/g, '') || 'i';
+      return new RegExp(pattern, flags).test(haystack);
+    } catch {
+      return false;
+    }
+  }
+  return haystack.toLowerCase().includes(pattern.toLowerCase());
+}
+
+function entryExcludedFromArchive(entry, exclusions) {
+  const rules = Array.isArray(exclusions?.rules) ? exclusions.rules : [];
+  return rules.some((rule) => exclusionRuleMatches(entry, rule));
+}
+
+function isPublicArchiveEntry(entry, exclusions) {
+  return Boolean(
+    entry &&
+      entry.hiddenFromPublicLibrary !== true &&
+      (entry.webmPreview || entry.thumbnail || entry.thumbnailPoster) &&
+      !entryExcludedFromArchive(entry, exclusions),
+  );
+}
+
+function videoMetadataForEntry(origin, entry, entryId, note = '', canonicalUrl = '', embedUrl = '') {
+  const id = String(entry?.id || entryId || '').trim();
+  const contentUrl = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
   const poster =
-    safePublicImage(entry?.thumbnailPoster || '') ||
+    entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') ||
     generatedThumbnailUrl(origin, entry) ||
-    safePublicImage(entry?.thumbnail || '');
+    entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
   if (!id || !contentUrl || !poster) return null;
   const name = cleanPublicText(entry?.title || id || 'Spine animation preview', 110);
   const description =
@@ -89,13 +322,29 @@ function videoMetadataForEntry(origin, entry, entryId, note = '') {
     description,
     thumbnailUrl: poster,
     contentUrl,
-    embedUrl: pageUrlForEntry(origin, id),
-    url: pageUrlForEntry(origin, id),
+    embedUrl: embedUrl || pageUrlForEntry(origin, id),
+    url: canonicalUrl || pageUrlForEntry(origin, id),
+    proofDocuments: proofDocumentsForEntry(origin, entry, canonicalUrl || pageUrlForEntry(origin, id)),
+    sourceProofUrl: sourceProofUrlForEntry(origin, entry),
+    blockchainAnchorUrl: blockchainAnchorUrlForEntry(origin, entry),
+    proofHash: sanitizeSha256(entry?.sourceProof?.proofHash || entry?.blockchainAnchor?.sourceProofHash),
+    anchorHash: sanitizeSha256(entry?.blockchainAnchor?.anchorHash),
     uploadDate: isoDate(entry?.uploadedAt) || '2026-05-04T00:00:00.000Z',
+    duration: durationToIso8601(entry?.previewDuration),
+    width: positiveInteger(entry?.previewWidth),
+    height: positiveInteger(entry?.previewHeight),
   };
 }
 
-function seoHead({ origin, entryId, video, fallbackTitle = 'Spine-Link' }) {
+function seoHead({
+  origin,
+  entryId,
+  video,
+  fallbackTitle = 'Spine-Link',
+  robots = 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1',
+  playerUrl = '',
+  archiveUrl = '',
+}) {
   const title = video?.name ? `${video.name} - Spine animation video preview` : fallbackTitle;
   const description = video?.description || 'Spine-Link interactive Spine animation preview and Spine web viewer.';
   const url = video?.url || (entryId ? pageUrlForEntry(origin, entryId) : origin);
@@ -104,6 +353,7 @@ function seoHead({ origin, entryId, video, fallbackTitle = 'Spine-Link' }) {
     ? {
         '@context': 'https://schema.org',
         '@type': 'VideoObject',
+        '@id': `${video.url}#video`,
         name: video.name,
         description: video.description,
         thumbnailUrl: [video.thumbnailUrl],
@@ -111,10 +361,22 @@ function seoHead({ origin, entryId, video, fallbackTitle = 'Spine-Link' }) {
         contentUrl: video.contentUrl,
         embedUrl: video.embedUrl,
         url: video.url,
+        mainEntityOfPage: video.url,
         isFamilyFriendly: true,
+        ...(Array.isArray(video.proofDocuments) && video.proofDocuments.length
+          ? { subjectOf: video.proofDocuments.map((document) => ({ '@id': document['@id'] })) }
+          : {}),
+        ...(video.duration ? { duration: video.duration } : {}),
+        ...(video.width ? { width: video.width } : {}),
+        ...(video.height ? { height: video.height } : {}),
+        potentialAction: {
+          '@type': 'WatchAction',
+          target: video.url,
+        },
         publisher: {
           '@type': 'Organization',
-          name: 'Spine-Link',
+          name: 'Spine Portfolio',
+          alternateName: 'Spine-Link',
           url: origin,
         },
       }
@@ -129,15 +391,27 @@ function seoHead({ origin, entryId, video, fallbackTitle = 'Spine-Link' }) {
         representativeOfPage: true,
       }
     : null;
+  const proofStructuredData = video?.proofDocuments?.length
+    ? {
+        '@context': 'https://schema.org',
+        '@graph': video.proofDocuments,
+      }
+    : null;
   return `
     <title>${escapeHtml(title)}</title>
     <meta name="description" content="${escapeHtml(description)}" />
-    <meta name="robots" content="index,follow,max-image-preview:large,max-video-preview:-1" />
+    <meta name="robots" content="${escapeHtml(robots)}" />
+    <meta name="googlebot" content="${escapeHtml(robots)}" />
+    <meta name="application-name" content="Spine Portfolio" />
+    <meta name="apple-mobile-web-app-title" content="Spine Portfolio" />
     <link rel="canonical" href="${escapeHtml(url)}" />
+    ${playerUrl && playerUrl !== url ? `<link rel="alternate" href="${escapeHtml(playerUrl)}" title="Interactive Spine player" />` : ''}
+    ${archiveUrl && archiveUrl !== url ? `<link rel="alternate" href="${escapeHtml(archiveUrl)}" title="World SPINE ARCHIVE detail page" />` : ''}
     <meta property="og:type" content="${video ? 'video.other' : 'website'}" />
     <meta property="og:title" content="${escapeHtml(title)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:url" content="${escapeHtml(url)}" />
+    <meta property="og:site_name" content="Spine Portfolio" />
     <meta property="og:image" content="${escapeHtml(image)}" />${video ? `
     <meta property="og:video" content="${escapeHtml(video.contentUrl)}" />
     <meta property="og:video:secure_url" content="${escapeHtml(video.contentUrl)}" />
@@ -147,7 +421,8 @@ function seoHead({ origin, entryId, video, fallbackTitle = 'Spine-Link' }) {
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />${structuredData ? `
     <script type="application/ld+json">${escapedJson(structuredData)}</script>
-    <script type="application/ld+json">${escapedJson(imageStructuredData)}</script>` : ''}`;
+    <script type="application/ld+json">${escapedJson(imageStructuredData)}</script>${proofStructuredData ? `
+    <script type="application/ld+json">${escapedJson(proofStructuredData)}</script>` : ''}` : ''}`;
 }
 
 function githubHeaders(token) {
@@ -210,12 +485,6 @@ function compareLibraryEntries(a, b) {
   return String(b?.uploadedAt || '').localeCompare(String(a?.uploadedAt || ''));
 }
 
-function baseLikeCount(value = '') {
-  let hash = 0;
-  for (const character of String(value)) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return 12 + (hash % 87);
-}
-
 async function githubJson(settings, path) {
   const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
   const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`, {
@@ -226,9 +495,7 @@ async function githubJson(settings, path) {
 }
 
 async function githubText(settings, path) {
-  const data = await githubJson(settings, path);
-  if (!data?.content) return '';
-  return base64ToText(data.content);
+  return cachedGithubText(settings, path);
 }
 
 async function githubList(settings, path) {
@@ -261,14 +528,38 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3) {
 function createHtml(config) {
   const video = config.video || null;
   const origin = config.origin || 'https://spine-link.vercel.app';
+  const entryMetricId = String(config.entryId || 'spine-preview');
+  const metric = metricCountsForId(config.metrics, entryMetricId);
+  const clientConfig = {
+    ...config,
+    metrics: {
+      entries: {
+        [entryMetricId]: metric,
+      },
+    },
+  };
+  const videoPreviewRatio =
+    video?.width && video?.height && Number(video.width) > 0 && Number(video.height) > 0
+      ? `${Math.round(Number(video.width))} / ${Math.round(Number(video.height))}`
+      : '16 / 9';
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    ${seoHead({ origin, entryId: config.entryId, video, fallbackTitle: 'Spine-Link interactive Spine animation preview' })}
+    ${seoHead({
+      origin,
+      entryId: config.entryId,
+      video,
+      fallbackTitle: 'Spine-Link interactive Spine animation preview',
+      robots: config.robots,
+      playerUrl: config.playerUrl,
+      archiveUrl: config.archiveUrl,
+    })}
     <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/page-transitions.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.2.113/dist/spine-player.css" />
+    <script src="/page-transitions.js" defer></script>
     <style>
       * { box-sizing: border-box; }
       * { scrollbar-width: thin; scrollbar-color: rgba(74,78,84,.72) transparent; }
@@ -276,10 +567,9 @@ function createHtml(config) {
       *::-webkit-scrollbar-track { background: transparent; }
       *::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(74,78,84,.72); background-clip: content-box; }
       *::-webkit-scrollbar-thumb:hover { background: rgba(100,106,115,.78); background-clip: content-box; }
-      html, body, #app { width: 100%; height: 100%; margin: 0; }
-      body { overflow: hidden; background: #000; color: #e7edf4; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .particle-field { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; opacity: .78; }
-      #app { position: relative; z-index: 1; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 18px; padding: 24px; background: rgba(0,0,0,.78); }
+      html, body, #app { width: 100%; min-height: 100%; margin: 0; }
+      body { overflow: auto; background: #000; color: #e7edf4; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      #app { position: relative; z-index: 1; display: grid; grid-template-rows: auto auto auto; gap: 18px; min-height: 100vh; padding: 24px; background: rgba(0,0,0,.78); }
       .topbar { display: flex; justify-content: space-between; gap: 18px; align-items: center; }
       .brand-link { display: inline-block; color: inherit; text-decoration: none; }
       .brand-logo { display: inline-flex; align-items: center; gap: 8px; color: #fff; font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif; font-size: clamp(34px, 4.4vw, 58px); font-weight: 500; line-height: .78; letter-spacing: .18em; text-shadow: 0 0 1px rgba(255,255,255,.86), 0 6px 18px rgba(0,0,0,.42); }
@@ -292,8 +582,19 @@ function createHtml(config) {
       .brand-spine-mark i:nth-child(5) { width: 8px; transform: translateX(8px); }
       .brand-plus { margin-left: 8px; color: #ff6a28; font-size: .72em; font-weight: 800; letter-spacing: .22em; line-height: 1; text-transform: uppercase; transform: translate(-15px, .18em); }
       .brand-link:hover .brand-plus { color: #8cc7ff; }
-      .stage { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 18px; }
+      .player-top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; }
+      .player-top-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 14px; border: 1px solid rgba(140,199,255,.32); border-radius: 8px; color: #dff1ff; background: rgba(140,199,255,.08); box-shadow: 0 12px 28px rgba(0,0,0,.24), inset 0 0 18px rgba(140,199,255,.06); font-size: 13px; font-weight: 950; text-decoration: none; white-space: nowrap; }
+      .player-top-button.is-primary { border-color: rgba(179,255,64,.62); color: #eaffc2; background: rgba(179,255,64,.1); }
+      .player-top-button:hover { border-color: rgba(255,106,40,.7); color: #fff; background: rgba(255,106,40,.12); }
+      .stage { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 18px; min-height: 560px; height: calc(100vh - 104px); }
       .player-frame { position: relative; min-width: 0; min-height: 0; }
+      .video-watch-panel { position: relative; display: grid; gap: 10px; overflow: hidden; padding: 16px; border: 1px solid rgba(255,185,214,.46); border-radius: 8px; background: #020304; box-shadow: 0 20px 64px rgba(0,0,0,.34); }
+      .video-watch-panel--bottom { margin-top: 4px; }
+      .seo-video-frame { display: flex; align-items: center; justify-content: center; width: 100%; height: min(70vh, 820px); min-height: 220px; max-height: min(70vh, 820px); overflow: hidden; border: 1px solid rgba(140,199,255,.22); border-radius: 8px; background: #000; }
+      .video-watch-player, .seo-video-preview { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; aspect-ratio: var(--video-preview-ratio, 16 / 9); object-fit: contain; background: #000; }
+      .video-watch-copy { display: grid; gap: 5px; pointer-events: none; }
+      .video-watch-copy h1 { margin: 0; color: #fff; font-size: clamp(24px, 3.4vw, 44px); line-height: 1; letter-spacing: 0; text-shadow: 0 4px 18px rgba(0,0,0,.76); }
+      .video-watch-copy p { max-width: 780px; margin: 0; color: rgba(237,245,255,.78); font-size: 14px; line-height: 1.35; }
       #player { width: 100%; height: 100%; min-height: 0; touch-action: none; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; overflow: hidden; background: conic-gradient(#565656 25%, #505052 0 50%, #565656 0 75%, #505052 0); background-size: var(--preview-pattern-size, 140px) var(--preview-pattern-size, 140px); }
       .library-nav-button { position: absolute; top: 50%; z-index: 8; display: grid; place-items: center; width: 52px; min-height: 78px; padding: 0; border: 1px solid rgba(140,199,255,.55); border-radius: 8px; color: #f7fbff; background: rgba(9,13,17,.68); box-shadow: 0 16px 34px rgba(0,0,0,.38), inset 0 0 22px rgba(140,199,255,.08); font-size: 42px; font-weight: 800; line-height: 1; transform: translateY(-50%); backdrop-filter: blur(10px); }
       .library-nav-button:hover { border-color: rgba(179,255,64,.78); background: rgba(23,31,18,.78); }
@@ -305,11 +606,16 @@ function createHtml(config) {
       .section-title { margin: 0 0 10px; color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
       .seo-video-card { display: none; }
       .seo-video-card.is-visible { display: block; }
-      .seo-video-preview { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid rgba(140,199,255,.22); border-radius: 8px; object-fit: cover; background: #030405; }
       .preview-like-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 44px; border: 1px solid rgba(255,185,214,.42); border-radius: 999px; color: #ffe4ef; background: rgba(8,9,11,.68); box-shadow: 0 12px 30px rgba(0,0,0,.22); cursor: pointer; }
       .preview-like-button span { color: currentColor; font-size: 22px; line-height: 1; transform: translateY(-1px); }
       .preview-like-button strong { color: currentColor; font-size: 14px; font-weight: 950; line-height: 1; }
       .preview-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.14); }
+      .preview-view-count { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 34px; margin-top: 8px; color: rgba(231,237,244,.78); font-size: 13px; font-weight: 850; }
+      .preview-view-count strong { color: #fff; }
+      .proof-card { display: ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? 'grid' : 'none'}; gap: 10px; }
+      .proof-card a { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; padding: 0 10px; border: 1px solid rgba(140,199,255,.2); border-radius: 8px; color: #dff1ff; background: rgba(140,199,255,.08); font-size: 12px; font-weight: 850; text-decoration: none; }
+      .proof-card a:hover { border-color: rgba(179,255,64,.58); color: #fff; }
+      .proof-card code { overflow: hidden; max-width: 132px; color: rgba(237,245,255,.68); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
       select, button { width: 100%; }
       select { min-height: 48px; padding: 0 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; color: #e7edf4; background: #1a2027; }
       button { min-height: 38px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; color: rgba(231,237,244,.86); background: rgba(255,255,255,.045); cursor: pointer; }
@@ -336,7 +642,7 @@ function createHtml(config) {
       .owner-library strong, .owner-library span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .owner-library strong { color: #fff; font-size: 13px; text-shadow: 0 2px 12px rgba(0,0,0,.75); }
       .owner-library span { color: rgba(231,237,244,.7); font-size: 11px; }
-      @media (max-width: 760px) { * { scrollbar-width: none; } *::-webkit-scrollbar { width: 0; height: 0; display: none; } body { overflow: auto; } #app { height: auto; min-height: 100%; padding: 16px; } .stage { grid-template-columns: 1fr; } .player-frame { height: 60vh; min-height: 360px; } #player { width: 100%; height: 100%; min-height: 0; } .library-nav-button { display: none; } .topbar { align-items: flex-start; flex-direction: column; } }
+      @media (max-width: 760px) { * { scrollbar-width: none; } *::-webkit-scrollbar { width: 0; height: 0; display: none; } #app { min-height: 100%; padding: 16px; } .stage { grid-template-columns: 1fr; height: auto; min-height: 0; } .player-frame { height: auto; min-height: 0; } .seo-video-frame { max-height: min(62vh, 520px); } #player { width: 100%; height: 54vh; min-height: 340px; } .library-nav-button { display: none; } .topbar { align-items: flex-start; flex-direction: column; } .player-top-actions { justify-content: flex-start; flex-wrap: wrap; width: 100%; } }
       .spine-link-loop-button { position: relative; margin-right: 12px !important; }
       .spine-player-controls { z-index: 4; }
       .spine-player-controls.spine-player-controls-hidden { pointer-events: auto; opacity: 1; }
@@ -347,10 +653,13 @@ function createHtml(config) {
     </style>
   </head>
   <body>
-    <canvas class="particle-field" id="particle-field" aria-hidden="true"></canvas>
     <div id="app">
       <header class="topbar">
         <a class="brand-link" href="/" aria-label="Spine-Link home"><span class="brand-logo" aria-hidden="true"><span>s</span><span>p</span><span class="brand-spine-mark"><i></i><i></i><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="brand-plus">link</span></span></a>
+        <nav class="player-top-actions" aria-label="Spine-Link player navigation">
+          <a class="player-top-button" href="/world-spine-archive">World SPINE ARCHIVE</a>
+          <a class="player-top-button is-primary" href="/">Create preview</a>
+        </nav>
       </header>
       <div class="stage">
         <div class="player-frame">
@@ -362,73 +671,24 @@ function createHtml(config) {
           <div class="preview-card" id="set-card"><div class="section-title">Set</div><select id="set-select"></select></div>
           <div class="preview-card owner-card" id="owner-card"><div class="section-title">Creator</div><div id="owner-profile"></div></div>
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
-          <div class="preview-card seo-video-card${video ? ' is-visible' : ''}" id="seo-video-card"><div class="section-title">Video preview</div>${video ? `<video class="seo-video-preview" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl)}" muted loop playsinline preload="metadata" controls></video>` : ''}</div>
-          <div class="preview-card like-card"><div class="section-title">Likes</div><button class="preview-like-button" id="preview-like-button" type="button" data-like-id="${String(config.entryId || 'spine-preview').replace(/"/g, '&quot;')}" data-base-likes="${baseLikeCount(config.entryId || 'spine-preview')}" aria-pressed="false"><span aria-hidden="true">♡</span><strong>${baseLikeCount(config.entryId || 'spine-preview')}</strong></button></div>
+          <div class="preview-card like-card" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><div class="section-title">Metrics</div><button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button><div class="preview-view-count" data-metric-id="${escapeHtml(entryMetricId)}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div></div>
+          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<div class="preview-card proof-card"><div class="section-title">Origin proof</div>${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div>` : ''}
           <div class="preview-card animation-card"><div class="section-title">Animations</div><div id="animation-list"></div></div>
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
       </div>
+      ${video ? `<section class="video-watch-panel video-watch-panel--bottom" aria-label="${escapeHtml(video.name)} video preview">
+        <div class="section-title">Video preview</div>
+        <div class="seo-video-frame" style="--video-preview-ratio: ${escapeHtml(videoPreviewRatio)}">
+          <video class="video-watch-player seo-video-preview" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl)}" muted playsinline preload="metadata" controls></video>
+        </div>
+        <div class="video-watch-copy"><h1>${escapeHtml(video.name)}</h1><p>${escapeHtml(video.description)}</p></div>
+      </section>` : ''}
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.2.113/dist/iife/spine-player.js"></script>
-    <script type="application/json" id="spine-preview-config">${escapedJson(config)}</script>
+    <script type="application/json" id="spine-preview-config">${escapedJson(clientConfig)}</script>
     <script>
-      function startParticleField() {
-        const canvas = document.getElementById("particle-field");
-        const context = canvas?.getContext?.("2d");
-        if (!canvas || !context || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
-        const colors = ["92, 169, 255", "179, 255, 64", "255, 106, 40", "238, 246, 255"];
-        const particles = [];
-        let width = 0;
-        let height = 0;
-        let pixelRatio = 1;
-        let frame = 0;
-        function resetParticle(particle, randomizePosition) {
-          particle.x = Math.random() * width;
-          particle.y = randomizePosition ? Math.random() * height : height + Math.random() * 60;
-          particle.radius = 0.45 + Math.random() * 1.15;
-          particle.speedX = (Math.random() - 0.5) * 0.11;
-          particle.speedY = -(0.045 + Math.random() * 0.16);
-          particle.alpha = 0.08 + Math.random() * 0.22;
-          particle.pulse = Math.random() * Math.PI * 2;
-          particle.color = colors[Math.floor(Math.random() * colors.length)];
-        }
-        function resizeParticles() {
-          width = window.innerWidth || 1;
-          height = window.innerHeight || 1;
-          pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-          canvas.width = Math.floor(width * pixelRatio);
-          canvas.height = Math.floor(height * pixelRatio);
-          canvas.style.width = width + "px";
-          canvas.style.height = height + "px";
-          context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-          const targetCount = Math.max(28, Math.min(82, Math.floor((width * height) / 18000)));
-          while (particles.length < targetCount) {
-            const particle = {};
-            resetParticle(particle, true);
-            particles.push(particle);
-          }
-          particles.length = targetCount;
-        }
-        function drawParticles(time) {
-          context.clearRect(0, 0, width, height);
-          for (const particle of particles) {
-            particle.x += particle.speedX + Math.sin(time * 0.00018 + particle.pulse) * 0.018;
-            particle.y += particle.speedY;
-            if (particle.y < -20 || particle.x < -28 || particle.x > width + 28) resetParticle(particle, false);
-            const alpha = particle.alpha * (0.72 + Math.sin(time * 0.001 + particle.pulse) * 0.28);
-            context.beginPath();
-            context.fillStyle = "rgba(" + particle.color + ", " + alpha + ")";
-            context.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-            context.fill();
-          }
-          frame = window.requestAnimationFrame(drawParticles);
-        }
-        resizeParticles();
-        window.addEventListener("resize", resizeParticles, { passive: true });
-        frame = window.requestAnimationFrame(drawParticles);
-        window.addEventListener("pagehide", () => window.cancelAnimationFrame(frame), { once: true });
-      }
-      startParticleField();
+      // Keep the preview static on load; the Spine player is already the active animated surface.
       if (window.spine?.GLTexture) {
         window.spine.GLTexture.DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL = true;
       }
@@ -531,6 +791,19 @@ function createHtml(config) {
         noteCard.style.display = note ? "" : "none";
       }
       function renderSetList() { setSelect.innerHTML = ""; sets.forEach((set) => { const option = document.createElement("option"); option.value = set.label; option.textContent = set.label; setSelect.appendChild(option); }); }
+      function playOwnerThumb(video) {
+        const source = video?.dataset?.videoSrc || "";
+        if (!source) return;
+        if (!video.getAttribute("src")) video.setAttribute("src", source);
+        video.muted = true;
+        video.playsInline = true;
+        video.play().catch(() => {});
+      }
+      function stopOwnerThumb(video) {
+        if (!video) return;
+        video.pause();
+        try { video.currentTime = 0; } catch {}
+      }
       function renderOwnerCard() {
         const owner = config.ownerProfile || {};
         const items = Array.isArray(owner.library) ? owner.library : [];
@@ -570,12 +843,12 @@ function createHtml(config) {
           const thumb = videoSrc ? document.createElement("video") : thumbSrc ? document.createElement("img") : document.createElement("div");
           thumb.className = "owner-thumb";
           if (videoSrc) {
-            thumb.src = videoSrc;
+            thumb.dataset.videoSrc = videoSrc;
             if (item.thumbnailPoster) thumb.poster = item.thumbnailPoster;
             thumb.muted = true;
-            thumb.loop = true;
+            thumb.loop = false;
             thumb.playsInline = true;
-            thumb.preload = "metadata";
+            thumb.preload = "none";
             thumb.setAttribute("aria-hidden", "true");
           } else if (thumbSrc) {
             thumb.src = thumbSrc;
@@ -591,6 +864,107 @@ function createHtml(config) {
           ownerLibrary.appendChild(link);
         });
       }
+      function installOwnerLibraryChaos() {
+        const visibleVideos = new Set();
+        const manualVideos = new WeakSet();
+        const hoverTimers = new WeakMap();
+        let chaosTimer = 0;
+        function clearHoverTimer(video) {
+          const timer = hoverTimers.get(video);
+          if (timer) window.clearTimeout(timer);
+          hoverTimers.delete(video);
+        }
+        function startHoverLoop(video) {
+          manualVideos.add(video);
+          clearHoverTimer(video);
+          video.onended = () => {
+            const timer = window.setTimeout(() => {
+              if (!manualVideos.has(video)) return;
+              try { video.currentTime = 0; } catch {}
+              playOwnerThumb(video);
+            }, 1000);
+            hoverTimers.set(video, timer);
+          };
+          playOwnerThumb(video);
+        }
+        function stopHoverLoop(video) {
+          manualVideos.delete(video);
+          clearHoverTimer(video);
+          stopOwnerThumb(video);
+        }
+        function scheduleChaos() {
+          window.clearTimeout(chaosTimer);
+          if (document.hidden) return;
+          chaosTimer = window.setTimeout(runChaos, 560 + Math.random() * 1320);
+        }
+        function randomSample(items, count) {
+          return items
+            .map((item) => ({ item, sort: Math.random() }))
+            .sort((a, b) => a.sort - b.sort)
+            .slice(0, count)
+            .map((entry) => entry.item);
+        }
+        function runChaos() {
+          const videos = Array.from(visibleVideos).filter((video) => video.isConnected && (video.dataset.videoSrc || video.getAttribute("src")));
+          if (!videos.length) {
+            scheduleChaos();
+            return;
+          }
+          const activeLimit = Math.min(2, Math.max(1, Math.ceil(videos.length * 0.25)));
+          randomSample(videos.filter((video) => !video.paused && !manualVideos.has(video)), videos.length).slice(activeLimit).forEach(stopOwnerThumb);
+          randomSample(videos.filter((video) => video.paused && !manualVideos.has(video)), activeLimit).forEach((video) => {
+            if (Math.random() < 0.78) {
+              playOwnerThumb(video);
+              window.setTimeout(() => {
+                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.88) stopOwnerThumb(video);
+              }, 480 + Math.random() * 1900);
+            }
+          });
+          videos.forEach((video) => {
+            if (!manualVideos.has(video) && !video.paused && Math.random() < 0.3) stopOwnerThumb(video);
+          });
+          scheduleChaos();
+        }
+        document.querySelectorAll(".owner-library a").forEach((link) => {
+          const video = link.querySelector("video.owner-thumb");
+          if (!video) return;
+          link.addEventListener("pointerenter", () => startHoverLoop(video));
+          link.addEventListener("focusin", () => startHoverLoop(video));
+          link.addEventListener("pointerleave", () => stopHoverLoop(video));
+          link.addEventListener("focusout", () => stopHoverLoop(video));
+        });
+        if ("IntersectionObserver" in window) {
+          const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+              const video = entry.target.querySelector("video.owner-thumb");
+              if (!video) return;
+              if (entry.isIntersecting && entry.intersectionRatio >= 0.42) {
+                visibleVideos.add(video);
+              } else {
+                visibleVideos.delete(video);
+                if (!manualVideos.has(video)) stopOwnerThumb(video);
+              }
+            });
+            scheduleChaos();
+          }, { threshold: [0, 0.42, 0.68, 1] });
+          document.querySelectorAll(".owner-library a").forEach((link) => observer.observe(link));
+        } else {
+          document.querySelectorAll("video.owner-thumb").forEach((video) => visibleVideos.add(video));
+        }
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            window.clearTimeout(chaosTimer);
+            visibleVideos.forEach((video) => { if (!manualVideos.has(video)) stopOwnerThumb(video); });
+          } else {
+            scheduleChaos();
+          }
+        });
+        window.addEventListener("pagehide", () => {
+          window.clearTimeout(chaosTimer);
+          visibleVideos.forEach(stopOwnerThumb);
+        }, { once: true });
+        scheduleChaos();
+      }
       function rememberBaseViewport() { if (!player?.currentViewport) return; const v = player.currentViewport; baseViewport.value = { x: v.x, y: v.y, width: v.width * currentZoom.value, height: v.height * currentZoom.value, padLeft: v.padLeft * currentZoom.value, padRight: v.padRight * currentZoom.value, padTop: v.padTop * currentZoom.value, padBottom: v.padBottom * currentZoom.value }; }
       function touchDistance(touches) { const a = touches.item(0), b = touches.item(1); if (!a || !b) return 0; return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); }
       function applyZoom(nextZoom) { currentZoom.value = Math.min(4, Math.max(0.25, Number(nextZoom))); playerElement.style.setProperty("--preview-pattern-size", (140 * currentZoom.value) + "px"); const b = baseViewport.value; if (!b || !player?.currentViewport) return; const cx = b.x + b.width / 2, cy = b.y + b.height / 2, width = b.width / currentZoom.value, height = b.height / currentZoom.value; const next = { x: cx - width / 2, y: cy - height / 2, width, height, padLeft: b.padLeft / currentZoom.value, padRight: b.padRight / currentZoom.value, padTop: b.padTop / currentZoom.value, padBottom: b.padBottom / currentZoom.value }; player.previousViewport = { ...next }; player.currentViewport = next; player.viewportTransitionStart = performance.now(); }
@@ -604,43 +978,7 @@ function createHtml(config) {
       function createPlayer() { if (!activeSet.value) return; player?.dispose(); document.getElementById("player").innerHTML = ""; baseViewport.value = null; player = new spine.SpinePlayer("player", { ...activeSet.value, showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: true, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); applyZoom(currentZoom.value); }); } }); }
       function renderAnimationList() { animationList.innerHTML = ""; animationNames.value.forEach((animationName) => { const button = document.createElement("button"); button.type = "button"; button.textContent = animationName; button.className = animationName === activeAnimation.name ? "active" : ""; button.onclick = () => { activeAnimation.name = animationName; syncUrl(); playActiveAnimationFromStart(); applyZoom(currentZoom.value); renderAnimationList(); }; animationList.appendChild(button); }); }
       function syncPreviewLike() {
-        if (!previewLikeButton) return;
-        const id = previewLikeButton.dataset.likeId || "spine-preview";
-        const base = Number(previewLikeButton.dataset.baseLikes || "0") || 0;
-        const key = "spine-link-like:" + id;
-        const liked = localStorage.getItem(key) === "true";
-        previewLikeButton.classList.toggle("is-liked", liked);
-        previewLikeButton.setAttribute("aria-pressed", String(liked));
-        const icon = previewLikeButton.querySelector("span");
-        const count = previewLikeButton.querySelector("strong");
-        if (icon) icon.textContent = liked ? "♥" : "♡";
-        if (count) count.textContent = String(base + (liked ? 1 : 0));
-      }
-      previewLikeButton?.addEventListener("click", () => {
-        const id = previewLikeButton.dataset.likeId || "spine-preview";
-        const key = "spine-link-like:" + id;
-        localStorage.setItem(key, String(localStorage.getItem(key) !== "true"));
-        syncPreviewLike();
-      });
-      function randomOwnerVideoPulse() {
-        const videos = Array.from(document.querySelectorAll(".owner-thumb")).filter((video) => video.tagName === "VIDEO" && video.getAttribute("src"));
-        if (!videos.length) {
-          window.setTimeout(randomOwnerVideoPulse, 4200);
-          return;
-        }
-        const sample = videos.sort(() => Math.random() - 0.5).slice(0, Math.max(1, Math.min(2, Math.ceil(videos.length * 0.35))));
-        sample.forEach((video) => {
-          video.muted = true;
-          video.loop = true;
-          video.playsInline = true;
-          video.play().catch(() => {});
-          window.setTimeout(() => {
-            if (video.matches(":hover")) return;
-            video.pause();
-            try { video.currentTime = 0; } catch {}
-          }, 1800 + Math.random() * 1600);
-        });
-        window.setTimeout(randomOwnerVideoPulse, 3600 + Math.random() * 2600);
+        return;
       }
       playerElement.addEventListener("wheel", (event) => { event.preventDefault(); applyZoom(currentZoom.value + (event.deltaY > 0 ? -0.1 : 0.1)); }, { passive: false });
       playerElement.addEventListener("touchstart", (event) => {
@@ -677,25 +1015,29 @@ function createHtml(config) {
       window.addEventListener("mouseup", (event) => { if (event.button !== 2) return; event.preventDefault(); event.stopImmediatePropagation(); panPosition.value = null; }, true);
       setSelect.onchange = () => { activeSet.value = sets.find((set) => set.label === setSelect.value) || sets[0]; activeAnimation.name = activeSet.value?.animation || ""; syncSetInfo(); renderAnimationList(); syncUrl(); createPlayer(); };
       window.addEventListener("popstate", applySelectionFromUrl);
-      renderSetList(); syncSetInfo(); renderOwnerCard(); syncPreviewLike(); window.setTimeout(randomOwnerVideoPulse, 900); syncLibraryNavigationButtons(); syncUrl(true); createPlayer(); renderAnimationList();
+      renderSetList(); syncSetInfo(); renderOwnerCard(); installOwnerLibraryChaos(); syncPreviewLike(); syncLibraryNavigationButtons(); syncUrl(true); createPlayer(); renderAnimationList();
     </script>
+    <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(entryMetricId)} };</script>
+    <script src="/spine-metrics.js" defer></script>
   </body>
 </html>`;
 }
 
-function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId }) {
+function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo, robots, playerUrl, archiveUrl }) {
   const title = cleanPublicText(entry?.title || entryId || 'Spine preview');
-  const poster = safePublicImage(entry?.thumbnailPoster || '') || generatedThumbnailUrl(origin, entry);
-  const video = safePublicVideo(entry?.webmPreview || '') || `${origin}/v_holder.webm`;
-  const videoSeo = videoMetadataForEntry(origin, entry, entryId, note);
+  const poster = entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
+  const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm') || `${origin}/v_holder.webm`;
   const ownerUrl = ownerProfile?.url || (entry?.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '/');
-  const likes = baseLikeCount(entryId || title);
+  const metricId = String(entryId || title);
+  const metric = metricCountsForId(metrics, metricId);
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    ${seoHead({ origin, entryId, video: videoSeo, fallbackTitle: `${title} - Spine-Link video preview` })}
+    ${seoHead({ origin, entryId, video: videoSeo, fallbackTitle: `${title} - Spine-Link video preview`, robots, playerUrl, archiveUrl })}
+    <link rel="stylesheet" href="/page-transitions.css" />
+    <script src="/page-transitions.js" defer></script>
     <style>
       * { box-sizing: border-box; }
       body { min-height: 100vh; margin: 0; color: #edf5ff; background: #050607; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -712,39 +1054,25 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId })
       .preview-like-button span { font-size: 22px; transform: translateY(-1px); }
       .preview-like-button strong { font-size: 14px; font-weight: 950; }
       .preview-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.14); }
+      .preview-view-count { display: inline-flex; align-items: center; gap: 8px; color: rgba(237,245,255,.72); font-size: 14px; font-weight: 850; }
+      .preview-view-count strong { color: #fff; }
     </style>
   </head>
   <body>
     <main class="page">
       <div class="topbar"><div class="brand">Spine-Link</div><a class="back" href="${ownerUrl}">Open portfolio</a></div>
       <section class="video-card">
-        <video src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted loop playsinline autoplay controls></video>
+        <video src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted playsinline preload="none" controls></video>
         <div class="body">
           <h1>${title}</h1>
           ${note ? `<p>${cleanPublicText(note, 240)}</p>` : '<p>This older library item uses the portfolio video holder because its original Spine source files are no longer available.</p>'}
-          <button class="preview-like-button" id="preview-like-button" type="button" data-like-id="${String(entryId || title).replace(/"/g, '&quot;')}" data-base-likes="${likes}" aria-pressed="false"><span aria-hidden="true">♡</span><strong>${likes}</strong></button>
+          <button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(metricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button>
+          <div class="preview-view-count" data-metric-id="${escapeHtml(metricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div>
         </div>
       </section>
     </main>
-    <script>
-      const button = document.getElementById("preview-like-button");
-      function syncLike() {
-        const id = button.dataset.likeId || "spine-preview";
-        const base = Number(button.dataset.baseLikes || "0") || 0;
-        const key = "spine-link-like:" + id;
-        const liked = localStorage.getItem(key) === "true";
-        button.classList.toggle("is-liked", liked);
-        button.setAttribute("aria-pressed", String(liked));
-        button.querySelector("span").textContent = liked ? "♥" : "♡";
-        button.querySelector("strong").textContent = String(base + (liked ? 1 : 0));
-      }
-      button.addEventListener("click", () => {
-        const key = "spine-link-like:" + (button.dataset.likeId || "spine-preview");
-        localStorage.setItem(key, String(localStorage.getItem(key) !== "true"));
-        syncLike();
-      });
-      syncLike();
-    </script>
+    <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(metricId)} };</script>
+    <script src="/spine-metrics.js" defer></script>
   </body>
 </html>`;
 }
@@ -755,11 +1083,15 @@ async function createDynamicPreview(settings, uploadPath, origin) {
   let note = '';
   let ownerProfile = null;
   let entry = null;
+  let exclusions = { rules: [] };
   const pathParts = cleanRepoPath(uploadPath).split('/').filter(Boolean);
   const indexPath = joinRepoPath(pathParts.slice(0, -1).join('/'), 'index.json');
+  const metricsPath = joinRepoPath(settings.basePath || defaultBasePath, 'metrics.json');
+  const exclusionsPath = joinRepoPath(settings.basePath || defaultBasePath, 'archive-exclusions.json');
   const uploadId = pathParts[pathParts.length - 1] || '';
   const entryId = uploadId || uploadPath;
   let entries = [];
+  let metrics = {};
 
   for (const directory of setDirectories) {
     const items = await githubList(settings, directory.path);
@@ -779,6 +1111,14 @@ async function createDynamicPreview(settings, uploadPath, origin) {
     }
 
     const animations = animationNamesFromJson(skeletonJson);
+    const skinNames = skinNamesFromSkeletonJson(skeletonJson);
+    const atlasPages = extractAtlasPages(atlasText);
+    const textureUrls = atlasPages.map((pageName) => {
+      const matchedTexture =
+        textures.find((texture) => imageMatchesAtlasPage(texture.name, pageName)) ??
+        (textures.length === 1 ? textures[0] : null);
+      return matchedTexture ? versionedAssetUrl(origin, matchedTexture, matchedTexture.sha) : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5U9WcAAAAASUVORK5CYII=';
+    });
     const defaultAnimation =
       animations.find((name) => name.toLowerCase() === 'idle') ??
       animations.find((name) => name.toLowerCase().includes('idle')) ??
@@ -793,8 +1133,8 @@ async function createDynamicPreview(settings, uploadPath, origin) {
       atlas: versionedAssetUrl(origin, atlas, assetVersion),
       animation: defaultAnimation,
       animations,
-      textures: textures.map((texture) => texture.name),
-      skin: 'default',
+      textures: textureUrls,
+      skin: preferredSkinName(skinNames),
       premultipliedAlpha: hasPremultipliedAlpha(atlasText),
       viewport: viewportFromJson(skeletonJson)
         ? { ...viewportFromJson(skeletonJson), padLeft: '14%', padRight: '14%', padTop: '14%', padBottom: '14%' }
@@ -804,6 +1144,10 @@ async function createDynamicPreview(settings, uploadPath, origin) {
 
   try {
     const indexText = indexPath ? await githubText(settings, indexPath) : '';
+    const metricsText = metricsPath ? await githubText(settings, metricsPath) : '';
+    const exclusionsText = exclusionsPath ? await githubText(settings, exclusionsPath) : '';
+    metrics = parseMetricsJson(metricsText);
+    exclusions = exclusionsText ? JSON.parse(exclusionsText) : { rules: [] };
     entries = indexText ? JSON.parse(indexText) : [];
     entry = Array.isArray(entries)
       ? entries.find((item) => item?.id === uploadId || cleanRepoPath(item?.previewPath || '') === cleanRepoPath(uploadPath))
@@ -824,9 +1168,9 @@ async function createDynamicPreview(settings, uploadPath, origin) {
       const ownerLibraryItems = ownerEntries.map((item) => ({
         title: cleanPublicText(item?.title || item?.id || 'Spine preview'),
         url: `${origin}/p/${encodeURIComponent(String(item?.id || '').trim())}`,
-        thumbnail: item?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(item?.thumbnail || '')) ? '' : safePublicImage(item?.thumbnail || ''),
-        thumbnailPoster: safePublicImage(item?.thumbnailPoster || '') || generatedThumbnailUrl(origin, item),
-        webmPreview: safePublicVideo(item?.webmPreview || '') || `${origin}/v_holder.webm`,
+        thumbnail: item?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(item?.thumbnail || '')) ? '' : entryImageAsset(item?.thumbnail || '', item, 'thumbnail'),
+        thumbnailPoster: entryImageAsset(item?.thumbnailPoster || '', item, 'poster') || generatedThumbnailUrl(origin, item),
+        webmPreview: entryVideoAsset(item?.webmPreview || '', item, 'webm') || `${origin}/v_holder.webm`,
         thumbnailType: '',
         animations: Array.isArray(item?.animations) ? item.animations.length : 0,
       }));
@@ -843,14 +1187,29 @@ async function createDynamicPreview(settings, uploadPath, origin) {
   } catch {
     note = '';
   }
-  const video = videoMetadataForEntry(origin, entry, entryId, note);
-  if (sets.length === 0) return createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId });
-  return createHtml({ sets, note, ownerProfile, entryId, origin, video });
+  const publicArchiveEntry = isPublicArchiveEntry(entry, exclusions);
+  const playerUrl = publicArchiveEntry ? playerUrlForEntry(origin, entry, entryId) : pageUrlForEntry(origin, entryId);
+  const archiveUrl = publicArchiveEntry ? archiveUrlForEntry(origin, entry, entryId) : '';
+  const canonicalUrl = publicArchiveEntry ? playerUrl : '';
+  const robots = entry && (entry.hiddenFromPublicLibrary === true || entryExcludedFromArchive(entry, exclusions))
+    ? 'noindex,follow'
+    : 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1';
+  const video = videoMetadataForEntry(origin, entry, entryId, note, canonicalUrl, playerUrl);
+  if (sets.length === 0) {
+    return {
+      html: createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo: video, robots, playerUrl, archiveUrl }),
+      robots,
+    };
+  }
+  return {
+    html: createHtml({ sets, note, ownerProfile, entryId, origin, video, metrics, robots, playerUrl, archiveUrl }),
+    robots,
+  };
 }
 
 export default async function handler(request, response) {
-  if (request.method !== 'GET') {
-    response.setHeader('Allow', 'GET');
+  if (!['GET', 'HEAD'].includes(request.method)) {
+    response.setHeader('Allow', 'GET, HEAD');
     return response.status(405).send('Method not allowed');
   }
 
@@ -864,21 +1223,30 @@ export default async function handler(request, response) {
     owner: process.env.GITHUB_OWNER || defaultOwner,
     repo: process.env.GITHUB_REPO || defaultRepo,
     branch: process.env.GITHUB_BRANCH || defaultBranch,
+    basePath: cleanRepoPath(process.env.GITHUB_BASE_PATH || defaultBasePath),
     token,
   };
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 
   try {
     let html = '';
-    if (path.endsWith('/preview.html')) {
+    let robotsHeader = 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1';
+    if (path.endsWith('.html')) {
       html = await githubText(settings, path);
       if (!html) return response.status(404).send('Preview not found');
     } else {
-      html = await createDynamicPreview(settings, path, origin);
+      const preview = await createDynamicPreview(settings, path, origin);
+      html = preview.html;
+      robotsHeader = preview.robots;
     }
 
     response.setHeader('Content-Type', 'text/html; charset=utf-8');
-    response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('X-Robots-Tag', robotsHeaderValue(robotsHeader));
+    if (request.method === 'HEAD') {
+      setNoStoreHeaders(response);
+      return response.status(200).send('');
+    }
+    setCacheHeaders(response, cacheProfiles.dynamicHtmlBrowser, cacheProfiles.dynamicHtmlCdn);
     return response.status(200).send(html);
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Preview failed');

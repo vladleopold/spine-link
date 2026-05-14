@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
+import { startParticleField } from "./particles";
 import {
   Calendar,
   Copy,
@@ -15,9 +16,11 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Save,
   Send,
   SlidersHorizontal,
   Upload,
+  User,
   X,
   ZoomIn,
   ZoomOut,
@@ -27,6 +30,8 @@ import type { SpinePlayer as SpinePlayerInstance, SpinePlayerConfig } from "@eso
 type AppProps = {
   initialFiles?: File[];
   initialOpenLibrary?: boolean;
+  initialLogin?: boolean;
+  initialUpload?: boolean;
 };
 
 type LoadedAsset = {
@@ -54,6 +59,11 @@ type PreparedSpine = {
     height: number;
   };
   rawDataURIs: Record<string, string>;
+};
+
+type ExtraSpinePlayer = {
+  id: string;
+  set: PreparedSpine;
 };
 
 type PlayerViewport = {
@@ -111,6 +121,111 @@ type GitHubSettings = {
   title: string;
 };
 
+type SourceProofFile = {
+  name: string;
+  bytes: number;
+  sha256: string;
+};
+
+type BrowserEnvironmentProof = {
+  userAgent: string;
+  platform: string;
+  language: string;
+  languages: string[];
+  hardwareConcurrency: number;
+  deviceMemory?: number;
+  screen: {
+    width: number;
+    height: number;
+    colorDepth: number;
+    pixelRatio: number;
+  };
+  timezone: string;
+  timezoneOffset: number;
+  maxTouchPoints: number;
+  cookieEnabled: boolean;
+};
+
+type SourceProof = {
+  type: "SpineLinkSourceProof";
+  version: 1;
+  proofHash: string;
+  hashAlgorithm: "SHA-256";
+  entryId: string;
+  title: string;
+  uploadedAt: string;
+  proofPath: string;
+  proofUrl: string;
+  uploader: {
+    mode: "google-account" | "anonymous-browser";
+    googleEmailSha256?: string;
+    anonymousAccountId: string;
+    anonymousFingerprint: string;
+    browserFingerprintSha256: string;
+    browserEnvironmentHashSha256: string;
+    browserEnvironment: BrowserEnvironmentProof;
+  };
+  github: {
+    owner: string;
+    repo: string;
+    branch: string;
+    previewPath: string;
+  };
+  blockchain: {
+    status: "ready-to-anchor";
+    recommendedAnchorPayload: string;
+    note: string;
+  };
+  files: SourceProofFile[];
+};
+
+type GitHubProofReceipt = {
+  name: string;
+  path: string;
+  bytes: number;
+  sha256: string;
+  github: {
+    contentSha?: string;
+    commitSha?: string;
+    commitUrl?: string;
+    downloadUrl?: string;
+  };
+};
+
+type BlockchainAnchor = {
+  type: "SpineLinkGitHubBlockchainAnchor";
+  version: 1;
+  anchorHash: string;
+  recommendedAnchorPayload: string;
+  anchorPath?: string;
+  anchorUrl?: string;
+  sourceProofHash: string;
+  sourceProofPath?: string;
+  sourceProofUrl?: string;
+  blockchain: {
+    status: "ready-to-anchor" | "submitted" | "failed";
+    chain?: string;
+    chainId?: number;
+    network?: string;
+    transactionHash?: string;
+    transactionData?: string;
+    explorerUrl?: string;
+    message?: string;
+  };
+  github?: {
+    owner?: string;
+    repo?: string;
+    branch?: string;
+    repositoryUrl?: string;
+    uploadPath?: string;
+    anchorPath?: string;
+    anchorUrl?: string;
+    anchorCommitSha?: string;
+    anchorCommitUrl?: string;
+    files?: GitHubProofReceipt[];
+  };
+};
+
 type LibraryEntry = {
   id: string;
   title: string;
@@ -143,8 +258,41 @@ type LibraryEntry = {
   webmPreviewPath?: string;
   previewWidth?: number;
   previewHeight?: number;
+  thumbnailWidth?: number;
+  thumbnailHeight?: number;
+  mediaWidth?: number;
+  mediaHeight?: number;
+  mediaAspectRatio?: number;
   previewDuration?: number;
   cardSize?: LibraryCardSize;
+  sourceProof?: SourceProof;
+  sourceProofPath?: string;
+  sourceProofUrl?: string;
+  blockchainAnchor?: BlockchainAnchor;
+};
+
+type EntryMetric = {
+  likes: number;
+  views: number;
+  liked?: boolean;
+};
+
+type HomeFeedEntry = {
+  id: string;
+  title: string;
+  ownerName?: string;
+  ownerUrl?: string;
+  previewUrl: string;
+  webmPreview?: string;
+  thumbnail?: string;
+  thumbnailPoster?: string;
+  thumbnailType?: "gif" | "image";
+  previewWidth?: number;
+  previewHeight?: number;
+  mediaAspectRatio?: number;
+  animations?: number;
+  pageMode?: "Portfolio" | "Library";
+  metrics?: EntryMetric;
 };
 
 type UploadResponse = {
@@ -260,51 +408,36 @@ function libraryCardSizeClassForManualSize(size?: string) {
   return `library-card--${size}`;
 }
 
+function fallbackLibraryCardSizeClass(index: number) {
+  const fallbackSizes = [
+    "library-card--horizontal",
+    "library-card--square",
+    "library-card--medium-wide",
+    "library-card--vertical",
+    "library-card--large-rect",
+    "library-card--wide",
+    "library-card--medium-narrow",
+    "library-card--square",
+  ];
+  return fallbackSizes[Math.abs(index) % fallbackSizes.length];
+}
+
 function libraryCardSizeClass(entry: LibraryEntry, index: number) {
-  void index;
   const manualClass = libraryCardSizeClassForManualSize(entry.cardSize);
-  const width = Number(entry.previewWidth || 0);
-  const height = Number(entry.previewHeight || 0);
-  const ratio = width > 0 && height > 0 ? width / height : 0;
+  const mediaRatio = Number(entry.mediaAspectRatio || 0);
+  const width = Number(entry.previewWidth || entry.thumbnailWidth || entry.mediaWidth || 0);
+  const height = Number(entry.previewHeight || entry.thumbnailHeight || entry.mediaHeight || 0);
+  const ratio = mediaRatio > 0 ? mediaRatio : width > 0 && height > 0 ? width / height : 0;
   if (manualClass === "library-card--medium-narrow" && ratio >= 0.75 && ratio <= 1.15) {
     return "library-card--square";
   }
   if (manualClass) return manualClass;
+  if (!ratio) return fallbackLibraryCardSizeClass(index);
   return libraryCardSizeClassForRatio(ratio);
 }
 
-function videoContentAspectRatio(video: HTMLVideoElement) {
-  const width = video.videoWidth;
-  const height = video.videoHeight;
-  if (!width || !height || video.readyState < 2) return 0;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) return 0;
-
-  try {
-    context.drawImage(video, 0, 0, width, height);
-    const imageData = context.getImageData(0, 0, width, height);
-    const bounds = detectImageDataContentBounds(imageData);
-    return bounds.width / bounds.height;
-  } catch {
-    return 0;
-  }
-}
-
 function selectLibraryVideoAspectRatio(video: HTMLVideoElement) {
-  const videoRatio = video.videoWidth / video.videoHeight;
-  const contentRatio = videoContentAspectRatio(video);
-  if (!contentRatio) return videoRatio;
-  if (videoRatio >= 0.8 && videoRatio <= 1.15 && contentRatio >= 0.95) {
-    return 1.36;
-  }
-  if (videoRatio >= 0.8 && videoRatio <= 1.15 && contentRatio > 0.45 && contentRatio < 1.35) {
-    return videoRatio;
-  }
-  return contentRatio;
+  return video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 0;
 }
 
 function applyLibraryCardVideoAspect(video: HTMLVideoElement) {
@@ -324,6 +457,20 @@ function applyLibraryCardVideoAspect(video: HTMLVideoElement) {
     "library-card--full",
   );
   card.classList.add(nextClass);
+}
+
+function videoPreviewAspectRatioStyle(entry?: Pick<LibraryEntry, "previewWidth" | "previewHeight"> | null) {
+  const width = Number(entry?.previewWidth || 0);
+  const height = Number(entry?.previewHeight || 0);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return undefined;
+  return { "--video-preview-ratio": `${Math.round(width)} / ${Math.round(height)}` } as React.CSSProperties;
+}
+
+function applySeoVideoPreviewAspect(video: HTMLVideoElement) {
+  if (!video.videoWidth || !video.videoHeight) return;
+  const frame = video.closest(".seo-video-frame");
+  if (!(frame instanceof HTMLElement)) return;
+  frame.style.setProperty("--video-preview-ratio", `${video.videoWidth} / ${video.videoHeight}`);
 }
 
 const googleClientId =
@@ -383,6 +530,7 @@ function loadGoogleIdentityScript() {
 const anonymousAccountStorageKey = "spine-link-anonymous-account";
 const googleSessionStorageKey = "spine-link-google-session";
 const profileVisibilityStorageKey = "spine-link-profile-visible-on-shares";
+const skeletonUploadTipStoragePrefix = "spine-link-skeleton-upload-tip";
 
 type StoredGoogleSession = {
   user: GoogleUser;
@@ -399,6 +547,43 @@ function browserFingerprint() {
     Intl.DateTimeFormat().resolvedOptions().timeZone,
     `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`,
   ].join("|");
+}
+
+function browserEnvironmentProof(): BrowserEnvironmentProof {
+  if (typeof window === "undefined") {
+    return {
+      userAgent: "server",
+      platform: "server",
+      language: "",
+      languages: [],
+      hardwareConcurrency: 0,
+      screen: { width: 0, height: 0, colorDepth: 0, pixelRatio: 1 },
+      timezone: "",
+      timezoneOffset: 0,
+      maxTouchPoints: 0,
+      cookieEnabled: false,
+    };
+  }
+
+  const navigatorWithMemory = navigator as Navigator & { deviceMemory?: number };
+  return {
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    language: navigator.language,
+    languages: Array.from(navigator.languages || []).slice(0, 8),
+    hardwareConcurrency: Number(navigator.hardwareConcurrency || 0),
+    ...(typeof navigatorWithMemory.deviceMemory === "number" ? { deviceMemory: navigatorWithMemory.deviceMemory } : {}),
+    screen: {
+      width: Number(window.screen?.width || 0),
+      height: Number(window.screen?.height || 0),
+      colorDepth: Number(window.screen?.colorDepth || 0),
+      pixelRatio: Number(window.devicePixelRatio || 1),
+    },
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+    timezoneOffset: new Date().getTimezoneOffset(),
+    maxTouchPoints: Number(navigator.maxTouchPoints || 0),
+    cookieEnabled: Boolean(navigator.cookieEnabled),
+  };
 }
 
 function hashString(value: string) {
@@ -462,9 +647,20 @@ function storeGoogleSession(user: GoogleUser, accessToken: string, expiresIn = 3
   );
 }
 
+function updateStoredGoogleUser(user: GoogleUser) {
+  if (typeof window === "undefined") return;
+  const storedSession = readStoredGoogleSession();
+  if (!storedSession?.accessToken) return;
+  window.localStorage.setItem(googleSessionStorageKey, JSON.stringify({ ...storedSession, user } satisfies StoredGoogleSession));
+}
+
 function clearStoredGoogleSession() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(googleSessionStorageKey);
+}
+
+function cleanAccountDisplayName(value = "") {
+  return String(value).replace(/\s+/g, " ").trim().slice(0, 80);
 }
 
 function readStoredProfileVisibility() {
@@ -476,6 +672,33 @@ function readStoredProfileVisibility() {
 function storeProfileVisibility(value: boolean) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(profileVisibilityStorageKey, String(value));
+}
+
+function skeletonUploadTipStorageKeys(user: GoogleUser | null, anonymousAccount: AnonymousAccount) {
+  const keys = [`${skeletonUploadTipStoragePrefix}:browser:${anonymousAccount.id}`];
+  const email = user?.email?.trim().toLowerCase();
+  if (email) keys.push(`${skeletonUploadTipStoragePrefix}:user:${email}`);
+  return keys;
+}
+
+function hasDismissedSkeletonUploadTip(user: GoogleUser | null, anonymousAccount: AnonymousAccount) {
+  if (typeof window === "undefined") return false;
+  try {
+    return skeletonUploadTipStorageKeys(user, anonymousAccount).some((key) => window.localStorage.getItem(key) === "dismissed");
+  } catch {
+    return false;
+  }
+}
+
+function storeDismissedSkeletonUploadTip(user: GoogleUser | null, anonymousAccount: AnonymousAccount) {
+  if (typeof window === "undefined") return;
+  try {
+    for (const key of skeletonUploadTipStorageKeys(user, anonymousAccount)) {
+      window.localStorage.setItem(key, "dismissed");
+    }
+  } catch {
+    // Ignore storage failures; the close button should still hide the prompt for this render.
+  }
 }
 
 function publicOwnerIdFor(user: GoogleUser | null, anonymousAccount: AnonymousAccount) {
@@ -507,6 +730,29 @@ function isAtlasFile(file: File) {
 
 function isImageFile(file: File) {
   return ["png", "jpg", "jpeg", "webp"].includes(extensionOf(file.name));
+}
+
+function skinNamesFromSkeletonJson(skeletonJson: unknown) {
+  if (!skeletonJson || typeof skeletonJson !== "object" || !("skins" in skeletonJson)) return [];
+  const skins = (skeletonJson as { skins?: unknown }).skins;
+  if (Array.isArray(skins)) {
+    return skins
+      .map((skin) => {
+        if (typeof skin === "string") return skin;
+        if (skin && typeof skin === "object" && "name" in skin && typeof skin.name === "string") return skin.name;
+        return "";
+      })
+      .filter(Boolean);
+  }
+  if (skins && typeof skins === "object") {
+    return Object.keys(skins).filter(Boolean);
+  }
+  return [];
+}
+
+function preferredSkinName(skinNames: string[]) {
+  if (!skinNames.length) return "";
+  return skinNames.includes("default") ? "default" : skinNames[0] || "";
 }
 
 function assetStem(name: string) {
@@ -670,6 +916,46 @@ function extractAtlasPages(atlasText = "") {
     .filter((line) => /\.(png|jpe?g|webp)$/i.test(line));
 }
 
+function canonicalAtlasPageName(pageName = "") {
+  return basename(String(pageName || "").replace(/\\/g, "/").trim());
+}
+
+function imageMatchesAtlasPage(imageName = "", pageName = "") {
+  const imageBase = basename(String(imageName || "").replace(/\\/g, "/").trim()).toLowerCase();
+  const pageBase = canonicalAtlasPageName(pageName).toLowerCase();
+  if (!imageBase || !pageBase) return false;
+  if (imageBase === pageBase) return true;
+  if (pageBase.endsWith(imageBase)) return true;
+  if (imageBase.endsWith(pageBase)) return true;
+  return false;
+}
+
+function atlasTextWithCanonicalPageNames(atlasText = "") {
+  const lines = atlasText.split(/\r?\n/);
+  let nextPage = false;
+
+  return lines
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        nextPage = false;
+        return line;
+      }
+
+      if (!/^\s/.test(line) && /\.(png|jpe?g|webp)$/i.test(trimmed)) {
+        nextPage = true;
+        return canonicalAtlasPageName(trimmed);
+      }
+
+      if (nextPage && !/^\s/.test(line) && /:/.test(line)) {
+        nextPage = false;
+      }
+
+      return line;
+    })
+    .join("\n");
+}
+
 type AtlasRegion = {
   name: string;
   x: number;
@@ -717,6 +1003,52 @@ function extractAtlasRegions(atlasText = "", pageName: string) {
   }
 
   return regions;
+}
+
+function fallbackViewportFromAtlas(atlasText = ""): PreparedSpine["viewport"] {
+  const lines = atlasText.split(/\r?\n/);
+  let maxWidth = 0;
+  let maxHeight = 0;
+  let activeRegion = "";
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      activeRegion = "";
+      continue;
+    }
+
+    if (/^[^\s].*\.(png|jpe?g|webp)$/i.test(rawLine)) {
+      activeRegion = "";
+      continue;
+    }
+
+    if (!rawLine.startsWith(" ") && !rawLine.startsWith("\t")) {
+      activeRegion = line;
+      continue;
+    }
+
+    if (!activeRegion || !/^(?:orig|size|bounds):/i.test(line)) continue;
+
+    const numbers = line.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+    const [first, second, third, fourth] = numbers;
+    const width = typeof third === "number" ? third : first;
+    const height = typeof fourth === "number" ? fourth : second;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) continue;
+    maxWidth = Math.max(maxWidth, width);
+    maxHeight = Math.max(maxHeight, height);
+  }
+
+  if (maxWidth <= 0 || maxHeight <= 0) return undefined;
+
+  const paddedWidth = Math.max(256, maxWidth * 1.16);
+  const paddedHeight = Math.max(256, maxHeight * 1.16);
+  return {
+    x: -paddedWidth / 2,
+    y: -paddedHeight / 2,
+    width: paddedWidth,
+    height: paddedHeight,
+  };
 }
 
 async function transparentizeAtlasEffectRegions(sourceDataUri: string, atlasText = "", pageName: string) {
@@ -850,6 +1182,9 @@ function textDataUri(mime: string, text: string) {
   return `data:${mime};charset=utf-8,${encodeURIComponent(text)}`;
 }
 
+const transparentPngDataUri =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6Xn4cAAAAASUVORK5CYII=";
+
 function textFromDataUri(dataUri = "") {
   const commaIndex = dataUri.indexOf(",");
   if (commaIndex < 0) return "";
@@ -906,6 +1241,122 @@ function textToBase64(text: string) {
   return btoa(unescape(encodeURIComponent(text)));
 }
 
+function byteLengthFromBase64(base64: string) {
+  const normalized = base64.replace(/\s/g, "");
+  const padding = normalized.endsWith("==") ? 2 : normalized.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((normalized.length * 3) / 4) - padding);
+}
+
+function base64ToBytes(base64: string) {
+  const binary = window.atob(base64.replace(/\s/g, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function bytesToHex(bytes: ArrayBuffer) {
+  return Array.from(new Uint8Array(bytes))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function sha256HexFromBytes(bytes: Uint8Array) {
+  const input = new Uint8Array(bytes.byteLength);
+  input.set(bytes);
+  return bytesToHex(await crypto.subtle.digest("SHA-256", input.buffer));
+}
+
+async function sha256HexFromText(text: string) {
+  return bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function shortHash(value = "", head = 10, tail = 8) {
+  const clean = value.trim();
+  if (clean.length <= head + tail + 3) return clean;
+  return `${clean.slice(0, head)}...${clean.slice(-tail)}`;
+}
+
+async function createSourceProof(
+  files: { name: string; contentBase64: string }[],
+  options: {
+    uploadId: string;
+    title: string;
+    uploadedAt: string;
+    uploadPath: string;
+    proofPath: string;
+    proofUrl: string;
+    settings: GitHubSettings;
+    user: GoogleUser | null;
+    anonymousAccount: AnonymousAccount;
+  },
+): Promise<SourceProof> {
+  const fileProofs = await Promise.all(
+    files.map(async (file) => ({
+      name: file.name,
+      bytes: byteLengthFromBase64(file.contentBase64),
+      sha256: await sha256HexFromBytes(base64ToBytes(file.contentBase64)),
+    })),
+  );
+  const browserHash = await sha256HexFromText(browserFingerprint());
+  const browserEnvironment = browserEnvironmentProof();
+  const browserEnvironmentHashSha256 = await sha256HexFromText(canonicalJson(browserEnvironment));
+  const googleEmailSha256 = options.user?.email ? await sha256HexFromText(options.user.email.trim().toLowerCase()) : undefined;
+  const proofPayload = {
+    type: "SpineLinkSourceProof" as const,
+    version: 1 as const,
+    hashAlgorithm: "SHA-256" as const,
+    entryId: options.uploadId,
+    title: options.title,
+    uploadedAt: options.uploadedAt,
+    proofPath: options.proofPath,
+    proofUrl: options.proofUrl,
+    uploader: {
+      mode: options.user?.email ? ("google-account" as const) : ("anonymous-browser" as const),
+      ...(googleEmailSha256 ? { googleEmailSha256 } : {}),
+      anonymousAccountId: options.anonymousAccount.id,
+      anonymousFingerprint: options.anonymousAccount.fingerprint,
+      browserFingerprintSha256: browserHash,
+      browserEnvironmentHashSha256,
+      browserEnvironment,
+    },
+    github: {
+      owner: options.settings.owner,
+      repo: options.settings.repo,
+      branch: options.settings.branch,
+      previewPath: options.uploadPath,
+    },
+    blockchain: {
+      status: "ready-to-anchor" as const,
+      recommendedAnchorPayload: "",
+      note:
+        "Anchor proofHash on-chain together with the GitHub commit/file path to timestamp the original upload evidence.",
+    },
+    files: fileProofs.sort((a, b) => a.name.localeCompare(b.name)),
+  };
+  const proofHash = await sha256HexFromText(canonicalJson(proofPayload));
+  return {
+    ...proofPayload,
+    proofHash,
+    blockchain: {
+      ...proofPayload.blockchain,
+      recommendedAnchorPayload: `sha256:${proofHash}`,
+    },
+  };
+}
+
 function editEntryIdFromLocation() {
   if (typeof window === "undefined") return "";
   return new URLSearchParams(window.location.search).get("edit") || "";
@@ -917,8 +1368,33 @@ function previewUrlForEntry(entryId: string, animationName = "") {
   return url.toString();
 }
 
-function assetUrlForRepoPath(path: string) {
-  return `${window.location.origin}/assets/${encodeRepoPath(path)}`;
+function cleanAssetVersion(value = "") {
+  return value
+    .trim()
+    .replace(/[^a-z0-9._-]/gi, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 120);
+}
+
+function withAssetVersion(url: string, version = "") {
+  const cleanVersion = cleanAssetVersion(version);
+  if (!url || !cleanVersion || /[?&]v=/i.test(url) || !/\/assets\//i.test(url)) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(cleanVersion)}`;
+}
+
+function assetUrlForRepoPath(path: string, version = "") {
+  return withAssetVersion(`${window.location.origin}/assets/${encodeRepoPath(path)}`, version);
+}
+
+function assetVersionForLibraryEntry(entry: LibraryEntry, fallback = "") {
+  return cleanAssetVersion(
+    entry.sourceProof?.proofHash ||
+      entry.blockchainAnchor?.sourceProofHash ||
+      entry.blockchainAnchor?.anchorHash ||
+      entry.uploadedAt ||
+      entry.id ||
+      fallback,
+  );
 }
 
 function safeLibraryAssetUrl(value = "") {
@@ -930,12 +1406,12 @@ function derivedLibraryAssetUrl(entry: LibraryEntry, extensions: string[]) {
   const previewPath = cleanRepoPath(entry.previewPath || "");
   const files = Array.isArray(entry.files) ? entry.files : [];
   const file = files.find((fileName) => extensions.some((extension) => fileName.toLowerCase().endsWith(extension)));
-  return previewPath && file ? assetUrlForRepoPath(joinRepoPath(previewPath, file)) : "";
+  return previewPath && file ? assetUrlForRepoPath(joinRepoPath(previewPath, file), assetVersionForLibraryEntry(entry, file)) : "";
 }
 
 function generatedPosterUrlForEntry(entry: LibraryEntry) {
   return entry.id && /^data:image\/webp;base64,/i.test(entry.thumbnailPoster || "")
-    ? `${window.location.origin}/assets/library/${encodeURIComponent(entry.id)}/generated-preview.webp`
+    ? assetUrlForRepoPath(`library/${entry.id}/generated-preview.webp`, assetVersionForLibraryEntry(entry, "generated-preview"))
     : "";
 }
 
@@ -943,10 +1419,27 @@ function generatedWebmUrlForEntry(entry: LibraryEntry) {
   return entry.id ? `${window.location.origin}/v_holder.webm` : "";
 }
 
-function baseLikeCount(value = "") {
-  let hash = 0;
-  for (const character of value) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return 12 + (hash % 87);
+const metricsVisitorStorageKey = "spine-link-metrics-visitor";
+
+function getStoredMetricsVisitorId() {
+  try {
+    const existing = window.localStorage.getItem(metricsVisitorStorageKey);
+    if (existing) return existing;
+    let generated = `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+    if (window.crypto?.getRandomValues) {
+      const bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      generated = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+    window.localStorage.setItem(metricsVisitorStorageKey, generated);
+    return generated;
+  } catch {
+    return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+function emptyEntryMetric(): EntryMetric {
+  return { likes: 0, views: 0, liked: false };
 }
 
 function safePreviewFileName(name: string, fallback: string) {
@@ -956,7 +1449,7 @@ function safePreviewFileName(name: string, fallback: string) {
 
 async function fileFromLibraryPath(entry: LibraryEntry, fileName: string) {
   const assetPath = joinRepoPath(entry.previewPath, fileName);
-  const response = await fetch(`/assets/${encodeRepoPath(assetPath)}`, { cache: "no-store" });
+  const response = await fetch(`/assets/${encodeRepoPath(assetPath)}`);
   if (!response.ok) throw new Error(`Could not load ${fileName}`);
   return new File([await response.blob()], basename(fileName), { type: response.headers.get("Content-Type") || "" });
 }
@@ -1440,16 +1933,13 @@ async function loadFiles(files: File[]) {
         animationNames.find((animationName) => animationName.toLowerCase().includes("idle")) ??
         animationNames.find((animationName) => !animationName.toLowerCase().startsWith("eyes")) ??
         animationNames[0];
-      const skinNames =
-        skeletonJson && typeof skeletonJson === "object" && "skins" in skeletonJson
-          ? ((skeletonJson as { skins?: Array<{ name?: string }> }).skins ?? []).map((skin) => skin.name).filter(Boolean)
-          : [];
-      const defaultSkin = skinNames.find((skinName) => skinName !== "default") ?? skinNames[0];
+      const skinNames = skinNamesFromSkeletonJson(skeletonJson);
+      const defaultSkin = preferredSkinName(skinNames);
       const skeletonBounds =
         skeletonJson && typeof skeletonJson === "object" && "skeleton" in skeletonJson
           ? (skeletonJson as { skeleton?: Partial<PreparedSpine["viewport"]> }).skeleton
           : undefined;
-      const viewport =
+      const skeletonViewport =
         typeof skeletonBounds?.x === "number" &&
         typeof skeletonBounds.y === "number" &&
         typeof skeletonBounds.width === "number" &&
@@ -1461,13 +1951,13 @@ async function loadFiles(files: File[]) {
               height: skeletonBounds.height,
             }
           : undefined;
+      const viewport = skeletonViewport?.width && skeletonViewport.height ? skeletonViewport : fallbackViewportFromAtlas(atlas.text);
 
       for (const pageName of atlasPages) {
-        const pageBase = basename(pageName).toLowerCase();
+        const canonicalPageName = canonicalAtlasPageName(pageName);
+        const pageBase = canonicalPageName.toLowerCase();
         const matchedImage =
-          images.find((imageAsset) => imageAsset.file.name.toLowerCase() === pageName.toLowerCase()) ??
-          images.find((imageAsset) => basename(imageAsset.file.name).toLowerCase() === pageBase) ??
-          images.find((imageAsset) => assetStem(imageAsset.file.name) === skeletonStem) ??
+          images.find((imageAsset) => imageMatchesAtlasPage(imageAsset.file.name, pageName)) ??
           (images.length === 1 ? images[0] : undefined);
 
         if (matchedImage) {
@@ -1477,13 +1967,22 @@ async function loadFiles(files: File[]) {
             : matchedImage.transparentizedDataUri ?? matchedImage.dataUri;
           rawDataURIs[matchedImage.file.name] = imageDataUri;
           rawDataURIs[basename(matchedImage.file.name)] = imageDataUri;
+          rawDataURIs[canonicalPageName] = imageDataUri;
           rawDataURIs[pageName] = imageDataUri;
-          rawDataURIs[basename(pageName)] = imageDataUri;
+        } else {
+          rawDataURIs[canonicalPageName] = transparentPngDataUri;
+          rawDataURIs[pageName] = transparentPngDataUri;
         }
       }
 
-      if (usesRebuiltStraightAlphaTexture && !premultipliedAlpha && atlas.text) {
-        const fixedAtlasDataUri = textDataUri("text/plain", atlasTextWithPremultipliedAlpha(atlas.text, false));
+      const atlasTextForPreview = atlasTextWithCanonicalPageNames(
+        usesRebuiltStraightAlphaTexture && !premultipliedAlpha && atlas.text
+          ? atlasTextWithPremultipliedAlpha(atlas.text, false)
+          : atlas.text,
+      );
+
+      if (atlasTextForPreview) {
+        const fixedAtlasDataUri = textDataUri("text/plain", atlasTextForPreview);
         rawDataURIs[atlas.file.name] = fixedAtlasDataUri;
         rawDataURIs[basename(atlas.file.name)] = fixedAtlasDataUri;
       }
@@ -1589,10 +2088,17 @@ function disablePlayerMix(player: SpinePlayerInstance | null) {
 }
 
 function playAnimationWithLoopMode(player: SpinePlayerInstance | null, animationName: string, isLoopEnabled: boolean, isLoopEnabledNow: () => boolean) {
-  if (!player || !animationName) return;
+  if (!player || !animationName) return false;
 
   disablePlayerMix(player);
-  const trackEntry = player.setAnimation(animationName, isLoopEnabled);
+  let trackEntry: ReturnType<SpinePlayerInstance["setAnimation"]>;
+  try {
+    trackEntry = player.setAnimation(animationName, isLoopEnabled);
+  } catch (error) {
+    console.warn(`Could not play Spine animation "${animationName}".`, error);
+    return false;
+  }
+
   (trackEntry as { mixDuration?: number; mixTime?: number }).mixDuration = 0;
   (trackEntry as { mixDuration?: number; mixTime?: number }).mixTime = 0;
   trackEntry.listener = {
@@ -1602,6 +2108,7 @@ function playAnimationWithLoopMode(player: SpinePlayerInstance | null, animation
     },
   };
   player.play();
+  return true;
 }
 
 function syncLoopButtons(player: SpinePlayerInstance | null, isLoopEnabled: boolean) {
@@ -1650,96 +2157,27 @@ function togglePlayerPlayback(player: SpinePlayerInstance | null, onPlayButton: 
   onPlayButton();
 }
 
-function ParticleField() {
+function ParticleField({ mode = "rich" }: { mode?: "quiet" | "rich" }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
+    if (!canvas) return undefined;
+    canvas.dataset.particleMode = mode;
+    return startParticleField(canvas, mode);
+  }, [mode]);
 
-    const colors = ["255,255,255", "140,199,255", "255,106,40"];
-    const particles: Particle[] = [];
-    let width = 0;
-    let height = 0;
-    let pixelRatio = 1;
-    let animationFrame = 0;
-
-    const resetParticle = (particle: Particle, randomizePosition = false) => {
-      particle.x = Math.random() * width;
-      particle.y = randomizePosition ? Math.random() * height : height + Math.random() * 80;
-      particle.radius = 0.55 + Math.random() * 1.8;
-      particle.speedX = (Math.random() - 0.5) * 0.16;
-      particle.speedY = -(0.08 + Math.random() * 0.34);
-      particle.alpha = 0.18 + Math.random() * 0.64;
-      particle.pulse = Math.random() * Math.PI * 2;
-      particle.color = colors[Math.floor(Math.random() * colors.length)];
-    };
-
-    const resize = () => {
-      pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-      width = window.innerWidth;
-      height = window.innerHeight;
-      canvas.width = Math.floor(width * pixelRatio);
-      canvas.height = Math.floor(height * pixelRatio);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-
-      const targetCount = Math.min(170, Math.max(72, Math.floor((width * height) / 9000)));
-      while (particles.length < targetCount) {
-        const particle = {} as Particle;
-        resetParticle(particle, true);
-        particles.push(particle);
-      }
-      particles.length = targetCount;
-    };
-
-    const draw = (time: number) => {
-      context.clearRect(0, 0, width, height);
-
-      for (const particle of particles) {
-        particle.x += particle.speedX + Math.sin(time * 0.00025 + particle.pulse) * 0.035;
-        particle.y += particle.speedY;
-
-        if (particle.y < -24 || particle.x < -32 || particle.x > width + 32) {
-          resetParticle(particle);
-        }
-
-        const alpha = particle.alpha * (0.68 + Math.sin(time * 0.0012 + particle.pulse) * 0.32);
-        const glowRadius = particle.radius * 5.5;
-        const gradient = context.createRadialGradient(particle.x, particle.y, 0, particle.x, particle.y, glowRadius);
-        gradient.addColorStop(0, `rgba(${particle.color}, ${alpha})`);
-        gradient.addColorStop(0.42, `rgba(${particle.color}, ${alpha * 0.24})`);
-        gradient.addColorStop(1, `rgba(${particle.color}, 0)`);
-        context.fillStyle = gradient;
-        context.beginPath();
-        context.arc(particle.x, particle.y, glowRadius, 0, Math.PI * 2);
-        context.fill();
-      }
-
-      animationFrame = window.requestAnimationFrame(draw);
-    };
-
-    resize();
-    animationFrame = window.requestAnimationFrame(draw);
-    window.addEventListener("resize", resize);
-
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      window.removeEventListener("resize", resize);
-    };
-  }, []);
-
-  return <canvas className="particle-field" ref={canvasRef} aria-hidden="true" />;
+  return <canvas className="particle-field" data-particle-mode={mode} ref={canvasRef} aria-hidden="true" />;
 }
 
-export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
+export function App({ initialFiles, initialOpenLibrary = false, initialLogin = false, initialUpload = false }: AppProps) {
   const isEditPage = Boolean(editEntryIdFromLocation());
   const playerRef = useRef<SpinePlayerInstance | null>(null);
   const previewPanelRef = useRef<HTMLDivElement | null>(null);
   const playerHostRef = useRef<HTMLDivElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const homeUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const homeFeedRef = useRef<HTMLDivElement | null>(null);
   const googleTokenClientRef = useRef<GoogleTokenClient | null>(null);
   const baseViewportRef = useRef<PlayerViewport | null>(null);
   const playerCanvasSizeRef = useRef({ width: 1, height: 1 });
@@ -1753,7 +2191,10 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   const animationsRef = useRef<string[]>([]);
   const preparedSpineRef = useRef<PreparedSpine | null>(null);
   const initialOpenLibraryRef = useRef(initialOpenLibrary);
+  const initialLoginRef = useRef(initialLogin);
+  const initialUploadRef = useRef(initialUpload);
   const [spineOptions, setSpineOptions] = useState<PreparedSpine[]>([]);
+  const [extraSpineSets, setExtraSpineSets] = useState<ExtraSpinePlayer[]>([]);
   const [preparedSpine, setPreparedSpine] = useState<PreparedSpine | null>(null);
   const [animations, setAnimations] = useState<string[]>([]);
   const [activeAnimation, setActiveAnimation] = useState("");
@@ -1778,9 +2219,18 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   const [isIntroDocking, setIsIntroDocking] = useState(false);
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() => readStoredGoogleSession()?.user ?? null);
   const [googleIdToken, setGoogleIdToken] = useState(() => getValidStoredGoogleToken());
+  const [profileNameInput, setProfileNameInput] = useState(() => cleanAccountDisplayName(readStoredGoogleSession()?.user?.name || ""));
+  const [isSavingProfileName, setIsSavingProfileName] = useState(false);
+  const [isSkeletonUploadTipVisible, setIsSkeletonUploadTipVisible] = useState(
+    () => !hasDismissedSkeletonUploadTip(googleUser, anonymousAccount),
+  );
   const [googleAuthError, setGoogleAuthError] = useState("");
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [libraryEntries, setLibraryEntries] = useState<LibraryEntry[]>([]);
+  const [homeFeedEntries, setHomeFeedEntries] = useState<HomeFeedEntry[]>([]);
+  const [entryMetrics, setEntryMetrics] = useState<Record<string, EntryMetric>>({});
+  const [metricsVisitorId] = useState(() => getStoredMetricsVisitorId());
   const [isLibraryLoading, setIsLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState("");
   const [isPortfolioMode, setIsPortfolioMode] = useState(false);
@@ -1819,6 +2269,343 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   );
 
   useEffect(() => {
+    const ids = Array.from(new Set(libraryEntries.map((entry) => entry.id).filter(Boolean)));
+    if (!ids.length) {
+      setEntryMetrics({});
+      return;
+    }
+
+    let cancelled = false;
+    fetch("/api/github-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "get-metrics",
+        ids,
+        visitorId: metricsVisitorId,
+      }),
+    })
+      .then((response) => response.json().then((payload) => ({ response, payload })).catch(() => ({ response, payload: {} })))
+      .then(({ response, payload }) => {
+        if (cancelled || !response.ok || !payload.metrics) return;
+        setEntryMetrics((currentMetrics) => ({ ...currentMetrics, ...payload.metrics }));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [libraryEntries, metricsVisitorId]);
+
+  useEffect(() => {
+    if (isEditPage) return;
+    let cancelled = false;
+
+    const applyHomeFeedEntries = (entries: HomeFeedEntry[]) => {
+      const nextEntries = entries
+        .filter((entry: HomeFeedEntry) => entry?.id && entry?.previewUrl)
+        .slice(0, 32);
+      setHomeFeedEntries(nextEntries);
+      setEntryMetrics((currentMetrics) => {
+        const nextMetrics = { ...currentMetrics };
+        nextEntries.forEach((entry: HomeFeedEntry) => {
+          if (entry.metrics) nextMetrics[entry.id] = entry.metrics;
+        });
+        return nextMetrics;
+      });
+    };
+
+    try {
+      const cached = JSON.parse(window.sessionStorage.getItem("spine-link-home-feed-cache") || "null") as {
+        savedAt?: number;
+        entries?: HomeFeedEntry[];
+      } | null;
+      if (cached?.savedAt && Date.now() - cached.savedAt < 5 * 60 * 1000 && Array.isArray(cached.entries)) {
+        applyHomeFeedEntries(cached.entries);
+      }
+    } catch {
+      // Session cache is only a speed hint.
+    }
+
+    fetch("/api/github-archive?feed=home")
+      .then((response) => response.json().then((payload) => ({ response, payload })).catch(() => ({ response, payload: {} })))
+      .then(({ response, payload }) => {
+        if (cancelled || !response.ok || !Array.isArray(payload.entries)) return;
+        const nextEntries = payload.entries
+          .filter((entry: HomeFeedEntry) => entry?.id && entry?.previewUrl)
+          .slice(0, 32);
+        applyHomeFeedEntries(nextEntries);
+        try {
+          window.sessionStorage.setItem("spine-link-home-feed-cache", JSON.stringify({ savedAt: Date.now(), entries: nextEntries }));
+        } catch {
+          // Session cache is optional.
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditPage]);
+
+  useEffect(() => {
+    const root = homeFeedRef.current;
+    if (!root || !homeFeedEntries.length) return;
+    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    const saveData = Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
+    if (prefersReducedMotion || saveData) return;
+
+    const videos = Array.from(root.querySelectorAll<HTMLVideoElement>(".home-feed-video"));
+    if (!videos.length) return;
+    const maxActiveVideos = window.innerWidth < 900 ? 1 : 2;
+
+    function pauseVideo(video: HTMLVideoElement) {
+      video.pause();
+      video.removeAttribute("data-playing");
+      try {
+        video.currentTime = 0;
+      } catch {}
+      if (video.getAttribute("src")) {
+        video.removeAttribute("src");
+        video.load();
+      }
+    }
+
+    function playVideo(video: HTMLVideoElement) {
+      const source = video.dataset.videoSrc || "";
+      if (!source) return;
+      if (!video.getAttribute("src")) video.setAttribute("src", source);
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.setAttribute("data-playing", "true");
+      video.play().catch(() => {
+        video.removeAttribute("data-playing");
+      });
+    }
+
+    function visibleVideoScore(video: HTMLVideoElement) {
+      const rect = video.getBoundingClientRect();
+      const visibleWidth = Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0);
+      if (visibleWidth <= 32 || rect.bottom <= 0 || rect.top >= window.innerHeight) return 0;
+      const center = rect.left + rect.width / 2;
+      const distancePenalty = Math.abs(center - window.innerWidth / 2) / Math.max(1, window.innerWidth);
+      return Math.max(0, visibleWidth / Math.max(1, rect.width) - distancePenalty * 0.2);
+    }
+
+    function syncVisibleVideos() {
+      if (document.hidden) {
+        videos.forEach(pauseVideo);
+        return;
+      }
+      const activeVideos = videos
+        .map((video) => ({ video, score: visibleVideoScore(video) }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, maxActiveVideos)
+        .map((item) => item.video);
+      const activeSet = new Set(activeVideos);
+      videos.forEach((video) => {
+        if (activeSet.has(video)) playVideo(video);
+        else pauseVideo(video);
+      });
+    }
+
+    const interval = window.setInterval(syncVisibleVideos, 1300);
+    const handleVisibilityChange = () => syncVisibleVideos();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    syncVisibleVideos();
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      videos.forEach(pauseVideo);
+    };
+  }, [homeFeedEntries]);
+
+  useEffect(() => {
+    const cards = Array.from(document.querySelectorAll<HTMLElement>(".library-card"));
+    if (!cards.length) return;
+
+    const visibleVideos = new Set<HTMLVideoElement>();
+    const manualVideos = new WeakSet<HTMLVideoElement>();
+    const hoverTimers = new WeakMap<HTMLVideoElement, number>();
+    const cleanups: Array<() => void> = [];
+    let chaosTimer = 0;
+
+    const stopVideo = (video: HTMLVideoElement) => {
+      video.pause();
+      video.onended = null;
+      try {
+        video.currentTime = 0;
+      } catch {
+        // Some browsers block seeking before metadata is ready.
+      }
+    };
+
+    const playVideo = (video: HTMLVideoElement) => {
+      if (!video.currentSrc && !video.src) return;
+      video.muted = true;
+      video.loop = false;
+      video.playsInline = true;
+      try {
+        video.currentTime = 0;
+      } catch {
+        // Some browsers block seeking before metadata is ready.
+      }
+      void video.play().catch(() => undefined);
+    };
+
+    const clearHoverTimer = (video: HTMLVideoElement) => {
+      const timer = hoverTimers.get(video);
+      if (timer) window.clearTimeout(timer);
+      hoverTimers.delete(video);
+    };
+
+    const startHoverLoop = (video: HTMLVideoElement) => {
+      manualVideos.add(video);
+      clearHoverTimer(video);
+      video.onended = () => {
+        const timer = window.setTimeout(() => {
+          if (!manualVideos.has(video)) return;
+          try {
+            video.currentTime = 0;
+          } catch {
+            // Some browsers block seeking before metadata is ready.
+          }
+          playVideo(video);
+        }, 1000);
+        hoverTimers.set(video, timer);
+      };
+      playVideo(video);
+    };
+
+    const stopHoverLoop = (video: HTMLVideoElement) => {
+      manualVideos.delete(video);
+      clearHoverTimer(video);
+      stopVideo(video);
+    };
+
+    const randomSample = <T,>(items: T[], count: number) =>
+      items
+        .map((item) => ({ item, sort: Math.random() }))
+        .sort((a, b) => a.sort - b.sort)
+        .slice(0, count)
+        .map((entry) => entry.item);
+
+    const scheduleChaos = () => {
+      window.clearTimeout(chaosTimer);
+      if (document.hidden) return;
+      chaosTimer = window.setTimeout(runChaos, 520 + Math.random() * 1280);
+    };
+
+    const runChaos = () => {
+      const videos = Array.from(visibleVideos).filter((video) => video.isConnected && (video.currentSrc || video.src));
+      if (!videos.length) {
+        scheduleChaos();
+        return;
+      }
+      const activeLimit = Math.min(2, Math.max(1, Math.ceil(videos.length * 0.2)));
+      randomSample(
+        videos.filter((video) => !video.paused && !manualVideos.has(video)),
+        videos.length,
+      )
+        .slice(activeLimit)
+        .forEach(stopVideo);
+      randomSample(
+        videos.filter((video) => video.paused && !manualVideos.has(video)),
+        activeLimit,
+      ).forEach((video) => {
+        if (Math.random() < 0.76) {
+          playVideo(video);
+          window.setTimeout(() => {
+            if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.88) stopVideo(video);
+          }, 460 + Math.random() * 2100);
+        }
+      });
+      videos.forEach((video) => {
+        if (!manualVideos.has(video) && !video.paused && Math.random() < 0.28) stopVideo(video);
+      });
+      scheduleChaos();
+    };
+
+    cards.forEach((card) => {
+      const video = card.querySelector<HTMLVideoElement>(".library-card-webm");
+      if (!video) return;
+      const handleEnter = () => startHoverLoop(video);
+      const handleLeave = () => stopHoverLoop(video);
+      card.addEventListener("pointerenter", handleEnter);
+      card.addEventListener("focusin", handleEnter);
+      card.addEventListener("pointerleave", handleLeave);
+      card.addEventListener("focusout", handleLeave);
+      cleanups.push(() => {
+        card.removeEventListener("pointerenter", handleEnter);
+        card.removeEventListener("focusin", handleEnter);
+        card.removeEventListener("pointerleave", handleLeave);
+        card.removeEventListener("focusout", handleLeave);
+      });
+    });
+
+    let observer: IntersectionObserver | null = null;
+    if ("IntersectionObserver" in window) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const video = entry.target.querySelector<HTMLVideoElement>(".library-card-webm");
+            if (!video) return;
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.42) {
+              visibleVideos.add(video);
+              if (video.readyState < 1) {
+                video.preload = "metadata";
+                video.load();
+              }
+            } else {
+              visibleVideos.delete(video);
+              if (!manualVideos.has(video)) stopVideo(video);
+            }
+          });
+          scheduleChaos();
+        },
+        { threshold: [0, 0.42, 0.68, 1] },
+      );
+      cards.forEach((card) => observer?.observe(card));
+    } else {
+      cards.forEach((card) => {
+        const video = card.querySelector<HTMLVideoElement>(".library-card-webm");
+        if (video) visibleVideos.add(video);
+      });
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        window.clearTimeout(chaosTimer);
+        visibleVideos.forEach((video) => {
+          if (!manualVideos.has(video)) stopVideo(video);
+        });
+      } else {
+        scheduleChaos();
+      }
+    };
+    const handlePageHide = () => {
+      window.clearTimeout(chaosTimer);
+      visibleVideos.forEach(stopVideo);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    scheduleChaos();
+
+    return () => {
+      window.clearTimeout(chaosTimer);
+      visibleVideos.forEach(stopVideo);
+      cleanups.forEach((cleanup) => cleanup());
+      observer?.disconnect();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, [isLibraryOpen, visiblePortfolioEntries]);
+
+  useEffect(() => {
     if (!publishProgress.isOpen || publishProgress.value >= 95) return;
 
     const duration = 4000 + Math.random() * 4000;
@@ -1848,7 +2635,25 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     () => new URL(`/u/${encodeURIComponent(publicLibraryOwnerId)}`, window.location.origin).toString(),
     [publicLibraryOwnerId],
   );
+  const accountDisplayName = useMemo(
+    () => cleanAccountDisplayName(profileNameInput || googleUser?.name || libraryEntries.find((entry) => entry.ownerName)?.ownerName || ""),
+    [googleUser?.name, libraryEntries, profileNameInput],
+  );
   const isPublishProgressCompact = Boolean(preparedSpine && animations.length);
+
+  useEffect(() => {
+    const savedOwnerName = cleanAccountDisplayName(libraryEntries.find((entry) => entry.ownerName)?.ownerName || "");
+    if (!savedOwnerName) return;
+    const currentInput = cleanAccountDisplayName(profileNameInput);
+    const googleName = cleanAccountDisplayName(googleUser?.name || "");
+    if (currentInput && currentInput !== googleName) return;
+    setProfileNameInput(savedOwnerName);
+    if (googleUser && googleName !== savedOwnerName) {
+      const nextGoogleUser = { ...googleUser, name: savedOwnerName };
+      setGoogleUser(nextGoogleUser);
+      updateStoredGoogleUser(nextGoogleUser);
+    }
+  }, [googleUser, libraryEntries, profileNameInput]);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -1890,62 +2695,8 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   }, []);
 
   useEffect(() => {
-    if (!isLibraryOpen) return;
-    let timeoutId = 0;
-    let activeVideo: HTMLVideoElement | null = null;
-    let videoIndex = 0;
-    let lastVideo: HTMLVideoElement | null = null;
-
-    const stopVideo = (video: HTMLVideoElement | null) => {
-      if (!video) return;
-      video.pause();
-      video.onended = null;
-      try {
-        video.currentTime = 0;
-      } catch {
-        // Ignore browsers that block seeking before metadata is ready.
-      }
-    };
-
-    const playNextCard = () => {
-      const videos = Array.from(document.querySelectorAll<HTMLVideoElement>(".library-card-webm")).filter((video) => video.src);
-      if (videos.length === 0) {
-        timeoutId = window.setTimeout(playNextCard, 1200);
-        return;
-      }
-
-      stopVideo(activeVideo);
-      let video = videos[videoIndex % videos.length];
-      videoIndex += 1;
-      if (videos.length > 1 && video === lastVideo) {
-        video = videos[videoIndex % videos.length];
-        videoIndex += 1;
-      }
-      lastVideo = video;
-      activeVideo = video;
-      video.muted = true;
-      video.loop = false;
-      video.playsInline = true;
-      try {
-        video.currentTime = 0;
-      } catch {
-        // Ignore browsers that block seeking before metadata is ready.
-      }
-      video.onended = () => {
-        stopVideo(video);
-        timeoutId = window.setTimeout(playNextCard, 420);
-      };
-      video.play().catch(() => {
-        stopVideo(video);
-        timeoutId = window.setTimeout(playNextCard, 1200);
-      });
-    };
-    timeoutId = window.setTimeout(playNextCard, 900);
-    return () => {
-      window.clearTimeout(timeoutId);
-      stopVideo(activeVideo);
-    };
-  }, [isLibraryOpen, libraryEntries.length]);
+    setIsSkeletonUploadTipVisible(!hasDismissedSkeletonUploadTip(googleUser, anonymousAccount));
+  }, [anonymousAccount, googleUser]);
 
   const fileSummary = useMemo(() => {
     if (!preparedSpine) return "No files selected yet";
@@ -1961,11 +2712,17 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     [preparedSpine, renderSettingsByLabel],
   );
   const shouldShowStatus = isLoading || Boolean(error) || !preparedSpine || /failed|error|stopped/i.test(status);
+  const shouldShowSkeletonUploadTip = isSkeletonUploadTipVisible && !preparedSpine && !isEditPage;
 
   const configuredSpine = useMemo(
     () => (preparedSpine ? applySkeletonRenderSettings(preparedSpine, activeRenderSettings) : null),
     [activeRenderSettings, preparedSpine],
   );
+
+  const dismissSkeletonUploadTip = () => {
+    storeDismissedSkeletonUploadTip(googleUser, anonymousAccount);
+    setIsSkeletonUploadTipVisible(false);
+  };
 
   const updateActiveRenderSettings = (nextSettings: Partial<SkeletonRenderSettings>) => {
     if (!preparedSpine) return;
@@ -1999,8 +2756,13 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
 
   const playActiveAnimationFromStart = useCallback(() => {
     const animationName = activeAnimationRef.current || preparedSpineRef.current?.defaultAnimation || animationsRef.current[0] || "";
-    playAnimationWithLoopMode(playerRef.current, animationName, loopEnabledRef.current, () => loopEnabledRef.current);
-    if (animationName) setActiveAnimation(animationName);
+    if (playAnimationWithLoopMode(playerRef.current, animationName, loopEnabledRef.current, () => loopEnabledRef.current)) {
+      setActiveAnimation(animationName);
+      setError("");
+    } else if (animationName) {
+      setError(`Animation bounds are invalid: ${animationName}.`);
+      setStatus("Choose another animation.");
+    }
   }, []);
 
   const togglePreviewPlayback = useCallback(() => {
@@ -2064,6 +2826,27 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
 
   const prepareFromFiles = useCallback(
     async (fileList: FileList | File[]) => {
+      if (preparedSpine && !isEditPage) {
+        setStatus("Reading files for an extra player...");
+        setError("");
+        try {
+          const nextSpineOptions = await loadFiles(Array.from(fileList));
+          const nextSpine = chooseInitialSet(nextSpineOptions);
+          if (!nextSpine) throw new Error("Could not create an extra player from these files.");
+          setExtraSpineSets((currentSets) => [
+            ...currentSets,
+            { id: `extra-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, set: nextSpine },
+          ]);
+          setStatus(`Extra player added. Total extra players: ${extraSpineSets.length + 1}.`);
+        } catch (nextError) {
+          setError(nextError instanceof Error ? nextError.message : "Could not prepare extra Spine files.");
+          setStatus("Extra player upload stopped.");
+        } finally {
+          setIsDragging(false);
+        }
+        return;
+      }
+
       const shouldDockIntro = !preparedSpine;
       setIsIntroDocking(shouldDockIntro);
       setIsLoading(true);
@@ -2106,8 +2889,111 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         setIsLoading(false);
       }
     },
-    [preparedSpine, resetPlayer],
+    [extraSpineSets.length, isEditPage, preparedSpine, resetPlayer],
   );
+
+  const handleSelectedFiles = useCallback(
+    (files: File[]) => {
+      if (!files.length) return;
+      setIsDragging(false);
+      setError("");
+      setStatus(`Selected ${files.length} file${files.length === 1 ? "" : "s"}. Reading files locally...`);
+      void prepareFromFiles(files);
+    },
+    [prepareFromFiles],
+  );
+
+  useEffect(() => {
+    window.__spineLinkReceiveFiles = handleSelectedFiles;
+    return () => {
+      if (window.__spineLinkReceiveFiles === handleSelectedFiles) {
+        window.__spineLinkReceiveFiles = undefined;
+      }
+    };
+  }, [handleSelectedFiles]);
+
+  const handleFileInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement> | React.FormEvent<HTMLInputElement>) => {
+      const input = event.currentTarget;
+      const files = Array.from(input.files ?? []);
+      window.setTimeout(() => {
+        input.value = "";
+      }, 0);
+      handleSelectedFiles(files);
+    },
+    [handleSelectedFiles],
+  );
+
+  const clearFileInputBeforePick = useCallback((event: React.MouseEvent<HTMLInputElement>) => {
+    event.currentTarget.value = "";
+  }, []);
+
+  useEffect(() => {
+    const hasFiles = (event: DragEvent) => {
+      return Array.from(event.dataTransfer?.types ?? []).includes("Files");
+    };
+
+    const handleDocumentDragOver = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      setIsDragging(true);
+    };
+
+    const handleDocumentDrop = (event: DragEvent) => {
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      if (!files.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handleSelectedFiles(files);
+    };
+
+    document.addEventListener("dragover", handleDocumentDragOver, true);
+    document.addEventListener("drop", handleDocumentDrop, true);
+    return () => {
+      document.removeEventListener("dragover", handleDocumentDragOver, true);
+      document.removeEventListener("drop", handleDocumentDrop, true);
+    };
+  }, [handleSelectedFiles]);
+
+  useEffect(() => {
+    const disposers: Array<() => void> = [];
+    const mountedPlayers: Array<SpinePlayerInstance> = [];
+    let isCancelled = false;
+
+    const mountExtraPlayers = async () => {
+      if (!extraSpineSets.length) return;
+      const { SpinePlayer } = await loadSpinePlayerModule();
+      if (isCancelled) return;
+      const hosts = Array.from(document.querySelectorAll<HTMLDivElement>(".extra-player-host[data-extra-player-id]"));
+      hosts.forEach((host) => {
+        const setId = host.dataset.extraPlayerId || "";
+        const prepared = extraSpineSets.find((candidate) => candidate.id === setId)?.set;
+        if (!prepared) return;
+        host.innerHTML = "";
+        const player = new SpinePlayer(host, {
+          skeleton: prepared.skeletonName,
+          atlas: prepared.atlasName,
+          rawDataURIs: prepared.rawDataURIs,
+          animation: prepared.defaultAnimation,
+          ...(prepared.defaultSkin ? { skin: prepared.defaultSkin } : {}),
+          premultipliedAlpha: prepared.premultipliedAlpha,
+          showControls: true,
+          showLoading: true,
+          alpha: true,
+          preserveDrawingBuffer: true,
+          backgroundColor: "00000000",
+        });
+        mountedPlayers.push(player as unknown as SpinePlayerInstance);
+      });
+    };
+
+    void mountExtraPlayers();
+    return () => {
+      isCancelled = true;
+      disposers.forEach((dispose) => dispose());
+      mountedPlayers.forEach((player) => player.dispose?.());
+    };
+  }, [extraSpineSets]);
 
   const initialFilesLoadedRef = useRef(false);
   const editEntryLoadedRef = useRef(false);
@@ -2211,7 +3097,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
       atlas: configuredSpine.atlasName,
       rawDataURIs: configuredSpine.rawDataURIs,
       animation: configuredSpine.defaultAnimation,
-      skin: configuredSpine.defaultSkin,
+      ...(configuredSpine.defaultSkin ? { skin: configuredSpine.defaultSkin } : {}),
       premultipliedAlpha: configuredSpine.premultipliedAlpha,
       showControls: true,
       showLoading: true,
@@ -2228,19 +3114,25 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
       success: (player) => {
         const names = player.skeleton?.data.animations.map((animation) => animation.name) ?? [];
         const initialAnimation = configuredSpine.defaultAnimation && names.includes(configuredSpine.defaultAnimation) ? configuredSpine.defaultAnimation : names[0];
+        const playableAnimation =
+          initialAnimation && playAnimationWithLoopMode(player, initialAnimation, loopEnabledRef.current, () => loopEnabledRef.current)
+            ? initialAnimation
+            : names.find((animationName) => playAnimationWithLoopMode(player, animationName, loopEnabledRef.current, () => loopEnabledRef.current));
         setAnimations(names);
-        setActiveAnimation(initialAnimation ?? "");
-        if (initialAnimation) {
-          disablePlayerMix(player);
-          playAnimationWithLoopMode(player, initialAnimation, loopEnabledRef.current, () => loopEnabledRef.current);
+        setActiveAnimation(playableAnimation ?? initialAnimation ?? "");
+        if (playableAnimation) {
           installLoopButton(player, loopEnabledRef.current, toggleLoopEnabled, playActiveAnimationFromStart);
           rememberCurrentViewport();
           applyZoomToPlayer(zoomRef.current, false);
-          if (!currentLibraryEntry) void publishToGitHub(configuredSpine, names, initialAnimation);
+          if (!currentLibraryEntry) void publishToGitHub(configuredSpine, names, playableAnimation);
+        } else if (initialAnimation) {
+          setError(`Animation bounds are invalid: ${initialAnimation}.`);
         }
         setStatus(
-          names.length
+          playableAnimation
             ? `Ready. Animations found: ${names.length}. Creating permanent link...`
+            : names.length
+              ? "Ready, but the available animations have invalid bounds."
             : "Ready, but the animation list is empty.",
         );
       },
@@ -2312,8 +3204,14 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   }, [preparedSpine]);
 
   const selectAnimation = (animationName: string) => {
+    if (!playAnimationWithLoopMode(playerRef.current, animationName, loopEnabledRef.current, () => loopEnabledRef.current)) {
+      setError(`Animation bounds are invalid: ${animationName}.`);
+      setStatus("Choose another animation.");
+      return;
+    }
+
     setActiveAnimation(animationName);
-    playAnimationWithLoopMode(playerRef.current, animationName, loopEnabledRef.current, () => loopEnabledRef.current);
+    setError("");
     applyZoomToPlayer(zoomRef.current, false);
     window.setTimeout(() => {
       const canvas = (playerRef.current as unknown as { canvas?: HTMLCanvasElement | null } | null)?.canvas;
@@ -2544,6 +3442,39 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     }
   };
 
+  const toggleEntryLike = async (entry: Pick<LibraryEntry, "id">) => {
+    const currentMetric = entryMetrics[entry.id] ?? emptyEntryMetric();
+    const nextLiked = !currentMetric.liked;
+    const optimisticMetric = {
+      ...currentMetric,
+      liked: nextLiked,
+      likes: Math.max(0, currentMetric.likes + (nextLiked ? 1 : -1)),
+    };
+    setEntryMetrics((currentMetrics) => ({ ...currentMetrics, [entry.id]: optimisticMetric }));
+
+    try {
+      const response = await fetch("/api/github-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "track-metric",
+          metricAction: "like",
+          entryId: entry.id,
+          liked: nextLiked,
+          visitorId: metricsVisitorId,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : `Metrics API ${response.status}`);
+      if (result.metric) {
+        setEntryMetrics((currentMetrics) => ({ ...currentMetrics, [entry.id]: result.metric }));
+      }
+    } catch (nextError) {
+      setEntryMetrics((currentMetrics) => ({ ...currentMetrics, [entry.id]: currentMetric }));
+      setLibraryError(nextError instanceof Error ? nextError.message : "Could not update like.");
+    }
+  };
+
   const updateLibraryEntryVisibility = async (entry: LibraryEntry, hiddenFromPublicLibrary: boolean) => {
     setLibraryError("");
     try {
@@ -2651,7 +3582,9 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     clearStoredGoogleSession();
     setGoogleUser(null);
     setGoogleIdToken("");
+    setProfileNameInput("");
     setGoogleAuthError("");
+    setIsAccountMenuOpen(false);
     setIsLibraryOpen(false);
     setLibraryEntries([]);
     setLibraryError("");
@@ -2671,6 +3604,8 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           googleIdToken: accessToken,
           anonymousAccount,
           settings: githubPublishSettings,
+          ownerName: cleanAccountDisplayName(profileNameInput || user.name || ""),
+          ownerPicture: user.picture,
           commitPrefix: `Merge Spine-Link library ${user.email}`,
         }),
       });
@@ -2722,6 +3657,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   }, [anonymousAccount, googleIdToken]);
 
   const openLibrary = () => {
+    setIsAccountMenuOpen(false);
     setIsLibraryOpen(true);
     void loadLibrary();
   };
@@ -2732,8 +3668,27 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     openLibrary();
   }, [loadLibrary]);
 
-  const startNewLibraryEntry = (sourceElement?: HTMLElement | null) => {
+  useEffect(() => {
+    if (!initialLoginRef.current) return;
+    initialLoginRef.current = false;
+    void openGoogleSignIn();
+  }, []);
+
+  useEffect(() => {
+    if (!initialUploadRef.current) return;
+    initialUploadRef.current = false;
+    window.setTimeout(() => startNewLibraryEntry(), 120);
+  }, []);
+
+  const startNewLibraryEntry = (
+    sourceElement?: HTMLElement | null,
+    options: { openPicker?: boolean; picker?: HTMLInputElement | null } = {},
+  ) => {
     void sourceElement;
+    const { openPicker = true, picker = uploadInputRef.current } = options;
+    if (!hasDismissedSkeletonUploadTip(googleUser, anonymousAccount)) {
+      setIsSkeletonUploadTipVisible(true);
+    }
     setIsLibraryOpen(false);
     setCurrentLibraryEntry(null);
     setGeneratedPreviewUrl("");
@@ -2745,7 +3700,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
     setError("");
     setStatus("Choose files for a new library card.");
     publishedKeysRef.current.clear();
-    uploadInputRef.current?.click();
+    if (openPicker) picker?.click();
   };
 
   const updateOwnerPortfolioMode = async (nextMode: boolean) => {
@@ -2768,7 +3723,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           anonymousAccount,
           settings: githubPublishSettings,
           portfolioMode: nextMode,
-          ownerName: googleUser?.name,
+          ownerName: accountDisplayName || googleUser?.name,
           ownerPicture: googleUser?.picture,
           publicOwnerId: publicLibraryOwnerId,
           commitPrefix: nextMode ? "Enable Spine-Link portfolio mode" : "Enable Spine-Link library mode",
@@ -2808,7 +3763,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           anonymousAccount,
           settings: githubPublishSettings,
           showOwnerLibrary: nextValue,
-          ownerName: googleUser?.name,
+          ownerName: accountDisplayName || googleUser?.name,
           ownerPicture: googleUser?.picture,
           publicOwnerId: publicOwnerIdFor(googleUser, anonymousAccount),
           commitPrefix: "Update Spine-Link public profile setting",
@@ -2822,6 +3777,64 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
       setProfileVisibilityStatus(nextValue ? "Your name is visible" : "Your name is hidden");
     } catch (nextError) {
       setProfileVisibilityStatus(nextError instanceof Error ? nextError.message : "Could not save profile setting.");
+    }
+  };
+
+  const saveAccountDisplayName = async () => {
+    const nextName = cleanAccountDisplayName(profileNameInput);
+    if (!nextName) {
+      setProfileVisibilityStatus("Enter account name");
+      return;
+    }
+
+    setIsSavingProfileName(true);
+    setProfileVisibilityStatus("Saving account name...");
+    const nextGoogleUser = googleUser ? { ...googleUser, name: nextName } : null;
+    if (nextGoogleUser) {
+      setGoogleUser(nextGoogleUser);
+      updateStoredGoogleUser(nextGoogleUser);
+    }
+
+    try {
+      const requestHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (googleIdToken) requestHeaders.Authorization = `Bearer ${googleIdToken}`;
+
+      const response = await fetch("/api/github-upload", {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify({
+          action: "update-profile-name",
+          googleIdToken,
+          anonymousAccount,
+          settings: githubPublishSettings,
+          ownerName: nextName,
+          ownerPicture: googleUser?.picture,
+          publicOwnerId: publicLibraryOwnerId,
+          commitPrefix: "Update Spine-Link account name",
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof result?.error === "string" ? result.error : `Library API ${response.status}`);
+      }
+      if (Array.isArray(result.entries)) {
+        setLibraryEntries(normalizeLibraryOrder(result.entries));
+      } else {
+        setLibraryEntries((currentEntries) =>
+          currentEntries.map((currentEntry) => ({
+            ...currentEntry,
+            ownerName: nextName,
+            ...(googleUser?.picture ? { ownerPicture: googleUser.picture } : {}),
+          })),
+        );
+      }
+      setProfileVisibilityStatus("Account name saved");
+    } catch (nextError) {
+      setProfileVisibilityStatus(nextError instanceof Error ? nextError.message : "Could not save account name.");
+    } finally {
+      setIsSavingProfileName(false);
     }
   };
 
@@ -2871,8 +3884,20 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
               return;
             }
 
-            const nextGoogleUser = { email, name: payload.name, picture: payload.picture };
+            const googleDisplayName = cleanAccountDisplayName(payload.name || "");
+            const storedSession = readStoredGoogleSession();
+            const storedDisplayName =
+              storedSession?.user?.email?.toLowerCase() === email.toLowerCase()
+                ? cleanAccountDisplayName(storedSession.user.name || "")
+                : "";
+            const currentDisplayName = cleanAccountDisplayName(profileNameInput);
+            const nextDisplayName =
+              (currentDisplayName && currentDisplayName !== googleDisplayName ? currentDisplayName : "") ||
+              storedDisplayName ||
+              googleDisplayName;
+            const nextGoogleUser = { email, name: nextDisplayName || payload.name, picture: payload.picture };
             setGoogleUser(nextGoogleUser);
+            setProfileNameInput(nextDisplayName);
             setGoogleIdToken(response.access_token);
             storeGoogleSession(nextGoogleUser, response.access_token, response.expires_in);
             setGoogleAuthError("");
@@ -2929,7 +3954,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         const previewDuration = currentAnimationDurationSeconds(playerRef.current);
         setPublishProgress((current) => ({ ...current, label: "Recording WebM preview" }));
         const previewMedia = await createCanvasPreviewMedia(playerCanvas, previewDuration, async () => {
-          playAnimationWithLoopMode(playerRef.current, defaultAnimation, false, () => false);
+          if (!playAnimationWithLoopMode(playerRef.current, defaultAnimation, false, () => false)) return;
           await waitAnimationFrames(1);
           rememberCurrentViewport();
           applyZoomToPlayer(zoomRef.current, false);
@@ -2948,7 +3973,22 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         const thumbnailPosterPath = thumbnailPoster ? joinRepoPath(uploadPath, thumbnailPosterName) : "";
         if (webmPreview) fileMap.set(webmPreviewName, webmPreview);
         if (thumbnailPoster) fileMap.set(thumbnailPosterName, thumbnailPoster);
-        const files = Array.from(fileMap.entries()).map(([name, dataUri]) => ({ name, contentBase64: dataUriToBase64(dataUri) }));
+        const proofFileName = "source-proof.json";
+        const proofPath = joinRepoPath(uploadPath, proofFileName);
+        let files = Array.from(fileMap.entries()).map(([name, dataUri]) => ({ name, contentBase64: dataUriToBase64(dataUri) }));
+        const sourceProof = await createSourceProof(files, {
+          uploadId,
+          title: nextSettings.title || existingEntry?.title || spine.label,
+          uploadedAt,
+          uploadPath,
+          proofPath,
+          proofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
+          settings: nextSettings,
+          user: googleUser ? { ...googleUser, name: accountDisplayName || googleUser.name } : googleUser,
+          anonymousAccount,
+        });
+        fileMap.set(proofFileName, textDataUri("application/json", JSON.stringify(sourceProof, null, 2)));
+        files = Array.from(fileMap.entries()).map(([name, dataUri]) => ({ name, contentBase64: dataUriToBase64(dataUri) }));
         const commitPrefix = `${isEditingEntry ? "Update" : "Add"} Spine preview ${nextSettings.title}`;
 
         if (files.length < 3) {
@@ -2958,6 +3998,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         setPublishProgress((current) => ({ ...current, label: "Saving files to library" }));
         setStatus(`Files ready. Uploading: 0/${files.length}...`);
 
+        const uploadedProofFiles: GitHubProofReceipt[] = [];
         for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
           const file = files[fileIndex];
           const filePath = joinRepoPath(uploadPath, file.name);
@@ -2984,6 +4025,19 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           if (!response.ok) {
             throw new Error(typeof result?.error === "string" ? result.error : `Upload API ${response.status}`);
           }
+          const sourceProofFile = sourceProof.files.find((proofFile) => proofFile.name === file.name);
+          uploadedProofFiles.push({
+            name: file.name,
+            path: filePath,
+            bytes: Number(result.bytes || sourceProofFile?.bytes || byteLengthFromBase64(file.contentBase64)),
+            sha256: String(result.sha256 || sourceProofFile?.sha256 || (await sha256HexFromBytes(base64ToBytes(file.contentBase64)))),
+            github: {
+              contentSha: typeof result.github?.contentSha === "string" ? result.github.contentSha : "",
+              commitSha: typeof result.github?.commitSha === "string" ? result.github.commitSha : "",
+              commitUrl: typeof result.github?.commitUrl === "string" ? result.github.commitUrl : "",
+              downloadUrl: typeof result.github?.downloadUrl === "string" ? result.github.downloadUrl : "",
+            },
+          });
           setPublishProgress((current) => ({
             ...current,
             label: `Saving files ${fileIndex + 1}/${files.length}`,
@@ -2992,11 +4046,46 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           setStatus(`Files ready. Uploading: ${fileIndex + 1}/${files.length}...`);
         }
 
+        setPublishProgress((current) => ({ ...current, label: "Writing source proof anchor", value: Math.max(current.value, 92) }));
+        const anchorFileName = "blockchain-anchor.json";
+        const anchorPath = joinRepoPath(uploadPath, anchorFileName);
+        const anchorRequestHeaders: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (googleIdToken) anchorRequestHeaders.Authorization = `Bearer ${googleIdToken}`;
+        const anchorResponse = await fetch("/api/github-upload", {
+          method: "POST",
+          headers: anchorRequestHeaders,
+          body: JSON.stringify({
+            action: "anchor-source-proof",
+            googleIdToken,
+            anonymousAccount,
+            settings: nextSettings,
+            sourceProof,
+            uploadedFiles: uploadedProofFiles,
+            anchorPath,
+            uploadPath,
+            entryId: uploadId,
+            title: nextSettings.title || existingEntry?.title || spine.label,
+            uploadedAt,
+            proofPath,
+            proofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
+            commitPrefix,
+          }),
+        });
+        const anchorResult = await anchorResponse.json().catch(() => ({}));
+        if (!anchorResponse.ok) {
+          throw new Error(typeof anchorResult?.error === "string" ? anchorResult.error : `Blockchain anchor API ${anchorResponse.status}`);
+        }
+        const blockchainAnchor = anchorResult.anchor as BlockchainAnchor | undefined;
+        const entryFiles = files.map((file) => file.name);
+        if (blockchainAnchor?.anchorPath && !entryFiles.includes(anchorFileName)) entryFiles.push(anchorFileName);
+
         const entry: LibraryEntry = {
           id: uploadId,
           title: nextSettings.title || existingEntry?.title || spine.label,
           ownerEmail: googleUser?.email || existingEntry?.ownerEmail,
-          ownerName: googleUser?.name || existingEntry?.ownerName,
+          ownerName: accountDisplayName || existingEntry?.ownerName || googleUser?.name,
           ownerPicture: googleUser?.picture || existingEntry?.ownerPicture,
           publicOwnerId: existingEntry?.publicOwnerId || publicOwnerIdFor(googleUser, anonymousAccount),
           ownerAnonId: existingEntry?.ownerAnonId || anonymousAccount.id,
@@ -3010,14 +4099,14 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
           textures: Array.from(new Set(setsForPublish.flatMap((nextSpine) => nextSpine.atlasPages.map(basename)))),
           animations: animationNames,
           defaultAnimation,
-          files: files.map((file) => file.name),
+          files: entryFiles,
           previewPath: uploadPath,
           repositoryUrl: existingEntry?.repositoryUrl || "",
           ...(note ? { note } : {}),
-          ...(thumbnailPosterPath ? { thumbnail: assetUrlForRepoPath(thumbnailPosterPath), thumbnailPath: thumbnailPosterPath } : {}),
+          ...(thumbnailPosterPath ? { thumbnail: assetUrlForRepoPath(thumbnailPosterPath, uploadedAt), thumbnailPath: thumbnailPosterPath } : {}),
           ...(thumbnailPosterPath
             ? {
-                thumbnailPoster: assetUrlForRepoPath(thumbnailPosterPath),
+                thumbnailPoster: assetUrlForRepoPath(thumbnailPosterPath, uploadedAt),
                 thumbnailPosterPath,
                 previewWidth: previewMedia.width || undefined,
                 previewHeight: previewMedia.height || undefined,
@@ -3029,10 +4118,14 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
               : {}),
           ...(thumbnailPosterPath ? { thumbnailType: "image" } : {}),
           ...(webmPreviewPath
-            ? { webmPreview: assetUrlForRepoPath(webmPreviewPath), webmPreviewPath }
+            ? { webmPreview: assetUrlForRepoPath(webmPreviewPath, uploadedAt), webmPreviewPath }
             : existingEntry?.webmPreview && /^https:\/\//i.test(existingEntry.webmPreview)
               ? { webmPreview: existingEntry.webmPreview, ...(existingEntry.webmPreviewPath ? { webmPreviewPath: existingEntry.webmPreviewPath } : {}) }
               : {}),
+          sourceProof,
+          sourceProofPath: proofPath,
+          sourceProofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
+          ...(blockchainAnchor ? { blockchainAnchor } : {}),
         };
         const indexRequestHeaders: Record<string, string> = {
           "Content-Type": "application/json",
@@ -3058,6 +4151,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         setPublishProgress({ isOpen: true, value: 100, label: "Permanent link ready" });
         setLibraryEntries((currentEntries) => [entry, ...currentEntries.filter((currentEntry) => currentEntry.id !== entry.id)]);
         setCurrentLibraryEntry(entry);
+        setIsLibraryOpen(false);
         setPreviewNote(note);
         setSelectedCardSize(entry.cardSize || "auto");
         setGeneratedPreviewUrl(permanentPreviewUrl);
@@ -3087,9 +4181,27 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    setIsDragging(false);
-    void prepareFromFiles(event.dataTransfer.files);
+    handleSelectedFiles(Array.from(event.dataTransfer.files ?? []));
   };
+  const showHomeFeed = !preparedSpine && !isEditPage && homeFeedEntries.length > 0;
+  const homeFeedLoop = showHomeFeed ? [...homeFeedEntries, ...homeFeedEntries] : [];
+  const isHomeDropOnly = !preparedSpine && !isEditPage && extraSpineSets.length === 0;
+  const siteReadingPages = [
+    { href: "/spine-link.html", title: "Spine-Link", description: "Platform overview" },
+    { href: "/spine-preview.html", title: "Spine Preview", description: "Open JSON, SKEL and atlas files" },
+    { href: "/spine-preview-online.html", title: "Preview Online", description: "Browser Spine preview guide" },
+    { href: "/spine-web-viewer.html", title: "Web Viewer", description: "Open Spine files online" },
+    { href: "/spine-animation-preview.html", title: "Animation Preview", description: "Preview Spine animations" },
+    { href: "/spine-animation-dataset.html", title: "Animation Dataset", description: "Commercial source database" },
+    { href: "/spine-library.html", title: "Spine Library", description: "Online animation gallery" },
+    { href: "/spine-portfolio.html", title: "Spine Portfolio", description: "Portfolio animation library" },
+    { href: "/share-spine-animation-link.html", title: "Share Animation Link", description: "Create shareable previews" },
+    { href: "/spine-portfolio-link.html", title: "Portfolio Link", description: "Public portfolio sharing" },
+    { href: "/spine-animator.html", title: "Spine Animator", description: "Animator workflow notes" },
+    { href: "/spine-animations.html", title: "Spine Animations", description: "Preview, save and share" },
+    { href: "/spine-work.html", title: "Spine Work", description: "Share work previews" },
+    { href: "/spine-link-manifesto.html", title: "Manifesto", description: "AI animator agreement" },
+  ];
 
   return (
     <main
@@ -3105,13 +4217,15 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
       onDrop={handleDrop}
     >
       <section className="seo-intro" aria-label="Spine-Link SEO description">
-        <h1>Spine-Link online Spine preview and Spine web viewer</h1>
+        <h1>Spine-Link is an animation portfolio platform with Google accounts and uploads</h1>
         <p>
-          Spine-Link is a browser based Spine preview tool for Spine online workflows, Spine web previews, Spine webview links,
-          JSON and SKEL animation files, atlas files, and texture images.
+          World SPINE ARCHIVE is the public archive of user Spine animation works. Anyone can create an anonymous
+          preview with Create preview, or sign in with Google to create a profile, choose a public portfolio with likes,
+          views, showcase and archive publishing, or keep a private library profile that is not listed on the site or in
+          Google.
         </p>
       </section>
-      <ParticleField />
+      <ParticleField mode={isEditPage ? "quiet" : "rich"} />
       {publishProgress.isOpen && (
         <div className={`publish-progress-overlay ${isPublishProgressCompact ? "is-compact" : ""}`} role="status" aria-live="polite">
           <div className="publish-progress-dialog">
@@ -3130,6 +4244,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
       <section className="workspace">
         <header className="topbar">
           <a className="brand-link" href="/" aria-label="Spine-Link home">
+            <span className="brand-mobile-text">spine link</span>
             <span className="brand-logo" aria-hidden="true">
               <span>s</span>
               <span>p</span>
@@ -3144,69 +4259,249 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
               <span>e</span>
               <span className="brand-plus">link</span>
             </span>
+            <img className="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="" aria-hidden="true" />
           </a>
-          <div className="site-menu-group">
-            <button className="site-add-button" type="button" onClick={(event) => startNewLibraryEntry(event.currentTarget)} aria-label="Add new animation card" title="Add new animation card">
-              <Plus size={24} />
-            </button>
-            <details className="site-menu">
-              <summary className="site-menu-toggle" aria-label="Open site menu" title="Menu">
-                <span />
-                <span />
-                <span />
-              </summary>
-              <nav className="site-menu-panel" aria-label="Site pages">
-                <a href="/spine-animation-dataset.html">
-                  <strong>Animation Dataset</strong>
-                  <span>Curated Spine data page</span>
-                </a>
-                <a href="/spine-web-viewer.html">
-                  <strong>Web Viewer</strong>
-                  <span>Open Spine files online</span>
-                </a>
-                <a href="/spine-animation-preview.html">
-                  <strong>Animation Preview</strong>
-                  <span>Preview Spine animations</span>
-                </a>
-              </nav>
-            </details>
-          </div>
-          <div className="auth-panel">
-            {googleUser ? (
-              <div className="auth-user">
-                {googleUser.picture && <img src={googleUser.picture} alt="" />}
-                <button type="button" onClick={openLibrary}>My Portfolio</button>
-                <button className="sign-out-icon-button" type="button" onClick={signOutGoogle} title="Sign out" aria-label="Sign out">
-                  <LogOut size={17} />
-                </button>
-              </div>
-            ) : (
-              <>
-                <button className="my-library-button" type="button" onClick={openLibrary}>
-                  My Portfolio
-                </button>
-                <button className="google-fallback-button" type="button" onClick={openGoogleSignIn}>
-                  <span aria-hidden="true">G</span>
-                  Portfolio with Google
-                </button>
-                {googleAuthError && <span className="auth-error">{googleAuthError}</span>}
-              </>
+          <div className="top-actions-row">
+            {isHomeDropOnly && (
+              <a className="world-archive-link" href="/world-spine-archive">
+                BROWSE
+              </a>
             )}
+            <div className="auth-panel">
+              {googleUser ? (
+                <div className={`auth-user ${isAccountMenuOpen ? "is-account-menu-open" : ""}`}>
+                  <span>{googleUser.email}</span>
+                  <button type="button" onClick={openLibrary}>MY PORTFOLIO</button>
+                  <div className="avatar-menu">
+                    <button
+                      className="avatar-menu-toggle"
+                      type="button"
+                      title="Account"
+                      aria-label="Account menu"
+                      aria-expanded={isAccountMenuOpen}
+                      onClick={() => setIsAccountMenuOpen((isOpen) => !isOpen)}
+                    >
+                      {googleUser.picture ? <img src={googleUser.picture} alt="" /> : <span>{(googleUser.name || googleUser.email || "A").charAt(0).toUpperCase()}</span>}
+                    </button>
+                    <button className="sign-out-icon-button" type="button" onClick={signOutGoogle} title="Sign out" aria-label="Sign out">
+                      <LogOut size={17} />
+                      <span>Sign out</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <a className="my-library-button" href="/?portfolio=1" onClick={(event) => { event.preventDefault(); openLibrary(); }}>
+                    Portfolio database
+                  </a>
+                  <button className="guest-account-button" type="button" onClick={() => { setIsAccountMenuOpen(false); void openGoogleSignIn(); }} title="Sign in" aria-label="Sign in">
+                    <User className="user_icon" size={22} />
+                  </button>
+                  {googleAuthError && <span className="auth-error">{googleAuthError}</span>}
+                </>
+              )}
+            </div>
+            <div className="site-menu-group">
+              <button className="site-add-button" type="button" onClick={(event) => startNewLibraryEntry(event.currentTarget)} aria-label="Add new animation card" title="Add new animation card">
+                <Plus size={24} />
+              </button>
+              <details className="site-menu">
+                <summary className="site-menu-toggle" aria-label="Open site menu" title="Menu">
+                  <span />
+                  <span />
+                  <span />
+                </summary>
+                <nav className="site-menu-panel" aria-label="Site pages">
+                  {siteReadingPages.map((page) => (
+                    <a href={page.href} key={page.href}>
+                      <strong>{page.title}</strong>
+                      <span>{page.description}</span>
+                    </a>
+                  ))}
+                </nav>
+              </details>
+            </div>
           </div>
         </header>
 
+        {showHomeFeed && (
+          <section className="home-portfolio-feed" aria-label="World SPINE ARCHIVE public portfolio and library work feed" ref={homeFeedRef}>
+            <div className="home-feed-heading">
+              <span className="home-feed-archive-label">World SPINE ARCHIVE</span>
+              <strong>Public user works from portfolios and libraries</strong>
+              <small>Anyone can add a Spine animation with Create preview or publish through a Google account profile.</small>
+            </div>
+            <div className="home-feed-viewport">
+              <div className="home-feed-track">
+                {homeFeedLoop.map((entry, index) => {
+                  const metric = entryMetrics[entry.id] ?? entry.metrics ?? emptyEntryMetric();
+                  const poster = entry.thumbnailPoster || entry.thumbnail || "";
+                  const likedEntry = Boolean(metric.liked);
+                  const previewWidth = Number(entry.previewWidth || 0);
+                  const previewHeight = Number(entry.previewHeight || 0);
+                  const mediaRatio =
+                    previewWidth > 0 && previewHeight > 0
+                      ? previewWidth / previewHeight
+                      : Number(entry.mediaAspectRatio || 0);
+                  const cardStyle = {
+                    ...(poster ? { "--home-feed-poster": `url(${poster})` } : {}),
+                    ...(Number.isFinite(mediaRatio) && mediaRatio > 0
+                      ? {
+                          "--home-feed-ratio": `${Math.max(1, Math.round(mediaRatio * 1000))} / 1000`,
+                          "--home-feed-card-width": `${Math.round(Math.max(260, Math.min(860, 320 * mediaRatio)))}px`,
+                        }
+                      : {}),
+                  } as React.CSSProperties;
+                  return (
+                    <a
+                      className="home-feed-card"
+                      href={entry.previewUrl}
+                      key={`${entry.id}-${index}`}
+                      style={cardStyle}
+                      aria-label={`Open ${entry.title}`}
+                    >
+                      {entry.webmPreview ? (
+                        <video
+                          className="home-feed-video"
+                          data-video-src={entry.webmPreview}
+                          poster={poster || undefined}
+                          muted
+                          playsInline
+                          preload="none"
+                          aria-hidden="true"
+                        />
+                      ) : poster ? (
+                        <img src={poster} alt="" loading="lazy" decoding="async" />
+                      ) : (
+                        <span className="home-feed-fallback">{entry.animations ?? 0}</span>
+                      )}
+                      <button
+                        className={`home-feed-like ${likedEntry ? "is-liked" : ""}`}
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void toggleEntryLike(entry);
+                        }}
+                        aria-pressed={likedEntry}
+                        title={likedEntry ? "Liked" : "Like"}
+                      >
+                        <Heart size={30} fill={likedEntry ? "currentColor" : "none"} />
+                        <span>{metric.likes}</span>
+                      </button>
+                      <span className="home-feed-overlay">
+                        <strong>{entry.title}</strong>
+                        <em>{entry.ownerName || "Spine creator"} · {entry.pageMode || "Library"} · {metric.views} views</em>
+                      </span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        )}
+
         <div className="stage">
-          <div
-            className="preview-panel"
-            ref={previewPanelRef}
-          >
+          <div className={isHomeDropOnly ? "home-drop-panel" : `preview-panel ${extraSpineSets.length ? "has-multiple-players" : ""}`} ref={previewPanelRef}>
             {!preparedSpine && (
-              <div className="empty-state">
-                <Upload size={44} strokeWidth={1.5} />
-                <span>Waiting for Spine files</span>
+              <>
+                <label
+                  className={`drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}`}
+                  onClick={(event) => {
+                    if ((event.target as Element | null)?.closest("input")) return;
+                    startNewLibraryEntry(event.currentTarget, { openPicker: false, picker: homeUploadInputRef.current });
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={(event) => {
+                    event.stopPropagation();
+                    setIsDragging(false);
+                  }}
+                  onDrop={handleDrop}
+                >
+                  <input
+                    ref={homeUploadInputRef}
+                    name="spine-files"
+                    type="file"
+                    multiple
+                    accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
+                    aria-label="Upload Spine JSON SKEL atlas and texture files"
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsDragging(true);
+                    }}
+                    onDrop={handleDrop}
+                    onClick={clearFileInputBeforePick}
+                    onChange={handleFileInputChange}
+                    onInput={handleFileInputChange}
+                  />
+                  <Upload size={44} strokeWidth={1.5} />
+                  <strong>Drag'and'Drop files here</strong>
+                  <span>JSON or SKEL, atlas, and textures become a Spine preview.</span>
+                </label>
+                {isHomeDropOnly && (
+                  <p className="home-drop-caption" style={{ fontSize: "8px", lineHeight: 1.2 }}>
+                    <strong>Upload agreement:</strong> by adding files here, you agree to the{" "}
+                    <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public works and uploaded animation
+                    files may be analyzed by automated systems and used as learning, testing, and reference material for
+                    AI animator agents. Personal account data is not sold or shared for unrelated marketing.
+                  </p>
+                )}
+                {(error || isLoading || isDragging || isPublishingLink) && (
+                  <div
+                    className="home-upload-monitor"
+                    data-state={error ? "error" : isLoading ? "loading" : isDragging ? "dragging" : isPublishingLink ? "saving" : "ready"}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <strong>
+                      {error
+                        ? "Upload stopped"
+                        : isLoading
+                          ? "Reading files"
+                          : isPublishingLink
+                            ? "Creating portfolio card"
+                            : "Drop files now"}
+                    </strong>
+                    <span>{error || status}</span>
+                  </div>
+                )}
+                <p className="upload-agreement main-upload-agreement" style={{ fontSize: "8px", lineHeight: 1.2 }}>
+                  Upload agreement: by dropping or choosing files here, you agree to the{" "}
+                  <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public animation files may be
+                  processed, indexed, studied, and used to build educational datasets, evaluation material, and
+                  training examples for AI animator agents. Upload only work you own or have permission to publish.
+                </p>
+              </>
+            )}
+            {shouldShowSkeletonUploadTip && (
+              <div className="skeleton-upload-tip" role="status" aria-live="polite">
+                <span>ты можешь перетащить одновременно 10 скелетов файлов</span>
+                <button type="button" onClick={dismissSkeletonUploadTip} aria-label="Закрыть подсказку">
+                  <X size={14} />
+                </button>
               </div>
             )}
             <div className="player-host" ref={playerHostRef} />
+            {extraSpineSets.map((extraSet) => (
+              <div key={extraSet.id} className="extra-player-shell">
+                <button
+                  className="extra-player-remove"
+                  type="button"
+                  onClick={() => {
+                    setExtraSpineSets((currentSets) => currentSets.filter((currentSet) => currentSet.id !== extraSet.id));
+                    setStatus("Extra player removed.");
+                  }}
+                >
+                  Remove
+                </button>
+                <div className="player-host extra-player-host" data-extra-player-id={extraSet.id} />
+              </div>
+            ))}
             {generatedPreviewUrl && isLinkBannerOpen && (
               <div className="link-ready-banner" role="status" aria-live="polite">
                 <div className="link-ready-banner-main">
@@ -3214,6 +4509,23 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                   <a href={generatedPreviewUrl} target="_blank" rel="noreferrer">
                     {generatedPreviewUrl}
                   </a>
+                  {currentLibraryEntry?.sourceProof?.proofHash && (
+                    <div className="proof-summary">
+                      <span>proof {shortHash(currentLibraryEntry.sourceProof.proofHash)}</span>
+                      <a
+                        href={currentLibraryEntry.sourceProofUrl || currentLibraryEntry.sourceProof.proofUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        source-proof.json
+                      </a>
+                      {currentLibraryEntry.blockchainAnchor?.anchorUrl && (
+                        <a href={currentLibraryEntry.blockchainAnchor.anchorUrl} target="_blank" rel="noreferrer">
+                          blockchain-anchor.json
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="link-ready-banner-actions">
                   <button type="button" onClick={copyGeneratedLink}>
@@ -3333,42 +4645,111 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
             {isEditPage && selectedPreviewImage ? (
               <div className="preview-card seo-video-card is-visible" id="seo-video-card">
                 <div className="section-title">Video preview</div>
-                <video
-                  className="seo-video-preview"
-                  src={currentLibraryEntry?.webmPreview || undefined}
-                  poster={selectedPreviewImage}
-                  muted
-                  loop
-                  playsInline
-                  preload="metadata"
-                  controls
-                />
+                <div className="seo-video-frame" style={videoPreviewAspectRatioStyle(currentLibraryEntry)}>
+                  <video
+                    className="seo-video-preview"
+                    src={currentLibraryEntry?.webmPreview || undefined}
+                    poster={selectedPreviewImage}
+                    muted
+                    loop
+                    playsInline
+                    preload="none"
+                    controls
+                    onLoadedMetadata={(event) => applySeoVideoPreviewAspect(event.currentTarget)}
+                  />
+                </div>
               </div>
             ) : (
-              <label
-                className={`drop-zone ${isDragging ? "is-dragging" : ""}`}
-                onDragOver={(event) => {
+              <form
+                className="portfolio-upload-form"
+                action="/?upload=work"
+                method="get"
+                aria-label="Upload animation work to portfolio"
+                onSubmit={(event) => {
                   event.preventDefault();
-                  event.stopPropagation();
-                  setIsDragging(true);
+                  startNewLibraryEntry(event.currentTarget);
                 }}
-                onDragLeave={(event) => {
-                  event.stopPropagation();
-                  setIsDragging(false);
-                }}
-                onDrop={handleDrop}
               >
-                <input
-                  ref={uploadInputRef}
-                  type="file"
-                  multiple
-                  accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
-                  onChange={(event) => event.target.files && void prepareFromFiles(event.target.files)}
-                />
-                <Upload size={22} />
-                <strong>Drag files here</strong>
-                <span>json/skel, atlas, and one or more texture images</span>
-              </label>
+                <div className="portfolio-upload-form-top">
+                  <div>
+                    <div className="section-title">Upload work</div>
+                    <strong>Add a Spine animation portfolio project</strong>
+                  </div>
+                  {googleUser ? (
+                    <span className="portfolio-upload-status" title={googleUser.email}>
+                      Account connected
+                    </span>
+                  ) : (
+                    <a href="/?login=google" onClick={(event) => { event.preventDefault(); void openGoogleSignIn(); }}>
+                      Sign in
+                    </a>
+                  )}
+                </div>
+                <label
+                  className={`drop-zone ${isDragging ? "is-dragging" : ""}`}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={(event) => {
+                    event.stopPropagation();
+                    setIsDragging(false);
+                  }}
+                  onDrop={handleDrop}
+                >
+                  <input
+                    ref={uploadInputRef}
+                    name="spine-files"
+                    type="file"
+                    multiple
+                    accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
+                    aria-label="Upload Spine JSON SKEL atlas and texture files"
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsDragging(true);
+                    }}
+                    onDrop={handleDrop}
+                    onClick={clearFileInputBeforePick}
+                    onChange={handleFileInputChange}
+                    onInput={handleFileInputChange}
+                  />
+                  <Upload size={22} />
+                  <strong>Choose files for portfolio</strong>
+                  <span>JSON or SKEL, atlas, and textures become an editable public portfolio card.</span>
+                </label>
+                <p className="upload-agreement">
+                  Upload agreement: by adding files here, you agree to the{" "}
+                  <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public works and uploaded animation
+                  files may be analyzed by automated systems and used as learning, testing, and reference material for
+                  AI animator agents. Personal account data is not sold or shared for unrelated marketing.
+                </p>
+                <div className="portfolio-upload-fields" aria-label="Portfolio upload fields">
+                  <label>
+                    <span>Account</span>
+                    {googleUser ? (
+                      <span className="portfolio-upload-status" title={googleUser.email}>
+                        Signed in
+                      </span>
+                    ) : (
+                      <a href="/?login=google" onClick={(event) => { event.preventDefault(); void openGoogleSignIn(); }}>
+                        Google sign-in / registration
+                      </a>
+                    )}
+                  </label>
+                  <label>
+                    <span>Profile</span>
+                    <a href="/?portfolio=1" onClick={(event) => { event.preventDefault(); openLibrary(); }}>
+                      Portfolio database
+                    </a>
+                  </label>
+                  <label>
+                    <span>Publish</span>
+                    <button type="submit">Upload work</button>
+                  </label>
+                </div>
+              </form>
             )}
 
             {shouldShowStatus && (
@@ -3448,7 +4829,23 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                   </button>
                 )}
               </div>
-              <p className="link-note">{copyStatus || "Permanent links work without Google sign-in."}</p>
+              <p className="link-note">
+                {copyStatus || (googleUser ? "This work is stored in your portfolio database." : "Google sign-in stores the work in your portfolio database.")}
+              </p>
+              {currentLibraryEntry?.sourceProof?.proofHash && (
+                <div className="link-proof-row">
+                  <span>Origin proof</span>
+                  <code>{shortHash(currentLibraryEntry.sourceProof.proofHash, 12, 10)}</code>
+                  <a href={currentLibraryEntry.sourceProofUrl || currentLibraryEntry.sourceProof.proofUrl} target="_blank" rel="noreferrer">
+                    source
+                  </a>
+                  {currentLibraryEntry.blockchainAnchor?.anchorUrl && (
+                    <a href={currentLibraryEntry.blockchainAnchor.anchorUrl} target="_blank" rel="noreferrer">
+                      {currentLibraryEntry.blockchainAnchor.blockchain?.status === "submitted" ? "on-chain" : "anchor"}
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
 
             {isEditPage && (
@@ -3541,8 +4938,13 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
         <div className={`library-modal ${isPortfolioMode ? "is-portfolio-mode" : ""}`} role="dialog" aria-modal="true" aria-label="Portfolio">
           <div className="library-modal-top">
             <div>
-              <div className="library-kicker">{isPortfolioMode ? "PORTFOLIO" : "LIBRARY"}</div>
-              <h2>{isPortfolioMode ? "MEDIA GALLERY" : "YOUR"}</h2>
+              <div className="library-kicker">ACCOUNT DATABASE</div>
+              <h2>{isPortfolioMode ? "Portfolio gallery" : "Portfolio database"}</h2>
+              <p className="library-modal-subtitle">
+                {googleUser
+                  ? `Signed in as ${accountDisplayName || googleUser.email}${accountDisplayName ? ` · ${googleUser.email}` : ""}`
+                  : "Browser account is active. Sign in with Google to register and merge uploads."}
+              </p>
             </div>
             <div className="library-modal-actions">
               <button className="library-add-button" type="button" onClick={(event) => startNewLibraryEntry(event.currentTarget)} title="Add new animation card">
@@ -3561,11 +4963,38 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
 
           <div className="library-profile-settings">
             <div className="library-profile-settings-copy">
+              <form
+                className="account-name-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void saveAccountDisplayName();
+                }}
+              >
+                <label htmlFor="spine-account-name">Account name</label>
+                <input
+                  id="spine-account-name"
+                  type="text"
+                  value={profileNameInput}
+                  onChange={(event) => setProfileNameInput(event.currentTarget.value)}
+                  placeholder="Spine creator"
+                  maxLength={80}
+                  autoComplete="name"
+                />
+                <button type="submit" disabled={isSavingProfileName || !cleanAccountDisplayName(profileNameInput)}>
+                  {isSavingProfileName ? <Loader2 className="spin" size={15} /> : <Save size={15} />}
+                  {isSavingProfileName ? "Saving" : "Save"}
+                </button>
+              </form>
               <div className="section-title">{isPortfolioMode ? "Portfolio link" : "Library link"}</div>
-              <strong>{isPortfolioMode ? "Share a link to your portfolio" : "Share a link to your library"}</strong>
+              <strong>{isPortfolioMode ? "Public portfolio link" : "Private library link"}</strong>
               <a href={publicLibraryUrl} target="_blank" rel="noreferrer">
                 {publicLibraryUrl}
               </a>
+              <span>
+                {isPortfolioMode
+                  ? "Public portfolio mode is indexable, has real likes and views, can appear in the showcase, and publishes visible works to World SPINE ARCHIVE."
+                  : "Library mode is private by default: it stores uploaded works for the owner and is not listed through the site or Google like public portfolios."}
+              </span>
               {profileVisibilityStatus && <em>{profileVisibilityStatus}</em>}
             </div>
             <div className="library-profile-settings-actions">
@@ -3579,11 +5008,11 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 title={isPortfolioMode ? "Switch to library mode" : "Switch to portfolio mode"}
               >
                 {isPortfolioMode ? <FileArchive size={17} /> : <Layers size={17} />}
-                <span className="action-label">{isPortfolioMode ? "LIBRARY MODE" : "PORTFOLIO MODE"}</span>
+                <span className="action-label">{isPortfolioMode ? "Library" : "Portfolio"}</span>
               </button>
               <button type="button" onClick={copyPublicLibraryLink} title="Copy profile link">
                 <Copy size={17} />
-                <span className="action-label">Copy link</span>
+                <span className="action-label">Copy</span>
               </button>
               <button
                 className={!showProfileOnSharedPages ? "active" : ""}
@@ -3593,7 +5022,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 title={showProfileOnSharedPages ? "Hide my name" : "Show my name"}
               >
                 {showProfileOnSharedPages ? <EyeOff size={17} /> : <Eye size={17} />}
-                <span className="action-label">{showProfileOnSharedPages ? "Hide my name" : "Show my name"}</span>
+                <span className="action-label">{showProfileOnSharedPages ? "Hide name" : "Show name"}</span>
               </button>
             </div>
           </div>
@@ -3625,8 +5054,8 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 <option value="hidden">Hidden only</option>
               </select>
               <select value={portfolioSort} onChange={(event) => setPortfolioSort(event.target.value as typeof portfolioSort)} aria-label="Sort portfolio">
-                <option value="curated">Curated order</option>
-                <option value="newest">Newest first</option>
+                <option value="curated">Curated</option>
+                <option value="newest">Newest</option>
                 <option value="name">Name A-Z</option>
               </select>
             </div>
@@ -3649,18 +5078,18 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                 const editUrl = new URL(`/?edit=${encodeURIComponent(entry.id)}`, window.location.origin).toString();
                 const uploadedDate = entry.uploadedAt ? new Date(entry.uploadedAt) : null;
                 const webmPreviewUrl = isWebmPreview(entry.webmPreview || "")
-                  ? entry.webmPreview || ""
+                  ? withAssetVersion(entry.webmPreview || "", assetVersionForLibraryEntry(entry, "webm"))
                   : derivedLibraryAssetUrl(entry, [".webm"]) || generatedWebmUrlForEntry(entry);
-                const safeThumbnail = safeLibraryAssetUrl(entry.thumbnail || "");
+                const safeThumbnail = withAssetVersion(safeLibraryAssetUrl(entry.thumbnail || ""), assetVersionForLibraryEntry(entry, "thumbnail"));
                 const safePoster =
-                  safeLibraryAssetUrl(entry.thumbnailPoster || "") ||
+                  withAssetVersion(safeLibraryAssetUrl(entry.thumbnailPoster || ""), assetVersionForLibraryEntry(entry, "poster")) ||
                   generatedPosterUrlForEntry(entry) ||
                   derivedLibraryAssetUrl(entry, [".webp", ".png", ".jpg", ".jpeg"]);
                 const isGifThumbnail = entry.thumbnailType === "gif" || /^data:image\/gif;base64,/i.test(entry.thumbnail || "");
                 const thumbnailForCard = isGifThumbnail ? safePoster : safeThumbnail || safePoster;
-                const likeStorageKey = `spine-link-like:${entry.id}`;
-                const likedEntry = typeof window !== "undefined" && window.localStorage.getItem(likeStorageKey) === "true";
-                const likeCount = baseLikeCount(entry.id) + (likedEntry ? 1 : 0);
+                const entryMetric = entryMetrics[entry.id] ?? emptyEntryMetric();
+                const likedEntry = Boolean(entryMetric.liked);
+                const likeCount = entryMetric.likes;
                 const shouldIgnoreCardOpen = (target: EventTarget | null) =>
                   target instanceof HTMLElement &&
                   Boolean(target.closest(".library-card-actions, .library-card-order-actions, .portfolio-like-button"));
@@ -3674,7 +5103,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                     data-card-size-mode={entry.cardSize && entry.cardSize !== "auto" ? "manual" : "auto"}
                     style={{
                       "--library-card-offset": `${(index % 4) * 18}px`,
-                      ...(!webmPreviewUrl && thumbnailForCard ? { "--library-thumbnail": `url(${thumbnailForCard})` } : {}),
+                      ...(thumbnailForCard ? { "--library-thumbnail": `url(${thumbnailForCard})` } : {}),
                     } as React.CSSProperties}
                   >
                     <div
@@ -3699,9 +5128,7 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-                          const nextLiked = window.localStorage.getItem(likeStorageKey) !== "true";
-                          window.localStorage.setItem(likeStorageKey, String(nextLiked));
-                          setLibraryEntries((currentEntries) => [...currentEntries]);
+                          void toggleEntryLike(entry);
                         }}
                         aria-pressed={likedEntry}
                         title={likedEntry ? "Liked" : "Like"}
@@ -3715,12 +5142,12 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                       <video
                         className="library-card-webm"
                         src={webmPreviewUrl || undefined}
+                        poster={thumbnailForCard || undefined}
                         muted
                         playsInline
-                        preload="metadata"
+                        preload="none"
                         aria-hidden="true"
                         onLoadedMetadata={(event) => applyLibraryCardVideoAspect(event.currentTarget)}
-                        onLoadedData={(event) => applyLibraryCardVideoAspect(event.currentTarget)}
                       />
                       <Layers size={24} />
                       <span>{entry.animations?.length ?? 0}</span>
@@ -3737,6 +5164,10 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
                       </div>
                       {isPortfolioMode && entry.note && <p>{entry.note}</p>}
                       <div className="library-card-meta">
+                        <span>
+                          <Eye size={13} />
+                          {entryMetric.views} views
+                        </span>
                         <span>{entry.files?.length ?? 0} files</span>
                       </div>
                     </div>
@@ -3767,9 +5198,6 @@ export function App({ initialFiles, initialOpenLibrary = false }: AppProps) {
       )}
       <a className="site-credit" href="https://t.me/vladleopold" target="_blank" rel="noreferrer">
         by leopold
-      </a>
-      <a className="world-archive-link" href="/world-spine-archive">
-        WORLD SPINE ARCHIVE
       </a>
     </main>
   );
