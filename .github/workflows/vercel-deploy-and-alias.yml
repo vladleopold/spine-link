@@ -9,6 +9,20 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate Vercel secrets
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::Missing VERCEL_TOKEN GitHub secret."
+            exit 1
+          fi
+          if [ -z "$VERCEL_SCOPE" ]; then
+            echo "::error::Missing VERCEL_SCOPE GitHub secret."
+            exit 1
+          fi
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
+
       - name: Check out repo
         uses: actions/checkout@v4
 
