@@ -4985,7 +4985,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                   {isSavingProfileName ? "Saving" : "Save"}
                 </button>
               </form>
-              <div className="section-title">{isPortfolioMode ? "Portfolio link" : "Library link"}</div>
+              {!isEditPage && <div className="section-title">{isPortfolioMode ? "Portfolio link" : "Library link"}</div>}
               <strong>{isPortfolioMode ? "Public portfolio link" : "Private library link"}</strong>
               <a href={publicLibraryUrl} target="_blank" rel="noreferrer">
                 {publicLibraryUrl}

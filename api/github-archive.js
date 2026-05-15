@@ -470,10 +470,10 @@ function baseStyles() {
       html, body { min-height: 100%; margin: 0; }
       body { color: #edf5ff; background: #050607; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       .page { width: 100%; margin: 0; padding: 26px 14px 46px; }
-      .top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; gap: 18px; margin-bottom: 22px; }
-      .archive-title-block { min-width: 0; }
-      .brand { color: #fff; text-decoration: none; font-size: clamp(32px, 5vw, 72px); font-weight: 950; letter-spacing: .02em; line-height: .9; }
-      .brand span { display: block; color: #ff6a28; font-size: 12px; letter-spacing: .32em; text-transform: uppercase; }
+      .top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; margin-bottom: 22px; }
+      .archive-title-block { min-width: 0; justify-self: center; text-align: center; }
+      .brand { display: inline-flex; flex-wrap: nowrap; align-items: baseline; gap: 14px; max-width: 100%; color: #fff; text-decoration: none; font-size: clamp(32px, 5vw, 72px); font-weight: 950; letter-spacing: .02em; line-height: .92; white-space: nowrap; }
+      .brand span { display: inline-block; color: #ff6a28; font-size: 12px; letter-spacing: .32em; text-transform: uppercase; white-space: nowrap; }
       .archive-header-right { display: grid; justify-items: end; gap: 12px; }
       .archive-logo { display: inline-flex; align-items: center; gap: 8px; color: #f7fbff; font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif; font-size: clamp(30px, 3.6vw, 54px); font-weight: 500; line-height: .78; letter-spacing: .18em; text-decoration: none; text-transform: uppercase; text-shadow: 0 0 1px rgba(255,255,255,.86), 0 6px 18px rgba(0,0,0,.42); }
       .archive-logo-mark { display: inline-grid; gap: 4px; width: 16px; margin: 0 -3px 0 -5px; transform: translateY(1px); }
@@ -494,8 +494,10 @@ function baseStyles() {
         *::-webkit-scrollbar { width: 0; height: 0; display: none; }
         .page { width: 100%; padding: 18px 9px 46px; }
         .top { grid-template-columns: 1fr; align-items: start; }
+        .archive-title-block { justify-self: start; text-align: left; }
         .archive-header-right { justify-items: start; width: 100%; }
         .archive-logo { font-size: clamp(30px, 13vw, 46px); }
+        .brand { gap: 10px; white-space: normal; }
         .item-header-title span { max-width: 100%; white-space: normal; }
       }
   `;
@@ -689,13 +691,6 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
         </div>
         <div class="archive-header-right">
           <a class="back" href="/">Create preview</a>
-          <div class="archive-select-control" aria-live="polite">
-            <div class="archive-select-actions">
-              <button type="button" id="archive-select-button">Select</button>
-              <button type="button" class="is-delete" id="archive-delete-button" hidden>Delete</button>
-            </div>
-            <div class="archive-select-status" id="archive-select-status"></div>
-          </div>
         </div>
       </header>
       <p class="muted">
@@ -705,6 +700,15 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
         the site or Google unlike portfolios.
       </p>
       ${entries.length ? `<section class="grid">${cards}</section>` : '<p class="muted">No public previews yet.</p>'}
+      <footer class="archive-footer">
+        <div class="archive-select-control" aria-live="polite">
+          <div class="archive-select-actions">
+            <button type="button" id="archive-select-button">Select</button>
+            <button type="button" class="is-delete" id="archive-delete-button" hidden>Delete</button>
+          </div>
+          <div class="archive-select-status" id="archive-select-status"></div>
+        </div>
+      </footer>
     </main>
     <script>window.SpineLinkMetricsConfig = {};</script>
     <script src="/spine-metrics.js" defer></script>

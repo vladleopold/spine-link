@@ -603,6 +603,7 @@ function createHtml(config) {
       .library-nav-button--next { right: 14px; }
       #sidebar { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
       .preview-card { padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
+      .preview-top-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, .9fr); gap: 12px; align-items: stretch; margin-bottom: 12px; }
       .section-title { margin: 0 0 10px; color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
       .seo-video-card { display: none; }
       .seo-video-card.is-visible { display: block; }
@@ -623,8 +624,17 @@ function createHtml(config) {
       #animation-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; }
       .note-text { margin: 0; color: rgba(231,237,244,.88); font-size: 16px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
       .note-card:empty { display: none; }
-      .owner-card { display: none; gap: 14px; }
+      .owner-card { display: none; gap: 12px; }
       .owner-card.is-visible { display: grid; }
+      .preview-top-row .preview-card { min-height: 0; }
+      .preview-top-row .section-title { margin-bottom: 8px; }
+      .preview-top-row .owner-profile { gap: 10px; }
+      .preview-top-row .owner-avatar { width: 40px; height: 40px; }
+      .preview-top-row .owner-profile strong { font-size: 15px; }
+      .preview-top-row .owner-profile span { font-size: 11px; }
+      .preview-top-row .like-card { display: grid; align-content: start; gap: 10px; }
+      .preview-top-row .like-card .preview-like-button { min-height: 42px; }
+      .preview-top-row .preview-view-count { margin-top: 0; }
       .owner-profile { display: flex; align-items: center; gap: 12px; min-width: 0; }
       .owner-avatar { width: 46px; height: 46px; border: 1px solid rgba(255,255,255,.14); border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.08); }
       .owner-avatar-fallback { display: grid; place-items: center; color: #111; font-weight: 900; background: #b3ff40; }
@@ -652,12 +662,11 @@ function createHtml(config) {
       .spine-link-loop-button.is-off::after { content: none; }
     </style>
   </head>
-  <body>
+      <body>
     <div id="app">
       <header class="topbar">
         <a class="brand-link" href="/" aria-label="Spine-Link home"><span class="brand-logo" aria-hidden="true"><span>s</span><span>p</span><span class="brand-spine-mark"><i></i><i></i><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="brand-plus">link</span></span></a>
         <nav class="player-top-actions" aria-label="Spine-Link player navigation">
-          <a class="player-top-button" href="/world-spine-archive">World SPINE ARCHIVE</a>
           <a class="player-top-button is-primary" href="/">Create preview</a>
         </nav>
       </header>
@@ -669,11 +678,13 @@ function createHtml(config) {
         </div>
         <aside id="sidebar">
           <div class="preview-card" id="set-card"><div class="section-title">Set</div><select id="set-select"></select></div>
-          <div class="preview-card owner-card" id="owner-card"><div class="section-title">Creator</div><div id="owner-profile"></div></div>
+          <div class="preview-top-row">
+            <div class="preview-card owner-card" id="owner-card"><div class="section-title">Creator</div><div id="owner-profile"></div></div>
+            <div class="preview-card like-card" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><div class="section-title">Metrics</div><button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button><div class="preview-view-count" data-metric-id="${escapeHtml(entryMetricId)}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div></div>
+          </div>
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
-          <div class="preview-card like-card" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><div class="section-title">Metrics</div><button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button><div class="preview-view-count" data-metric-id="${escapeHtml(entryMetricId)}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div></div>
-          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<div class="preview-card proof-card"><div class="section-title">Origin proof</div>${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div>` : ''}
           <div class="preview-card animation-card"><div class="section-title">Animations</div><div id="animation-list"></div></div>
+          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<div class="preview-card proof-card"><div class="section-title">Origin proof</div>${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div>` : ''}
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
       </div>
