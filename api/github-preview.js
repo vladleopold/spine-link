@@ -704,9 +704,10 @@ function createHtml(config) {
       }
       @media (max-width: 560px) {
         #app { padding: 10px 12px 56px; }
-        .topbar { grid-template-columns: 1fr; justify-items: start; }
-        .player-top-actions { justify-self: start; margin-left: 0; }
-        .player-top-button { max-width: calc(100vw - 24px); min-height: 34px; }
+        .topbar { grid-template-columns: minmax(0, 1fr) auto; justify-items: stretch; }
+        .brand-logo { font-size: clamp(21px, 6.2vw, 28px); letter-spacing: .14em; }
+        .player-top-actions { justify-self: end; margin-left: 0; }
+        .player-top-button { max-width: min(34vw, 116px); min-height: 34px; padding-inline: 9px; }
         .preview-top-row { grid-template-columns: minmax(0, 1fr) auto auto; margin: 2px 0 10px; }
         .preview-like-button { width: 60px; height: 60px; }
       }
