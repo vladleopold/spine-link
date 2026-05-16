@@ -380,18 +380,26 @@ function createLibraryHtml({ origin, publicOwnerId, entries, metrics }) {
       *::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(74,78,84,.72); background-clip: content-box; }
       *::-webkit-scrollbar-thumb:hover { background: rgba(100,106,115,.78); background-clip: content-box; }
       body { min-height: 100vh; margin: 0; color: #edf5ff; background: #070809; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .page { position: relative; z-index: 1; width: min(1280px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
-      .creator-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 28px; width: 100%; margin-bottom: 28px; padding: 24px 26px 26px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; background: rgba(8,9,10,.78); box-shadow: inset 0 0 0 1px rgba(255,255,255,.02), 0 22px 70px rgba(0,0,0,.32); backdrop-filter: blur(10px); }
-      .creator-kicker { align-self: center; color: #ff6a28; font-size: clamp(16px, 2vw, 22px); font-weight: 950; letter-spacing: .18em; text-transform: uppercase; }
-      .creator-row { display: flex; align-items: center; justify-self: end; gap: 18px; min-width: 0; max-width: 100%; }
-      .creator-avatar { flex: 0 0 auto; width: 62px; height: 62px; overflow: hidden; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; background: #181b20; box-shadow: 0 0 0 1px rgba(140,199,255,.08); }
+      .page { position: relative; z-index: 1; width: min(1280px, calc(100% - 24px)); margin: 0 auto; padding: 22px 0 48px; }
+      .creator-card { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 18px; width: 100%; margin-bottom: 14px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+      .creator-logo { display: inline-flex; align-items: center; justify-self: start; min-width: 0; color: #fff; text-decoration: none; }
+      .creator-logo-mark { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; color: #fff; font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif; font-size: clamp(26px, 4.4vw, 44px); font-weight: 500; line-height: .78; letter-spacing: .18em; text-shadow: 0 0 1px rgba(255,255,255,.86), 0 6px 18px rgba(0,0,0,.42); }
+      .creator-logo-spine { display: inline-grid; gap: 3px; width: 12px; margin: 0 -3px 0 -5px; transform: translateY(0); }
+      .creator-logo-spine i { display: block; width: 12px; height: 5px; border-radius: 999px; background: #ff5a1f; box-shadow: 0 0 8px rgba(255,90,31,.22); }
+      .creator-logo-spine i:nth-child(2) { width: 11px; transform: translateX(2px); }
+      .creator-logo-spine i:nth-child(3) { width: 10px; transform: translateX(3px); }
+      .creator-logo-spine i:nth-child(4) { width: 9px; transform: translateX(4px); }
+      .creator-logo-spine i:nth-child(5) { width: 8px; transform: translateX(5px); }
+      .creator-logo-plus { margin-left: 4px; color: #ff6a28; font-size: .62em; font-weight: 800; letter-spacing: .18em; line-height: 1; text-transform: uppercase; transform: translate(-10px, .18em); }
+      .creator-row { display: flex; align-items: center; justify-self: end; min-width: 0; max-width: 100%; }
+      .creator-avatar { flex: 0 0 auto; width: 72px; height: 72px; overflow: hidden; border: 0; border-radius: 999px; background: #181b20; box-shadow: 0 0 0 1px rgba(140,199,255,.08); }
       .creator-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
-      .creator-avatar-fallback { display: grid; place-items: center; width: 100%; height: 100%; color: #111; background: #b3ff40; font-size: 25px; font-weight: 950; }
-      .creator-name-line { display: flex; align-items: baseline; gap: 40px; min-width: 0; }
-      .creator-name { color: #fff; font-size: clamp(24px, 3.2vw, 34px); font-weight: 950; line-height: 1.05; white-space: nowrap; }
-      .creator-count { color: rgba(237,245,255,.62); font-size: clamp(16px, 2vw, 22px); font-weight: 900; letter-spacing: .05em; white-space: nowrap; text-transform: uppercase; }
-      .portfolio-search-copy { margin: -8px 0 24px; color: rgba(237,245,255,.76); }
-      .portfolio-search-copy h1 { margin: 0 0 8px; color: #fff; font-size: clamp(24px, 4vw, 46px); line-height: 1; letter-spacing: 0; }
+      .creator-avatar-fallback { display: grid; place-items: center; width: 100%; height: 100%; color: #111; background: #b3ff40; font-size: 34px; font-weight: 950; }
+      .creator-name-line { display: contents; }
+      .creator-name { display: none; }
+      .creator-count { justify-self: center; color: rgba(237,245,255,.66); font-size: clamp(19px, 3.8vw, 32px); font-weight: 950; letter-spacing: .13em; white-space: nowrap; text-transform: uppercase; }
+      .portfolio-search-copy { margin: 0 0 18px; color: rgba(237,245,255,.76); }
+      .portfolio-search-copy h1 { display: none; }
       .portfolio-search-copy p { max-width: 760px; margin: 0; font-size: 15px; line-height: 1.55; }
       .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); grid-auto-flow: dense; grid-auto-rows: 96px; gap: 18px; }
       .library-card { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; margin: 0; overflow: hidden; border: 2px solid rgba(255,185,214,.72); border-radius: 8px; color: inherit; background: radial-gradient(circle at 22% 22%, rgba(255,106,40,.28), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.32), transparent 32%), linear-gradient(135deg, rgba(32,35,38,.98), rgba(20,22,25,.98)); box-shadow: 0 0 0 1px rgba(255,185,214,.2), 0 20px 56px rgba(0,0,0,.34); transition: transform 150ms ease, border-color 150ms ease; }
@@ -405,7 +413,6 @@ function createLibraryHtml({ origin, publicOwnerId, entries, metrics }) {
       .library-card--large-rect { grid-column: span 4; grid-row: span 4; }
       .library-card--full { grid-column: 1 / -1; grid-row: span 3; }
       .library-card:hover { transform: translateY(-3px); border-color: #ffe4ef; }
-      .is-library-page .creator-card { border-color: rgba(140,199,255,.24); box-shadow: inset 0 0 0 1px rgba(140,199,255,.05), 0 22px 70px rgba(0,0,0,.32); }
       .is-library-page .library-card { border-color: rgba(140,199,255,.58); box-shadow: 0 0 0 1px rgba(140,199,255,.14), 0 20px 56px rgba(0,0,0,.34); }
       .is-library-page .library-card:hover { border-color: rgba(179,255,64,.9); }
       .library-card::before { content: ""; position: absolute; inset: 0; z-index: 0; background-image: var(--library-thumbnail); background-position: center; background-repeat: no-repeat; background-size: contain; opacity: .92; transform: none; transform-origin: center; }
@@ -429,19 +436,17 @@ function createLibraryHtml({ origin, publicOwnerId, entries, metrics }) {
       .library-card-meta strong { color: inherit; font-size: inherit; }
       .empty { padding: 34px; border: 1px dashed rgba(255,255,255,.16); border-radius: 8px; color: rgba(237,245,255,.68); text-align: center; }
       @media (max-width: 900px) { .library-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: 76px; } .library-card--horizontal, .library-card--wide, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; } }
-      @media (max-width: 640px) { * { scrollbar-width: none; } *::-webkit-scrollbar { width: 0; height: 0; display: none; } .creator-card { grid-template-columns: 1fr; gap: 22px; padding: 20px; } .creator-row { align-items: center; justify-self: stretch; flex-direction: row; gap: 14px; } .creator-avatar { width: clamp(44px, 15vw, 56px); height: clamp(44px, 15vw, 56px); } .creator-name-line { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, max-content); column-gap: 40px; row-gap: 7px; } .creator-name { max-width: calc(100vw - 140px); font-size: clamp(18px, 6.2vw, 30px); white-space: nowrap; } .creator-count { font-size: clamp(14px, 4.4vw, 18px); } .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 98px; } .library-card, .library-card--small-square, .library-card--square, .library-card--horizontal, .library-card--wide, .library-card--vertical, .library-card--medium-narrow, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; grid-row: span 3; } }
+      @media (max-width: 640px) { * { scrollbar-width: none; } *::-webkit-scrollbar { width: 0; height: 0; display: none; } .page { width: min(100% - 24px, 1280px); padding-top: 20px; } .creator-card { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; margin-bottom: 8px; } .creator-logo-mark { font-size: clamp(23px, 7.3vw, 30px); letter-spacing: .13em; } .creator-count { font-size: clamp(18px, 4.7vw, 24px); letter-spacing: .13em; } .creator-row { justify-self: end; } .creator-avatar { width: clamp(54px, 13vw, 72px); height: clamp(54px, 13vw, 72px); } .creator-avatar-fallback { font-size: clamp(26px, 7vw, 34px); } .portfolio-search-copy { margin-bottom: 14px; } .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 98px; } .library-card, .library-card--small-square, .library-card--square, .library-card--horizontal, .library-card--wide, .library-card--vertical, .library-card--medium-narrow, .library-card--medium-wide, .library-card--large-rect, .library-card--full { grid-column: 1 / -1; grid-row: span 3; } }
     </style>
   </head>
   <body class="${publicPageClass}">
     <main class="page">
       <section class="creator-card" aria-label="${publicPageLabel}">
-        <div class="creator-kicker">${publicPageLabel}</div>
+        <a class="creator-logo" href="/" aria-label="Spine-Link home"><span class="creator-logo-mark" aria-hidden="true"><span>s</span><span>p</span><span class="creator-logo-spine"><i></i><i></i><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="creator-logo-plus">link</span></span></a>
+        <span class="creator-count">${visibleEntries.length} SPINE WORKS</span>
         <div class="creator-row">
           <div class="creator-avatar" aria-hidden="true">
             ${ownerPicture ? `<img src="${ownerPicture}" alt="" />` : `<div class="creator-avatar-fallback">${ownerInitial}</div>`}
-          </div>
-          <div class="creator-name-line">
-            <strong class="creator-name">${ownerName}</strong><span class="creator-count">${visibleEntries.length} SPINE WORKS</span>
           </div>
         </div>
       </section>
