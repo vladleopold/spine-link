@@ -1014,8 +1014,6 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
         }
         function scheduleChaos() {
           window.clearTimeout(chaosTimer);
-          if (document.hidden) return;
-          chaosTimer = window.setTimeout(runChaos, 520 + Math.random() * 1280);
         }
         function randomSample(items, count) {
           return items

@@ -2357,8 +2357,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
     const videos = Array.from(root.querySelectorAll<HTMLVideoElement>(".home-feed-video"));
     if (!videos.length) return;
-    const maxActiveVideos = window.innerWidth < 900 ? 1 : 2;
-
     function pauseVideo(video: HTMLVideoElement) {
       video.pause();
       video.removeAttribute("data-playing");
@@ -2371,53 +2369,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       }
     }
 
-    function playVideo(video: HTMLVideoElement) {
-      const source = video.dataset.videoSrc || "";
-      if (!source) return;
-      if (!video.getAttribute("src")) video.setAttribute("src", source);
-      video.muted = true;
-      video.loop = true;
-      video.playsInline = true;
-      video.setAttribute("data-playing", "true");
-      video.play().catch(() => {
-        video.removeAttribute("data-playing");
-      });
-    }
-
-    function visibleVideoScore(video: HTMLVideoElement) {
-      const rect = video.getBoundingClientRect();
-      const visibleWidth = Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0);
-      if (visibleWidth <= 32 || rect.bottom <= 0 || rect.top >= window.innerHeight) return 0;
-      const center = rect.left + rect.width / 2;
-      const distancePenalty = Math.abs(center - window.innerWidth / 2) / Math.max(1, window.innerWidth);
-      return Math.max(0, visibleWidth / Math.max(1, rect.width) - distancePenalty * 0.2);
-    }
-
-    function syncVisibleVideos() {
-      if (document.hidden) {
-        videos.forEach(pauseVideo);
-        return;
-      }
-      const activeVideos = videos
-        .map((video) => ({ video, score: visibleVideoScore(video) }))
-        .filter((item) => item.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, maxActiveVideos)
-        .map((item) => item.video);
-      const activeSet = new Set(activeVideos);
-      videos.forEach((video) => {
-        if (activeSet.has(video)) playVideo(video);
-        else pauseVideo(video);
-      });
-    }
-
-    const interval = window.setInterval(syncVisibleVideos, 1300);
-    const handleVisibilityChange = () => syncVisibleVideos();
+    const handleVisibilityChange = () => videos.forEach(pauseVideo);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    syncVisibleVideos();
+    videos.forEach(pauseVideo);
 
     return () => {
-      window.clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       videos.forEach(pauseVideo);
     };
@@ -2495,8 +2451,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
     const scheduleChaos = () => {
       window.clearTimeout(chaosTimer);
-      if (document.hidden) return;
-      chaosTimer = window.setTimeout(runChaos, 520 + Math.random() * 1280);
     };
 
     const runChaos = () => {

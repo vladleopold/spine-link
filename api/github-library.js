@@ -588,8 +588,6 @@ function createLibraryHtml({ origin, publicOwnerId, entries, metrics }) {
         }
         function scheduleChaos() {
           window.clearTimeout(chaosTimer);
-          if (document.hidden) return;
-          chaosTimer = window.setTimeout(runChaos, 520 + Math.random() * 1280);
         }
         function randomSample(items, count) {
           return items

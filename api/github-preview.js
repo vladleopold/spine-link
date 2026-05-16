@@ -963,8 +963,6 @@ function createHtml(config) {
         }
         function scheduleChaos() {
           window.clearTimeout(chaosTimer);
-          if (document.hidden) return;
-          chaosTimer = window.setTimeout(runChaos, 560 + Math.random() * 1320);
         }
         function randomSample(items, count) {
           return items

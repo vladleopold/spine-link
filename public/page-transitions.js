@@ -45,7 +45,7 @@
   }
 
   function startQuietSeoParticles() {
-    if (document.getElementById("root") || document.getElementById("app") || document.querySelector(".library-grid")) return;
+    if (document.getElementById("root") || document.getElementById("app") || document.querySelector(".library-grid") || document.querySelector(".grid .tile")) return;
     if (document.querySelector(".particle-field")) return;
     const canvas = document.createElement("canvas");
     canvas.className = "particle-field particle-field--seo";
