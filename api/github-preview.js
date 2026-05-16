@@ -657,19 +657,23 @@ function createHtml(config) {
         *::-webkit-scrollbar { width: 0; height: 0; display: none; }
         html, body, #app { min-height: 100%; }
         body { background: #030404; }
-        #app { display: flex; flex-direction: column; gap: 18px; min-height: 100%; padding: 34px 16px 56px; background: #030404; }
+        #app { display: flex; flex-direction: column; gap: 10px; min-height: 100%; padding: 12px 16px 56px; background: #030404; }
         .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; overflow: hidden; }
         .brand-link { min-width: 0; overflow: hidden; }
-        .brand-logo { max-width: 100%; gap: 7px; font-size: clamp(34px, 10vw, 50px); letter-spacing: .18em; }
-        .brand-spine-mark { gap: 4px; width: 15px; margin: 0 -4px 0 -7px; transform: translateY(0); }
-        .brand-spine-mark i { width: 15px; height: 7px; }
+        .brand-logo { max-width: 100%; gap: 5px; font-size: clamp(24px, 5.6vw, 30px); letter-spacing: .16em; }
+        .brand-spine-mark { gap: 3px; width: 11px; margin: 0 -3px 0 -5px; transform: translateY(0); }
+        .brand-spine-mark i { width: 11px; height: 5px; }
+        .brand-spine-mark i:nth-child(2) { width: 10px; }
+        .brand-spine-mark i:nth-child(3) { width: 9px; }
+        .brand-spine-mark i:nth-child(4) { width: 8px; }
+        .brand-spine-mark i:nth-child(5) { width: 7px; }
         .brand-plus { margin-left: 5px; font-size: .64em; letter-spacing: .17em; transform: translate(-15px, .16em); }
         .player-top-actions { flex: 0 0 auto; justify-content: flex-end; width: auto; margin-left: auto; }
-        .player-top-button { max-width: min(40vw, 292px); min-height: 80px; padding: 0 20px; overflow: hidden; border-color: rgba(179,255,64,.58); border-radius: 14px; color: #efffd8; background: rgba(179,255,64,.08); font-size: clamp(20px, 4.8vw, 25px); text-overflow: ellipsis; box-shadow: none; }
+        .player-top-button { max-width: min(36vw, 120px); min-height: 34px; padding: 0 12px; overflow: hidden; border-color: rgba(179,255,64,.58); border-radius: 8px; color: #efffd8; background: rgba(179,255,64,.08); font-size: clamp(12px, 2.8vw, 15px); text-overflow: ellipsis; box-shadow: none; }
         .stage { display: contents; }
         #sidebar { display: contents; }
         .player-frame { order: 2; height: auto; min-height: 0; }
-        .preview-top-row { order: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: clamp(8px, 2vw, 16px); min-width: 0; margin: 18px clamp(0px, 3.6vw, 32px) 16px; overflow: hidden; }
+        .preview-top-row { order: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: clamp(8px, 2vw, 16px); min-width: 0; margin: 4px clamp(0px, 3.6vw, 32px) 10px; overflow: hidden; }
         .preview-card { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
         .preview-top-row .section-title, .like-card .section-title { display: none; }
         .owner-card.is-visible { display: block; min-width: 0; }
@@ -699,11 +703,11 @@ function createHtml(config) {
         .seo-video-frame { max-height: min(62vh, 520px); }
       }
       @media (max-width: 560px) {
-        #app { padding-inline: 12px; }
+        #app { padding: 10px 12px 56px; }
         .topbar { grid-template-columns: 1fr; justify-items: start; }
         .player-top-actions { justify-self: start; margin-left: 0; }
-        .player-top-button { max-width: calc(100vw - 24px); min-height: 62px; }
-        .preview-top-row { grid-template-columns: minmax(0, 1fr) auto auto; margin-inline: 0; }
+        .player-top-button { max-width: calc(100vw - 24px); min-height: 34px; }
+        .preview-top-row { grid-template-columns: minmax(0, 1fr) auto auto; margin: 2px 0 10px; }
         .preview-like-button { width: 60px; height: 60px; }
       }
       .spine-link-loop-button { position: relative; margin-right: 12px !important; }
