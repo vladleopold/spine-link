@@ -1,4 +1,4 @@
-const CACHE_VERSION = "spine-link-cache-v2026-05-14-disabled";
+const CACHE_VERSION = "spine-link-cache-v2026-05-16-idle-cpu";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -6,7 +6,6 @@ const STATIC_URLS = [
   "/site.webmanifest",
   "/favicon-64.png",
   "/page-transitions.css",
-  "/page-transitions.js",
   "/spine-link-video-thumbnail.png",
 ];
 
