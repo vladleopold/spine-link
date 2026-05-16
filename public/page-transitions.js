@@ -45,6 +45,7 @@
   }
 
   function startQuietSeoParticles() {
+    return;
     if (document.getElementById("root") || document.getElementById("app") || document.querySelector(".library-grid") || document.querySelector(".grid .tile")) return;
     if (document.querySelector(".particle-field")) return;
     const canvas = document.createElement("canvas");
