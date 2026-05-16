@@ -1,6 +1,5 @@
-import { startParticleField } from "./particles";
-
 const root = document.getElementById("root");
+export {};
 let isAppLoading = false;
 let isAppMounted = false;
 let mountedFileReceiver: ((files: File[]) => void) | null = null;
@@ -47,7 +46,6 @@ function renderBootShell(isDragging = false) {
 
   root.innerHTML = `
     <main class="app-shell is-empty ${isDragging ? "is-docking" : ""}">
-      <canvas class="particle-field" aria-hidden="true"></canvas>
       <section class="seo-intro" aria-label="Spine-Link SEO description">
         <h1>Spine-Link is an animation portfolio platform with Google accounts and uploads</h1>
         <p>World SPINE ARCHIVE is the public archive of user Spine animation works. Anyone can create an anonymous preview with the Create preview button, or sign in with Google to create a profile, choose public portfolio mode with likes, views, showcase and archive publishing, or keep a private library profile that is not listed on the site or in Google.</p>
@@ -150,7 +148,6 @@ function renderLoadingShell() {
   stopBootParticles?.();
   root.innerHTML = `
     <main class="app-shell is-empty">
-      <canvas class="particle-field" aria-hidden="true"></canvas>
       <section class="workspace">
         <div class="stage">
           <div class="preview-panel">
@@ -170,11 +167,6 @@ function startBootParticles() {
   window.cancelAnimationFrame(bootParticleStartFrame);
   stopBootParticles?.();
   stopBootParticles = null;
-  bootParticleStartFrame = window.requestAnimationFrame(() => {
-    const canvas = root?.querySelector<HTMLCanvasElement>(".particle-field");
-    if (canvas) canvas.dataset.particleMode = "rich";
-    stopBootParticles = canvas ? startParticleField(canvas, "rich") : null;
-  });
 }
 
 async function mountApp(initialFiles: File[] = [], options: { openLibrary?: boolean; login?: boolean; upload?: boolean } = {}) {

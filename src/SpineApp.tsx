@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
-import { startParticleField } from "./particles";
 import {
   Calendar,
   Copy,
@@ -33,6 +32,12 @@ type AppProps = {
   initialLogin?: boolean;
   initialUpload?: boolean;
 };
+
+declare global {
+  interface Window {
+    __spineLinkReceiveFiles?: (files: File[]) => void;
+  }
+}
 
 type LoadedAsset = {
   file: File;
@@ -2158,16 +2163,7 @@ function togglePlayerPlayback(player: SpinePlayerInstance | null, onPlayButton: 
 }
 
 function ParticleField({ mode = "rich" }: { mode?: "quiet" | "rich" }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return undefined;
-    canvas.dataset.particleMode = mode;
-    return startParticleField(canvas, mode);
-  }, [mode]);
-
-  return <canvas className="particle-field" data-particle-mode={mode} ref={canvasRef} aria-hidden="true" />;
+  return null;
 }
 
 export function App({ initialFiles, initialOpenLibrary = false, initialLogin = false, initialUpload = false }: AppProps) {
