@@ -692,6 +692,7 @@ function createHtml(config) {
         #animation-list { grid-template-columns: 1fr; gap: 10px; }
         #animation-list button { min-height: 72px; border-color: rgba(140,199,255,.86); border-radius: 12px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 25px; font-weight: 850; }
         #set-card, .note-card, .proof-card, .owner-library { order: 4; margin-inline: 32px; }
+        .video-watch-panel { display: none; }
         .seo-video-frame { max-height: min(62vh, 520px); }
       }
       .spine-link-loop-button { position: relative; margin-right: 12px !important; }
