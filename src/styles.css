@@ -1502,6 +1502,11 @@ h1 {
   background: rgba(255, 255, 255, 0.045);
 }
 
+.app-shell.is-edit-page .portfolio-upload-form {
+  align-self: flex-start;
+  width: min(430px, 100%);
+}
+
 .portfolio-upload-form-top {
   display: flex;
   align-items: center;
@@ -1775,6 +1780,10 @@ h1 {
   visibility: hidden;
 }
 
+.app-shell.is-empty.is-edit-page .inspector > :not(.drop-zone) {
+  visibility: visible;
+}
+
 .app-shell.is-empty .drop-zone svg {
   width: 44px;
   height: 44px;
@@ -1786,6 +1795,19 @@ h1 {
 
 .app-shell.is-empty .drop-zone span {
   font-size: 22px;
+}
+
+.app-shell.is-empty.is-edit-page .drop-zone svg {
+  width: 22px;
+  height: 22px;
+}
+
+.app-shell.is-empty.is-edit-page .drop-zone strong {
+  font-size: 18px;
+}
+
+.app-shell.is-empty.is-edit-page .drop-zone span {
+  font-size: 14px;
 }
 
 .app-shell.is-empty .drop-zone::before {
@@ -1857,6 +1879,12 @@ h1 {
   padding: 10px;
   border-style: solid;
   background: rgba(35, 104, 151, 0.12);
+}
+
+.app-shell.is-empty.is-edit-page .drop-zone {
+  width: 100%;
+  min-height: 148px;
+  padding: 18px;
 }
 
 .selected-preview-card {
@@ -2588,6 +2616,144 @@ h1 {
     #050505;
 }
 
+.library-modal.is-portfolio-mode {
+  gap: 10px;
+  padding: 12px;
+}
+
+.library-modal.is-portfolio-mode .library-modal-top {
+  top: -12px;
+  margin: -12px -12px 0;
+  padding: 8px 12px;
+}
+
+.library-modal.is-portfolio-mode .library-modal-top > div:first-child {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: 6px 12px;
+}
+
+.library-modal.is-portfolio-mode .library-kicker {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+}
+
+.library-modal.is-portfolio-mode h2 {
+  font-size: clamp(18px, 3vw, 24px);
+}
+
+.library-modal.is-portfolio-mode .library-modal-subtitle {
+  grid-column: 1 / -1;
+  max-width: min(620px, 58vw);
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.library-modal.is-portfolio-mode .library-modal-actions {
+  gap: 6px;
+}
+
+.library-modal.is-portfolio-mode .library-modal-actions button {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+}
+
+.library-modal.is-portfolio-mode .library-profile-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+}
+
+.library-modal.is-portfolio-mode .library-profile-settings-copy {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 230px) auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.library-modal.is-portfolio-mode .account-name-form {
+  display: contents;
+}
+
+.library-modal.is-portfolio-mode .account-name-form label {
+  grid-column: 1;
+  font-size: 10px;
+}
+
+.library-modal.is-portfolio-mode .account-name-form input {
+  grid-column: 2;
+  height: 32px;
+  padding: 0 10px;
+}
+
+.library-modal.is-portfolio-mode .account-name-form button {
+  grid-column: 3;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.library-modal.is-portfolio-mode .library-profile-settings-copy > .section-title,
+.library-modal.is-portfolio-mode .library-profile-settings-copy > strong {
+  grid-column: 1;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.library-modal.is-portfolio-mode .library-profile-settings-copy > a {
+  grid-column: 2 / 5;
+  font-size: 13px;
+}
+
+.library-modal.is-portfolio-mode .library-profile-settings-copy > span,
+.library-modal.is-portfolio-mode .library-profile-settings-copy > em {
+  display: none;
+}
+
+.library-modal.is-portfolio-mode .library-profile-settings-actions {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.library-modal.is-portfolio-mode .library-profile-settings-actions > button,
+.library-modal.is-portfolio-mode .library-profile-settings-actions > .portfolio-mode-button {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.library-modal.is-portfolio-mode .library-profile-settings-actions > .portfolio-mode-button {
+  min-width: 118px;
+}
+
+.library-modal.is-portfolio-mode .portfolio-gallery-tools {
+  grid-template-columns: minmax(180px, 1fr) minmax(116px, auto) minmax(120px, auto);
+  gap: 8px;
+  padding: 8px;
+}
+
+.library-modal.is-portfolio-mode .portfolio-gallery-tools .portfolio-stat {
+  display: none;
+}
+
+.library-modal.is-portfolio-mode .portfolio-gallery-tools input,
+.library-modal.is-portfolio-mode .portfolio-gallery-tools select {
+  height: 34px;
+  padding: 0 10px;
+}
+
 .library-modal-top,
 .library-modal-actions,
 .library-card-meta,
@@ -2946,7 +3112,32 @@ h1 {
 .library-modal.is-portfolio-mode .library-grid {
   grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
   grid-auto-rows: 96px;
-  gap: 18px;
+  gap: 12px;
+}
+
+.library-modal.is-portfolio-mode .library-card-shell {
+  gap: 6px;
+}
+
+.library-modal.is-portfolio-mode .library-card--small-square,
+.library-modal.is-portfolio-mode .library-card--square {
+  grid-row: span 4;
+}
+
+.library-modal.is-portfolio-mode .library-card--horizontal,
+.library-modal.is-portfolio-mode .library-card--wide,
+.library-modal.is-portfolio-mode .library-card--full {
+  grid-row: span 3;
+}
+
+.library-modal.is-portfolio-mode .library-card--medium-wide,
+.library-modal.is-portfolio-mode .library-card--large-rect {
+  grid-row: span 4;
+}
+
+.library-modal.is-portfolio-mode .library-card--medium-narrow,
+.library-modal.is-portfolio-mode .library-card--vertical {
+  grid-row: span 5;
 }
 
 .library-card-shell {
@@ -3182,7 +3373,7 @@ h1 {
 
 .library-modal.is-portfolio-mode .library-card-visual {
   min-height: 0;
-  padding: 24px;
+  padding: 18px;
 }
 
 .library-card-visual svg,
@@ -3214,6 +3405,21 @@ h1 {
 
 .library-modal.is-portfolio-mode .library-card-body {
   background: rgba(17, 17, 20, 0.72);
+  gap: 5px;
+  padding: 10px 12px;
+}
+
+.library-modal.is-portfolio-mode .library-card-title-row {
+  gap: 8px;
+}
+
+.library-modal.is-portfolio-mode .library-card-body p {
+  display: none;
+}
+
+.library-modal.is-portfolio-mode .library-card-date,
+.library-modal.is-portfolio-mode .library-card-meta {
+  font-size: 11px;
 }
 
 .library-card-body p {
@@ -3237,6 +3443,10 @@ h1 {
   cursor: default;
 }
 
+.library-modal.is-portfolio-mode .library-card-actions {
+  gap: 5px;
+}
+
 .library-card-order-actions {
   position: relative;
   z-index: 1;
@@ -3245,6 +3455,10 @@ h1 {
   gap: 8px;
   margin: 0;
   cursor: default;
+}
+
+.library-modal.is-portfolio-mode .library-card-order-actions {
+  gap: 5px;
 }
 
 .library-card-actions a,
@@ -3265,6 +3479,15 @@ h1 {
   font-size: 12px;
   font-weight: 800;
   text-decoration: none;
+}
+
+.library-modal.is-portfolio-mode .library-card-actions a,
+.library-modal.is-portfolio-mode .library-card-actions button,
+.library-modal.is-portfolio-mode .library-card-order-actions button {
+  min-height: 28px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 11px;
 }
 
 .library-card-actions a,
@@ -3592,10 +3815,37 @@ h1 {
     padding: 12px;
   }
 
+  .library-modal.is-portfolio-mode {
+    inset: 8px;
+    gap: 8px;
+    padding: 8px;
+  }
+
   .library-modal-top {
     top: -12px;
     margin: -12px -12px 0;
     padding: 10px 12px;
+  }
+
+  .library-modal.is-portfolio-mode .library-modal-top {
+    top: -8px;
+    margin: -8px -8px 0;
+    padding: 7px 8px;
+  }
+
+  .library-modal.is-portfolio-mode .library-modal-top > div:first-child {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 3px 8px;
+  }
+
+  .library-modal.is-portfolio-mode .library-modal-subtitle {
+    max-width: min(430px, 54vw);
+    font-size: 10px;
+  }
+
+  .library-modal.is-portfolio-mode .library-modal-actions button {
+    width: 32px;
+    height: 32px;
   }
 
   .library-kicker {
@@ -3621,7 +3871,7 @@ h1 {
 
   .library-modal.is-portfolio-mode .library-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    grid-auto-rows: 76px;
+    grid-auto-rows: 66px;
   }
 
   .library-card--horizontal,
@@ -3661,6 +3911,45 @@ h1 {
     align-items: stretch;
     gap: 10px;
     padding: 10px;
+  }
+
+  .library-modal.is-portfolio-mode .library-profile-settings {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .library-modal.is-portfolio-mode .library-profile-settings-copy {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 5px 8px;
+  }
+
+  .library-modal.is-portfolio-mode .account-name-form label,
+  .library-modal.is-portfolio-mode .library-profile-settings-copy > .section-title,
+  .library-modal.is-portfolio-mode .library-profile-settings-copy > strong {
+    grid-column: 1;
+    font-size: 10px;
+  }
+
+  .library-modal.is-portfolio-mode .account-name-form input,
+  .library-modal.is-portfolio-mode .library-profile-settings-copy > a {
+    grid-column: 2;
+  }
+
+  .library-modal.is-portfolio-mode .account-name-form button {
+    grid-column: 3;
+  }
+
+  .library-modal.is-portfolio-mode .library-profile-settings-actions {
+    display: flex;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .library-modal.is-portfolio-mode .library-profile-settings-actions > button,
+  .library-modal.is-portfolio-mode .library-profile-settings-actions > .portfolio-mode-button {
+    min-height: 30px;
+    padding: 0 9px;
   }
 
   .library-profile-settings-copy {
@@ -3750,6 +4039,43 @@ h1 {
     grid-column: auto;
     width: 100%;
     height: 36px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .library-modal.is-portfolio-mode .library-grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: 78px;
+  }
+
+  .library-modal.is-portfolio-mode .library-card--small-square,
+  .library-modal.is-portfolio-mode .library-card--square,
+  .library-modal.is-portfolio-mode .library-card--horizontal,
+  .library-modal.is-portfolio-mode .library-card--wide,
+  .library-modal.is-portfolio-mode .library-card--vertical,
+  .library-modal.is-portfolio-mode .library-card--medium-narrow,
+  .library-modal.is-portfolio-mode .library-card--medium-wide,
+  .library-modal.is-portfolio-mode .library-card--large-rect,
+  .library-modal.is-portfolio-mode .library-card--full {
+    grid-column: 1 / -1;
+  }
+
+  .library-modal.is-portfolio-mode .library-card--horizontal,
+  .library-modal.is-portfolio-mode .library-card--wide,
+  .library-modal.is-portfolio-mode .library-card--full {
+    grid-row: span 3;
+  }
+
+  .library-modal.is-portfolio-mode .library-card--small-square,
+  .library-modal.is-portfolio-mode .library-card--square,
+  .library-modal.is-portfolio-mode .library-card--medium-wide,
+  .library-modal.is-portfolio-mode .library-card--large-rect {
+    grid-row: span 4;
+  }
+
+  .library-modal.is-portfolio-mode .library-card--medium-narrow,
+  .library-modal.is-portfolio-mode .library-card--vertical {
+    grid-row: span 5;
   }
 }
 
@@ -4038,26 +4364,26 @@ h1 {
 
   .library-card--wide,
   .library-card--full {
-    grid-row: span 3;
+    grid-row: span 2;
   }
 
   .library-card--horizontal,
   .library-card--medium-wide {
-    grid-row: span 4;
+    grid-row: span 3;
   }
 
   .library-card--small-square,
   .library-card--square {
-    grid-row: span 5;
+    grid-row: span 4;
   }
 
   .library-card--large-rect,
   .library-card--medium-narrow {
-    grid-row: span 6;
+    grid-row: span 5;
   }
 
   .library-card--vertical {
-    grid-row: span 8;
+    grid-row: span 6;
   }
 
   .library-profile-settings {
@@ -4534,6 +4860,30 @@ h1 {
   visibility: hidden;
   filter: none;
   pointer-events: none;
+}
+
+.app-shell.is-empty.is-edit-page .inspector > :not(.drop-zone) {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.app-shell.is-empty.is-edit-page .drop-zone {
+  width: 100%;
+  min-height: 148px;
+  padding: 18px;
+}
+
+.app-shell.is-empty.is-edit-page .drop-zone svg {
+  width: 22px;
+  height: 22px;
+}
+
+.app-shell.is-empty.is-edit-page .drop-zone strong {
+  font-size: 18px;
+}
+
+.app-shell.is-empty.is-edit-page .drop-zone span {
+  font-size: 14px;
 }
 
 .site-credit {

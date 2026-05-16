@@ -2879,31 +2879,17 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   }, []);
 
   useEffect(() => {
-    const hasFiles = (event: DragEvent) => {
-      return Array.from(event.dataTransfer?.types ?? []).includes("Files");
-    };
-
-    const handleDocumentDragOver = (event: DragEvent) => {
-      if (!hasFiles(event)) return;
-      event.preventDefault();
-      setIsDragging(true);
-    };
-
     const handleDocumentDrop = (event: DragEvent) => {
-      const files = Array.from(event.dataTransfer?.files ?? []);
-      if (!files.length) return;
+      const hasFiles = Array.from(event.dataTransfer?.types ?? []).includes("Files");
+      if (!hasFiles) return;
       event.preventDefault();
-      event.stopPropagation();
-      handleSelectedFiles(files);
     };
 
-    document.addEventListener("dragover", handleDocumentDragOver, true);
     document.addEventListener("drop", handleDocumentDrop, true);
     return () => {
-      document.removeEventListener("dragover", handleDocumentDragOver, true);
       document.removeEventListener("drop", handleDocumentDrop, true);
     };
-  }, [handleSelectedFiles]);
+  }, []);
 
   useEffect(() => {
     const disposers: Array<() => void> = [];
@@ -4156,15 +4142,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   return (
     <main
       className={`app-shell ${!preparedSpine ? "is-empty" : ""} ${isIntroDocking ? "is-docking" : ""} ${isEditPage ? "is-edit-page" : ""}`}
-      onDragOver={(event) => {
-        event.preventDefault();
-        setIsDragging(true);
-      }}
-      onDragLeave={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-        setIsDragging(false);
-      }}
-      onDrop={handleDrop}
     >
       <section className="seo-intro" aria-label="Spine-Link SEO description">
         <h1>Spine-Link is an animation portfolio platform with Google accounts and uploads</h1>
@@ -4353,7 +4330,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
         <div className="stage">
           <div className={isHomeDropOnly ? "home-drop-panel" : `preview-panel ${extraSpineSets.length ? "has-multiple-players" : ""}`} ref={previewPanelRef}>
-            {!preparedSpine && (
+            {!preparedSpine && !isEditPage && !isLibraryOpen && (
               <>
                 <label
                   className={`drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}`}

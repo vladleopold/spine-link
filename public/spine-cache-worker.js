@@ -1,4 +1,4 @@
-const CACHE_VERSION = "spine-link-cache-v2026-05-16-idle-cpu";
+const CACHE_VERSION = "spine-link-cache-v2026-05-16-low-power-particles";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
