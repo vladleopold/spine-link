@@ -694,10 +694,10 @@ function createHtml(config) {
         #player { width: 100%; height: min(86vw, 600px); min-height: 360px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
         .spine-player-controls { min-height: 84px; }
         .library-nav-button { display: none; }
-        .animation-card { order: 3; margin: 66px 32px 0; }
-        .animation-card .section-title { margin: 0 0 18px; font-size: 27px; letter-spacing: .16em; }
-        #animation-list { grid-template-columns: 1fr; gap: 10px; }
-        #animation-list button { min-height: 72px; border-color: rgba(140,199,255,.86); border-radius: 12px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 25px; font-weight: 850; }
+        .animation-card { order: 3; margin: 34px 32px 0; }
+        .animation-card .section-title { margin: 0 0 10px; font-size: 16px; letter-spacing: .14em; }
+        #animation-list { grid-template-columns: 1fr; gap: 6px; }
+        #animation-list button { min-height: 38px; border-color: rgba(140,199,255,.78); border-radius: 8px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 14px; font-weight: 850; }
         #set-card, .note-card, .proof-card, .owner-library { order: 4; margin-inline: 32px; }
         .video-watch-panel { display: none; }
         .seo-video-frame { max-height: min(62vh, 520px); }
