@@ -469,13 +469,13 @@ function baseStyles() {
       *::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: rgba(74,78,84,.72); background-clip: content-box; }
       html, body { min-height: 100%; margin: 0; }
       body { color: #edf5ff; background: #050607; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .page { width: 100%; margin: 0; padding: 26px 14px 46px; }
-      .top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; margin-bottom: 22px; }
+      .page { width: 100%; margin: 0; padding: 20px 0 46px; overflow: hidden; }
+      .top { display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr) auto; align-items: center; gap: 16px; margin-bottom: 8px; }
       .archive-title-block { min-width: 0; justify-self: center; text-align: center; }
-      .brand { display: inline-flex; flex-wrap: nowrap; align-items: baseline; gap: 14px; max-width: 100%; color: #fff; text-decoration: none; font-size: clamp(32px, 5vw, 72px); font-weight: 950; letter-spacing: .02em; line-height: .92; white-space: nowrap; }
-      .brand span { display: inline-block; color: #ff6a28; font-size: 12px; letter-spacing: .32em; text-transform: uppercase; white-space: nowrap; }
+      .brand { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 10px; max-width: 100%; color: #fff; text-decoration: none; font-size: clamp(26px, 4.2vw, 46px); font-weight: 950; letter-spacing: 0; line-height: .9; white-space: nowrap; }
+      .brand span { display: none; }
       .archive-header-right { display: grid; justify-items: end; gap: 12px; }
-      .archive-logo { display: inline-flex; align-items: center; gap: 8px; color: #f7fbff; font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif; font-size: clamp(30px, 3.6vw, 54px); font-weight: 500; line-height: .78; letter-spacing: .18em; text-decoration: none; text-transform: uppercase; text-shadow: 0 0 1px rgba(255,255,255,.86), 0 6px 18px rgba(0,0,0,.42); }
+      .archive-logo { display: inline-flex; align-items: center; gap: 6px; color: #f7fbff; font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif; font-size: clamp(30px, 4.3vw, 44px); font-weight: 500; line-height: .78; letter-spacing: .18em; text-decoration: none; text-transform: uppercase; text-shadow: 0 0 1px rgba(255,255,255,.86), 0 6px 18px rgba(0,0,0,.42); }
       .archive-logo-mark { display: inline-grid; gap: 4px; width: 16px; margin: 0 -3px 0 -5px; transform: translateY(1px); }
       .archive-logo-mark i { display: block; width: 16px; height: 7px; border-radius: 999px; background: #ff5a1f; box-shadow: 0 0 8px rgba(255,90,31,.22); }
       .archive-logo-mark i:nth-child(1) { transform: translateX(-1px); }
@@ -486,18 +486,18 @@ function baseStyles() {
       .archive-logo-link { margin-left: 8px; color: #ff6a28; font-size: .72em; font-weight: 800; letter-spacing: .22em; line-height: 1; transform: translate(-15px, .18em); }
       .item-header-title { display: grid; gap: 8px; min-width: 0; }
       .item-header-title span { display: block; max-width: 100%; overflow: hidden; color: #fff; font-size: clamp(20px, 3vw, 34px); font-weight: 950; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
-      .back { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 14px; border: 1px solid rgba(179,255,64,.62); border-radius: 8px; color: #eaffc2; background: rgba(179,255,64,.1); box-shadow: 0 12px 28px rgba(0,0,0,.24), inset 0 0 18px rgba(179,255,64,.08); font-size: 13px; font-weight: 950; text-decoration: none; white-space: nowrap; }
+      .back { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 22px; border: 1px solid rgba(179,255,64,.62); border-radius: 8px; color: #eaffc2; background: rgba(179,255,64,.1); box-shadow: 0 12px 28px rgba(0,0,0,.24), inset 0 0 18px rgba(179,255,64,.08); font-size: 17px; font-weight: 950; text-decoration: none; white-space: nowrap; }
       .back:hover { border-color: rgba(140,199,255,.78); color: #fff; background: rgba(140,199,255,.12); }
       .muted { color: rgba(237,245,255,.62); }
       @media (max-width: 700px) {
         * { scrollbar-width: none; }
         *::-webkit-scrollbar { width: 0; height: 0; display: none; }
-        .page { width: 100%; padding: 18px 9px 46px; }
-        .top { grid-template-columns: 1fr; align-items: start; }
-        .archive-title-block { justify-self: start; text-align: left; }
-        .archive-header-right { justify-items: start; width: 100%; }
-        .archive-logo { font-size: clamp(30px, 13vw, 46px); }
-        .brand { gap: 10px; white-space: normal; }
+        .page { width: 100%; padding: 18px 0 46px; }
+        .top { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+        .archive-title-block { grid-column: 1 / -1; grid-row: 2; justify-self: center; text-align: center; }
+        .archive-header-right { justify-items: end; width: auto; }
+        .archive-logo { font-size: clamp(28px, 8vw, 38px); }
+        .brand { gap: 10px; font-size: clamp(24px, 7vw, 38px); white-space: nowrap; }
         .item-header-title span { max-width: 100%; white-space: normal; }
       }
   `;
@@ -635,6 +635,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
     <style>
       ${baseStyles()}
       .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(74px, 4.6vw, 96px), 1fr)); grid-auto-flow: dense; grid-auto-rows: clamp(62px, 3.7vw, 78px); gap: 10px; width: 100%; margin: 0; }
+      .archive-copy { max-width: min(680px, 74vw); margin: 0 auto 8px; color: rgba(237,245,255,.62); font-size: clamp(12px, 1.8vw, 17px); font-weight: 750; line-height: 1.02; text-align: left; }
       .tile { position: relative; min-height: 0; overflow: hidden; border: 1px solid rgba(140,199,255,.18); border-radius: 8px; color: inherit; background: #090b0d; text-decoration: none; }
       body.is-archive-selecting .tile { cursor: pointer; }
       body.is-archive-selecting .tile:hover { border-color: rgba(255,214,96,.78); }
@@ -672,6 +673,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
       .archive-select-control button:disabled { cursor: wait; opacity: .7; }
       .archive-select-status { max-width: min(420px, calc(100vw - 28px)); min-height: 18px; padding: 6px 9px; border-radius: 7px; color: rgba(237,245,255,.78); background: rgba(7,10,12,.78); font-size: 12px; line-height: 1.35; text-align: right; pointer-events: none; backdrop-filter: blur(10px); }
       @media (max-width: 700px) {
+        .archive-copy { max-width: min(680px, 74vw); margin-bottom: 8px; font-size: clamp(12px, 2.7vw, 15px); }
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 92px; gap: 8px; }
         .tile, .tile--small-square, .tile--square, .tile--horizontal, .tile--wide, .tile--vertical, .tile--medium-narrow, .tile--medium-wide, .tile--large-rect, .tile--full { grid-column: 1 / -1; grid-row: span 3; }
         .tile-overlay { grid-template-columns: 1fr; align-items: start; gap: 8px; }
@@ -693,7 +695,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
           <a class="back" href="/">Create preview</a>
         </div>
       </header>
-      <p class="muted">
+      <p class="archive-copy">
         Browse public Spine animation works from the worldwide archive. Anyone can add a work anonymously with
         Create preview, or sign in with Google and publish through a profile. Portfolio profiles are public,
         searchable, and show likes and views; library profiles are private by default and are not listed through
