@@ -672,7 +672,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
       .archive-select-control button.is-delete { border-color: rgba(255,87,87,.72); color: #fff; background: rgba(148,22,22,.88); }
       .archive-select-control button:disabled { cursor: wait; opacity: .7; }
       .archive-select-status { max-width: min(420px, calc(100vw - 28px)); min-height: 18px; padding: 6px 9px; border-radius: 7px; color: rgba(237,245,255,.78); background: rgba(7,10,12,.78); font-size: 12px; line-height: 1.35; text-align: right; pointer-events: none; backdrop-filter: blur(10px); }
-      @media (max-width: 700px) {
+      @media (max-width: 1024px) {
         .archive-copy { max-width: min(680px, 74vw); margin-bottom: 8px; font-size: clamp(12px, 2.7vw, 15px); }
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 92px; gap: 8px; }
         .tile, .tile--small-square, .tile--square, .tile--horizontal, .tile--wide, .tile--vertical, .tile--medium-narrow, .tile--medium-wide, .tile--large-rect, .tile--full { grid-column: 1 / -1; grid-row: span 3; }
@@ -689,7 +689,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
           <span>s</span><span>p</span><span class="archive-logo-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="archive-logo-link">link</span>
         </a>
         <div class="archive-title-block">
-          <h1 class="brand"><span>Public user Spine works</span>World SPINE ARCHIVE</h1>
+          <h1 class="brand"><span>Public user Spine works</span>World ARCHIVE</h1>
         </div>
         <div class="archive-header-right">
           <a class="back" href="/">Create preview</a>
