@@ -4872,7 +4872,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                   />
                 </div>
               </div>
-            ) : (
+            ) : preparedSpine ? null : (
               <form
                 className="portfolio-upload-form"
                 action="/?upload=work"
