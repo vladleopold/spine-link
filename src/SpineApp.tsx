@@ -4872,7 +4872,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                   />
                 </div>
               </div>
-            ) : preparedSpine ? null : (
+            ) : isUploadPage && !preparedSpine && spineOptions.length === 0 && extraSpineSets.length === 0 && !generatedPreviewUrl ? (
               <form
                 className="portfolio-upload-form"
                 action="/?upload=work"
@@ -4963,7 +4963,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                   </label>
                 </div>
               </form>
-            )}
+            ) : null}
 
             {shouldShowStatus && (
               <div className="status-line" data-state={error ? "error" : "ready"}>
