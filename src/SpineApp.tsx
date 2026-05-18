@@ -2492,6 +2492,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isIntroDocking, setIsIntroDocking] = useState(false);
+  const [isUploadPage, setIsUploadPage] = useState(initialUpload);
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() => readStoredGoogleSession()?.user ?? null);
   const [googleIdToken, setGoogleIdToken] = useState(() => getValidStoredGoogleToken());
   const [profileNameInput, setProfileNameInput] = useState(() => cleanAccountDisplayName(readStoredGoogleSession()?.user?.name || ""));
@@ -3909,6 +3910,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     if (!hasDismissedSkeletonUploadTip(googleUser, anonymousAccount)) {
       setIsSkeletonUploadTipVisible(true);
     }
+    setIsUploadPage(true);
     setIsLibraryOpen(false);
     setCurrentLibraryEntry(null);
     setGeneratedPreviewUrl("");
@@ -4405,7 +4407,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   };
   const showHomeFeed = !preparedSpine && !isEditPage && homeFeedEntries.length > 0;
   const homeFeedLoop = showHomeFeed ? [...homeFeedEntries, ...homeFeedEntries] : [];
-  const isHomeDropOnly = !preparedSpine && !isEditPage && extraSpineSets.length === 0;
+  const isHomeDropOnly = !preparedSpine && !isEditPage && !isUploadPage && extraSpineSets.length === 0;
   const siteReadingPages = [
     { href: "/spine-link.html", title: "Spine-Link", description: "Platform overview" },
     { href: "/spine-preview.html", title: "Spine Preview", description: "Open JSON, SKEL and atlas files" },
@@ -4425,7 +4427,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
   return (
     <main
-      className={`app-shell ${!preparedSpine ? "is-empty" : ""} ${isIntroDocking ? "is-docking" : ""} ${isEditPage ? "is-edit-page" : ""}`}
+      className={`app-shell ${!preparedSpine ? "is-empty" : ""} ${isIntroDocking ? "is-docking" : ""} ${isEditPage ? "is-edit-page" : ""} ${isUploadPage ? "is-upload-page" : ""}`}
     >
       <section className="seo-intro" aria-label="Spine-Link SEO description">
         <h1>Spine-Link is an animation portfolio platform with Google accounts and uploads</h1>
@@ -4614,7 +4616,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
         <div className="stage">
           <div className={isHomeDropOnly ? "home-drop-panel" : `preview-panel ${extraSpineSets.length ? "has-multiple-players" : ""}`} ref={previewPanelRef}>
-            {!preparedSpine && !isEditPage && !isLibraryOpen && (
+            {!preparedSpine && !isEditPage && !isLibraryOpen && !isUploadPage && (
               <>
                 <label
                   className={`drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}`}

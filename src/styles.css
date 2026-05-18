@@ -1636,6 +1636,52 @@ h1 {
   display: none;
 }
 
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .inspector {
+  display: flex;
+  position: relative;
+  z-index: 8;
+  justify-self: end;
+  width: min(400px, 100%);
+  pointer-events: auto;
+}
+
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .stage {
+  grid-template-columns: minmax(320px, 400px);
+  justify-content: end;
+  align-items: start;
+  pointer-events: none;
+}
+
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .preview-panel,
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .home-drop-panel {
+  display: none;
+  pointer-events: none;
+}
+
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .inspector > * {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .portfolio-upload-form .drop-zone {
+  width: 100%;
+  min-height: 148px;
+  padding: 18px;
+}
+
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .portfolio-upload-form .drop-zone svg {
+  width: 22px;
+  height: 22px;
+}
+
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .portfolio-upload-form .drop-zone strong {
+  font-size: 18px;
+}
+
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .portfolio-upload-form .drop-zone span {
+  font-size: 14px;
+}
+
 .app-shell.is-empty.is-edit-page .preview-panel {
   display: none;
   visibility: hidden;
