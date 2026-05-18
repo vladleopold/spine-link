@@ -74,6 +74,8 @@ type PreparedSpine = {
 type ExtraSpinePlayer = {
   id: string;
   set: PreparedSpine;
+  animations: string[];
+  activeAnimation: string;
 };
 
 type PlayerViewport = {
@@ -3057,15 +3059,28 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const prepareFromFiles = useCallback(
     async (fileList: FileList | File[]) => {
       if (preparedSpine && !isEditPage) {
+        if (extraSpineSets.length >= 9) {
+          setError("You can add up to 10 players on one page.");
+          setStatus("Extra player limit reached.");
+          setIsDragging(false);
+          return;
+        }
         setStatus("Reading files for an extra player...");
         setError("");
         try {
           const nextSpineOptions = await loadFiles(Array.from(fileList));
           const nextSpine = chooseInitialSet(nextSpineOptions);
           if (!nextSpine) throw new Error("Could not create an extra player from these files.");
+          const nextAnimations = nextSpine.animations.length ? nextSpine.animations : [nextSpine.defaultAnimation || "animation"].filter(Boolean);
+          const nextActiveAnimation = nextSpine.defaultAnimation && nextAnimations.includes(nextSpine.defaultAnimation) ? nextSpine.defaultAnimation : nextAnimations[0] || "";
           setExtraSpineSets((currentSets) => [
             ...currentSets,
-            { id: `extra-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, set: nextSpine },
+            {
+              id: `extra-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              set: nextSpine,
+              animations: nextAnimations,
+              activeAnimation: nextActiveAnimation,
+            },
           ]);
           setStatus(`Extra player added. Total extra players: ${extraSpineSets.length + 1}.`);
         } catch (nextError) {
@@ -3178,13 +3193,15 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
     const mountExtraPlayers = async () => {
       if (!extraSpineSets.length) return;
-      const { SpinePlayer } = await loadSpinePlayerForSet(extraSpineSets[0]?.set);
       if (isCancelled) return;
       const hosts = Array.from(document.querySelectorAll<HTMLDivElement>(".extra-player-host[data-extra-player-id]"));
-      hosts.forEach((host) => {
+      for (const host of hosts) {
         const setId = host.dataset.extraPlayerId || "";
-        const prepared = extraSpineSets.find((candidate) => candidate.id === setId)?.set;
-        if (!prepared) return;
+        const extraSet = extraSpineSets.find((candidate) => candidate.id === setId);
+        const prepared = extraSet?.set;
+        if (!prepared) continue;
+        const { SpinePlayer } = await loadSpinePlayerForSet(prepared);
+        if (isCancelled) return;
         host.innerHTML = "";
         const player = new SpinePlayer(host, {
           skeleton: prepared.skeletonName,
@@ -3192,7 +3209,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           atlas: prepared.atlasName,
           atlasUrl: prepared.atlasName,
           rawDataURIs: prepared.rawDataURIs,
-          animation: prepared.defaultAnimation,
+          animation: extraSet?.activeAnimation || prepared.defaultAnimation,
           ...(prepared.defaultSkin ? { skin: prepared.defaultSkin } : {}),
           premultipliedAlpha: prepared.premultipliedAlpha,
           showControls: true,
@@ -3202,7 +3219,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           backgroundColor: "00000000",
         } as unknown as SpinePlayerConfig);
         mountedPlayers.push(player as unknown as SpinePlayerInstance);
-      });
+      }
     };
 
     void mountExtraPlayers();
@@ -4405,6 +4422,20 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     event.stopPropagation();
     handleSelectedFiles(Array.from(event.dataTransfer.files ?? []));
   };
+
+  const updateExtraPlayerAnimation = (id: string, animationName: string) => {
+    setExtraSpineSets((currentSets) =>
+      currentSets.map((currentSet) =>
+        currentSet.id === id
+          ? {
+              ...currentSet,
+              activeAnimation: animationName,
+            }
+          : currentSet,
+      ),
+    );
+  };
+
   const showHomeFeed = !preparedSpine && !isEditPage && homeFeedEntries.length > 0;
   const homeFeedLoop = showHomeFeed ? [...homeFeedEntries, ...homeFeedEntries] : [];
   const isHomeDropOnly = !preparedSpine && !isEditPage && !isUploadPage && extraSpineSets.length === 0;
@@ -4702,16 +4733,30 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             <div className="player-host" ref={playerHostRef} />
             {extraSpineSets.map((extraSet) => (
               <div key={extraSet.id} className="extra-player-shell">
-                <button
-                  className="extra-player-remove"
-                  type="button"
-                  onClick={() => {
-                    setExtraSpineSets((currentSets) => currentSets.filter((currentSet) => currentSet.id !== extraSet.id));
-                    setStatus("Extra player removed.");
-                  }}
-                >
-                  Remove
-                </button>
+                <div className="extra-player-toolbar">
+                  <strong>{extraSet.set.label}</strong>
+                  <select
+                    aria-label={`Animation for ${extraSet.set.label}`}
+                    value={extraSet.activeAnimation}
+                    onChange={(event) => updateExtraPlayerAnimation(extraSet.id, event.target.value)}
+                  >
+                    {extraSet.animations.map((animationName) => (
+                      <option key={animationName} value={animationName}>
+                        {animationName}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="extra-player-remove"
+                    type="button"
+                    onClick={() => {
+                      setExtraSpineSets((currentSets) => currentSets.filter((currentSet) => currentSet.id !== extraSet.id));
+                      setStatus("Extra player removed.");
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
                 <div className="player-host extra-player-host" data-extra-player-id={extraSet.id} />
               </div>
             ))}
@@ -5060,6 +5105,39 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 </div>
               )}
             </div>
+
+            {preparedSpine && !isEditPage && (
+              <div className="add-more-work-panel">
+                <div className="add-more-work-top">
+                  <div>
+                    <div className="section-title">Add more work</div>
+                    <strong>{extraSpineSets.length + 1}/10 players</strong>
+                  </div>
+                  <span>{extraSpineSets.length >= 9 ? "Limit reached" : "Add files"}</span>
+                </div>
+                <label className={`drop-zone add-more-work-drop ${isDragging ? "is-dragging" : ""} ${extraSpineSets.length >= 9 ? "is-disabled" : ""}`}>
+                  <input
+                    type="file"
+                    multiple
+                    disabled={extraSpineSets.length >= 9}
+                    accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
+                    aria-label="Add more Spine work"
+                    onClick={clearFileInputBeforePick}
+                    onChange={handleFileInputChange}
+                    onInput={handleFileInputChange}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsDragging(true);
+                    }}
+                    onDrop={handleDrop}
+                  />
+                  <Upload size={18} />
+                  <strong>Add more work</strong>
+                  <span>Drop another skeleton, atlas, and textures.</span>
+                </label>
+              </div>
+            )}
 
             {isEditPage && (
               <div className="card-size-panel">

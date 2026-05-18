@@ -1195,13 +1195,37 @@ h1 {
 
 .extra-player-shell {
   position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.extra-player-toolbar {
+  z-index: 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 220px) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid rgba(140, 199, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(8, 10, 12, 0.74);
+}
+
+.extra-player-toolbar strong {
+  overflow: hidden;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extra-player-toolbar select {
+  min-height: 32px;
+  font-size: 12px;
 }
 
 .extra-player-remove {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 8;
   min-height: 30px;
   padding: 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.24);
@@ -1216,6 +1240,47 @@ h1 {
 .extra-player-remove:hover {
   border-color: rgba(140, 199, 255, 0.72);
   background: rgba(23, 35, 52, 0.9);
+}
+
+.add-more-work-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(140, 199, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.add-more-work-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.add-more-work-top strong,
+.add-more-work-top span {
+  color: rgba(231, 237, 244, 0.76);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.add-more-work-drop {
+  min-height: 116px;
+  padding: 14px;
+}
+
+.add-more-work-drop strong {
+  font-size: 16px;
+}
+
+.add-more-work-drop span {
+  font-size: 12px;
+}
+
+.add-more-work-drop.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .preview-panel::after {
