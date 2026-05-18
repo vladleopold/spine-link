@@ -36,6 +36,9 @@ type AppProps = {
 declare global {
   interface Window {
     __spineLinkReceiveFiles?: (files: File[]) => void;
+    spine?: {
+      SpinePlayer?: new (parent: HTMLElement | string, config: SpinePlayerConfig) => SpinePlayerInstance;
+    };
   }
 }
 
@@ -46,6 +49,7 @@ type LoadedAsset = {
   premultipliedTransparentizedDataUri?: string;
   hasBlackMatte?: boolean;
   text?: string;
+  skeletonVersion?: string;
 };
 
 type PreparedSpine = {
@@ -53,6 +57,7 @@ type PreparedSpine = {
   skeletonName: string;
   atlasName: string;
   atlasPages: string[];
+  skeletonVersion?: string;
   animations: string[];
   defaultAnimation?: string;
   defaultSkin?: string;
@@ -492,6 +497,10 @@ const githubPublishSettings: GitHubSettings = {
 type SpinePlayerModule = typeof import("@esotericsoftware/spine-player");
 
 let spinePlayerModulePromise: Promise<SpinePlayerModule> | null = null;
+const legacySpinePlayerPromises = new Map<
+  string,
+  Promise<{ SpinePlayer: new (parent: HTMLElement | string, config: SpinePlayerConfig) => SpinePlayerInstance }>
+>();
 let googleScriptPromise: Promise<void> | null = null;
 
 function loadSpinePlayerModule() {
@@ -500,12 +509,92 @@ function loadSpinePlayerModule() {
       import("@esotericsoftware/spine-player"),
       import("@esotericsoftware/spine-player/dist/spine-player.css"),
     ]).then(([module]) => {
-      module.GLTexture.DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL = true;
+      (module.GLTexture as unknown as { DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL?: boolean }).DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL = true;
       return module;
     });
   }
 
   return spinePlayerModulePromise;
+}
+
+function loadScriptOnce(src: string) {
+  return new Promise<void>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
+    if (existingScript?.dataset.loaded === "true") {
+      resolve();
+      return;
+    }
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error(`Could not load ${src}`)), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      resolve();
+    };
+    script.onerror = () => reject(new Error(`Could not load ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+function loadStylesheetOnce(href: string) {
+  if (document.querySelector<HTMLLinkElement>(`link[href="${href}"]`)) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = href;
+  document.head.appendChild(link);
+}
+
+function isLegacySpine38(preparedSpine?: Pick<PreparedSpine, "skeletonVersion"> | null) {
+  return /^3\./.test(preparedSpine?.skeletonVersion || "");
+}
+
+function legacySpine3Runtime(version = "") {
+  if (/^3\.7(?:\.|$)/.test(version)) return "3.7";
+  if (/^3\.8(?:\.|$)/.test(version)) return "3.8";
+  return "";
+}
+
+function unsupportedSpineMajorMessage(version = "") {
+  const major = version.match(/^(\d+)\./)?.[1] || "";
+  if (major === "1" || major === "2") {
+    return `This skeleton was exported with Spine ${version}. The file was detected correctly, but Spine ${major}.x needs its matching legacy web runtime bundle before it can be previewed in this browser player.`;
+  }
+  return "";
+}
+
+async function loadSpinePlayerForSet(preparedSpine?: Pick<PreparedSpine, "skeletonVersion"> | null) {
+  const version = preparedSpine?.skeletonVersion || "";
+  const unsupportedMessage = unsupportedSpineMajorMessage(preparedSpine?.skeletonVersion || "");
+  if (unsupportedMessage) throw new Error(unsupportedMessage);
+  if (!isLegacySpine38(preparedSpine)) return loadSpinePlayerModule();
+
+  const runtime = legacySpine3Runtime(version);
+  if (!runtime) {
+    throw new Error(
+      `This skeleton was exported with Spine ${version || "3.x"}. Spine 3.7 and 3.8 legacy players are bundled; this older 3.x export needs its matching runtime or a re-export to 3.8/4.x.`,
+    );
+  }
+
+  if (!legacySpinePlayerPromises.has(runtime)) {
+    legacySpinePlayerPromises.set(
+      runtime,
+      (async () => {
+      loadStylesheetOnce(`/vendor-spine-player-${runtime}.css`);
+      await loadScriptOnce(`/vendor-spine-player-${runtime}.js`);
+      const SpinePlayer = window.spine?.SpinePlayer;
+      if (!SpinePlayer) throw new Error(`Legacy Spine ${runtime} runtime could not be loaded.`);
+      return { SpinePlayer };
+      })(),
+    );
+  }
+
+  return legacySpinePlayerPromises.get(runtime)!;
 }
 
 function loadGoogleIdentityScript() {
@@ -887,6 +976,176 @@ function readAsArrayBuffer(file: File) {
   });
 }
 
+class SpineBinaryCursor {
+  index = 0;
+
+  constructor(private readonly bytes: Uint8Array) {}
+
+  readByte() {
+    return this.bytes[this.index++] ?? 0;
+  }
+
+  skip(length: number) {
+    this.index += length;
+  }
+
+  readInt(optimizePositive: boolean) {
+    let byte = this.readByte();
+    let result = byte & 0x7f;
+    if ((byte & 0x80) !== 0) {
+      byte = this.readByte();
+      result |= (byte & 0x7f) << 7;
+      if ((byte & 0x80) !== 0) {
+        byte = this.readByte();
+        result |= (byte & 0x7f) << 14;
+        if ((byte & 0x80) !== 0) {
+          byte = this.readByte();
+          result |= (byte & 0x7f) << 21;
+          if ((byte & 0x80) !== 0) {
+            byte = this.readByte();
+            result |= (byte & 0x7f) << 28;
+          }
+        }
+      }
+    }
+    return optimizePositive ? result : (result >>> 1) ^ -(result & 1);
+  }
+
+  readStringMeta() {
+    const start = this.index;
+    const byteCount = this.readInt(true);
+    const contentStart = this.index;
+    if (byteCount === 0) return { start, end: this.index, value: null as string | null };
+    if (byteCount === 1) return { start, end: this.index, value: "" };
+    this.skip(byteCount - 1);
+    return {
+      start,
+      end: this.index,
+      value: new TextDecoder().decode(this.bytes.slice(contentStart, this.index)),
+    };
+  }
+}
+
+function encodeSpineBinaryString(value: string) {
+  const textBytes = new TextEncoder().encode(value);
+  const byteCount = textBytes.length + 1;
+  const lengthBytes: number[] = [];
+  let remaining = byteCount;
+  while (true) {
+    let byte = remaining & 0x7f;
+    remaining >>>= 7;
+    if (remaining) byte |= 0x80;
+    lengthBytes.push(byte);
+    if (!remaining) break;
+  }
+  return new Uint8Array([...lengthBytes, ...textBytes]);
+}
+
+function replaceByteRanges(bytes: Uint8Array, replacements: Array<{ start: number; end: number; bytes: Uint8Array }>) {
+  if (!replacements.length) return bytes;
+  const sorted = [...replacements].sort((a, b) => a.start - b.start);
+  const nextLength = sorted.reduce((length, replacement) => length - (replacement.end - replacement.start) + replacement.bytes.length, bytes.length);
+  const nextBytes = new Uint8Array(nextLength);
+  let sourceIndex = 0;
+  let targetIndex = 0;
+
+  for (const replacement of sorted) {
+    nextBytes.set(bytes.slice(sourceIndex, replacement.start), targetIndex);
+    targetIndex += replacement.start - sourceIndex;
+    nextBytes.set(replacement.bytes, targetIndex);
+    targetIndex += replacement.bytes.length;
+    sourceIndex = replacement.end;
+  }
+
+  nextBytes.set(bytes.slice(sourceIndex), targetIndex);
+  return nextBytes;
+}
+
+function sanitizedSkelDataUriFromBuffer(buffer: ArrayBuffer, version = "") {
+  const bytes = new Uint8Array(buffer);
+  const cursor = new SpineBinaryCursor(bytes);
+  const replacements: Array<{ start: number; end: number; bytes: Uint8Array }> = [];
+
+  try {
+    if (/^3\./.test(version)) {
+      cursor.readStringMeta();
+      cursor.readStringMeta();
+    } else {
+      cursor.skip(8);
+      cursor.readStringMeta();
+      cursor.skip(4);
+    }
+    cursor.skip(16);
+    const nonessential = cursor.readByte() !== 0;
+    if (nonessential) {
+      cursor.skip(4);
+      cursor.readStringMeta();
+      cursor.readStringMeta();
+    }
+
+    const stringCount = cursor.readInt(true);
+    for (let index = 0; index < stringCount; index += 1) cursor.readStringMeta();
+
+    const boneCount = cursor.readInt(true);
+    for (let index = 0; index < boneCount; index += 1) {
+      const name = cursor.readStringMeta();
+      if (!name.value) {
+        replacements.push({
+          start: name.start,
+          end: name.end,
+          bytes: encodeSpineBinaryString(`__placeholder_bone_${index}`),
+        });
+      }
+
+      if (index > 0) cursor.readInt(true);
+      cursor.skip(32);
+      cursor.readInt(true);
+      cursor.skip(1);
+      if (nonessential) {
+        cursor.skip(4);
+      }
+    }
+  } catch {
+    return `data:application/octet-stream;base64,${bytesToBase64FromBytes(bytes)}`;
+  }
+
+  return `data:application/octet-stream;base64,${bytesToBase64FromBytes(replaceByteRanges(bytes, replacements))}`;
+}
+
+function spineBinaryVersionFromBuffer(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  const legacyCursor = new SpineBinaryCursor(bytes);
+  try {
+    legacyCursor.readStringMeta();
+    const version = legacyCursor.readStringMeta().value || "";
+    if (/^\d+\.\d+(?:\.|$)/.test(version)) return version;
+  } catch {
+    // Try the current binary header below.
+  }
+
+  const cursor = new SpineBinaryCursor(bytes);
+  try {
+    cursor.skip(8);
+    return cursor.readStringMeta().value || "";
+  } catch {
+    return "";
+  }
+}
+
+function spineSkeletonVersionFromText(text?: string) {
+  if (!text) return "";
+  try {
+    const decodedJson = stripPackedPlaceholders(decodePackedSkeletonJson(text));
+    if (decodedJson && typeof decodedJson === "object" && "skeleton" in decodedJson) {
+      const version = (decodedJson as { skeleton?: { spine?: unknown } }).skeleton?.spine;
+      return typeof version === "string" ? version : "";
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
 async function readAtlasText(file: File) {
   const buffer = await readAsArrayBuffer(file);
   const bytes = new Uint8Array(buffer);
@@ -1244,6 +1503,15 @@ function dataUriToBase64(dataUri: string) {
 
 function textToBase64(text: string) {
   return btoa(unescape(encodeURIComponent(text)));
+}
+
+function bytesToBase64FromBytes(bytes: Uint8Array) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return window.btoa(binary);
 }
 
 function byteLengthFromBase64(base64: string) {
@@ -1877,7 +2145,14 @@ async function loadFiles(files: File[]) {
   const assets = await Promise.all(
     usefulFiles.map(async (file): Promise<LoadedAsset> => {
       const text = isAtlasFile(file) ? await readAtlasText(file) : extensionOf(file.name) === "json" ? await readAsText(file) : undefined;
-      let dataUri = await readAsDataUri(file);
+      const binaryBuffer = extensionOf(file.name) === "skel" ? await readAsArrayBuffer(file) : undefined;
+      const skeletonVersion = binaryBuffer ? spineBinaryVersionFromBuffer(binaryBuffer) : spineSkeletonVersionFromText(text);
+      let dataUri =
+        binaryBuffer && /^(3\.8|4\.)/.test(skeletonVersion)
+          ? sanitizedSkelDataUriFromBuffer(binaryBuffer, skeletonVersion)
+          : binaryBuffer
+            ? `data:application/octet-stream;base64,${bytesToBase64FromBytes(new Uint8Array(binaryBuffer))}`
+            : await readAsDataUri(file);
       const transparentizedImage = isImageFile(file) ? await readAsTransparentizedImageDataUri(file) : undefined;
 
       if (extensionOf(file.name) === "json" && text) {
@@ -1896,6 +2171,7 @@ async function loadFiles(files: File[]) {
         premultipliedTransparentizedDataUri: transparentizedImage?.premultipliedDataUri,
         hasBlackMatte: transparentizedImage?.hasBlackMatte,
         text,
+        skeletonVersion,
       };
     }),
   );
@@ -1997,6 +2273,7 @@ async function loadFiles(files: File[]) {
         skeletonName: skeleton.file.name,
         atlasName: atlas.file.name,
       atlasPages,
+      skeletonVersion: skeleton.skeletonVersion,
       animations: animationNames,
       defaultAnimation,
         defaultSkin,
@@ -2104,14 +2381,16 @@ function playAnimationWithLoopMode(player: SpinePlayerInstance | null, animation
     return false;
   }
 
-  (trackEntry as { mixDuration?: number; mixTime?: number }).mixDuration = 0;
-  (trackEntry as { mixDuration?: number; mixTime?: number }).mixTime = 0;
-  trackEntry.listener = {
-    ...trackEntry.listener,
-    complete: () => {
-      if (!isLoopEnabledNow()) player.pause();
-    },
-  };
+  if (trackEntry) {
+    (trackEntry as { mixDuration?: number; mixTime?: number }).mixDuration = 0;
+    (trackEntry as { mixDuration?: number; mixTime?: number }).mixTime = 0;
+    trackEntry.listener = {
+      ...trackEntry.listener,
+      complete: () => {
+        if (!isLoopEnabledNow()) player.pause();
+      },
+    };
+  }
   player.play();
   return true;
 }
@@ -2687,7 +2966,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   };
 
   const resetPlayer = useCallback(() => {
-    playerRef.current?.dispose();
+    playerRef.current?.dispose?.();
     playerRef.current = null;
     baseViewportRef.current = null;
     playerCanvasSizeRef.current = { width: 1, height: 1 };
@@ -2898,7 +3177,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
     const mountExtraPlayers = async () => {
       if (!extraSpineSets.length) return;
-      const { SpinePlayer } = await loadSpinePlayerModule();
+      const { SpinePlayer } = await loadSpinePlayerForSet(extraSpineSets[0]?.set);
       if (isCancelled) return;
       const hosts = Array.from(document.querySelectorAll<HTMLDivElement>(".extra-player-host[data-extra-player-id]"));
       hosts.forEach((host) => {
@@ -2908,7 +3187,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         host.innerHTML = "";
         const player = new SpinePlayer(host, {
           skeleton: prepared.skeletonName,
+          ...(extensionOf(prepared.skeletonName) === "skel" ? { skelUrl: prepared.skeletonName } : { jsonUrl: prepared.skeletonName }),
           atlas: prepared.atlasName,
+          atlasUrl: prepared.atlasName,
           rawDataURIs: prepared.rawDataURIs,
           animation: prepared.defaultAnimation,
           ...(prepared.defaultSkin ? { skin: prepared.defaultSkin } : {}),
@@ -2918,7 +3199,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           alpha: true,
           preserveDrawingBuffer: true,
           backgroundColor: "00000000",
-        });
+        } as unknown as SpinePlayerConfig);
         mountedPlayers.push(player as unknown as SpinePlayerInstance);
       });
     };
@@ -3028,9 +3309,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
     let isCancelled = false;
     resetPlayer();
-    const config: SpinePlayerConfig = {
+    const config = {
       skeleton: configuredSpine.skeletonName,
+      ...(extensionOf(configuredSpine.skeletonName) === "skel" ? { skelUrl: configuredSpine.skeletonName } : { jsonUrl: configuredSpine.skeletonName }),
       atlas: configuredSpine.atlasName,
+      atlasUrl: configuredSpine.atlasName,
       rawDataURIs: configuredSpine.rawDataURIs,
       animation: configuredSpine.defaultAnimation,
       ...(configuredSpine.defaultSkin ? { skin: configuredSpine.defaultSkin } : {}),
@@ -3047,13 +3330,13 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         padTop: "14%",
         padBottom: "14%",
       },
-      success: (player) => {
-        const names = player.skeleton?.data.animations.map((animation) => animation.name) ?? [];
+      success: (player: SpinePlayerInstance) => {
+        const names = player.skeleton?.data.animations.map((animation: { name: string }) => animation.name) ?? [];
         const initialAnimation = configuredSpine.defaultAnimation && names.includes(configuredSpine.defaultAnimation) ? configuredSpine.defaultAnimation : names[0];
         const playableAnimation =
           initialAnimation && playAnimationWithLoopMode(player, initialAnimation, loopEnabledRef.current, () => loopEnabledRef.current)
             ? initialAnimation
-            : names.find((animationName) => playAnimationWithLoopMode(player, animationName, loopEnabledRef.current, () => loopEnabledRef.current));
+            : names.find((animationName: string) => playAnimationWithLoopMode(player, animationName, loopEnabledRef.current, () => loopEnabledRef.current));
         setAnimations(names);
         setActiveAnimation(playableAnimation ?? initialAnimation ?? "");
         if (playableAnimation) {
@@ -3072,13 +3355,14 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             : "Ready, but the animation list is empty.",
         );
       },
-      error: (_player, message) => {
-        setError(message || "Spine runtime could not open these files.");
+      error: (_player: SpinePlayerInstance, message: unknown) => {
+        const runtimeMessage = message as unknown;
+        setError(runtimeMessage instanceof Error ? runtimeMessage.message : String(runtimeMessage || "Spine runtime could not open these files."));
         setStatus("Preview error.");
       },
-    };
+    } as unknown as SpinePlayerConfig;
 
-    void loadSpinePlayerModule()
+    void loadSpinePlayerForSet(configuredSpine)
       .then(({ SpinePlayer }) => {
         if (isCancelled || !playerHostRef.current) return;
         playerRef.current = new SpinePlayer(playerHostRef.current, config);
