@@ -1266,7 +1266,11 @@ h1 {
 }
 
 .add-more-work-drop {
-  min-height: 116px;
+  justify-self: start;
+  width: 200px;
+  max-width: 100%;
+  height: 300px;
+  min-height: 300px;
   padding: 14px;
 }
 
@@ -1672,9 +1676,11 @@ h1 {
 }
 
 .drop-zone {
+  position: relative;
   display: grid;
   gap: 9px;
   align-content: center;
+  overflow: hidden;
   min-height: 158px;
   padding: 22px;
   border: 1px dashed rgba(140, 199, 255, 0.36);
