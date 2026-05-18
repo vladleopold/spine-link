@@ -1637,7 +1637,22 @@ h1 {
 }
 
 .app-shell.is-empty.is-edit-page .preview-panel {
+  display: none;
   visibility: hidden;
+  pointer-events: none;
+  touch-action: auto;
+}
+
+.app-shell.is-empty.is-edit-page .stage {
+  grid-template-columns: minmax(320px, 400px);
+  justify-content: end;
+  align-items: start;
+  pointer-events: none;
+}
+
+.app-shell.is-empty.is-edit-page .inspector {
+  width: min(400px, 100%);
+  pointer-events: auto;
 }
 
 .app-shell.is-empty .drop-zone {
