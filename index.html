@@ -16,9 +16,18 @@
     <meta name="googlebot" content="index, follow, max-image-preview:large, max-video-preview:-1, max-snippet:-1" />
     <meta name="application-name" content="Spine Portfolio" />
     <meta name="apple-mobile-web-app-title" content="Spine Portfolio" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preconnect" href="https://accounts.google.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://api.github.com" />
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.2.113/dist/spine-player.css" as="style" crossorigin />
+    <link rel="preload" href="/spine-link-video-thumbnail.png" as="image" fetchpriority="high" />
     <link rel="canonical" href="https://spine-link.vercel.app/" />
     <link rel="amphtml" href="https://spine-link.vercel.app/amp.html" />
     <meta name="theme-color" content="#000000" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="google-site-verification" content="c2ff3a8991d80229" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://spine-link.vercel.app/" />
     <meta property="og:title" content="Spine-Link — Animation Portfolio Platform" />
@@ -624,7 +633,7 @@
             "name": "What Spine files can Spine-Link preview?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Spine-Link previews Spine JSON or SKEL skeleton files together with atlas files and PNG, JPG, or WEBP texture images."
+              "text": "Spine-Link previews Spine JSON or SKEL skeleton files together with atlas files and PNG, JPG, or WEBP texture images directly in the browser."
             }
           },
           {
@@ -632,7 +641,47 @@
             "name": "Can I share a Spine animation preview online?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. Spine-Link can upload a preview package and create a permanent web link for sharing Spine animation previews in a browser."
+              "text": "Yes. Spine-Link can upload a preview package and create a permanent web link for sharing Spine animation previews in a browser with Google Video Search support."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need an account to use Spine-Link?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. You can create an anonymous preview without an account. Signing in with Google unlocks a portfolio profile with likes, views, and private library features."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What is World SPINE ARCHIVE?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "World SPINE ARCHIVE is the public archive of user Spine animation works on Spine-Link. Anyone can browse or add Spine animations to the archive."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I upload Spine animation files?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Drag and drop your Spine JSON or SKEL, atlas, and texture files onto the upload area on the Spine-Link homepage. The preview generates automatically in your browser."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I keep my Spine portfolio private?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Spine-Link supports private library profiles that are not listed on the site or in Google search results, unlike public portfolio profiles."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does Spine-Link support blockchain proof for animations?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Uploaded works can include SHA-256 hashes, GitHub commit receipts, browser evidence hashes, and optional EVM blockchain anchors for source-origin proof."
             }
           }
         ]
@@ -776,19 +825,19 @@
       </main>
     </noscript>
     <section class="search-content" aria-label="Spine-Link search description">
-      <h1>Spine-Link is an animation portfolio platform with Google login and uploads.</h1>
+      <h1>Spine-Link — Animation Portfolio Platform with Google Login and Upload</h1>
       <p>
         Spine-Link is a platform where users register or sign in with Google, upload Spine animation work, save it in an
         account-backed profile database, edit portfolio cards, and publish public animation portfolio links.
       </p>
-      <h2>World SPINE ARCHIVE.</h2>
+      <h2>World SPINE ARCHIVE — Public Spine Animation Archive</h2>
       <p>
         World SPINE ARCHIVE is the public archive of user Spine animation works. Anyone can add their own Spine
         animation anonymously with the Create preview button on the archive page, or sign in with Google to create a
         profile. A profile can be a public portfolio with likes, views, showcase and archive publishing, or a private
         library that is private by default and cannot be found through the site or Google unlike public portfolios.
       </p>
-      <h2>Spine portfolio platform and upload features.</h2>
+      <h2>Spine Portfolio Platform Features — Upload, Preview, Share</h2>
       <ul>
         <li><a href="/world-spine-archive">World SPINE ARCHIVE</a>.</li>
         <li><a href="/?upload=work">Create preview anonymously</a>.</li>

@@ -311,6 +311,14 @@ function createLibraryHtml({ origin, publicOwnerId, entries, metrics }) {
     '@context': 'https://schema.org',
     '@graph': [
       {
+        '@type': 'BreadcrumbList',
+        '@id': `${absoluteProfileUrl}#breadcrumb`,
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Spine-Link', item: origin },
+          { '@type': 'ListItem', position: 2, name: rawOwnerName, item: absoluteProfileUrl },
+        ],
+      },
+      {
         '@type': 'ProfilePage',
         '@id': `${absoluteProfileUrl}#profile`,
         name: title,
@@ -355,6 +363,11 @@ function createLibraryHtml({ origin, publicOwnerId, entries, metrics }) {
     <meta name="robots" content="${indexablePortfolio ? 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1' : 'noindex,follow'}" />
     <meta name="application-name" content="Spine Portfolio" />
     <meta name="apple-mobile-web-app-title" content="Spine Portfolio" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preconnect" href="https://accounts.google.com" crossorigin />
+    <link rel="dns-prefetch" href="https://api.github.com" />
     <meta property="og:type" content="profile" />
     <meta property="og:url" content="${escapeHtml(absoluteProfileUrl)}" />
     <meta property="og:title" content="${escapeHtml(title)}" />
@@ -399,7 +412,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries, metrics }) {
       .creator-name { display: none; }
       .creator-count { justify-self: center; color: rgba(237,245,255,.66); font-size: clamp(19px, 3.8vw, 32px); font-weight: 950; letter-spacing: .13em; white-space: nowrap; text-transform: uppercase; }
       .portfolio-search-copy { margin: 0 0 18px; color: rgba(237,245,255,.76); }
-      .portfolio-search-copy h1 { display: none; }
+      .portfolio-search-copy h1 { margin: 0 0 6px; color: #fff; font-size: clamp(24px, 4vw, 48px); font-weight: 950; line-height: 1; }
       .portfolio-search-copy p { max-width: 760px; margin: 0; font-size: 15px; line-height: 1.55; }
       .library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); grid-auto-flow: dense; grid-auto-rows: 96px; gap: 18px; }
       .library-card { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; margin: 0; overflow: hidden; border: 2px solid rgba(255,185,214,.72); border-radius: 8px; color: inherit; background: radial-gradient(circle at 22% 22%, rgba(255,106,40,.28), transparent 36%), radial-gradient(circle at 78% 16%, rgba(140,199,255,.32), transparent 32%), linear-gradient(135deg, rgba(32,35,38,.98), rgba(20,22,25,.98)); box-shadow: 0 0 0 1px rgba(255,185,214,.2), 0 20px 56px rgba(0,0,0,.34); transition: transform 150ms ease, border-color 150ms ease; }

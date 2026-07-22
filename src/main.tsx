@@ -59,7 +59,7 @@ function renderBootShell(isDragging = false) {
               <span class="brand-spine-mark"><i></i><i></i><i></i><i></i><i></i></span>
               <span>N</span><span>E</span><span class="brand-plus">LINK</span>
             </span>
-            <img class="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="" aria-hidden="true">
+            <img class="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="Spine-Link logo" aria-hidden="true">
           </a>
           <details class="site-menu">
             <summary class="site-menu-toggle" aria-label="Open site menu" title="Menu">

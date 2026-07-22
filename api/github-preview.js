@@ -402,6 +402,19 @@ function videoMetadataForEntry(origin, entry, entryId, note = '', canonicalUrl =
   };
 }
 
+function breadcrumbStructuredData(items) {
+  return items.length > 1 ? {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  } : null;
+}
+
 function seoHead({
   origin,
   entryId,
@@ -463,6 +476,11 @@ function seoHead({
         '@graph': video.proofDocuments,
       }
     : null;
+  const breadcrumbs = breadcrumbStructuredData([
+    { name: 'Spine-Link', url: origin },
+    ...(archiveUrl ? [{ name: 'World SPINE ARCHIVE', url: archiveUrl }] : []),
+    { name: video?.name || fallbackTitle, url: video?.url || url },
+  ]);
   return `
     <title>${escapeHtml(title)}</title>
     <meta name="description" content="${escapeHtml(description)}" />
@@ -470,6 +488,7 @@ function seoHead({
     <meta name="googlebot" content="${escapeHtml(robots)}" />
     <meta name="application-name" content="Spine Portfolio" />
     <meta name="apple-mobile-web-app-title" content="Spine Portfolio" />
+    <meta name="theme-color" content="#000000" />
     <link rel="canonical" href="${escapeHtml(url)}" />
     ${playerUrl && playerUrl !== url ? `<link rel="alternate" href="${escapeHtml(playerUrl)}" title="Interactive Spine player" />` : ''}
     ${archiveUrl && archiveUrl !== url ? `<link rel="alternate" href="${escapeHtml(archiveUrl)}" title="World SPINE ARCHIVE detail page" />` : ''}
@@ -481,14 +500,17 @@ function seoHead({
     <meta property="og:image" content="${escapeHtml(image)}" />${video ? `
     <meta property="og:video" content="${escapeHtml(video.contentUrl)}" />
     <meta property="og:video:secure_url" content="${escapeHtml(video.contentUrl)}" />
-    <meta property="og:video:type" content="video/webm" />` : ''}
+    <meta property="og:video:type" content="video/webm" />
+    ${video.width ? `<meta property="og:video:width" content="${video.width}" />` : ''}
+    ${video.height ? `<meta property="og:video:height" content="${video.height}" />` : ''}` : ''}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <meta name="twitter:image" content="${escapeHtml(image)}" />${structuredData ? `
     <script type="application/ld+json">${escapedJson(structuredData)}</script>
     <script type="application/ld+json">${escapedJson(imageStructuredData)}</script>${proofStructuredData ? `
-    <script type="application/ld+json">${escapedJson(proofStructuredData)}</script>` : ''}` : ''}`;
+    <script type="application/ld+json">${escapedJson(proofStructuredData)}</script>` : ''}` : ''}${breadcrumbs ? `
+    <script type="application/ld+json">${escapedJson(breadcrumbs)}</script>` : ''}`;
 }
 
 function githubHeaders(token) {

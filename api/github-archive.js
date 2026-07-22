@@ -444,20 +444,23 @@ function entryImageUrl(origin, entry) {
   return entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || (isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'));
 }
 
-function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false } = {}) {
+function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, altText = '', fetchpriority = '' } = {}) {
   const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
   const poster = entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
   const thumbnail = isGifThumbnail ? poster : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
+  const alt = altText || escapeHtml(entry?.title || entry?.id || 'Spine animation preview');
+  const fp = fetchpriority ? ` fetchpriority="${escapeHtml(fetchpriority)}"` : '';
+  const loading = fetchpriority === 'high' ? '' : ' loading="lazy"';
   if (video) {
     const videoSource = eagerVideo ? ` src="${escapeHtml(video)}" controls` : ` data-video-src="${escapeHtml(video)}"`;
     const preload = eagerVideo ? 'metadata' : 'none';
-    return `<video class="${posterClass}"${poster || thumbnail ? ` poster="${escapeHtml(poster || thumbnail)}"` : ''}${videoSource} muted playsinline preload="${preload}"></video>`;
+    return `<video class="${posterClass}"${poster || thumbnail ? ` poster="${escapeHtml(poster || thumbnail)}"` : ''}${videoSource} muted playsinline preload="${preload}" aria-label="${alt}"${fp}></video>`;
   }
   if (thumbnail) {
-    return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="" loading="lazy" decoding="async" />`;
+    return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="${alt}"${loading} decoding="async"${fp} />`;
   }
-  return `<div class="media-fallback">${Array.isArray(entry?.animations) ? entry.animations.length : 0}</div>`;
+  return `<div class="media-fallback" aria-label="${alt}">${Array.isArray(entry?.animations) ? entry.animations.length : 0}</div>`;
 }
 
 function baseStyles() {
@@ -515,8 +518,9 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
       const views = metric.views;
       const cardSizeMode = entry?.cardSize && entry.cardSize !== 'auto' ? 'manual' : 'auto';
       const entryId = escapeHtml(String(entry?.id || ''));
+      const fp = index < 6 ? 'high' : '';
       return `<a class="${tileClassForEntry(entry, index)}" data-entry-id="${entryId}" data-archive-url="${escapeHtml(archiveUrl)}" data-card-size-mode="${cardSizeMode}" href="${escapeHtml(itemUrl)}" aria-label="Open ${title} in the interactive Spine player">
-        <div class="tile-media">${mediaHtml(entry, { origin })}</div>
+        <div class="tile-media">${mediaHtml(entry, { origin, fetchpriority: fp })}</div>
         <span class="tile-select-check" aria-hidden="true">✓</span>
         <div class="tile-overlay">
           <strong class="tile-title">${title}</strong>
@@ -572,6 +576,14 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
     '@context': 'https://schema.org',
     '@graph': [
       {
+        '@type': 'BreadcrumbList',
+        '@id': `${origin}/world-spine-archive#breadcrumb`,
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Spine-Link', item: origin },
+          { '@type': 'ListItem', position: 2, name: 'World SPINE ARCHIVE', item: `${origin}/world-spine-archive` },
+        ],
+      },
+      {
         '@type': 'CollectionPage',
         '@id': `${origin}/world-spine-archive#collection`,
         name: 'World SPINE ARCHIVE',
@@ -618,7 +630,12 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
     <meta name="keywords" content="spine portfolio, portfolio spine, spine animation portfolio, spine animator portfolio, world spine archive, spine library" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
     <meta name="googlebot" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
+    <meta name="application-name" content="Spine Portfolio" />
+    <meta name="theme-color" content="#000000" />
     <link rel="canonical" href="${origin}/world-spine-archive" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preconnect" href="https://accounts.google.com" crossorigin />
+    <link rel="dns-prefetch" href="https://api.github.com" />
     <link rel="stylesheet" href="/page-transitions.css" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="World SPINE ARCHIVE - Public Spine Portfolio Library" />
@@ -696,10 +713,13 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
         </div>
       </header>
       <p class="archive-copy">
-        Browse public Spine animation works from the worldwide archive. Anyone can add a work anonymously with
-        Create preview, or sign in with Google and publish through a profile. Portfolio profiles are public,
-        searchable, and show likes and views; library profiles are private by default and are not listed through
-        the site or Google unlike portfolios.
+        Browse public <a href="/spine-animations.html" style="color:inherit">Spine animation</a> works from the worldwide archive.
+        Anyone can <a href="/?upload=work" style="color:inherit">add a Spine animation</a> anonymously with
+        <a href="/?upload=work" style="color:inherit">Create preview</a>, or <a href="/?login=google" style="color:inherit">sign in with Google</a>
+        and publish through a <a href="/spine-portfolio.html" style="color:inherit">Spine portfolio</a> profile.
+        <a href="/spine-portfolio.html" style="color:inherit">Portfolio profiles</a> are public,
+        searchable, and show likes and views; <a href="/spine-library.html" style="color:inherit">library profiles</a> are private by default
+        and are not listed through the site or Google unlike portfolios.
       </p>
       ${entries.length ? `<section class="grid">${cards}</section>` : '<p class="muted">No public previews yet.</p>'}
       <footer class="archive-footer">
@@ -1239,9 +1259,15 @@ function archiveItemHtml({ origin, entry, metrics }) {
     <meta name="description" content="${escapeHtml(description)}" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
     <meta name="googlebot" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
+    <meta name="application-name" content="Spine Portfolio" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="canonical" href="${escapeHtml(pageUrl)}" />
     <link rel="alternate" href="${escapeHtml(playerPageUrl)}" title="${title} interactive Spine player video page" />
     ${mediaVideo ? `<link rel="alternate" href="${escapeHtml(videoPageUrl)}" title="${title} dedicated WebM watch page" />` : ''}
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preconnect" href="https://accounts.google.com" crossorigin />
+    <link rel="dns-prefetch" href="https://api.github.com" />
     <link rel="stylesheet" href="/page-transitions.css" />
     <meta property="og:type" content="${mediaVideo ? 'video.other' : 'article'}" />
     <meta property="og:title" content="${title} - World SPINE ARCHIVE" />
@@ -1269,7 +1295,8 @@ function archiveItemHtml({ origin, entry, metrics }) {
       .metric-pill strong { color: currentColor; font-size: 13px; }
       .metric-like-button { border-color: rgba(255,185,214,.32); color: #ffe4ef; cursor: pointer; user-select: none; }
       .metric-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.16); }
-      h1 { margin: 0 0 8px; font-size: clamp(30px, 5vw, 56px); line-height: .95; }
+      .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; pointer-events: none; }
+      .item-title { margin: 0 0 8px; font-size: clamp(30px, 5vw, 56px); line-height: .95; }
       .spine-link { display: inline-flex; justify-content: center; align-items: center; min-height: 48px; padding: 0 16px; border: 1px solid rgba(179,255,64,.72); border-radius: 8px; color: #eaffc2; font-weight: 900; text-decoration: none; background: rgba(179,255,64,.12); }
       .proof-panel { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.1); }
       .proof-panel a { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; padding: 0 10px; border: 1px solid rgba(140,199,255,.2); border-radius: 8px; color: #dff1ff; background: rgba(140,199,255,.08); font-size: 12px; font-weight: 850; text-decoration: none; }
@@ -1293,11 +1320,12 @@ function archiveItemHtml({ origin, entry, metrics }) {
         </div>
       </header>
       <section class="viewer">
+        <h1 class="visually-hidden">${title} — World SPINE ARCHIVE</h1>
         <div class="media-panel">${mediaHtml(entry, { origin, posterClass: 'media-main', eagerVideo: true })}</div>
-        <aside class="side">
+        <div class="side">
           <div>
             <p class="muted">Spine media preview</p>
-            <h1>${title}</h1>
+            <h2 class="item-title">${title}</h2>
             <p class="muted">${animations} animations</p>
             <div class="metric-row" data-metric-id="${safeEntryId}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views">
               <span class="metric-pill metric-like-button" data-metric-id="${safeEntryId}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" role="button" tabindex="0" aria-pressed="false" title="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></span>
@@ -1311,7 +1339,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
           </div>` : ''}
           <a class="spine-link" href="${spineUrl}">Open interactive Spine player</a>
           ${mediaVideo ? `<a class="spine-link" href="${videoWatchUrl(entry)}">Dedicated WebM page</a>` : ''}
-        </aside>
+        </div>
       </section>
     </main>
     <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(entryId)} };</script>
