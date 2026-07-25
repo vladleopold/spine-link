@@ -138,6 +138,43 @@ function isAtlasPath(path) {
   return lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx');
 }
 
+function isSkeletonJsonPath(path) {
+  return String(path || '').toLowerCase().endsWith('.json');
+}
+
+function isSkeletonJsonData(data) {
+  return data && typeof data === 'object' && (data.skeleton || data.bones || data.slots || data.skins || data.animations);
+}
+
+function sanitizeSkeletonJson(json) {
+  if (!json || typeof json !== 'object') return json;
+  const attachments = json?.skins?.flatMap((skin) => Object.values(skin || {})) || [];
+  for (const slotAttachments of attachments) {
+    if (!slotAttachments || typeof slotAttachments !== 'object') continue;
+    for (const attachment of Object.values(slotAttachments)) {
+      if (!attachment || typeof attachment !== 'object') continue;
+      const type = attachment.type;
+      if (type === 'mesh' || type === 'linkedmesh') {
+        if (type === 'mesh' && !attachment.source) {
+          if (!Array.isArray(attachment.uvs)) attachment.uvs = [];
+          if (!Array.isArray(attachment.vertices)) attachment.vertices = [];
+          if (!Array.isArray(attachment.triangles)) attachment.triangles = [];
+        }
+        if (type === 'linkedmesh' && !attachment.source) {
+          if (!Array.isArray(attachment.uvs)) attachment.uvs = [];
+          if (!Array.isArray(attachment.vertices)) attachment.vertices = [];
+          if (!Array.isArray(attachment.triangles)) attachment.triangles = [];
+        }
+      }
+    }
+  }
+  return json;
+}
+
+function sanitizeSkeletonData(json) {
+  return sanitizeSkeletonJson(json);
+}
+
 function byteRangeFromHeader(rangeHeader = '', size = 0) {
   const match = String(rangeHeader).match(/^bytes=(\d*)-(\d*)$/);
   if (!match || size <= 0) return null;

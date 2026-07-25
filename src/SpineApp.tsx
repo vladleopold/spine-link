@@ -851,6 +851,30 @@ function preferredSkinName(skinNames: string[]) {
   return skinNames.includes("default") ? "default" : skinNames[0] || "";
 }
 
+function sanitizeSkeletonData(json: unknown): unknown {
+  return sanitizeSkeletonJson(json);
+}
+
+function sanitizeSkeletonJson(json: unknown): unknown {
+  if (!json || typeof json !== "object") return json;
+  const attachments = json?.skins?.flatMap((skin: unknown) => Object.values(skin as Record<string, unknown> || {})) || [];
+  for (const slotAttachments of attachments) {
+    if (!slotAttachments || typeof slotAttachments !== "object") continue;
+    for (const attachment of Object.values(slotAttachments as Record<string, unknown>)) {
+      if (!attachment || typeof attachment !== "object") continue;
+      const type = (attachment as Record<string, unknown>).type as string;
+      if (type === "mesh" || type === "linkedmesh") {
+        if (!(attachment as Record<string, unknown>).source) {
+          if (!Array.isArray((attachment as Record<string, unknown>).uvs)) (attachment as Record<string, unknown>).uvs = [];
+          if (!Array.isArray((attachment as Record<string, unknown>).vertices)) (attachment as Record<string, unknown>).vertices = [];
+          if (!Array.isArray((attachment as Record<string, unknown>).triangles)) (attachment as Record<string, unknown>).triangles = [];
+        }
+      }
+    }
+  }
+  return json;
+}
+
 function assetStem(name: string) {
   return basename(name)
     .replace(/\.(atlas\.docx|atlas\.txt|atlas|json|skel|png|jpe?g|webp)$/i, "")
@@ -1137,7 +1161,7 @@ function spineBinaryVersionFromBuffer(buffer: ArrayBuffer) {
 function spineSkeletonVersionFromText(text?: string) {
   if (!text) return "";
   try {
-    const decodedJson = stripPackedPlaceholders(decodePackedSkeletonJson(text));
+    const decodedJson = sanitizeSkeletonData(stripPackedPlaceholders(decodePackedSkeletonJson(text)));
     if (decodedJson && typeof decodedJson === "object" && "skeleton" in decodedJson) {
       const version = (decodedJson as { skeleton?: { spine?: unknown } }).skeleton?.spine;
       return typeof version === "string" ? version : "";
@@ -2157,10 +2181,10 @@ async function loadFiles(files: File[]) {
             : await readAsDataUri(file);
       const transparentizedImage = isImageFile(file) ? await readAsTransparentizedImageDataUri(file) : undefined;
 
-      if (extensionOf(file.name) === "json" && text) {
-        const decodedJson = stripPackedPlaceholders(decodePackedSkeletonJson(text));
-        dataUri = textDataUri("application/json", JSON.stringify(decodedJson));
-      }
+if (extensionOf(file.name) === "json" && text) {
+         const decodedJson = sanitizeSkeletonData(stripPackedPlaceholders(decodePackedSkeletonJson(text)));
+         dataUri = textDataUri("application/json", JSON.stringify(decodedJson));
+       }
 
       if (isAtlasFile(file) && text) {
         dataUri = textDataUri("text/plain", text);
@@ -2206,7 +2230,7 @@ async function loadFiles(files: File[]) {
       const premultipliedAlpha = hasPremultipliedAlpha(atlas.text);
       let usesRebuiltStraightAlphaTexture = false;
       const skeletonJson =
-        extensionOf(skeleton.file.name) === "json" ? stripPackedPlaceholders(decodePackedSkeletonJson(skeleton.text)) : null;
+        extensionOf(skeleton.file.name) === "json" ? sanitizeSkeletonData(stripPackedPlaceholders(decodePackedSkeletonJson(skeleton.text))) : null;
       const animationNames =
         skeletonJson && typeof skeletonJson === "object" && "animations" in skeletonJson
           ? Object.keys((skeletonJson as { animations?: Record<string, unknown> }).animations ?? {})
