@@ -651,7 +651,7 @@ function createHtml(config) {
     })}
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/page-transitions.css" />
-    <link rel="stylesheet" id="spine-player-stylesheet" href="https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.2.113/dist/spine-player.css" />
+    <link rel="stylesheet" id="spine-player-stylesheet" href="https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/spine-player.css" />
     <script src="/page-transitions.js" defer></script>
     <style>
       * { box-sizing: border-box; }
@@ -960,15 +960,15 @@ function createHtml(config) {
       }
       function loadSpineRuntime(set) {
         const runtime = legacyRuntimeForSet(set);
-        const key = runtime || "4.2.113";
+        const key = runtime || "4.3.13";
         if (!runtimeLoaders.has(key)) {
           runtimeLoaders.set(key, (async () => {
             if (runtime) {
               setPlayerStylesheet("/vendor-spine-player-" + runtime + ".css");
               await loadScriptOnce("/vendor-spine-player-" + runtime + ".js");
             } else {
-              setPlayerStylesheet("https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.2.113/dist/spine-player.css");
-              await loadScriptOnce("https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.2.113/dist/iife/spine-player.js");
+              setPlayerStylesheet("https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/spine-player.css");
+              await loadScriptOnce("https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/iife/spine-player.js");
             }
             if (!window.spine?.SpinePlayer) throw new Error("Spine runtime could not be loaded.");
             if (window.spine?.GLTexture) window.spine.GLTexture.DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL = true;
