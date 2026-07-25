@@ -1445,7 +1445,7 @@ function decodePackedSkeletonJson(text?: string) {
 }
 
 function textDataUri(mime: string, text: string) {
-  return `data:${mime};charset=utf-8,${encodeURIComponent(text)}`;
+  return `data:${mime};charset=utf-8,${text}`;
 }
 
 const transparentPngDataUri =
@@ -1458,7 +1458,7 @@ function textFromDataUri(dataUri = "") {
   const metadata = dataUri.slice(0, commaIndex);
   const payload = dataUri.slice(commaIndex + 1);
   if (metadata.includes(";base64")) return decodeURIComponent(escape(window.atob(payload)));
-  return decodeURIComponent(payload);
+  return payload;
 }
 
 function escapedJson(value: unknown) {
