@@ -126,8 +126,8 @@ const playerCssUrl = isLegacy
   ? `${args.origin}/vendor-spine-player-${versionMajor}.${runtimeMinor}.css`
   : 'https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/spine-player.css';
 
-const skeletonKey = skeletonFile.toLowerCase().endsWith('.skel') ? 'skelUrl' : 'jsonUrl';
-const atlasKey = 'atlasUrl';
+const skeletonKey = skeletonFile.toLowerCase().endsWith('.skel') ? 'skelUrl' : 'skeleton';
+const atlasKey = 'atlas';
 
 const setSegments = [uploadPath, firstSet.name];
 
