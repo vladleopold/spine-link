@@ -3,7 +3,6 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
 const args = {
@@ -234,6 +233,9 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
 </body>
 </html>`;
 
+const tempDir = path.join('/tmp', `spine-export-${Date.now()}`);
+fs.mkdirSync(tempDir, { recursive: true });
+
 const browser = await chromium.launch({
   headless: true,
   args: [
@@ -250,6 +252,7 @@ try {
   const context = await browser.newContext({
     viewport: { width: 960, height: 720 },
     reducedMotion: 'no-preference',
+    recordVideo: { dir: tempDir },
   });
   const page = await context.newPage();
 
@@ -269,43 +272,29 @@ try {
 
   console.error(`Animation ready, duration=${animDuration}s, canvas=${canvasWidth}x${canvasHeight}`);
 
-  const tempDir = path.join('/tmp', `spine-export-${Date.now()}`);
-  fs.mkdirSync(tempDir, { recursive: true });
+  const captureDuration = animDuration > 0 ? animDuration + 1 : 1;
+  await new Promise(resolve => setTimeout(resolve, captureDuration * 1000));
 
-  const fps = 30;
-  const captureDuration = animDuration > 0 ? animDuration + 0.5 : 0.5;
-  const totalFrames = Math.max(1, Math.ceil(captureDuration * fps));
-  const frameInterval = 1000 / fps;
+  await context.close();
 
-  for (let i = 0; i < totalFrames; i++) {
-    const framePath = path.join(tempDir, `frame-${String(i).padStart(6, '0')}.png`);
-    await page.screenshot({ path: framePath, clip: { x: 0, y: 0, width: canvasWidth, height: canvasHeight } });
-    if (i < totalFrames - 1) {
-      await new Promise(resolve => setTimeout(resolve, frameInterval));
-    }
+  const videoFiles = fs.readdirSync(tempDir).filter(f => f.endsWith('.webm'));
+  if (videoFiles.length === 0) {
+    console.error('No video file produced by Playwright');
+    process.exit(1);
+  }
+
+  const videoPath = path.join(tempDir, videoFiles[0]);
+  const videoSize = fs.statSync(videoPath).size;
+  console.error(`Playwright recording: ${videoPath} (${videoSize} bytes)`);
+
+  if (videoSize < 100) {
+    console.error('Recorded video is too small, possibly empty');
+    process.exit(1);
   }
 
   const outputPath = args.output || `${args.uploadId}-${targetAnimation}-preview.webm`;
   fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
-
-  const ffmpegCmd = [
-    'ffmpeg', '-y',
-    '-framerate', String(fps),
-    '-i', path.join(tempDir, 'frame-%06d.png'),
-    '-c:v', 'libvpx-vp9',
-    '-pix_fmt', 'yuva420p',
-    '-crf', '20',
-    '-b:v', '2M',
-    '-auto-alt-ref', '0',
-    outputPath,
-  ].join(' ');
-
-  try {
-    execSync(ffmpegCmd, { stdio: 'pipe', timeout: 120000 });
-  } catch (e) {
-    console.error(`FFmpeg failed: ${e.message}`);
-    process.exit(1);
-  }
+  fs.copyFileSync(videoPath, outputPath);
 
   const webmBuffer = fs.readFileSync(outputPath);
   const meta = {
@@ -315,13 +304,12 @@ try {
     width: canvasWidth,
     height: canvasHeight,
     bytes: webmBuffer.length,
-    frames: totalFrames,
     sha256: createHash('sha256').update(webmBuffer).digest('hex'),
     isDefault,
   };
   fs.writeFileSync(outputPath + '.json', JSON.stringify(meta, null, 2));
 
-  console.error(`WebM saved: ${outputPath} (${webmBuffer.length} bytes, ${canvasWidth}x${canvasHeight}, ${totalFrames} frames)`);
+  console.error(`WebM saved: ${outputPath} (${webmBuffer.length} bytes, ${canvasWidth}x${canvasHeight})`);
 
   console.log(JSON.stringify({ ...meta, ok: true, path: outputPath }));
 
@@ -329,4 +317,5 @@ try {
 
 } finally {
   await browser.close();
+  try { fs.rmSync(tempDir, { recursive: true }); } catch { }
 }
