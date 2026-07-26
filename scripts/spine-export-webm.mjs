@@ -111,42 +111,9 @@ function detectSkeletonVersion(filePath) {
   return '4.0';
 }
 
-function parseAnimationDurations(filePath) {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext !== '.json') return {};
-  try {
-    const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    const animations = content?.animations;
-    if (!animations || typeof animations !== 'object') return {};
-    const durations = {};
-    for (const [name, data] of Object.entries(animations)) {
-      const bones = data?.bones || {};
-      let maxDuration = 0;
-      for (const boneData of Object.values(bones)) {
-        for (const channel of Object.values(boneData)) {
-          if (Array.isArray(channel)) {
-            for (const keyframe of channel) {
-              const time = Number(keyframe?.time || 0);
-              if (time > maxDuration) maxDuration = time;
-            }
-          }
-        }
-      }
-      if (maxDuration > 0) durations[name] = maxDuration;
-    }
-    return durations;
-  } catch {
-    return {};
-  }
-}
-
 const skeletonFilePath = path.join(firstSet.path, skeletonFile);
 const skeletonVersion = detectSkeletonVersion(skeletonFilePath);
-const animationDurations = parseAnimationDurations(skeletonFilePath);
-const defaultDuration = Object.values(animationDurations).reduce((max, d) => Math.max(max, d), 0);
 const targetAnimation = args.animation || entry.defaultAnimation || '';
-const animationDuration = animationDurations[targetAnimation] || defaultDuration || 5;
-const captureTimeMs = Math.max(2000, Math.ceil(animationDuration * 1000) + 1000);
 
 const versionMajor = skeletonVersion.split('.')[0] || '4';
 const isLegacy = parseInt(versionMajor, 10) < 4;
@@ -177,7 +144,6 @@ console.error(`Set: ${firstSet.name}`);
 console.error(`Skeleton: ${skeletonFile} (v${skeletonVersion})`);
 console.error(`Atlas: ${atlasFile}`);
 console.error(`Animation: ${targetAnimation || '(default)'}`);
-console.error(`Duration: ${animationDuration}s (capture ${captureTimeMs}ms)`);
 
 const captureHtml = `<!DOCTYPE html>
 <html lang="en">
@@ -221,12 +187,33 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
     window.__captureError = 'WebGL context lost';
   });
 
+  function getAnimationDuration() {
+    try {
+      if (!player.animationState) return 0;
+      var track = player.animationState.getCurrent(0);
+      if (track && track.animation && typeof track.animation.duration === 'number' && track.animation.duration > 0) {
+        return track.animation.duration;
+      }
+      var tracks = player.animationState.tracks;
+      if (tracks) {
+        for (var i = 0; i < tracks.length; i++) {
+          var t = tracks[i];
+          if (t && t.animation && typeof t.animation.duration === 'number' && t.animation.duration > 0) {
+            return t.animation.duration;
+          }
+        }
+      }
+    } catch (e) {}
+    return 0;
+  }
+
   window.__startCapture = function() {
     var canvas = player.canvas;
     if (!canvas || canvas.width < 50 || canvas.height < 50) return;
 
     var fps = 30;
-    var captureMs = ${captureTimeMs};
+    var animDuration = getAnimationDuration();
+    var captureMs = Math.max(2000, Math.ceil(animDuration * 1000) + 1000);
 
     var mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
     var mimeType = mimeTypes.find(function(t) { return typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t); });
