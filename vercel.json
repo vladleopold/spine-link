@@ -427,6 +427,10 @@
     {
       "source": "/assets/:path(.*)",
       "destination": "/api/github-asset?path=:path"
+    },
+    {
+      "source": "/api/github-upload",
+      "destination": "/api/github-upload"
     }
   ]
 }

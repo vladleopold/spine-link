@@ -87,13 +87,18 @@ class SpineBinaryCursor {
   }
 }
 
+function extractVersion(v) {
+  const m = String(v).match(/^(\d+\.\d+(?:\.\d+)?)/);
+  return m ? m[1] : '';
+}
+
 function spineBinaryVersionFromBase64(base64 = '') {
   const bytes = Buffer.from(String(base64).replace(/\s/g, ''), 'base64');
   const legacyCursor = new SpineBinaryCursor(bytes);
   try {
     legacyCursor.readString();
-    const version = legacyCursor.readString() || '';
-    if (/^\d+\.\d+(?:\.|$)/.test(version)) return version;
+    const version = extractVersion(legacyCursor.readString());
+    if (version) return version;
   } catch {
     // Try newer binary header below.
   }
@@ -101,7 +106,7 @@ function spineBinaryVersionFromBase64(base64 = '') {
   const cursor = new SpineBinaryCursor(bytes);
   try {
     cursor.skip(8);
-    return cursor.readString() || '';
+    return extractVersion(cursor.readString()) || '';
   } catch {
     return '';
   }
@@ -620,6 +625,20 @@ async function githubFileContent(settings, path) {
   return data && typeof data.content === 'string' ? data.content : '';
 }
 
+async function githubFileHead(settings, path, maxBytes = 256) {
+  const rawUrl = `https://raw.githubusercontent.com/${settings.owner}/${settings.repo}/${settings.branch}/${encodeRepoPath(path)}`;
+  const response = await fetch(rawUrl, {
+    headers: {
+      Authorization: `Bearer ${settings.token}`,
+      Range: `bytes=0-${maxBytes - 1}`,
+      Accept: 'application/octet-stream',
+    },
+  });
+  if (!response.ok && response.status !== 206) return '';
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return buffer.toString('base64');
+}
+
 async function githubList(settings, path) {
   const data = await githubJson(settings, path);
   return Array.isArray(data) ? data : [];
@@ -871,7 +890,7 @@ function createHtml(config) {
       ${video ? `<section class="video-watch-panel video-watch-panel--bottom" aria-label="${escapeHtml(video.name)} video preview">
         <div class="section-title">Video preview</div>
         <div class="seo-video-frame" style="--video-preview-ratio: ${escapeHtml(videoPreviewRatio)}">
-          <video class="video-watch-player seo-video-preview" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl)}" muted playsinline preload="metadata" controls></video>
+          <video class="video-watch-player seo-video-preview" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl)}" muted playsinline preload="metadata" autoplay controls></video>
         </div>
         <div class="video-watch-copy"><h1>${escapeHtml(video.name)}</h1><p>${escapeHtml(video.description)}</p></div>
       </section>` : ''}
@@ -949,9 +968,10 @@ function createHtml(config) {
         }
       }
       const playerElement = document.getElementById("player");
-      const pinchDistance = { value: null };
-      const panPosition = { value: null };
-      const swipeStart = { value: null };
+const pinchDistance = { value: null };
+       const panPosition = { value: null };
+       const swipeStart = { value: null };
+       const touchPanPosition = { value: null };
       let player;
       const runtimeLoaders = new Map();
       function legacyRuntimeForSet(set) {
@@ -1137,6 +1157,7 @@ function createHtml(config) {
         }
         function scheduleChaos() {
           window.clearTimeout(chaosTimer);
+          chaosTimer = window.setTimeout(runChaos, 800 + Math.random() * 2000);
         }
         function randomSample(items, count) {
           return items
@@ -1151,18 +1172,18 @@ function createHtml(config) {
             scheduleChaos();
             return;
           }
-          const activeLimit = Math.min(2, Math.max(1, Math.ceil(videos.length * 0.25)));
+          const activeLimit = Math.min(4, Math.max(2, Math.ceil(videos.length * 0.35)));
           randomSample(videos.filter((video) => !video.paused && !manualVideos.has(video)), videos.length).slice(activeLimit).forEach(stopOwnerThumb);
           randomSample(videos.filter((video) => video.paused && !manualVideos.has(video)), activeLimit).forEach((video) => {
-            if (Math.random() < 0.78) {
+            if (Math.random() < 0.92) {
               playOwnerThumb(video);
               window.setTimeout(() => {
-                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.88) stopOwnerThumb(video);
-              }, 480 + Math.random() * 1900);
+                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.7) stopOwnerThumb(video);
+              }, 1200 + Math.random() * 3000);
             }
           });
           videos.forEach((video) => {
-            if (!manualVideos.has(video) && !video.paused && Math.random() < 0.3) stopOwnerThumb(video);
+            if (!manualVideos.has(video) && !video.paused && Math.random() < 0.4) stopOwnerThumb(video);
           });
           scheduleChaos();
         }
@@ -1222,38 +1243,69 @@ function createHtml(config) {
         return;
       }
       playerElement.addEventListener("wheel", (event) => { event.preventDefault(); applyZoom(currentZoom.value + (event.deltaY > 0 ? -0.1 : 0.1)); }, { passive: false });
-      playerElement.addEventListener("touchstart", (event) => {
-        if (event.touches.length === 2) {
-          swipeStart.value = null;
-          pinchDistance.value = touchDistance(event.touches);
-          return;
-        }
-        if (event.touches.length === 1) {
-          const touch = event.touches.item(0);
-          swipeStart.value = touch ? { x: touch.clientX, y: touch.clientY, time: performance.now() } : null;
-        }
-      }, { passive: false });
-      playerElement.addEventListener("touchmove", (event) => { if (event.touches.length !== 2 || pinchDistance.value === null) return; event.preventDefault(); const nextDistance = touchDistance(event.touches); applyZoom(currentZoom.value + (nextDistance - pinchDistance.value) / 220); pinchDistance.value = nextDistance; }, { passive: false });
-      playerElement.addEventListener("touchend", (event) => {
-        pinchDistance.value = null;
-        const start = swipeStart.value;
-        swipeStart.value = null;
-        if (!start || event.changedTouches.length !== 1) return;
-        const touch = event.changedTouches.item(0);
-        if (!touch) return;
-        const deltaX = touch.clientX - start.x;
-        const deltaY = touch.clientY - start.y;
-        const elapsed = performance.now() - start.time;
-        if (elapsed > 800 || Math.abs(deltaX) < 64 || Math.abs(deltaX) < Math.abs(deltaY) * 1.35) return;
-        navigateSibling(deltaX < 0 ? "next" : "previous");
-      });
-      playerElement.addEventListener("touchcancel", () => { pinchDistance.value = null; swipeStart.value = null; });
-      playerElement.addEventListener("click", (event) => { if (event.target.closest(".spine-player-controls")) return; event.preventDefault(); event.stopImmediatePropagation(); if (event.button === 0) togglePlayback(); }, true);
-      playerElement.addEventListener("dblclick", (event) => { if (event.target.closest(".spine-player-controls")) return; event.preventDefault(); event.stopImmediatePropagation(); }, true);
-      playerElement.addEventListener("contextmenu", (event) => { event.preventDefault(); event.stopImmediatePropagation(); }, true);
-      playerElement.addEventListener("mousedown", (event) => { if (event.button !== 2) return; event.preventDefault(); event.stopImmediatePropagation(); panPosition.value = { x: event.clientX, y: event.clientY }; }, true);
-      window.addEventListener("mousemove", (event) => { if (!panPosition.value) return; event.preventDefault(); event.stopImmediatePropagation(); const deltaX = event.clientX - panPosition.value.x, deltaY = event.clientY - panPosition.value.y; panPosition.value = { x: event.clientX, y: event.clientY }; panByPixels(deltaX, deltaY); }, { passive: false, capture: true });
-      window.addEventListener("mouseup", (event) => { if (event.button !== 2) return; event.preventDefault(); event.stopImmediatePropagation(); panPosition.value = null; }, true);
+playerElement.addEventListener("touchstart", (event) => {
+         if (event.touches.length === 2) {
+           swipeStart.value = null;
+           pinchDistance.value = touchDistance(event.touches);
+           return;
+         }
+         if (event.touches.length === 1) {
+           const touch = event.touches.item(0);
+           swipeStart.value = touch ? { x: touch.clientX, y: touch.clientY, time: performance.now() } : null;
+           touchPanPosition.value = touch ? { x: touch.clientX, y: touch.clientY } : null;
+         }
+       }, { passive: false });
+       playerElement.addEventListener("touchmove", (event) => {
+         if (event.touches.length === 2 && pinchDistance.value !== null) {
+           event.preventDefault();
+           const nextDistance = touchDistance(event.touches);
+           applyZoom(currentZoom.value + (nextDistance - pinchDistance.value) / 220);
+           pinchDistance.value = nextDistance;
+         } else if (event.touches.length === 1 && touchPanPosition.value) {
+           event.preventDefault();
+           const touch = event.touches.item(0);
+           if (!touch) return;
+           const deltaX = touch.clientX - touchPanPosition.value.x;
+           const deltaY = touch.clientY - touchPanPosition.value.y;
+           touchPanPosition.value = { x: touch.clientX, y: touch.clientY };
+           panByPixels(deltaX, deltaY);
+         }
+       }, { passive: false });
+       playerElement.addEventListener("touchend", (event) => {
+         pinchDistance.value = null;
+         touchPanPosition.value = null;
+         const start = swipeStart.value;
+         swipeStart.value = null;
+         if (!start || event.changedTouches.length !== 1) return;
+         const touch = event.changedTouches.item(0);
+         if (!touch) return;
+         const deltaX = touch.clientX - start.x;
+         const deltaY = touch.clientY - start.y;
+         const elapsed = performance.now() - start.time;
+         if (elapsed > 800 || Math.abs(deltaX) < 64 || Math.abs(deltaX) < Math.abs(deltaY) * 1.35) return;
+         navigateSibling(deltaX < 0 ? "next" : "previous");
+       });
+       playerElement.addEventListener("touchcancel", () => { pinchDistance.value = null; swipeStart.value = null; touchPanPosition.value = null; });
+       playerElement.addEventListener("click", (event) => {
+         if (event.target.closest(".spine-player-controls")) return;
+         event.preventDefault();
+         event.stopImmediatePropagation();
+         if (event.button === 2) togglePlayback();
+       }, true);
+       playerElement.addEventListener("dblclick", (event) => {
+         if (event.target.closest(".spine-player-controls")) return;
+         event.preventDefault();
+         event.stopImmediatePropagation();
+       }, true);
+       playerElement.addEventListener("contextmenu", (event) => { event.preventDefault(); event.stopImmediatePropagation(); }, true);
+       playerElement.addEventListener("mousedown", (event) => {
+         if (event.button !== 0) return;
+         event.preventDefault();
+         event.stopImmediatePropagation();
+         panPosition.value = { x: event.clientX, y: event.clientY };
+       }, true);
+       window.addEventListener("mousemove", (event) => { if (!panPosition.value) return; event.preventDefault(); event.stopImmediatePropagation(); const deltaX = event.clientX - panPosition.value.x, deltaY = event.clientY - panPosition.value.y; panPosition.value = { x: event.clientX, y: event.clientY }; panByPixels(deltaX, deltaY); }, { passive: false, capture: true });
+       window.addEventListener("mouseup", (event) => { if (event.button !== 0) return; event.preventDefault(); event.stopImmediatePropagation(); panPosition.value = null; }, true);
       setSelect.onchange = () => { activeSet.value = sets.find((set) => set.label === setSelect.value) || sets[0]; activeAnimation.name = activeSet.value?.animation || ""; syncSetInfo(); renderAnimationList(); syncUrl(); createPlayer(); };
       window.addEventListener("popstate", applySelectionFromUrl);
       renderSetList(); syncSetInfo(); renderOwnerCard(); installOwnerLibraryChaos(); syncPreviewLike(); syncLibraryNavigationButtons(); syncUrl(true); createPlayer(); renderAnimationList();
@@ -1303,7 +1355,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
     <main class="page">
       <div class="topbar"><div class="brand">Spine-Link</div><a class="back" href="${ownerUrl}">Open portfolio</a></div>
       <section class="video-card">
-        <video src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted playsinline preload="none" controls></video>
+        <video src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted playsinline preload="metadata" autoplay controls></video>
         <div class="body">
           <h1>${title}</h1>
           ${note ? `<p>${cleanPublicText(note, 240)}</p>` : '<p>This older library item uses the portfolio video holder because its original Spine source files are no longer available.</p>'}
@@ -1352,7 +1404,7 @@ async function createDynamicPreview(settings, uploadPath, origin) {
         skeletonJson = null;
       }
     } else if (skeleton.name.toLowerCase().endsWith('.skel')) {
-      skeletonVersion = spineBinaryVersionFromBase64(await githubFileContent(settings, skeleton.path));
+      skeletonVersion = spineBinaryVersionFromBase64(await githubFileHead(settings, skeleton.path, 256));
     }
 
     const animations = animationNamesFromJson(skeletonJson);

@@ -455,7 +455,7 @@ function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, a
   if (video) {
     const videoSource = eagerVideo ? ` src="${escapeHtml(video)}" controls` : ` data-video-src="${escapeHtml(video)}"`;
     const preload = eagerVideo ? 'metadata' : 'none';
-    return `<video class="${posterClass}"${poster || thumbnail ? ` poster="${escapeHtml(poster || thumbnail)}"` : ''}${videoSource} muted playsinline preload="${preload}" aria-label="${alt}"${fp}></video>`;
+    return `<video class="${posterClass}"${poster || thumbnail ? ` poster="${escapeHtml(poster || thumbnail)}"` : ''}${videoSource} muted playsinline preload="${preload}" autoplay aria-label="${alt}"${fp}></video>`;
   }
   if (thumbnail) {
     return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="${alt}"${loading} decoding="async"${fp} />`;
@@ -652,7 +652,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
     <style>
       ${baseStyles()}
       .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(74px, 4.6vw, 96px), 1fr)); grid-auto-flow: dense; grid-auto-rows: clamp(62px, 3.7vw, 78px); gap: 10px; width: 100%; margin: 0; }
-      .archive-copy { max-width: min(680px, 74vw); margin: 0 auto 8px; color: rgba(237,245,255,.62); font-size: clamp(12px, 1.8vw, 17px); font-weight: 750; line-height: 1.02; text-align: left; }
+      .archive-copy { max-width: min(680px, 74vw); margin: 0 auto 8px; color: rgba(237,245,255,.38); font-size: 9px; font-weight: 500; line-height: 1.02; text-align: left; }
       .tile { position: relative; min-height: 0; overflow: hidden; border: 1px solid rgba(140,199,255,.18); border-radius: 8px; color: inherit; background: #090b0d; text-decoration: none; }
       body.is-archive-selecting .tile { cursor: pointer; }
       body.is-archive-selecting .tile:hover { border-color: rgba(255,214,96,.78); }
@@ -690,7 +690,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
       .archive-select-control button:disabled { cursor: wait; opacity: .7; }
       .archive-select-status { max-width: min(420px, calc(100vw - 28px)); min-height: 18px; padding: 6px 9px; border-radius: 7px; color: rgba(237,245,255,.78); background: rgba(7,10,12,.78); font-size: 12px; line-height: 1.35; text-align: right; pointer-events: none; backdrop-filter: blur(10px); }
       @media (max-width: 1024px) {
-        .archive-copy { max-width: min(680px, 74vw); margin-bottom: 8px; font-size: clamp(12px, 2.7vw, 15px); }
+        .archive-copy { max-width: min(680px, 74vw); margin-bottom: 8px; font-size: 9px; }
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 92px; gap: 8px; }
         .tile, .tile--small-square, .tile--square, .tile--horizontal, .tile--wide, .tile--vertical, .tile--medium-narrow, .tile--medium-wide, .tile--large-rect, .tile--full { grid-column: 1 / -1; grid-row: span 3; }
         .tile-overlay { grid-template-columns: 1fr; align-items: start; gap: 8px; }
@@ -1034,6 +1034,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
         }
         function scheduleChaos() {
           window.clearTimeout(chaosTimer);
+          chaosTimer = window.setTimeout(runChaos, 800 + Math.random() * 2000);
         }
         function randomSample(items, count) {
           return items
@@ -1048,18 +1049,18 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
             scheduleChaos();
             return;
           }
-          const activeLimit = Math.min(2, Math.max(1, Math.ceil(videos.length * 0.2)));
+          const activeLimit = Math.min(4, Math.max(2, Math.ceil(videos.length * 0.35)));
           randomSample(videos.filter((video) => !video.paused && !manualVideos.has(video)), videos.length).slice(activeLimit).forEach(stopArchiveVideo);
           randomSample(videos.filter((video) => video.paused && !manualVideos.has(video)), activeLimit).forEach((video) => {
-            if (Math.random() < 0.76) {
+            if (Math.random() < 0.92) {
               playArchiveVideo(video);
               window.setTimeout(() => {
-                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.88) stopArchiveVideo(video);
-              }, 460 + Math.random() * 2100);
+                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.7) stopArchiveVideo(video);
+              }, 1200 + Math.random() * 3000);
             }
           });
           videos.forEach((video) => {
-            if (!manualVideos.has(video) && !video.paused && Math.random() < 0.28) stopArchiveVideo(video);
+            if (!manualVideos.has(video) && !video.paused && Math.random() < 0.4) stopArchiveVideo(video);
           });
           scheduleChaos();
         }
@@ -1554,7 +1555,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
       </header>
       <section class="watch-player" aria-label="${title} video watch page">
         <div class="video-frame">
-          ${mediaVideo ? `<video src="${escapeHtml(mediaVideo)}" poster="${escapeHtml(mediaImage)}" controls playsinline preload="metadata"></video>` : noVideoHtml}
+          ${mediaVideo ? `<video src="${escapeHtml(mediaVideo)}" poster="${escapeHtml(mediaImage)}" muted playsinline preload="metadata" autoplay controls></video>` : noVideoHtml}
         </div>
         <div class="watch-copy">
           <h1>${title}</h1>

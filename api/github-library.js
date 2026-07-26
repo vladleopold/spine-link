@@ -234,7 +234,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries, metrics }) {
       const likeCount = metric.likes;
       const viewCount = metric.views;
       const thumbnailStyle = thumbnail || thumbnailPoster ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
-      const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''}${thumbnailPoster || thumbnail ? ` poster="${escapeHtml(thumbnailPoster || thumbnail)}"` : ''} muted playsinline preload="none" aria-label="${itemTitle} video preview"></video>`;
+      const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''}${thumbnailPoster || thumbnail ? ` poster="${escapeHtml(thumbnailPoster || thumbnail)}"` : ''} muted playsinline preload="metadata" autoplay aria-label="${itemTitle} video preview"></video>`;
       const likeButton = isPortfolioMode ? `<button class="portfolio-like-button" type="button" data-metric-id="${escapeHtml(likeId)}" data-metric-like data-metric-current-likes="${likeCount}" data-metric-current-views="${viewCount}" aria-pressed="false" title="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${likeCount}</strong></button>` : '';
       const cardSizeMode = entry.cardSize && entry.cardSize !== 'auto' ? 'manual' : 'auto';
       return `<article class="library-card ${libraryCardSizeClass(entry, index)}" data-entry-id="${entryId}" data-card-size-mode="${cardSizeMode}"${thumbnailStyle}>
