@@ -3,6 +3,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
 const args = {
@@ -165,8 +166,9 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
 <script src="${playerJsUrl}"></script>
 <script>
 (function() {
-  window.__captureResult = null;
   window.__captureError = null;
+  window.__animDuration = 0;
+  window.__ready = false;
 
   var config = {
     ${skeletonKey}: ${JSON.stringify(skeletonRawUrl)},
@@ -217,157 +219,16 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
     return;
   }
 
-  player.canvas.addEventListener('webglcontextlost', function() {
-    window.__captureError = 'WebGL context lost';
-  });
+  window.__ready = true;
+  window.__canvasWidth = player.canvas ? player.canvas.width : 0;
+  window.__canvasHeight = player.canvas ? player.canvas.height : 0;
 
-  window.__startCapture = function() {
-    var canvas = player.canvas;
-    if (!canvas || canvas.width < 50 || canvas.height < 50) return;
-
-    try {
-      if (player.state && player.state.setAnimation) {
-        player.state.setAnimation(0, ${JSON.stringify(targetAnimation)}, false);
-      }
-    } catch (e) {}
-
-    var animDuration = 0;
-    try {
-      var track = player.animationState ? player.animationState.getCurrent(0) : null;
-      if (track && track.animation && typeof track.animation.duration === 'number') {
-        animDuration = track.animation.duration;
-      }
-    } catch (e) {}
-
-    var fps = 30;
-    var mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
-    var mimeType = mimeTypes.find(function(t) { return typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t); });
-    if (!mimeType) {
-      window.__captureError = 'No supported webm mime type';
-      return;
+  try {
+    var track = player.animationState ? player.animationState.getCurrent(0) : null;
+    if (track && track.animation && typeof track.animation.duration === 'number') {
+      window.__animDuration = track.animation.duration;
     }
-
-    try {
-      var stream = canvas.captureStream(fps);
-      if (!stream || !stream.getVideoTracks || !stream.getVideoTracks().length) {
-        window.__captureError = 'captureStream returned no video tracks';
-        return;
-      }
-
-      var chunks = [];
-      var recorder = new MediaRecorder(stream, {
-        mimeType: mimeType,
-        videoBitsPerSecond: Math.min(6000000, Math.max(1000000, canvas.width * canvas.height * 8)),
-      });
-
-      recorder.ondataavailable = function(e) {
-        if (e.data && e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = function() {
-        stream.getTracks().forEach(function(t) { t.stop(); });
-        if (chunks.length === 0) {
-          window.__captureError = 'No data captured';
-          return;
-        }
-        var blob = new Blob(chunks, { type: 'video/webm' });
-        var reader = new FileReader();
-        reader.onload = function() {
-          var elapsed = Date.now() - recordingStart;
-          window.__captureResult = {
-            base64: reader.result.split(',')[1],
-            mimeType: mimeType,
-            width: canvas.width,
-            height: canvas.height,
-            animationDuration: animDuration,
-            capturedDuration: elapsed / 1000,
-          };
-        };
-        reader.onerror = function() {
-          window.__captureError = 'FileReader error';
-        };
-        reader.readAsDataURL(blob);
-      };
-
-      recorder.onerror = function() {
-        window.__captureError = 'MediaRecorder error';
-        stream.getTracks().forEach(function(t) { t.stop(); });
-      };
-
-      recorder.start(250);
-      window.__recorder = recorder;
-
-      var offscreen = document.createElement('canvas');
-      offscreen.width = 80;
-      offscreen.height = 60;
-      var offCtx = offscreen.getContext('2d');
-
-      var prevSum = null;
-      var stableCount = 0;
-      var recordingStart = Date.now();
-      var MIN_RECORDING = 2000;
-      var MAX_RECORDING = 60000;
-      var STABLE_NEEDED = 10;
-      var SAMPLE_MS = 100;
-
-      function getFrameSum() {
-        try {
-          offCtx.drawImage(canvas, 0, 0, 80, 60);
-          var data = offCtx.getImageData(0, 0, 80, 60).data;
-          var sum = 0;
-          for (var i = 0; i < data.length; i += 4) {
-            sum += data[i] + data[i+1] + data[i+2];
-          }
-          return sum;
-        } catch (e) {
-          return prevSum !== null ? prevSum : 0;
-        }
-      }
-
-      function checkStability() {
-        if (recorder.state !== 'recording') return;
-
-        var sum = getFrameSum();
-        var elapsed = Date.now() - recordingStart;
-
-        if (prevSum !== null) {
-          var diff = Math.abs(sum - prevSum);
-          if (diff < 300) {
-            stableCount++;
-            if (stableCount >= STABLE_NEEDED && elapsed >= MIN_RECORDING) {
-              recorder.stop();
-              return;
-            }
-          } else {
-            stableCount = 0;
-          }
-        }
-        prevSum = sum;
-
-        if (elapsed >= MAX_RECORDING) {
-          recorder.stop();
-          return;
-        }
-
-        setTimeout(checkStability, SAMPLE_MS);
-      }
-
-      setTimeout(checkStability, SAMPLE_MS);
-    } catch (e) {
-      window.__captureError = 'Capture error: ' + e.message;
-    }
-  };
-
-  var checkReady = function() {
-    var canvas = player.canvas;
-    if (canvas && canvas.width > 50 && canvas.height > 50) {
-      setTimeout(window.__startCapture, 400);
-    } else {
-      setTimeout(checkReady, 300);
-    }
-  };
-
-  setTimeout(checkReady, 600);
+  } catch (e) {}
 })();
 </script>
 </body>
@@ -394,10 +255,7 @@ try {
 
   await page.setContent(captureHtml, { waitUntil: 'networkidle', timeout: 60000 });
 
-  await page.waitForFunction(
-    () => window.__captureResult !== null || window.__captureError,
-    { timeout: 120000, polling: 500 },
-  );
+  await page.waitForFunction(() => window.__ready === true, { timeout: 60000, polling: 200 });
 
   const error = await page.evaluate(() => window.__captureError || null);
   if (error) {
@@ -405,32 +263,69 @@ try {
     process.exit(1);
   }
 
-  const result = await page.evaluate(() => window.__captureResult);
-  if (!result || !result.base64) {
-    console.error('No capture result');
+  const animDuration = await page.evaluate(() => window.__animDuration || 0);
+  const canvasWidth = await page.evaluate(() => window.__canvasWidth || 960);
+  const canvasHeight = await page.evaluate(() => window.__canvasHeight || 720);
+
+  console.error(`Animation ready, duration=${animDuration}s, canvas=${canvasWidth}x${canvasHeight}`);
+
+  const tempDir = path.join('/tmp', `spine-export-${Date.now()}`);
+  fs.mkdirSync(tempDir, { recursive: true });
+
+  const fps = 30;
+  const captureDuration = animDuration > 0 ? animDuration + 0.5 : 0.5;
+  const totalFrames = Math.max(1, Math.ceil(captureDuration * fps));
+  const frameInterval = 1000 / fps;
+
+  for (let i = 0; i < totalFrames; i++) {
+    const framePath = path.join(tempDir, `frame-${String(i).padStart(6, '0')}.png`);
+    await page.screenshot({ path: framePath, clip: { x: 0, y: 0, width: canvasWidth, height: canvasHeight } });
+    if (i < totalFrames - 1) {
+      await new Promise(resolve => setTimeout(resolve, frameInterval));
+    }
+  }
+
+  const outputPath = args.output || `${args.uploadId}-${targetAnimation}-preview.webm`;
+  fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
+
+  const ffmpegCmd = [
+    'ffmpeg', '-y',
+    '-framerate', String(fps),
+    '-i', path.join(tempDir, 'frame-%06d.png'),
+    '-c:v', 'libvpx-vp9',
+    '-pix_fmt', 'yuva420p',
+    '-crf', '20',
+    '-b:v', '2M',
+    '-auto-alt-ref', '0',
+    outputPath,
+  ].join(' ');
+
+  try {
+    execSync(ffmpegCmd, { stdio: 'pipe', timeout: 120000 });
+  } catch (e) {
+    console.error(`FFmpeg failed: ${e.message}`);
     process.exit(1);
   }
 
-  const binary = Buffer.from(result.base64, 'base64');
-  const outputPath = args.output || `${args.uploadId}-${targetAnimation}-preview.webm`;
-  fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
-  fs.writeFileSync(outputPath, binary);
-
+  const webmBuffer = fs.readFileSync(outputPath);
   const meta = {
     animation: targetAnimation,
-    animationDuration: result.animationDuration,
-    capturedDuration: result.capturedDuration,
-    width: result.width,
-    height: result.height,
-    bytes: binary.length,
-    sha256: createHash('sha256').update(binary).digest('hex'),
+    animationDuration: animDuration,
+    capturedDuration: captureDuration,
+    width: canvasWidth,
+    height: canvasHeight,
+    bytes: webmBuffer.length,
+    frames: totalFrames,
+    sha256: createHash('sha256').update(webmBuffer).digest('hex'),
     isDefault,
   };
   fs.writeFileSync(outputPath + '.json', JSON.stringify(meta, null, 2));
 
-  console.error(`WebM saved: ${outputPath} (${binary.length} bytes, ${result.width}x${result.height})`);
+  console.error(`WebM saved: ${outputPath} (${webmBuffer.length} bytes, ${canvasWidth}x${canvasHeight}, ${totalFrames} frames)`);
 
   console.log(JSON.stringify({ ...meta, ok: true, path: outputPath }));
+
+  try { fs.rmSync(tempDir, { recursive: true }); } catch { }
 
 } finally {
   await browser.close();
