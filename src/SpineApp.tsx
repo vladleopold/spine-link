@@ -4397,66 +4397,58 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         setPublishProgress((current) => ({ ...current, label: "Saving files to library" }));
         setStatus(`Files ready. Uploading: 0/${files.length}...`);
 
-        const uploadedProofFiles: GitHubProofReceipt[] = [];
-        for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
-          const file = files[fileIndex];
-          const filePath = joinRepoPath(uploadPath, file.name);
-          const requestHeaders: Record<string, string> = {
-            "Content-Type": "application/json",
-          };
-          if (googleIdToken) requestHeaders.Authorization = `Bearer ${googleIdToken}`;
-          const fileSizeBytes = Math.ceil(file.contentBase64.length * 0.75);
-          const fileSizeMb = (fileSizeBytes / (1024 * 1024)).toFixed(1);
-          const bodyStr = JSON.stringify({
-            action: "put-file",
-            googleIdToken,
-            anonymousAccount,
-            settings: nextSettings,
-            file: {
-              path: filePath,
-              contentBase64: file.contentBase64,
-            },
-            message: `${commitPrefix}: ${file.name}`,
-          });
-          if (bodyStr.length > 4_000_000) {
-            setError(`${file.name} is ${fileSizeMb} MB — too large for Vercel's 4.5 MB limit. Reduce texture size or upgrade to Pro.`);
-            setStatus("Upload stopped.");
-            return;
-          }
-          const response = await fetch("/api/github-upload", {
-            method: "POST",
-            headers: requestHeaders,
-            body: bodyStr,
-          });
-          const result = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            if (response.status === 413) {
-              setError(`${file.name} (${fileSizeMb} MB) exceeds Vercel's 4.5 MB request limit. Reduce texture size or upgrade to Pro.`);
-              setStatus("Upload stopped.");
-              return;
-            }
-            throw new Error(typeof result?.error === "string" ? result.error : `Upload API ${response.status}`);
-          }
-          const sourceProofFile = sourceProof.files.find((proofFile) => proofFile.name === file.name);
-          uploadedProofFiles.push({
-            name: file.name,
-            path: filePath,
-            bytes: Number(result.bytes || sourceProofFile?.bytes || byteLengthFromBase64(file.contentBase64)),
-            sha256: String(result.sha256 || sourceProofFile?.sha256 || (await sha256HexFromBytes(base64ToBytes(file.contentBase64)))),
-            github: {
-              contentSha: typeof result.github?.contentSha === "string" ? result.github.contentSha : "",
-              commitSha: typeof result.github?.commitSha === "string" ? result.github.commitSha : "",
-              commitUrl: typeof result.github?.commitUrl === "string" ? result.github.commitUrl : "",
-              downloadUrl: typeof result.github?.downloadUrl === "string" ? result.github.downloadUrl : "",
-            },
-          });
-          setPublishProgress((current) => ({
-            ...current,
-            label: `Saving files ${fileIndex + 1}/${files.length}`,
-            value: Math.max(current.value, Math.round(((fileIndex + 1) / Math.max(files.length + 1, 1)) * 88)),
-          }));
-          setStatus(`Files ready. Uploading: ${fileIndex + 1}/${files.length}...`);
-        }
+         const uploadedProofFiles: GitHubProofReceipt[] = [];
+         const MAX_BODY = 4_000_000;
+         const CHUNK = 3_500_000;
+
+         const uploadOneFile = async (f: { name: string; contentBase64: string }, idx: number): Promise<GitHubProofReceipt> => {
+           const fp = joinRepoPath(uploadPath, f.name);
+           const rh: Record<string, string> = { "Content-Type": "application/json" };
+           if (googleIdToken) rh.Authorization = `Bearer ${googleIdToken}`;
+           const sb = JSON.stringify({ action: "put-file", googleIdToken, anonymousAccount, settings: nextSettings, file: { path: fp, contentBase64: f.contentBase64 }, message: `${commitPrefix}: ${f.name}` });
+           if (sb.length <= MAX_BODY) {
+             const r = await fetch("/api/github-upload", { method: "POST", headers: rh, body: sb });
+             const res = await r.json().catch(() => ({}));
+             if (!r.ok) throw new Error(typeof res?.error === "string" ? res.error : `Upload API ${r.status}`);
+             setPublishProgress((c) => ({ ...c, label: `Saving files ${idx + 1}/${files.length}`, value: Math.max(c.value, Math.round(((idx + 1) / Math.max(files.length + 1, 1)) * 88)) }));
+             setStatus(`Files ready. Uploading: ${idx + 1}/${files.length}...`);
+             const sp = sourceProof.files.find((pf) => pf.name === f.name);
+             return { name: f.name, path: fp, bytes: Number(res.bytes || sp?.bytes || byteLengthFromBase64(f.contentBase64)), sha256: String(res.sha256 || sp?.sha256 || (await sha256HexFromBytes(base64ToBytes(f.contentBase64)))), github: { contentSha: typeof res.github?.contentSha === "string" ? res.github.contentSha : "", commitSha: typeof res.github?.commitSha === "string" ? res.github.commitSha : "", commitUrl: typeof res.github?.commitUrl === "string" ? res.github.commitUrl : "", downloadUrl: typeof res.github?.downloadUrl === "string" ? res.github.downloadUrl : "" } };
+           }
+           const base64 = f.contentBase64.replace(/\s/g, "");
+           const totalChunks = Math.ceil(base64.length / CHUNK);
+           const results = await Promise.all(Array.from({ length: totalChunks }, async (_, i) => {
+             const chunk = base64.slice(i * CHUNK, (i + 1) * CHUNK);
+             const chunkPath = `${fp}.__chunks/${String(i).padStart(5, "0")}`;
+             const cb = JSON.stringify({ action: "multipart-upload-chunk", googleIdToken, anonymousAccount, settings: nextSettings, path: chunkPath, chunkIndex: i, contentBase64: chunk, message: `${commitPrefix}: chunk ${i} of ${f.name}` });
+             const cr = await fetch("/api/github-upload", { method: "POST", headers: rh, body: cb });
+             const cres = await cr.json().catch(() => ({}));
+             if (!cr.ok) throw new Error(`Chunk ${i} upload failed: ${cr.status}`);
+             return { chunkPath, bytes: Number(cres.bytes), sha256: String(cres.sha256) };
+           }));
+           for (const cr of results) { uploadedProofFiles.push({ name: `${f.name}.__chunks/${cr.chunkPath.split("/").pop()}`, path: cr.chunkPath, bytes: cr.bytes, sha256: cr.sha256, github: { contentSha: "", commitSha: "", commitUrl: "", downloadUrl: "" } }); }
+           const rb = JSON.stringify({ action: "reassemble-file", googleIdToken, anonymousAccount, settings: nextSettings, path: fp, chunkCount: totalChunks, message: `${commitPrefix}: reassemble ${f.name}` });
+           const rr = await fetch("/api/github-upload", { method: "POST", headers: rh, body: rb });
+           const rres = await rr.json().catch(() => ({}));
+           if (!rr.ok) throw new Error(typeof rres?.error === "string" ? rres.error : `Reassembly API ${rr.status}`);
+           setPublishProgress((c) => ({ ...c, label: `Saving files ${idx + 1}/${files.length}`, value: Math.max(c.value, Math.round(((idx + 1) / Math.max(files.length + 1, 1)) * 88)) }));
+           setStatus(`Files ready. Uploading: ${idx + 1}/${files.length}...`);
+           const sp = sourceProof.files.find((pf) => pf.name === f.name);
+           return { name: f.name, path: fp, bytes: Number(rres.bytes || sp?.bytes || byteLengthFromBase64(f.contentBase64)), sha256: String(rres.sha256 || sp?.sha256 || sha256HexFromBytes(base64ToBytes(base64))), github: { contentSha: typeof rres.github?.contentSha === "string" ? rres.github.contentSha : "", commitSha: typeof rres.github?.commitSha === "string" ? rres.github.commitSha : "", commitUrl: typeof rres.github?.commitUrl === "string" ? rres.github.commitUrl : "", downloadUrl: typeof rres.github?.downloadUrl === "string" ? rres.github.downloadUrl : "" } };
+         };
+
+         for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+           const file = files[fileIndex];
+           try {
+             const receipt = await uploadOneFile(file, fileIndex);
+             uploadedProofFiles.push(receipt);
+           } catch (uploadErr) {
+             const msg = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
+             setError(`Failed to upload ${file.name}: ${msg}`);
+             setStatus("Upload stopped.");
+             return;
+           }
+         }
 
         setPublishProgress((current) => ({ ...current, label: "Writing source proof anchor", value: Math.max(current.value, 92) }));
         const anchorFileName = "blockchain-anchor.json";

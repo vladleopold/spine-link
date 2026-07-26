@@ -893,6 +893,62 @@ export default async function handler(request, response) {
       });
     }
 
+    if (action === 'multipart-upload-chunk') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const filePath = cleanRepoPath(body?.path || '');
+      const chunkIndex = Number(body?.chunkIndex);
+      const contentBase64 = String(body?.contentBase64 || '');
+      const message = `${commitPrefix}: chunk ${chunkIndex} of ${filePath.split('/').pop() || 'file'}`;
+      if (!filePath || !contentBase64 || !Number.isFinite(chunkIndex)) {
+        return response.status(400).json({ error: 'Invalid chunk payload' });
+      }
+      const chunkPath = `${filePath}.__chunks/${String(chunkIndex).padStart(5, '0')}`;
+      const existingChunk = await getGitHubContent(settings, chunkPath);
+      const writeResult = await putGitHubContent(settings, chunkPath, contentBase64, message, existingChunk?.sha, origin);
+      return response.status(200).json({
+        ok: true,
+        chunkIndex,
+        chunkPath,
+        bytes: Buffer.from(contentBase64.replace(/\s/g, ''), 'base64').byteLength,
+        github: publicGitHubWrite(writeResult),
+      });
+    }
+
+    if (action === 'reassemble-file') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const filePath = cleanRepoPath(body?.path || '');
+      const chunkCount = Number(body?.chunkCount);
+      if (!filePath || !Number.isFinite(chunkCount) || chunkCount < 1) {
+        return response.status(400).json({ error: 'Invalid reassembly payload' });
+      }
+      let fullBase64 = '';
+      const chunkShas = [];
+      for (let i = 0; i < chunkCount; i++) {
+        const chunkPath = `${filePath}.__chunks/${String(i).padStart(5, '0')}`;
+        const chunk = await getGitHubContent(settings, chunkPath);
+        if (!chunk || chunk.encoding !== 'base64') {
+          return response.status(404).json({ error: `Chunk ${i} not found at ${chunkPath}` });
+        }
+        fullBase64 += String(chunk.content).replace(/\s/g, '');
+        chunkShas.push(chunk.sha);
+      }
+      const existingFile = await getGitHubContent(settings, filePath);
+      const writeResult = await putGitHubContent(settings, filePath, fullBase64, `${commitPrefix}: reassembled ${filePath}`, existingFile?.sha, origin);
+      for (let i = 0; i < chunkCount; i++) {
+        const chunkPath = `${filePath}.__chunks/${String(i).padStart(5, '0')}`;
+        try {
+          await deleteGitHubContent(settings, chunkPath, `${commitPrefix}: cleanup chunk ${i} of ${filePath}`, chunkShas[i]);
+        } catch { /* ignore cleanup failures */ }
+      }
+      return response.status(200).json({
+        ok: true,
+        path: filePath,
+        bytes: Buffer.from(fullBase64, 'base64').length,
+        sha256: sha256HexFromBase64(fullBase64),
+        github: publicGitHubWrite(writeResult),
+      });
+    }
+
     if (action === 'update-index') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       if (!entry) return response.status(400).json({ error: 'Invalid index payload' });
