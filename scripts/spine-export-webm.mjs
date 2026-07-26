@@ -165,6 +165,9 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
 <script src="${playerJsUrl}"></script>
 <script>
 (function() {
+  window.__captureResult = null;
+  window.__captureError = null;
+
   var config = {
     ${skeletonKey}: ${JSON.stringify(skeletonRawUrl)},
     ${atlasKey}: ${JSON.stringify(atlasRawUrl)},
