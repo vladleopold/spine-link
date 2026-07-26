@@ -36,8 +36,10 @@ type AppProps = {
 declare global {
   interface Window {
     __spineLinkReceiveFiles?: (files: File[]) => void;
+    __spinePatched?: boolean;
     spine?: {
       SpinePlayer?: new (parent: HTMLElement | string, config: SpinePlayerConfig) => SpinePlayerInstance;
+      AtlasAttachmentLoader?: new () => unknown;
     };
   }
 }
@@ -522,8 +524,8 @@ function loadSpinePlayerModule() {
 }
 
 function patchAtlasAttachmentLoader(AtlasAttachmentLoader: unknown) {
-  if (!AtlasAttachmentLoader || (window as Record<string, unknown>).__spinePatched) return;
-  (window as Record<string, unknown>).__spinePatched = true;
+  if (!AtlasAttachmentLoader || window.__spinePatched) return;
+  window.__spinePatched = true;
   const p = (AtlasAttachmentLoader as Record<string, unknown>).prototype as Record<string, unknown>;
   const origFindRegion = p.findRegion as (...args: unknown[]) => unknown;
   if (typeof origFindRegion === "function") {
@@ -4389,23 +4391,36 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             "Content-Type": "application/json",
           };
           if (googleIdToken) requestHeaders.Authorization = `Bearer ${googleIdToken}`;
+          const fileSizeBytes = Math.ceil(file.contentBase64.length * 0.75);
+          const fileSizeMb = (fileSizeBytes / (1024 * 1024)).toFixed(1);
+          const bodyStr = JSON.stringify({
+            action: "put-file",
+            googleIdToken,
+            anonymousAccount,
+            settings: nextSettings,
+            file: {
+              path: filePath,
+              contentBase64: file.contentBase64,
+            },
+            message: `${commitPrefix}: ${file.name}`,
+          });
+          if (bodyStr.length > 4_000_000) {
+            setError(`${file.name} is ${fileSizeMb} MB — too large for Vercel's 4.5 MB limit. Reduce texture size or upgrade to Pro.`);
+            setStatus("Upload stopped.");
+            return;
+          }
           const response = await fetch("/api/github-upload", {
             method: "POST",
             headers: requestHeaders,
-            body: JSON.stringify({
-              action: "put-file",
-              googleIdToken,
-              anonymousAccount,
-              settings: nextSettings,
-              file: {
-                path: filePath,
-                contentBase64: file.contentBase64,
-              },
-              message: `${commitPrefix}: ${file.name}`,
-            }),
+            body: bodyStr,
           });
           const result = await response.json().catch(() => ({}));
           if (!response.ok) {
+            if (response.status === 413) {
+              setError(`${file.name} (${fileSizeMb} MB) exceeds Vercel's 4.5 MB request limit. Reduce texture size or upgrade to Pro.`);
+              setStatus("Upload stopped.");
+              return;
+            }
             throw new Error(typeof result?.error === "string" ? result.error : `Upload API ${response.status}`);
           }
           const sourceProofFile = sourceProof.files.find((proofFile) => proofFile.name === file.name);
