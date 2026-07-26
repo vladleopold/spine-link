@@ -513,11 +513,38 @@ function loadSpinePlayerModule() {
       import("@esotericsoftware/spine-player/dist/spine-player.css"),
     ]).then(([module]) => {
       (module.GLTexture as unknown as { DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL?: boolean }).DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL = true;
+      patchAtlasAttachmentLoader(module.AtlasAttachmentLoader);
       return module;
     });
   }
 
   return spinePlayerModulePromise;
+}
+
+function patchAtlasAttachmentLoader(AtlasAttachmentLoader: unknown) {
+  if (!AtlasAttachmentLoader || (window as Record<string, unknown>).__spinePatched) return;
+  (window as Record<string, unknown>).__spinePatched = true;
+  const p = (AtlasAttachmentLoader as Record<string, unknown>).prototype as Record<string, unknown>;
+  const origFindRegion = p.findRegion as (...args: unknown[]) => unknown;
+  if (typeof origFindRegion === "function") {
+    (p as Record<string, (...args: unknown[]) => unknown>).findRegion = function (this: unknown, ...args: unknown[]) {
+      try { return origFindRegion.apply(this, args); } catch { return null; }
+    };
+  }
+  const origFindRegions = p.findRegions as (...args: unknown[]) => unknown;
+  if (typeof origFindRegions === "function") {
+    (p as Record<string, (...args: unknown[]) => unknown>).findRegions = function (this: unknown, ...args: unknown[]) {
+      try { return origFindRegions.apply(this, args); } catch { return []; }
+    };
+  }
+  const methods = ["newRegionAttachment", "newMeshAttachment", "newBoundingBoxAttachment", "newPathAttachment", "newPointAttachment", "newClippingAttachment"];
+  for (const method of methods) {
+    const orig = p[method] as (...args: unknown[]) => unknown;
+    if (typeof orig !== "function") continue;
+    (p as Record<string, (...args: unknown[]) => unknown>)[method] = function (this: unknown, ...args: unknown[]) {
+      try { return orig.apply(this, args); } catch { return null; }
+    };
+  }
 }
 
 function loadScriptOnce(src: string) {
@@ -592,6 +619,7 @@ async function loadSpinePlayerForSet(preparedSpine?: Pick<PreparedSpine, "skelet
       await loadScriptOnce(`/vendor-spine-player-${runtime}.js`);
       const SpinePlayer = window.spine?.SpinePlayer;
       if (!SpinePlayer) throw new Error(`Legacy Spine ${runtime} runtime could not be loaded.`);
+      patchAtlasAttachmentLoader(window.spine?.AtlasAttachmentLoader);
       return { SpinePlayer };
       })(),
     );

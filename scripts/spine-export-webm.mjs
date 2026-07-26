@@ -178,6 +178,24 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
     viewport: { padLeft: '14%', padRight: '14%', padTop: '14%', padBottom: '14%' },
   };
 
+  if (spine.AtlasAttachmentLoader && !window.__spinePatched) {
+    window.__spinePatched = true;
+    var p = spine.AtlasAttachmentLoader.prototype;
+    var _findRegion = p.findRegion;
+    if (typeof _findRegion === 'function') {
+      p.findRegion = function() { try { return _findRegion.apply(this, arguments); } catch(e) { return null; } };
+    }
+    var _findRegions = p.findRegions;
+    if (typeof _findRegions === 'function') {
+      p.findRegions = function() { try { return _findRegions.apply(this, arguments); } catch(e) { return []; } };
+    }
+    ['newRegionAttachment','newMeshAttachment','newBoundingBoxAttachment','newPathAttachment','newPointAttachment','newClippingAttachment'].forEach(function(m) {
+      var orig = p[m];
+      if (typeof orig !== 'function') return;
+      p[m] = function() { try { return orig.apply(this, arguments); } catch(e) { return null; } };
+    });
+  }
+
   var player;
   try {
     player = new spine.SpinePlayer('player', config);
