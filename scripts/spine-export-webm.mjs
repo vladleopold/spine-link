@@ -200,6 +200,14 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
       }
     } catch (e) {}
 
+    var animDuration = 0;
+    try {
+      var track = player.animationState ? player.animationState.getCurrent(0) : null;
+      if (track && track.animation && typeof track.animation.duration === 'number') {
+        animDuration = track.animation.duration;
+      }
+    } catch (e) {}
+
     var fps = 30;
     var mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
     var mimeType = mimeTypes.find(function(t) { return typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t); });
@@ -234,11 +242,14 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
         var blob = new Blob(chunks, { type: 'video/webm' });
         var reader = new FileReader();
         reader.onload = function() {
+          var elapsed = Date.now() - recordingStart;
           window.__captureResult = {
             base64: reader.result.split(',')[1],
             mimeType: mimeType,
             width: canvas.width,
             height: canvas.height,
+            animationDuration: animDuration,
+            capturedDuration: elapsed / 1000,
           };
         };
         reader.onerror = function() {
@@ -374,10 +385,21 @@ try {
   fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
   fs.writeFileSync(outputPath, binary);
 
+  const meta = {
+    animation: targetAnimation,
+    animationDuration: result.animationDuration,
+    capturedDuration: result.capturedDuration,
+    width: result.width,
+    height: result.height,
+    bytes: binary.length,
+    sha256: createHash('sha256').update(binary).digest('hex'),
+    isDefault,
+  };
+  fs.writeFileSync(outputPath + '.json', JSON.stringify(meta, null, 2));
+
   console.error(`WebM saved: ${outputPath} (${binary.length} bytes, ${result.width}x${result.height})`);
 
-  const sha256 = createHash('sha256').update(binary).digest('hex');
-  console.log(JSON.stringify({ ok: true, path: outputPath, bytes: binary.length, width: result.width, height: result.height, sha256, isDefault }));
+  console.log(JSON.stringify({ ...meta, ok: true, path: outputPath }));
 
 } finally {
   await browser.close();
