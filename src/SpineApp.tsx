@@ -281,6 +281,7 @@ type LibraryEntry = {
   sourceProofPath?: string;
   sourceProofUrl?: string;
   blockchainAnchor?: BlockchainAnchor;
+  webmStatus?: string;
 };
 
 type EntryMetric = {
@@ -857,17 +858,23 @@ function sanitizeSkeletonData(json: unknown): unknown {
 
 function sanitizeSkeletonJson(json: unknown): unknown {
   if (!json || typeof json !== "object") return json;
-  const attachments = json?.skins?.flatMap((skin: unknown) => Object.values(skin as Record<string, unknown> || {})) || [];
+  const skins = (json as Record<string, unknown>).skins as Record<string, unknown>[] | undefined;
+  if (!skins) return json;
+  const attachments = skins.flatMap((skin) => Object.values(skin || {})) || [];
   for (const slotAttachments of attachments) {
     if (!slotAttachments || typeof slotAttachments !== "object") continue;
-    for (const attachment of Object.values(slotAttachments as Record<string, unknown>)) {
+    const attachmentValues = Object.values(slotAttachments as Record<string, unknown>);
+    for (const attachment of attachmentValues) {
       if (!attachment || typeof attachment !== "object") continue;
-      const type = (attachment as Record<string, unknown>).type as string;
+      const attachmentObj = attachment as Record<string, unknown>;
+      const type = attachmentObj.type as string | undefined;
       if (type === "mesh" || type === "linkedmesh") {
-        if (!(attachment as Record<string, unknown>).source) {
-          if (!Array.isArray((attachment as Record<string, unknown>).uvs)) (attachment as Record<string, unknown>).uvs = [];
-          if (!Array.isArray((attachment as Record<string, unknown>).vertices)) (attachment as Record<string, unknown>).vertices = [];
-          if (!Array.isArray((attachment as Record<string, unknown>).triangles)) (attachment as Record<string, unknown>).triangles = [];
+        if (!attachmentObj.source) {
+          if (type === "mesh" || type === "linkedmesh") {
+            if (!Array.isArray(attachmentObj.uvs)) attachmentObj.uvs = [];
+            if (!Array.isArray(attachmentObj.vertices)) attachmentObj.vertices = [];
+            if (!Array.isArray(attachmentObj.triangles)) attachmentObj.triangles = [];
+          }
         }
       }
     }
@@ -2484,6 +2491,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const playerCanvasSizeRef = useRef({ width: 1, height: 1 });
   const pinchDistanceRef = useRef<number | null>(null);
   const panPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const touchPanPositionRef = useRef<{ x: number; y: number } | null>(null);
   const publishedKeysRef = useRef<Set<string>>(new Set());
   const isPublishingRef = useRef(false);
   const zoomRef = useRef(1);
@@ -2659,25 +2667,104 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
     const videos = Array.from(root.querySelectorAll<HTMLVideoElement>(".home-feed-video"));
     if (!videos.length) return;
-    function pauseVideo(video: HTMLVideoElement) {
-      video.pause();
-      video.removeAttribute("data-playing");
+
+    const visibleVideos = new Set<HTMLVideoElement>();
+    const manualVideos = new WeakSet<HTMLVideoElement>();
+    let chaosTimer = 0;
+
+    const playVideo = (video: HTMLVideoElement) => {
+      if (!video.currentSrc && !video.src) return;
+      video.muted = true;
+      video.loop = false;
+      video.playsInline = true;
       try {
         video.currentTime = 0;
       } catch {}
-      if (video.getAttribute("src")) {
-        video.removeAttribute("src");
-        video.load();
+      void video.play().catch(() => undefined);
+    };
+
+    const stopVideo = (video: HTMLVideoElement) => {
+      video.pause();
+      video.onended = null;
+      try {
+        video.currentTime = 0;
+      } catch {}
+    };
+
+    const randomSample = <T,>(items: T[], count: number) =>
+      items
+        .map((item) => ({ item, sort: Math.random() }))
+        .sort((a, b) => a.sort - b.sort)
+        .slice(0, count)
+        .map((entry) => entry.item);
+
+    const scheduleChaos = () => {
+      window.clearTimeout(chaosTimer);
+      chaosTimer = window.setTimeout(runChaos, 3000 + Math.random() * 4000);
+    };
+
+    const runChaos = () => {
+      const videos = Array.from(visibleVideos).filter((video) => video.isConnected && (video.currentSrc || video.src));
+      if (!videos.length) {
+        scheduleChaos();
+        return;
       }
+      const activeLimit = Math.min(2, Math.max(1, Math.ceil(videos.length * 0.25)));
+      randomSample(
+        videos.filter((video) => !video.paused && !manualVideos.has(video)),
+        videos.length,
+      )
+        .slice(activeLimit)
+        .forEach(stopVideo);
+      randomSample(
+        videos.filter((video) => video.paused && !manualVideos.has(video)),
+        activeLimit,
+      ).forEach((video) => {
+        if (Math.random() < 0.7) {
+          playVideo(video);
+          window.setTimeout(() => {
+            if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.85) stopVideo(video);
+          }, 500 + Math.random() * 2000);
+        }
+      });
+      scheduleChaos();
+    };
+
+    let observer: IntersectionObserver | null = null;
+    const cards = root.querySelectorAll<HTMLAnchorElement>(".home-feed-card");
+    if ("IntersectionObserver" in window) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const video = entry.target.querySelector<HTMLVideoElement>(".home-feed-video");
+            if (!video) return;
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.4) {
+              visibleVideos.add(video);
+              if (video.readyState < 1) {
+                video.preload = "metadata";
+                video.load();
+              }
+            } else {
+              visibleVideos.delete(video);
+              if (!manualVideos.has(video)) stopVideo(video);
+            }
+          });
+          scheduleChaos();
+        },
+        { threshold: [0, 0.4, 0.7, 1] },
+      );
+      cards.forEach((card) => observer?.observe(card));
+    } else {
+      cards.forEach((card) => {
+        const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
+        if (video) visibleVideos.add(video);
+      });
+      scheduleChaos();
     }
 
-    const handleVisibilityChange = () => videos.forEach(pauseVideo);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    videos.forEach(pauseVideo);
-
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      videos.forEach(pauseVideo);
+      window.clearTimeout(chaosTimer);
+      observer?.disconnect();
     };
   }, [homeFeedEntries]);
 
@@ -3513,23 +3600,39 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     };
 
     const handleTouchStart = (event: TouchEvent) => {
+      if (!preparedSpine) return;
       if (event.touches.length === 2) {
         pinchDistanceRef.current = distanceBetweenTouches(event.touches);
+      } else if (event.touches.length === 1) {
+        event.preventDefault();
+        const touch = event.touches.item(0);
+        if (touch) touchPanPositionRef.current = { x: touch.clientX, y: touch.clientY };
       }
     };
 
     const handleTouchMove = (event: TouchEvent) => {
-      if (!preparedSpine || event.touches.length !== 2 || pinchDistanceRef.current === null) return;
+      if (!preparedSpine) return;
 
-      event.preventDefault();
-      const nextDistance = distanceBetweenTouches(event.touches);
-      const zoomDelta = (nextDistance - pinchDistanceRef.current) / 220;
-      pinchDistanceRef.current = nextDistance;
-      changeZoom(zoomRef.current + zoomDelta);
+      if (event.touches.length === 2 && pinchDistanceRef.current !== null) {
+        event.preventDefault();
+        const nextDistance = distanceBetweenTouches(event.touches);
+        const zoomDelta = (nextDistance - pinchDistanceRef.current) / 220;
+        pinchDistanceRef.current = nextDistance;
+        changeZoom(zoomRef.current + zoomDelta);
+      } else if (event.touches.length === 1 && touchPanPositionRef.current) {
+        event.preventDefault();
+        const touch = event.touches.item(0);
+        if (!touch) return;
+        const deltaX = touch.clientX - touchPanPositionRef.current.x;
+        const deltaY = touch.clientY - touchPanPositionRef.current.y;
+        touchPanPositionRef.current = { x: touch.clientX, y: touch.clientY };
+        panPlayerByPixels(deltaX, deltaY);
+      }
     };
 
     const handleTouchEnd = () => {
       pinchDistanceRef.current = null;
+      touchPanPositionRef.current = null;
     };
 
     const handleContextMenu = (event: MouseEvent) => {
@@ -3540,7 +3643,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
     const handleMouseDown = (event: MouseEvent) => {
       if (!preparedSpine) return;
-      if (!preparedSpine || event.button !== 2) return;
+      if (event.button !== 0) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       panPositionRef.current = { x: event.clientX, y: event.clientY };
@@ -3550,7 +3653,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       if (!preparedSpine || (event.target as Element | null)?.closest(".spine-player-controls, .link-ready-banner")) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (event.type === "click" && event.button === 0) togglePreviewPlayback();
+      if (event.type === "click" && event.button === 2) togglePreviewPlayback();
     };
 
     const handleMouseMove = (event: MouseEvent) => {
@@ -3564,7 +3667,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     };
 
     const handleMouseUp = (event: MouseEvent) => {
-      if (event.button !== 2) return;
+      if (event.button !== 0) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       panPositionRef.current = null;
@@ -4214,27 +4317,16 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         const setsForPublish = spineOptions.length ? spineOptions : [spine];
         const note = limitWords(previewNote);
         const playerCanvas = (playerRef.current as unknown as { canvas?: HTMLCanvasElement | null } | null)?.canvas;
-        const previewDuration = currentAnimationDurationSeconds(playerRef.current);
-        setPublishProgress((current) => ({ ...current, label: "Recording WebM preview" }));
-        const previewMedia = await createCanvasPreviewMedia(playerCanvas, previewDuration, async () => {
-          if (!playAnimationWithLoopMode(playerRef.current, defaultAnimation, false, () => false)) return;
-          await waitAnimationFrames(1);
-          rememberCurrentViewport();
-          applyZoomToPlayer(zoomRef.current, false);
-        });
-        const thumbnailPoster = previewMedia.poster || (await createCanvasImageThumbnail(playerCanvas));
-        const webmPreview = previewMedia.video;
+        setPublishProgress((current) => ({ ...current, label: "Capturing thumbnail" }));
+        const thumbnailPoster = await createCanvasImageThumbnail(playerCanvas);
         const fileMap = new Map<string, string>();
         for (const nextSpine of setsForPublish) {
           for (const file of filesForLibrary(nextSpine)) {
             fileMap.set(`${nextSpine.label}/${file.name}`, file.dataUri);
           }
         }
-        const webmPreviewName = safePreviewFileName(defaultAnimation || "animation", "preview.webm");
         const thumbnailPosterName = safePreviewFileName(defaultAnimation || "animation", "preview.webp");
-        const webmPreviewPath = webmPreview ? joinRepoPath(uploadPath, webmPreviewName) : "";
         const thumbnailPosterPath = thumbnailPoster ? joinRepoPath(uploadPath, thumbnailPosterName) : "";
-        if (webmPreview) fileMap.set(webmPreviewName, webmPreview);
         if (thumbnailPoster) fileMap.set(thumbnailPosterName, thumbnailPoster);
         const proofFileName = "source-proof.json";
         const proofPath = joinRepoPath(uploadPath, proofFileName);
@@ -4371,20 +4463,13 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             ? {
                 thumbnailPoster: assetUrlForRepoPath(thumbnailPosterPath, uploadedAt),
                 thumbnailPosterPath,
-                previewWidth: previewMedia.width || undefined,
-                previewHeight: previewMedia.height || undefined,
-          previewDuration: previewMedia.duration || undefined,
-          cardSize: selectedCardSize === "auto" ? undefined : selectedCardSize,
+                cardSize: selectedCardSize === "auto" ? undefined : selectedCardSize,
               }
             : existingEntry?.thumbnailPoster && /^https:\/\//i.test(existingEntry.thumbnailPoster)
               ? { thumbnailPoster: existingEntry.thumbnailPoster, ...(existingEntry.thumbnailPosterPath ? { thumbnailPosterPath: existingEntry.thumbnailPosterPath } : {}) }
               : {}),
           ...(thumbnailPosterPath ? { thumbnailType: "image" } : {}),
-          ...(webmPreviewPath
-            ? { webmPreview: assetUrlForRepoPath(webmPreviewPath, uploadedAt), webmPreviewPath }
-            : existingEntry?.webmPreview && /^https:\/\//i.test(existingEntry.webmPreview)
-              ? { webmPreview: existingEntry.webmPreview, ...(existingEntry.webmPreviewPath ? { webmPreviewPath: existingEntry.webmPreviewPath } : {}) }
-              : {}),
+          webmStatus: existingEntry?.webmStatus === "ready" ? "ready" : "pending",
           sourceProof,
           sourceProofPath: proofPath,
           sourceProofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
@@ -4631,11 +4716,12 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                       {entry.webmPreview ? (
                         <video
                           className="home-feed-video"
-                          data-video-src={entry.webmPreview}
+                          src={entry.webmPreview}
                           poster={poster || undefined}
                           muted
                           playsInline
-                          preload="none"
+                          preload="metadata"
+                          autoPlay
                           aria-hidden="true"
                         />
                       ) : poster ? (
@@ -4935,7 +5021,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     muted
                     loop
                     playsInline
-                    preload="none"
+                    preload="metadata"
+                    autoPlay
                     controls
                     onLoadedMetadata={(event) => applySeoVideoPreviewAspect(event.currentTarget)}
                   />
@@ -5460,7 +5547,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                         poster={thumbnailForCard || undefined}
                         muted
                         playsInline
-                        preload="none"
+                        preload="metadata"
+                        autoPlay
                         aria-hidden="true"
                         onLoadedMetadata={(event) => applyLibraryCardVideoAspect(event.currentTarget)}
                       />

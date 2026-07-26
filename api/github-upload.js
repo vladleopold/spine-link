@@ -266,6 +266,38 @@ function generatedPreviewWebmUrl(origin, entry) {
   return id ? `${origin}/v_holder.webm` : '';
 }
 
+async function dispatchSpineExportWebm(settings, entry, origin) {
+  const id = String(entry?.id || '').trim();
+  if (!id) return null;
+  const defaultAnimation = String(entry?.defaultAnimation || (Array.isArray(entry?.animations) ? entry.animations[0] : '') || '').trim();
+  try {
+    const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
+      method: 'POST',
+      headers: githubHeaders(settings.token),
+      body: JSON.stringify({
+        event_type: 'spine-export-webm',
+        client_payload: {
+          uploadId: id,
+          animation: defaultAnimation,
+          origin: String(origin || '').replace(/\/+$/, ''),
+          owner: settings.owner,
+          repo: settings.repo,
+          branch: settings.branch,
+        },
+      }),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      console.error(`[UPLOAD] dispatch workflow error: ${response.status} ${text}`);
+      return { status: 'failed', error: text };
+    }
+    return { status: 'dispatched' };
+  } catch (error) {
+    console.error('[UPLOAD] dispatch workflow exception:', error instanceof Error ? error.message : String(error));
+    return { status: 'failed', error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 function publicLibraryEntry(origin, entry) {
   if (!entry || typeof entry !== 'object') return entry;
   const next = { ...entry };
@@ -865,6 +897,7 @@ export default async function handler(request, response) {
       const indexPath = joinRepoPath(settings.basePath, 'index.json');
       const currentIndex = await getGitHubContent(settings, indexPath);
       const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
+      const existingEntry = currentEntries.find((c) => c.id === entry.id);
       const nextEntry = {
         ...entry,
         ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
@@ -874,11 +907,14 @@ export default async function handler(request, response) {
         publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
         showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
         portfolioMode: Boolean(entry?.portfolioMode),
+        ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
       };
       const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
       const dataScience = await updateDataScienceCatalog(settings, body, nextEntry, commitPrefix, origin);
-      return response.status(200).json({ ok: true, indexed: nextEntries.length, dataScience });
+      const isNewUpload = !existingEntry || existingEntry.webmStatus !== 'ready';
+      const dispatch = isNewUpload ? await dispatchSpineExportWebm(settings, nextEntry, origin) : null;
+      return response.status(200).json({ ok: true, indexed: nextEntries.length, dataScience, dispatch });
     }
 
 
@@ -1171,6 +1207,7 @@ export default async function handler(request, response) {
     const indexPath = joinRepoPath(settings.basePath, 'index.json');
     const currentIndex = await getGitHubContent(settings, indexPath);
     const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
+    const existingEntry = currentEntries.find((c) => c.id === entry.id);
     const nextEntry = {
       ...entry,
       ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
@@ -1180,11 +1217,13 @@ export default async function handler(request, response) {
       publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
       showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
       portfolioMode: Boolean(entry?.portfolioMode),
+      ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
     };
     const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
 
     await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
     const dataScience = await updateDataScienceCatalog(settings, body, nextEntry, commitPrefix, origin);
+    const dispatch = existingEntry?.webmStatus === 'ready' ? null : await dispatchSpineExportWebm(settings, nextEntry, origin);
 
     return response.status(200).json({
       ok: true,
@@ -1192,9 +1231,13 @@ export default async function handler(request, response) {
       previewUrl: `/api/github-preview?path=${encodeURIComponent(entry.previewPath)}`,
       uploaded: files.length + 3,
       dataScience,
+      dispatch,
     });
   } catch (error) {
     const statusCode = Number(error?.statusCode) || 500;
-    return response.status(statusCode).json({ error: error instanceof Error ? error.message : 'Upload failed' });
+    const message = error instanceof Error ? error.message : 'Upload failed';
+    console.error('[UPLOAD] error:', message);
+    if (error instanceof Error && error.stack) console.error('[UPLOAD] stack:', error.stack);
+    return response.status(statusCode).json({ error: message });
   }
 }
