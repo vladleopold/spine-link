@@ -270,6 +270,7 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
   const id = String(entry?.id || '').trim();
   if (!id) return null;
   const defaultAnimation = String(entry?.defaultAnimation || (Array.isArray(entry?.animations) ? entry.animations[0] : '') || '').trim();
+  const animations = Array.isArray(entry?.animations) ? entry.animations : [];
   try {
     const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
       method: 'POST',
@@ -279,6 +280,7 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
         client_payload: {
           uploadId: id,
           animation: defaultAnimation,
+          animations,
           origin: String(origin || '').replace(/\/+$/, ''),
           owner: settings.owner,
           repo: settings.repo,

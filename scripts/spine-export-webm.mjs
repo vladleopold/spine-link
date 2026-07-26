@@ -9,6 +9,7 @@ const args = {
   uploadId: '',
   origin: 'https://spine-link.vercel.app',
   animation: '',
+  defaultAnimation: '',
   output: '',
   repoPath: '.',
   basePath: 'library',
@@ -23,6 +24,7 @@ for (let i = 2; i < process.argv.length; i++) {
   if (arg.startsWith('--upload-id=')) args.uploadId = arg.split('=')[1];
   else if (arg.startsWith('--origin=')) args.origin = arg.split('=')[1];
   else if (arg.startsWith('--animation=')) args.animation = arg.split('=')[1];
+  else if (arg.startsWith('--default-animation=')) args.defaultAnimation = arg.split('=')[1];
   else if (arg.startsWith('--output=')) args.output = arg.split('=')[1];
   else if (arg.startsWith('--repo-path=')) args.repoPath = arg.split('=')[1];
   else if (arg.startsWith('--base-path=')) args.basePath = arg.split('=')[1];
@@ -32,7 +34,7 @@ for (let i = 2; i < process.argv.length; i++) {
 }
 
 if (!args.uploadId) {
-  console.error('Usage: spine-export-webm.mjs --upload-id=<id> [options]');
+  console.error('Usage: spine-export-webm.mjs --upload-id=<id> --animation=<name> [options]');
   process.exit(1);
 }
 
@@ -102,9 +104,7 @@ function detectSkeletonVersion(filePath) {
     if (ext === '.skel') {
       const buffer = fs.readFileSync(filePath);
       const versionEnd = buffer.indexOf(0);
-      if (versionEnd > 0) {
-        return buffer.toString('utf8', 0, versionEnd).trim();
-      }
+      if (versionEnd > 0) return buffer.toString('utf8', 0, versionEnd).trim();
       return buffer.toString('utf8', 0, Math.min(buffer.length, 80)).split('\0')[0].trim();
     }
   } catch { }
@@ -139,11 +139,14 @@ const skeletonRawUrl = rawUrl(skeletonFile);
 const atlasRawUrl = rawUrl(atlasFile);
 const textureRawUrls = textureFiles.map(f => rawUrl(f));
 
+const isDefault = args.animation && args.defaultAnimation && args.animation === args.defaultAnimation;
+
 console.error(`Entry: ${args.uploadId}`);
 console.error(`Set: ${firstSet.name}`);
 console.error(`Skeleton: ${skeletonFile} (v${skeletonVersion})`);
 console.error(`Atlas: ${atlasFile}`);
-console.error(`Animation: ${targetAnimation || '(default)'}`);
+console.error(`Animation: ${targetAnimation}`);
+console.error(`Is default: ${isDefault}`);
 
 const captureHtml = `<!DOCTYPE html>
 <html lang="en">
@@ -187,34 +190,17 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
     window.__captureError = 'WebGL context lost';
   });
 
-  function getAnimationDuration() {
-    try {
-      if (!player.animationState) return 0;
-      var track = player.animationState.getCurrent(0);
-      if (track && track.animation && typeof track.animation.duration === 'number' && track.animation.duration > 0) {
-        return track.animation.duration;
-      }
-      var tracks = player.animationState.tracks;
-      if (tracks) {
-        for (var i = 0; i < tracks.length; i++) {
-          var t = tracks[i];
-          if (t && t.animation && typeof t.animation.duration === 'number' && t.animation.duration > 0) {
-            return t.animation.duration;
-          }
-        }
-      }
-    } catch (e) {}
-    return 0;
-  }
-
   window.__startCapture = function() {
     var canvas = player.canvas;
     if (!canvas || canvas.width < 50 || canvas.height < 50) return;
 
-    var fps = 30;
-    var animDuration = getAnimationDuration();
-    var captureMs = Math.max(2000, Math.ceil(animDuration * 1000) + 1000);
+    try {
+      if (player.state && player.state.setAnimation) {
+        player.state.setAnimation(0, ${JSON.stringify(targetAnimation)}, false);
+      }
+    } catch (e) {}
 
+    var fps = 30;
     var mimeTypes = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
     var mimeType = mimeTypes.find(function(t) { return typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t); });
     if (!mimeType) {
@@ -253,7 +239,6 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
             mimeType: mimeType,
             width: canvas.width,
             height: canvas.height,
-            duration: captureMs / 1000,
           };
         };
         reader.onerror = function() {
@@ -269,11 +254,63 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
 
       recorder.start(250);
       window.__recorder = recorder;
-      window.__captureStarted = true;
 
-      setTimeout(function() {
-        if (recorder.state === 'recording') recorder.stop();
-      }, captureMs);
+      var offscreen = document.createElement('canvas');
+      offscreen.width = 80;
+      offscreen.height = 60;
+      var offCtx = offscreen.getContext('2d');
+
+      var prevSum = null;
+      var stableCount = 0;
+      var recordingStart = Date.now();
+      var MIN_RECORDING = 2000;
+      var MAX_RECORDING = 60000;
+      var STABLE_NEEDED = 10;
+      var SAMPLE_MS = 100;
+
+      function getFrameSum() {
+        try {
+          offCtx.drawImage(canvas, 0, 0, 80, 60);
+          var data = offCtx.getImageData(0, 0, 80, 60).data;
+          var sum = 0;
+          for (var i = 0; i < data.length; i += 4) {
+            sum += data[i] + data[i+1] + data[i+2];
+          }
+          return sum;
+        } catch (e) {
+          return prevSum !== null ? prevSum : 0;
+        }
+      }
+
+      function checkStability() {
+        if (recorder.state !== 'recording') return;
+
+        var sum = getFrameSum();
+        var elapsed = Date.now() - recordingStart;
+
+        if (prevSum !== null) {
+          var diff = Math.abs(sum - prevSum);
+          if (diff < 300) {
+            stableCount++;
+            if (stableCount >= STABLE_NEEDED && elapsed >= MIN_RECORDING) {
+              recorder.stop();
+              return;
+            }
+          } else {
+            stableCount = 0;
+          }
+        }
+        prevSum = sum;
+
+        if (elapsed >= MAX_RECORDING) {
+          recorder.stop();
+          return;
+        }
+
+        setTimeout(checkStability, SAMPLE_MS);
+      }
+
+      setTimeout(checkStability, SAMPLE_MS);
     } catch (e) {
       window.__captureError = 'Capture error: ' + e.message;
     }
@@ -282,7 +319,6 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
   var checkReady = function() {
     var canvas = player.canvas;
     if (canvas && canvas.width > 50 && canvas.height > 50) {
-      if (player.play) player.play();
       setTimeout(window.__startCapture, 400);
     } else {
       setTimeout(checkReady, 300);
@@ -316,10 +352,9 @@ try {
 
   await page.setContent(captureHtml, { waitUntil: 'networkidle', timeout: 60000 });
 
-  const totalTimeout = Math.max(captureTimeMs + 5000, 30000);
   await page.waitForFunction(
     () => window.__captureResult !== null || window.__captureError,
-    { timeout: totalTimeout, polling: 500 },
+    { timeout: 120000, polling: 500 },
   );
 
   const error = await page.evaluate(() => window.__captureError || null);
@@ -335,14 +370,14 @@ try {
   }
 
   const binary = Buffer.from(result.base64, 'base64');
-  const outputPath = args.output || `${args.uploadId}-preview.webm`;
+  const outputPath = args.output || `${args.uploadId}-${targetAnimation}-preview.webm`;
   fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
   fs.writeFileSync(outputPath, binary);
 
-  console.error(`WebM saved: ${outputPath} (${binary.length} bytes, ${result.width}x${result.height}, ${result.duration}s)`);
+  console.error(`WebM saved: ${outputPath} (${binary.length} bytes, ${result.width}x${result.height})`);
 
   const sha256 = createHash('sha256').update(binary).digest('hex');
-  console.log(JSON.stringify({ ok: true, path: outputPath, bytes: binary.length, width: result.width, height: result.height, duration: result.duration, sha256 }));
+  console.log(JSON.stringify({ ok: true, path: outputPath, bytes: binary.length, width: result.width, height: result.height, sha256, isDefault }));
 
 } finally {
   await browser.close();
