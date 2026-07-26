@@ -516,6 +516,7 @@ function loadSpinePlayerModule() {
     ]).then(([module]) => {
       (module.GLTexture as unknown as { DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL?: boolean }).DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL = true;
       patchAtlasAttachmentLoader(module.AtlasAttachmentLoader, module);
+      setTimeout(() => patchAtlasAttachmentLoader(window.spine?.AtlasAttachmentLoader, window.spine), 100);
       return module;
     });
   }
@@ -3129,6 +3130,17 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     baseViewportRef.current = null;
     playerCanvasSizeRef.current = { width: 1, height: 1 };
     if (playerHostRef.current) playerHostRef.current.innerHTML = "";
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: ErrorEvent) => {
+      const msg = event.message ?? "";
+      if (msg.includes("Region not set") || msg.includes("Region not found")) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("error", handler);
+    return () => window.removeEventListener("error", handler);
   }, []);
 
   const toggleLoopEnabled = useCallback(() => {
