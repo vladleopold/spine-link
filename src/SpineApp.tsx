@@ -515,7 +515,7 @@ function loadSpinePlayerModule() {
       import("@esotericsoftware/spine-player/dist/spine-player.css"),
     ]).then(([module]) => {
       (module.GLTexture as unknown as { DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL?: boolean }).DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL = true;
-      patchAtlasAttachmentLoader(module.AtlasAttachmentLoader);
+      patchAtlasAttachmentLoader(module.AtlasAttachmentLoader, module);
       return module;
     });
   }
@@ -523,10 +523,11 @@ function loadSpinePlayerModule() {
   return spinePlayerModulePromise;
 }
 
-function patchAtlasAttachmentLoader(AtlasAttachmentLoader: unknown) {
-  if (!AtlasAttachmentLoader || window.__spinePatched) return;
+function patchAtlasAttachmentLoader(Al: unknown, spineNs?: unknown) {
+  if (!Al || window.__spinePatched) return;
   window.__spinePatched = true;
-  const p = (AtlasAttachmentLoader as Record<string, unknown>).prototype as Record<string, unknown>;
+  const p = (Al as Record<string, unknown>).prototype as Record<string, unknown>;
+
   const origFindRegion = p.findRegion as (...args: unknown[]) => unknown;
   if (typeof origFindRegion === "function") {
     (p as Record<string, (...args: unknown[]) => unknown>).findRegion = function (this: unknown, ...args: unknown[]) {
@@ -545,6 +546,19 @@ function patchAtlasAttachmentLoader(AtlasAttachmentLoader: unknown) {
     if (typeof orig !== "function") continue;
     (p as Record<string, (...args: unknown[]) => unknown>)[method] = function (this: unknown, ...args: unknown[]) {
       try { return orig.apply(this, args); } catch { return null; }
+    };
+  }
+
+  const ns = spineNs as Record<string, unknown> | undefined;
+  if (!ns) return;
+  for (const ctorName of ["RegionAttachment", "MeshAttachment"]) {
+    const ctor = ns[ctorName];
+    if (typeof ctor !== "function") continue;
+    const proto = (ctor as unknown as Record<string, unknown>).prototype as Record<string, unknown>;
+    const orig = proto.computeUVs as (...args: unknown[]) => unknown;
+    if (typeof orig !== "function") continue;
+    (proto as Record<string, (...args: unknown[]) => unknown>).computeUVs = function (this: unknown, ...args: unknown[]) {
+      try { return orig.apply(this, args); } catch { return; }
     };
   }
 }
@@ -621,7 +635,7 @@ async function loadSpinePlayerForSet(preparedSpine?: Pick<PreparedSpine, "skelet
       await loadScriptOnce(`/vendor-spine-player-${runtime}.js`);
       const SpinePlayer = window.spine?.SpinePlayer;
       if (!SpinePlayer) throw new Error(`Legacy Spine ${runtime} runtime could not be loaded.`);
-      patchAtlasAttachmentLoader(window.spine?.AtlasAttachmentLoader);
+      patchAtlasAttachmentLoader(window.spine?.AtlasAttachmentLoader, window.spine);
       return { SpinePlayer };
       })(),
     );

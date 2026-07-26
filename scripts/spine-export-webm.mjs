@@ -194,6 +194,16 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
       if (typeof orig !== 'function') return;
       p[m] = function() { try { return orig.apply(this, arguments); } catch(e) { return null; } };
     });
+
+    ['RegionAttachment','MeshAttachment'].forEach(function(name) {
+      var ctor = spine[name];
+      if (typeof ctor !== 'function') return;
+      var cuv = ctor.prototype.computeUVs;
+      if (typeof cuv !== 'function') return;
+      ctor.prototype.computeUVs = function() {
+        try { return cuv.apply(this, arguments); } catch(e) {}
+      };
+    });
   }
 
   var player;
