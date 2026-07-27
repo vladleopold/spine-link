@@ -195,8 +195,8 @@ function indexablePortfolioState(entries) {
   };
 }
 
-function createLibraryHtml({ origin, publicOwnerId, entries, metrics }) {
-  const { visibleEntries, isPortfolioMode } = indexablePortfolioState(entries);
+function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback, metrics }) {
+  const { visibleEntries, isPortfolioMode } = indexablePortfolioState(entriesWithFallback);
   const firstEntry = visibleEntries[0] || entries[0] || {};
   const showOwnerName = firstEntry.showOwnerLibrary !== false;
   const ownerName = escapeHtml(showOwnerName ? firstEntry.ownerName || 'Spine-Link creator' : 'Spine-Link library');
@@ -709,8 +709,10 @@ export default async function handler(request, response) {
     const entries = Array.isArray(allEntries)
       ? allEntries.filter((entry) => String(entry?.publicOwnerId || '') === publicOwnerId)
       : [];
-    entries.sort(compareLibraryEntries);
-    const { visibleEntries, isPortfolioMode } = indexablePortfolioState(entries);
+  const entriesWithFallback = entries.length > 0 ? entries : allEntries;
+      : [];
+    entriesWithFallback.sort(compareLibraryEntries);
+    const { visibleEntries, isPortfolioMode } = indexablePortfolioState(entriesWithFallback);
     const robotsTag = isPortfolioMode && visibleEntries.length > 0
       ? 'index, follow, max-image-preview:large, max-video-preview:-1, max-snippet:-1'
       : 'noindex, follow';
@@ -721,7 +723,7 @@ export default async function handler(request, response) {
     if (request.method === 'HEAD') {
       return response.status(200).send('');
     }
-    return response.status(200).send(createLibraryHtml({ origin, publicOwnerId, entries, metrics }));
+    return response.status(200).send(createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback, metrics }));
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Library failed');
   }
