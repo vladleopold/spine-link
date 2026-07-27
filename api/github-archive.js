@@ -393,9 +393,17 @@ async function enrichArchiveEntryLayout(settings, origin, entry) {
 }
 
 async function enrichArchiveLayout(settings, origin, entries) {
-  const enriched = [];
-  for (const entry of entries) enriched.push(await enrichArchiveEntryLayout(settings, origin, entry));
-  return enriched;
+  // Process in parallel with concurrency limit to avoid overwhelming GitHub API
+  const concurrency = 8;
+  const results = [];
+  for (let i = 0; i < entries.length; i += concurrency) {
+    const batch = entries.slice(i, i + concurrency);
+    const batchResults = await Promise.all(
+      batch.map(entry => enrichArchiveEntryLayout(settings, origin, entry).catch(() => entry))
+    );
+    results.push(...batchResults);
+  }
+  return results;
 }
 
 function tileClassForRatio(ratio) {
