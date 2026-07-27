@@ -362,6 +362,15 @@ function sendAssetBuffer(request, response, { path, assetVersion, buffer, etag }
 }
 
 export default async function handler(request, response) {
+  // CORS headers for headless browser (origin: null)
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (request.method === 'OPTIONS') {
+    return response.status(204).end();
+  }
+
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     response.setHeader('Allow', 'GET, HEAD');
     return response.status(405).send('Method not allowed');
