@@ -294,7 +294,7 @@ function homepageFeedEntries(origin, entries, metrics) {
     .map((entry) => ({ entry, score: feedScore(entry, metrics) }))
     .sort((a, b) => b.score - a.score || compareArchiveEntries(a.entry, b.entry));
   const topPool = scoredEntries.slice(0, Math.min(96, Math.max(24, scoredEntries.length))).map(({ entry }) => entry);
-  const randomEntries = shuffleEntries(topPool).slice(0, 32);
+  const randomEntries = shuffleEntries(topPool).slice(0, 100);
   return randomEntries.map((entry) => {
     const id = String(entry?.id || '');
     const metric = metricCountsForId(metrics, id);
