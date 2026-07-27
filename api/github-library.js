@@ -701,14 +701,19 @@ export default async function handler(request, response) {
   };
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 
+  // Detect world-spine-archive page - show all entries regardless of viewer
+  const isArchivePage = request.url?.includes('/world-spine-archive') === true;
+
   try {
     const indexText = await githubText(settings, `${settings.basePath}/index.json`);
     const metricsText = await githubText(settings, `${settings.basePath}/metrics.json`);
     const metrics = parseMetricsJson(metricsText);
     const allEntries = indexText ? JSON.parse(indexText) : [];
-    const entries = Array.isArray(allEntries)
-      ? allEntries.filter((entry) => String(entry?.publicOwnerId || '') === publicOwnerId)
-      : [];
+    const entries = isArchivePage
+      ? allEntries
+      : (Array.isArray(allEntries)
+          ? allEntries.filter((entry) => String(entry?.publicOwnerId || '') === publicOwnerId)
+          : []);
     const entriesWithFallback = entries.length > 0 ? entries : allEntries;
     entriesWithFallback.sort(compareLibraryEntries);
     const { visibleEntries, isPortfolioMode } = indexablePortfolioState(entriesWithFallback);
