@@ -139,6 +139,10 @@ const skeletonRawUrl = rawUrl(skeletonFile);
 const atlasRawUrl = rawUrl(atlasFile);
 const textureRawUrls = textureFiles.map(f => rawUrl(f));
 
+const atlasLocalPath = path.join(firstSet.path, atlasFile);
+let atlasContent = fs.readFileSync(atlasLocalPath, 'utf8');
+atlasContent = atlasContent.replace(/^\.\.[\/\\]textures[\/\\]/gm, '');
+
 const isDefault = args.animation && args.defaultAnimation && args.animation === args.defaultAnimation;
 
 console.error(`Entry: ${args.uploadId}`);
@@ -169,17 +173,61 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
   window.__animDuration = 0;
   window.__ready = false;
 
+  var player;
   var config = {
-    ${skeletonKey}: ${JSON.stringify(skeletonRawUrl)},
-    ${atlasKey}: ${JSON.stringify(atlasRawUrl)},
-    textures: ${JSON.stringify(textureRawUrls)},
-    animation: ${JSON.stringify(targetAnimation)},
+    skelUrl: skeletonKey === 'skelUrl' ? skeletonRawUrl : undefined,
+    skeleton: skeletonKey === 'skeleton' ? skeletonRawUrl : undefined,
+    atlasUrl: atlasKey === 'atlasUrl' ? atlasRawUrl : undefined,
+    atlas: atlasKey === 'atlas' ? atlasRawUrl : undefined,
+    textures: textureRawUrls,
+    animation: targetAnimation,
     showLoading: false,
     premultipliedAlpha: false,
     preserveDrawingBuffer: true,
     alpha: true,
     backgroundColor: '#050607',
     viewport: { padLeft: '14%', padRight: '14%', padTop: '14%', padBottom: '14%' },
+    success: function (p) {
+      player = p;
+      window.__ready = true;
+      window.__canvasWidth = player.canvas ? player.canvas.width : 0;
+      window.__canvasHeight = player.canvas ? player.canvas.height : 0;
+      
+      try {
+        var track = player.animationState ? player.animationState.getCurrent(0) : null;
+        if (track && track.animation && typeof track.animation.duration === 'number') {
+          window.__animDuration = track.animation.duration;
+        }
+      } catch (e) {}
+
+      // Force 30 FPS playback by overriding requestAnimationFrame for the player?
+      // Not strictly necessary if we capture at 30fps and record for exact duration,
+      // but let's record using MediaRecorder.
+      if (player.canvas) {
+        try {
+          var stream = player.canvas.captureStream(30);
+          var recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+          var chunks = [];
+          recorder.ondataavailable = function(e) { if (e.data.size > 0) chunks.push(e.data); };
+          recorder.onstop = function() {
+            var blob = new Blob(chunks, { type: 'video/webm' });
+            var reader = new FileReader();
+            reader.onload = function() { window.__videoData = reader.result; };
+            reader.readAsDataURL(blob);
+          };
+          recorder.start();
+          
+          window.__stopRecording = function() {
+            if (recorder.state === 'recording') recorder.stop();
+          };
+        } catch(err) {
+           window.__captureError = 'MediaRecorder failed: ' + err.message;
+        }
+      }
+    },
+    error: function (p, err) {
+      window.__captureError = 'Player creation failed: ' + err;
+    }
   };
 
   if (spine.AtlasAttachmentLoader && !window.__spinePatched) {
@@ -210,24 +258,15 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
     });
   }
 
-  var player;
   try {
-    player = new spine.SpinePlayer('player', config);
+    if (typeof spine.SpinePlayer === 'function') {
+      new spine.SpinePlayer('player', config);
+    } else {
+      window.__captureError = 'spine.SpinePlayer is not a function';
+    }
   } catch (e) {
     window.__captureError = 'Player creation failed: ' + e.message;
-    return;
   }
-
-  window.__ready = true;
-  window.__canvasWidth = player.canvas ? player.canvas.width : 0;
-  window.__canvasHeight = player.canvas ? player.canvas.height : 0;
-
-  try {
-    var track = player.animationState ? player.animationState.getCurrent(0) : null;
-    if (track && track.animation && typeof track.animation.duration === 'number') {
-      window.__animDuration = track.animation.duration;
-    }
-  } catch (e) {}
 })();
 </script>
 </body>
@@ -252,10 +291,19 @@ try {
   const context = await browser.newContext({
     viewport: { width: 960, height: 720 },
     reducedMotion: 'no-preference',
-    recordVideo: { dir: tempDir },
   });
   const page = await context.newPage();
 
+  page.on('console', msg => console.error(`[BROWSER ${msg.type()}] ${msg.text()}`));
+  page.on('pageerror', err => console.error(`[BROWSER ERROR] ${err.message}`));
+
+  await page.route(atlasRawUrl, async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/octet-stream',
+      body: atlasContent,
+    });
+  });
   await page.setContent(captureHtml, { waitUntil: 'networkidle', timeout: 60000 });
 
   await page.waitForFunction(() => window.__ready === true, { timeout: 60000, polling: 200 });
@@ -272,20 +320,29 @@ try {
 
   console.error(`Animation ready, duration=${animDuration}s, canvas=${canvasWidth}x${canvasHeight}`);
 
-  const captureDuration = animDuration > 0 ? animDuration + 1 : 1;
+  const captureDuration = animDuration > 0 ? animDuration : 1; // Exactly animDuration, no stretching/padding
   await new Promise(resolve => setTimeout(resolve, captureDuration * 1000));
 
-  await context.close();
+  await page.evaluate(() => {
+    if (window.__stopRecording) window.__stopRecording();
+  });
 
-  const videoFiles = fs.readdirSync(tempDir).filter(f => f.endsWith('.webm'));
-  if (videoFiles.length === 0) {
-    console.error('No video file produced by Playwright');
+  const videoDataUrl = await page.waitForFunction(() => window.__videoData, { timeout: 15000 }).then(h => h.jsonValue());
+  if (!videoDataUrl) {
+    console.error('No video data captured by MediaRecorder');
     process.exit(1);
   }
 
-  const videoPath = path.join(tempDir, videoFiles[0]);
-  const videoSize = fs.statSync(videoPath).size;
-  console.error(`Playwright recording: ${videoPath} (${videoSize} bytes)`);
+  const base64Data = videoDataUrl.split(',')[1];
+  const webmBuffer = Buffer.from(base64Data, 'base64');
+  
+  const videoPath = path.join(tempDir, 'browser-recording.webm');
+  fs.writeFileSync(videoPath, webmBuffer);
+
+  await context.close();
+
+  const videoSize = webmBuffer.length;
+  console.error(`MediaRecorder recording: ${videoPath} (${videoSize} bytes)`);
 
   if (videoSize < 100) {
     console.error('Recorded video is too small, possibly empty');
@@ -296,20 +353,38 @@ try {
   fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
   fs.copyFileSync(videoPath, outputPath);
 
-  const webmBuffer = fs.readFileSync(outputPath);
+  console.error(`WebM saved: ${outputPath} (${webmBuffer.length} bytes, ${canvasWidth}x${canvasHeight})`);
+
+  // Use ffmpeg to ensure perfect 30 fps and fixed duration (no stretching)
+  try {
+    const { execSync } = await import('child_process');
+    const fixedOutputPath = outputPath.replace('.webm', '-fixed.webm');
+    console.error(`Running ffmpeg to enforce 30fps and prevent time stretching...`);
+    // -r 30 enforces 30 fps, -vsync 1 / -fps_mode cfr ensures constant frame rate.
+    execSync(`ffmpeg -y -i "${outputPath}" -r 30 -c:v libvpx-vp9 -b:v 2M -pix_fmt yuv420p "${fixedOutputPath}"`, { stdio: 'inherit' });
+    if (fs.existsSync(fixedOutputPath)) {
+      fs.copyFileSync(fixedOutputPath, outputPath);
+      fs.rmSync(fixedOutputPath);
+      console.error(`FFmpeg processing complete. WebM is strictly 30fps.`);
+    }
+  } catch (err) {
+    console.error(`FFmpeg processing failed or skipped: ${err.message}`);
+  }
+
+  const finalWebmBuffer = fs.readFileSync(outputPath);
   const meta = {
     animation: targetAnimation,
     animationDuration: animDuration,
     capturedDuration: captureDuration,
     width: canvasWidth,
     height: canvasHeight,
-    bytes: webmBuffer.length,
-    sha256: createHash('sha256').update(webmBuffer).digest('hex'),
+    bytes: finalWebmBuffer.length,
+    sha256: createHash('sha256').update(finalWebmBuffer).digest('hex'),
     isDefault,
   };
   fs.writeFileSync(outputPath + '.json', JSON.stringify(meta, null, 2));
 
-  console.error(`WebM saved: ${outputPath} (${webmBuffer.length} bytes, ${canvasWidth}x${canvasHeight})`);
+  console.error(`Final WebM size: ${finalWebmBuffer.length} bytes`);
 
   console.log(JSON.stringify({ ...meta, ok: true, path: outputPath }));
 
