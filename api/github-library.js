@@ -709,8 +709,7 @@ export default async function handler(request, response) {
     const entries = Array.isArray(allEntries)
       ? allEntries.filter((entry) => String(entry?.publicOwnerId || '') === publicOwnerId)
       : [];
-  const entriesWithFallback = entries.length > 0 ? entries : allEntries;
-      : [];
+    const entriesWithFallback = entries.length > 0 ? entries : allEntries;
     entriesWithFallback.sort(compareLibraryEntries);
     const { visibleEntries, isPortfolioMode } = indexablePortfolioState(entriesWithFallback);
     const robotsTag = isPortfolioMode && visibleEntries.length > 0
