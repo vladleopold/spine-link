@@ -197,7 +197,7 @@ function indexablePortfolioState(entries) {
 
 function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback, metrics }) {
   const { visibleEntries, isPortfolioMode } = indexablePortfolioState(entriesWithFallback);
-  const firstEntry = visibleEntries[0] || entries[0] || {};
+  const firstEntry = visibleEntries[0] || entriesWithFallback[0] || {};
   const showOwnerName = firstEntry.showOwnerLibrary !== false;
   const ownerName = escapeHtml(showOwnerName ? firstEntry.ownerName || 'Spine-Link creator' : 'Spine-Link library');
   const rawOwnerName = showOwnerName ? firstEntry.ownerName || 'Spine-Link creator' : 'Spine-Link library';
