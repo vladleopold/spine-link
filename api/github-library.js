@@ -690,7 +690,7 @@ export default async function handler(request, response) {
 
   const requestedPublicOwnerId = String(request.query?.user || '').trim();
   const publicOwnerId = legacyPublicOwnerAliases[requestedPublicOwnerId] || requestedPublicOwnerId;
-  if (!/^u_[a-z0-9]{3,32}$/i.test(requestedPublicOwnerId)) return response.status(400).send('Invalid public library');
+  if (!/^(u_[a-z0-9]{3,32}|anon_[a-z0-9]+_[a-z0-9]+)$/i.test(requestedPublicOwnerId)) return response.status(400).send('Invalid public library');
 
   const settings = {
     owner: process.env.GITHUB_OWNER || defaultOwner,
