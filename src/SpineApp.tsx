@@ -1141,6 +1141,37 @@ function replaceByteRanges(bytes: Uint8Array, replacements: Array<{ start: numbe
 
 function sanitizedSkelDataUriFromBuffer(buffer: ArrayBuffer, version = "") {
   const bytes = new Uint8Array(buffer);
+
+  // --- Spine 3.8 binary patch: fix null imagesPath / audioPath in header ---
+  // In the Spine 3.8 binary format the header layout is:
+  //   [hash string] [version string] [x f32] [y f32] [w f32] [h f32] [imagesPath string] [audioPath string]
+  // A null string is encoded as 0x00 (charCount+1 = 0 → charCount = -1 → null).
+  // Spine's runtime throws "String in string table must not be null" when it encounters this.
+  // Fix: replace 0x00 → 0x01 (= empty string "") for imagesPath and audioPath.
+  if (/^3\./.test(version)) {
+    const patchCursor = new SpineBinaryCursor(new Uint8Array(bytes));
+    try {
+      patchCursor.readStringMeta(); // skip hash
+      patchCursor.readStringMeta(); // skip version
+      patchCursor.skip(16);         // skip x, y, w, h floats
+
+      const imagesPathPos = patchCursor.index;
+      if (bytes[imagesPathPos] === 0x00) {
+        // bytes is a read-only view, so we need to work on a mutable copy below
+        bytes[imagesPathPos] = 0x01;
+      }
+      patchCursor.readStringMeta(); // skip imagesPath
+
+      const audioPathPos = patchCursor.index;
+      if (bytes[audioPathPos] === 0x00) {
+        bytes[audioPathPos] = 0x01;
+      }
+    } catch {
+      // If parsing fails, continue with unpatched bytes — further sanitization may still help.
+    }
+  }
+  // --- end Spine 3.8 null-string patch ---
+
   const cursor = new SpineBinaryCursor(bytes);
   const replacements: Array<{ start: number; end: number; bytes: Uint8Array }> = [];
 
@@ -1189,6 +1220,7 @@ function sanitizedSkelDataUriFromBuffer(buffer: ArrayBuffer, version = "") {
 
   return `data:application/octet-stream;base64,${bytesToBase64FromBytes(replaceByteRanges(bytes, replacements))}`;
 }
+
 
 function spineBinaryVersionFromBuffer(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
