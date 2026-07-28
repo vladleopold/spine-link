@@ -406,16 +406,11 @@ function isPublicArchiveEntry(entry, exclusions) {
 
 function videoMetadataForEntry(origin, entry, entryId, note = '', canonicalUrl = '', embedUrl = '') {
   const id = String(entry?.id || entryId || '').trim();
-  const contentUrl = entry.webmPreviewHigh || entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
-  const contentUrlMedium = entry.webmPreviewMedium || contentUrl;
-  const contentUrlLow = entry.webmPreviewLow || contentUrlMedium;
+  const contentUrl = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
   const poster =
-    entry.webpPoster ||
     entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') ||
     generatedThumbnailUrl(origin, entry) ||
     entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
-  const posterMedium = entry.webpPosterMedium || poster;
-  const posterLow = entry.webpPosterLow || posterMedium;
   if (!id || !contentUrl || !poster) return null;
   const name = cleanPublicText(entry?.title || id || 'Spine animation preview', 110);
   const description =
@@ -426,11 +421,7 @@ function videoMetadataForEntry(origin, entry, entryId, note = '', canonicalUrl =
     name,
     description,
     thumbnailUrl: poster,
-    thumbnailUrlMedium: posterMedium,
-    thumbnailUrlLow: posterLow,
     contentUrl,
-    contentUrlMedium,
-    contentUrlLow,
     embedUrl: embedUrl || pageUrlForEntry(origin, id),
     url: canonicalUrl || pageUrlForEntry(origin, id),
     proofDocuments: proofDocumentsForEntry(origin, entry, canonicalUrl || pageUrlForEntry(origin, id)),
@@ -740,10 +731,8 @@ function createHtml(config) {
       .player-frame { position: relative; min-width: 0; min-height: 0; }
       .video-watch-panel { position: relative; display: grid; gap: 10px; overflow: hidden; padding: 16px; border: 1px solid rgba(255,185,214,.46); border-radius: 8px; background: #020304; box-shadow: 0 20px 64px rgba(0,0,0,.34); }
       .video-watch-panel--bottom { margin-top: 4px; }
-      .seo-video-frame { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: min(70vh, 820px); min-height: 220px; max-height: min(70vh, 820px); overflow: hidden; border: 1px solid rgba(140,199,255,.22); border-radius: 8px; background: #000; }
+      .seo-video-frame { display: flex; align-items: center; justify-content: center; width: 100%; height: min(70vh, 820px); min-height: 220px; max-height: min(70vh, 820px); overflow: hidden; border: 1px solid rgba(140,199,255,.22); border-radius: 8px; background: #000; }
       .video-watch-player, .seo-video-preview { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; aspect-ratio: var(--video-preview-ratio, 16 / 9); object-fit: contain; background: #000; }
-      .seo-video-frame video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transition: opacity 0.5s ease-in-out; }
-      .seo-video-frame video.is-hidden { opacity: 0; pointer-events: none; }
       .video-watch-copy { display: grid; gap: 5px; pointer-events: none; }
       .video-watch-copy h1 { margin: 0; color: #fff; font-size: clamp(24px, 3.4vw, 44px); line-height: 1; letter-spacing: 0; text-shadow: 0 4px 18px rgba(0,0,0,.76); }
       .video-watch-copy p { max-width: 780px; margin: 0; color: rgba(237,245,255,.78); font-size: 14px; line-height: 1.35; }
@@ -900,63 +889,8 @@ function createHtml(config) {
       </div>
       ${video ? `<section class="video-watch-panel video-watch-panel--bottom" aria-label="${escapeHtml(video.name)} video preview">
         <div class="section-title">Video preview</div>
-        <div class="seo-video-frame" id="seo-video-frame" style="--video-preview-ratio: ${escapeHtml(videoPreviewRatio)}">
-          <video class="video-watch-player seo-video-preview" id="video-layer-low" src="${escapeHtml(video.contentUrlLow)}" poster="${escapeHtml(video.thumbnailUrlLow)}" muted playsinline preload="metadata" autoplay controls></video>
-          <script>
-            // Progressive video loading (Low -> Medium -> High)
-            (function() {
-              const frame = document.getElementById('seo-video-frame');
-              const baseVideo = document.getElementById('video-layer-low');
-              const levels = [
-                { src: "${escapeHtml(video.contentUrlMedium)}", poster: "${escapeHtml(video.thumbnailUrlMedium)}", zIndex: 2 },
-                { src: "${escapeHtml(video.contentUrl)}", poster: "${escapeHtml(video.thumbnailUrl)}", zIndex: 3 }
-              ];
-              
-              let currentVideo = baseVideo;
-              currentVideo.style.zIndex = 1;
-              
-              function loadNextLevel(index) {
-                if (index >= levels.length) return;
-                const level = levels[index];
-                if (level.src === currentVideo.getAttribute('src')) {
-                  loadNextLevel(index + 1);
-                  return;
-                }
-                
-                const nextVideo = document.createElement('video');
-                nextVideo.className = 'video-watch-player seo-video-preview is-hidden';
-                nextVideo.muted = true;
-                nextVideo.playsInline = true;
-                nextVideo.poster = level.poster;
-                nextVideo.style.zIndex = level.zIndex;
-                
-                nextVideo.addEventListener('canplaythrough', () => {
-                  // Sync time and play state
-                  nextVideo.currentTime = currentVideo.currentTime;
-                  if (!currentVideo.paused) nextVideo.play().catch(()=>{});
-                  
-                  // Crossfade
-                  nextVideo.classList.remove('is-hidden');
-                  
-                  // Hide old after fade completes
-                  setTimeout(() => {
-                    currentVideo.classList.add('is-hidden');
-                    currentVideo.pause();
-                    currentVideo = nextVideo;
-                    nextVideo.controls = true; // Transfer controls to top layer
-                    loadNextLevel(index + 1);
-                  }, 500);
-                }, { once: true });
-                
-                nextVideo.src = level.src;
-                nextVideo.load();
-                frame.appendChild(nextVideo);
-              }
-              
-              // Start loading medium once low is playing
-              baseVideo.addEventListener('playing', () => loadNextLevel(0), { once: true });
-            })();
-          </script>
+        <div class="seo-video-frame" style="--video-preview-ratio: ${escapeHtml(videoPreviewRatio)}">
+          <video class="video-watch-player seo-video-preview" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl)}" muted playsinline preload="metadata" autoplay controls></video>
         </div>
         <div class="video-watch-copy"><h1>${escapeHtml(video.name)}</h1><p>${escapeHtml(video.description)}</p></div>
       </section>` : ''}

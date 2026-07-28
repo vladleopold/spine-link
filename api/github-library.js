@@ -218,15 +218,8 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
       const previewUrl = previewPath || playerPathForEntry(entry) || '/';
       const rawThumbnail = entryImageAsset(entry.thumbnail || '', entry, 'thumbnail');
       const derivedTexture = derivedMediaFromFiles(origin, entry, ['.png', '.jpg', '.jpeg', '.webp']);
-      
-      const posterHigh = entry.webpPoster || entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || derivedTexture;
-      const posterMedium = entry.webpPosterMedium || posterHigh;
-      const posterLow = entry.webpPosterLow || posterMedium;
-      
-      const videoHigh = entry.webmPreviewHigh || entryVideoAsset(entry.webmPreview || '', entry, 'webm') || derivedMediaFromFiles(origin, entry, ['.webm']) || generatedPreviewWebmUrl(origin, entry);
-      const videoMedium = entry.webmPreviewMedium || videoHigh;
-      const videoLow = entry.webmPreviewLow || videoMedium;
-      
+      const thumbnailPoster = entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || derivedTexture;
+      const webmPreview = entryVideoAsset(entry.webmPreview || '', entry, 'webm') || derivedMediaFromFiles(origin, entry, ['.webm']) || generatedPreviewWebmUrl(origin, entry);
       const isGifPreview = entry.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(rawThumbnail);
       const thumbnail = isGifPreview ? '' : rawThumbnail;
       const date = entry.uploadedAt ? new Date(entry.uploadedAt) : null;
@@ -240,10 +233,8 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
       const metric = metricCountsForId(metrics, likeId);
       const likeCount = metric.likes;
       const viewCount = metric.views;
-      
-      // Start with LOW quality for immediate visual fill
-      const thumbnailStyle = posterLow || thumbnail ? ` style="--library-thumbnail: url('${escapeHtml(posterLow || thumbnail)}')"` : '';
-      const previewMedia = `<video class="library-card-webm" data-video-src="${escapeHtml(videoLow)}" data-video-src-medium="${escapeHtml(videoMedium)}" data-poster-medium="${escapeHtml(posterMedium)}" ${videoLow ? `src="${escapeHtml(videoLow)}"` : ''} ${posterLow || thumbnail ? `poster="${escapeHtml(posterLow || thumbnail)}"` : ''} muted playsinline preload="metadata" autoplay aria-label="${itemTitle} video preview"></video>`;
+      const thumbnailStyle = thumbnail || thumbnailPoster ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
+      const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''}${thumbnailPoster || thumbnail ? ` poster="${escapeHtml(thumbnailPoster || thumbnail)}"` : ''} muted playsinline preload="metadata" autoplay aria-label="${itemTitle} video preview"></video>`;
       const likeButton = isPortfolioMode ? `<button class="portfolio-like-button" type="button" data-metric-id="${escapeHtml(likeId)}" data-metric-like data-metric-current-likes="${likeCount}" data-metric-current-views="${viewCount}" aria-pressed="false" title="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${likeCount}</strong></button>` : '';
       const cardSizeMode = entry.cardSize && entry.cardSize !== 'auto' ? 'manual' : 'auto';
       return `<article class="library-card ${libraryCardSizeClass(entry, index)}" data-entry-id="${entryId}" data-card-size-mode="${cardSizeMode}"${thumbnailStyle}>
@@ -682,38 +673,6 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
         scheduleChaos();
       }
       installChaoticCardPlayback();
-      
-      // Progressive Enhancement: Upgrade to Medium quality once the page is fully loaded
-      window.addEventListener("load", () => {
-        document.querySelectorAll(".library-card").forEach((card) => {
-          const video = card.querySelector(".library-card-webm");
-          if (!video) return;
-          
-          const mediumSrc = video.dataset.videoSrcMedium;
-          const mediumPoster = video.dataset.posterMedium;
-          
-          if (mediumPoster && mediumPoster !== video.getAttribute("poster")) {
-            const img = new Image();
-            img.onload = () => {
-              card.style.setProperty("--library-thumbnail", `url('${mediumPoster}')`);
-              video.setAttribute("poster", mediumPoster);
-            };
-            img.src = mediumPoster;
-          }
-          
-          if (mediumSrc && mediumSrc !== video.dataset.videoSrc) {
-            video.dataset.videoSrc = mediumSrc;
-            if (!video.paused || video.readyState > 0) {
-              const currentTime = video.currentTime || 0;
-              const isPlaying = !video.paused;
-              video.src = mediumSrc;
-              video.load();
-              video.currentTime = currentTime;
-              if (isPlaying) video.play().catch(() => {});
-            }
-          }
-        });
-      });
     </script>
     <script>window.SpineLinkMetricsConfig = {};</script>
     <script src="/spine-metrics.js" defer></script>
