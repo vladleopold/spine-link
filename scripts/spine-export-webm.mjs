@@ -111,19 +111,75 @@ function detectSkeletonVersion(filePath) {
   return '4.0';
 }
 
+/**
+ * Read skeleton bounding box (width/height) from the skeleton file.
+ * JSON skeletons store bounds in skeleton.width / skeleton.height.
+ * Binary .skel files: we attempt a best-effort parse of the header.
+ * Returns { width, height } or { width: 0, height: 0 } if unreadable.
+ */
+function readSkeletonBounds(filePath) {
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.json') {
+      const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      const w = Number(content?.skeleton?.width) || 0;
+      const h = Number(content?.skeleton?.height) || 0;
+      return { width: w, height: h };
+    }
+    if (ext === '.skel') {
+      // Binary .skel header layout (Spine 4.x):
+      //   - length-prefixed version string
+      //   - hash string, x, y, width, height (all floats after strings)
+      // We do a heuristic: read the JSON skeleton metadata if a .json sibling exists,
+      // otherwise fall back to 0x0 (the script will use a safe default).
+      const dir = path.dirname(filePath);
+      const base = path.basename(filePath, '.skel');
+      const jsonSibling = path.join(dir, base + '.json');
+      if (fs.existsSync(jsonSibling)) {
+        const content = JSON.parse(fs.readFileSync(jsonSibling, 'utf8'));
+        const w = Number(content?.skeleton?.width) || 0;
+        const h = Number(content?.skeleton?.height) || 0;
+        return { width: w, height: h };
+      }
+      // For .skel without a JSON sibling, return 0x0 — the browser will measure it live
+      return { width: 0, height: 0 };
+    }
+  } catch { }
+  return { width: 0, height: 0 };
+}
+
 const skeletonFilePath = path.join(firstSet.path, skeletonFile);
 const skeletonVersion = detectSkeletonVersion(skeletonFilePath);
+const skeletonBounds = readSkeletonBounds(skeletonFilePath);
 const targetAnimation = args.animation || entry.defaultAnimation || '';
+
+// --- Calculate dynamic video dimensions from skeleton bounds ---
+const PAD_RATIO = 0.14; // 14% padding on each side
+const MIN_VIDEO_DIM = 200;
+const MAX_VIDEO_DIM = 1920;
+
+const rawSkelWidth = skeletonBounds.width;
+const rawSkelHeight = skeletonBounds.height;
+
+// Add padding to skeleton bounds; fall back to 960x720 if bounds unknown
+const rawVideoWidth = rawSkelWidth > 0 ? rawSkelWidth * (1 + PAD_RATIO * 2) : 960;
+const rawVideoHeight = rawSkelHeight > 0 ? rawSkelHeight * (1 + PAD_RATIO * 2) : 720;
+
+// Clamp to min/max and ensure even dimensions (required by video codecs)
+const videoWidth = (Math.min(MAX_VIDEO_DIM, Math.max(MIN_VIDEO_DIM, Math.round(rawVideoWidth))) & ~1) || 960;
+const videoHeight = (Math.min(MAX_VIDEO_DIM, Math.max(MIN_VIDEO_DIM, Math.round(rawVideoHeight))) & ~1) || 720;
 
 const versionMajor = skeletonVersion.split('.')[0] || '4';
 const isLegacy = parseInt(versionMajor, 10) < 4;
 const runtimeMinor = isLegacy ? (skeletonVersion.split('.')[1] || '8') : '';
 
+// Use reliable Vercel domain for legacy player assets to avoid DNS resolution issues in GitHub Actions
+const stableOrigin = 'https://spine-link.vercel.app';
 const playerJsUrl = isLegacy
-  ? `${args.origin}/vendor-spine-player-${versionMajor}.${runtimeMinor}.js`
+  ? `${stableOrigin}/vendor-spine-player-${versionMajor}.${runtimeMinor}.js`
   : 'https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/iife/spine-player.js';
 const playerCssUrl = isLegacy
-  ? `${args.origin}/vendor-spine-player-${versionMajor}.${runtimeMinor}.css`
+  ? `${stableOrigin}/vendor-spine-player-${versionMajor}.${runtimeMinor}.css`
   : 'https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/spine-player.css';
 
 const skeletonKey = skeletonFile.toLowerCase().endsWith('.skel') ? 'skelUrl' : 'skeleton';
@@ -148,6 +204,8 @@ const isDefault = args.animation && args.defaultAnimation && args.animation === 
 console.error(`Entry: ${args.uploadId}`);
 console.error(`Set: ${firstSet.name}`);
 console.error(`Skeleton: ${skeletonFile} (v${skeletonVersion})`);
+console.error(`Skeleton bounds: ${rawSkelWidth}x${rawSkelHeight}`);
+console.error(`Video dimensions: ${videoWidth}x${videoHeight} (from bounds + ${PAD_RATIO * 100}% padding)`);
 console.error(`Atlas: ${atlasFile}`);
 console.error(`Animation: ${targetAnimation}`);
 console.error(`Is default: ${isDefault}`);
@@ -186,7 +244,7 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
     preserveDrawingBuffer: true,
     alpha: true,
     backgroundColor: '#050607',
-    viewport: { padLeft: '14%', padRight: '14%', padTop: '14%', padBottom: '14%' },
+    viewport: { padLeft: '0%', padRight: '0%', padTop: '0%', padBottom: '0%' },
     success: function (p) {
       player = p;
       window.__ready = true;
@@ -265,7 +323,7 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
       window.__captureError = 'spine.SpinePlayer is not a function';
     }
   } catch (e) {
-    window.__captureError = 'Player creation failed: ' + e.message;
+    window.__captureError = 'Player creation failed: ' + (e.message || e);
   }
 })();
 </script>
@@ -289,7 +347,7 @@ const browser = await chromium.launch({
 
 try {
   const context = await browser.newContext({
-    viewport: { width: 960, height: 720 },
+    viewport: { width: videoWidth, height: videoHeight },
     reducedMotion: 'no-preference',
   });
   const page = await context.newPage();
@@ -306,7 +364,7 @@ try {
   });
   await page.setContent(captureHtml, { waitUntil: 'networkidle', timeout: 60000 });
 
-  await page.waitForFunction(() => window.__ready === true, { timeout: 60000, polling: 200 });
+  await page.waitForFunction(() => window.__ready === true || window.__captureError, { timeout: 60000, polling: 200 });
 
   const error = await page.evaluate(() => window.__captureError || null);
   if (error) {
@@ -315,8 +373,8 @@ try {
   }
 
   const animDuration = await page.evaluate(() => window.__animDuration || 0);
-  const canvasWidth = await page.evaluate(() => window.__canvasWidth || 960);
-  const canvasHeight = await page.evaluate(() => window.__canvasHeight || 720);
+  const canvasWidth = await page.evaluate(() => window.__canvasWidth || 0) || videoWidth;
+  const canvasHeight = await page.evaluate(() => window.__canvasHeight || 0) || videoHeight;
 
   console.error(`Animation ready, duration=${animDuration}s, canvas=${canvasWidth}x${canvasHeight}`);
 
@@ -355,37 +413,88 @@ try {
 
   console.error(`WebM saved: ${outputPath} (${webmBuffer.length} bytes, ${canvasWidth}x${canvasHeight})`);
 
-  // Use ffmpeg to ensure perfect 30 fps and fixed duration (no stretching)
+  // Use ffmpeg to generate 3 qualities of WebM and 3 WebP posters
+  const baseOutputPath = outputPath.replace(/\.webm$/i, '');
+  const outPaths = {
+    webmHigh: outputPath,
+    webmMedium: `${baseOutputPath}-medium.webm`,
+    webmLow: `${baseOutputPath}-low.webm`,
+    webpHigh: `${baseOutputPath}.webp`,
+    webpMedium: `${baseOutputPath}-medium.webp`,
+    webpLow: `${baseOutputPath}-low.webp`,
+  };
+
+  const bitrates = { high: '1200k', medium: '350k', low: '150k' };
+  
+  // Calculate scaled dimensions (keeping aspect ratio, ensuring even numbers)
+  function calcScale(maxWidth) {
+    if (videoWidth <= maxWidth) return `${videoWidth}x${videoHeight}`;
+    const scale = maxWidth / videoWidth;
+    let newWidth = maxWidth;
+    let newHeight = Math.round(videoHeight * scale);
+    return `${newWidth & ~1}x${newHeight & ~1}`;
+  }
+  
+  const dimHigh = `${videoWidth}x${videoHeight}`;
+  const dimMedium = calcScale(1080);
+  const dimLow = calcScale(360);
+
   try {
     const { execSync } = await import('child_process');
-    const fixedOutputPath = outputPath.replace('.webm', '-fixed.webm');
-    console.error(`Running ffmpeg to enforce 30fps and prevent time stretching...`);
-    // -r 30 enforces 30 fps, -vsync 1 / -fps_mode cfr ensures constant frame rate.
-    execSync(`ffmpeg -y -i "${outputPath}" -r 30 -c:v libvpx-vp9 -b:v 2M -pix_fmt yuv420p "${fixedOutputPath}"`, { stdio: 'inherit' });
-    if (fs.existsSync(fixedOutputPath)) {
-      fs.copyFileSync(fixedOutputPath, outputPath);
-      fs.rmSync(fixedOutputPath);
-      console.error(`FFmpeg processing complete. WebM is strictly 30fps.`);
-    }
+    console.error(`Running ffmpeg to generate multiple qualities...`);
+    
+    // WebM Generation
+    // High Quality
+    execSync(`ffmpeg -y -i "${videoPath}" -r 30 -s ${dimHigh} -c:v libvpx-vp9 -b:v ${bitrates.high} -pix_fmt yuv420p "${outPaths.webmHigh}"`, { stdio: 'inherit' });
+    // Medium Quality
+    execSync(`ffmpeg -y -i "${videoPath}" -r 30 -s ${dimMedium} -c:v libvpx-vp9 -b:v ${bitrates.medium} -pix_fmt yuv420p "${outPaths.webmMedium}"`, { stdio: 'inherit' });
+    // Low Quality
+    execSync(`ffmpeg -y -i "${videoPath}" -r 30 -s ${dimLow} -c:v libvpx-vp9 -b:v ${bitrates.low} -pix_fmt yuv420p "${outPaths.webmLow}"`, { stdio: 'inherit' });
+
+    // WebP Generation (extract first frame)
+    // High Quality WebP
+    execSync(`ffmpeg -y -i "${videoPath}" -vframes 1 -s ${dimHigh} -c:v libwebp "${outPaths.webpHigh}"`, { stdio: 'inherit' });
+    // Medium Quality WebP
+    execSync(`ffmpeg -y -i "${videoPath}" -vframes 1 -s ${dimMedium} -c:v libwebp "${outPaths.webpMedium}"`, { stdio: 'inherit' });
+    // Low Quality WebP
+    execSync(`ffmpeg -y -i "${videoPath}" -vframes 1 -s ${dimLow} -c:v libwebp "${outPaths.webpLow}"`, { stdio: 'inherit' });
+
+    console.error(`FFmpeg processing complete. Generated 3x WebM and 3x WebP.`);
   } catch (err) {
     console.error(`FFmpeg processing failed or skipped: ${err.message}`);
+    // Fallback if ffmpeg fails: just copy the original capture to the main output
+    if (!fs.existsSync(outPaths.webmHigh)) fs.copyFileSync(videoPath, outPaths.webmHigh);
   }
 
-  const finalWebmBuffer = fs.readFileSync(outputPath);
+  function getFileSize(filePath) {
+    return fs.existsSync(filePath) ? fs.statSync(filePath).size : 0;
+  }
+
+  const finalWebmBuffer = fs.existsSync(outPaths.webmHigh) ? fs.readFileSync(outPaths.webmHigh) : Buffer.from([]);
+  
   const meta = {
     animation: targetAnimation,
     animationDuration: animDuration,
     capturedDuration: captureDuration,
-    width: canvasWidth,
-    height: canvasHeight,
+    width: videoWidth,
+    height: videoHeight,
+    skeletonWidth: rawSkelWidth,
+    skeletonHeight: rawSkelHeight,
     bytes: finalWebmBuffer.length,
-    sha256: createHash('sha256').update(finalWebmBuffer).digest('hex'),
+    sha256: finalWebmBuffer.length > 0 ? createHash('sha256').update(finalWebmBuffer).digest('hex') : '',
     isDefault,
+    files: {
+      webmHigh: getFileSize(outPaths.webmHigh),
+      webmMedium: getFileSize(outPaths.webmMedium),
+      webmLow: getFileSize(outPaths.webmLow),
+      webpHigh: getFileSize(outPaths.webpHigh),
+      webpMedium: getFileSize(outPaths.webpMedium),
+      webpLow: getFileSize(outPaths.webpLow)
+    }
   };
-  fs.writeFileSync(outputPath + '.json', JSON.stringify(meta, null, 2));
+  fs.writeFileSync(outPaths.webmHigh + '.json', JSON.stringify(meta, null, 2));
 
-  console.error(`Final WebM size: ${finalWebmBuffer.length} bytes`);
-
+  console.error(`Final High WebM size: ${meta.files.webmHigh} bytes`);
   console.log(JSON.stringify({ ...meta, ok: true, path: outputPath }));
 
   try { fs.rmSync(tempDir, { recursive: true }); } catch { }
