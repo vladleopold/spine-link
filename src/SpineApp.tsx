@@ -1123,19 +1123,25 @@ function replaceByteRanges(bytes: Uint8Array, replacements: Array<{ start: numbe
   if (!replacements.length) return bytes;
   const sorted = [...replacements].sort((a, b) => a.start - b.start);
   const nextLength = sorted.reduce((length, replacement) => length - (replacement.end - replacement.start) + replacement.bytes.length, bytes.length);
+  if (nextLength < 0) return bytes;
   const nextBytes = new Uint8Array(nextLength);
   let sourceIndex = 0;
   let targetIndex = 0;
 
   for (const replacement of sorted) {
-    nextBytes.set(bytes.slice(sourceIndex, replacement.start), targetIndex);
-    targetIndex += replacement.start - sourceIndex;
+    const prefix = bytes.slice(sourceIndex, replacement.start);
+    if (targetIndex + prefix.length > nextLength) return bytes;
+    nextBytes.set(prefix, targetIndex);
+    targetIndex += prefix.length;
+    if (targetIndex + replacement.bytes.length > nextLength) return bytes;
     nextBytes.set(replacement.bytes, targetIndex);
     targetIndex += replacement.bytes.length;
     sourceIndex = replacement.end;
   }
 
-  nextBytes.set(bytes.slice(sourceIndex), targetIndex);
+  const tail = bytes.slice(sourceIndex);
+  if (targetIndex + tail.length > nextLength) return bytes;
+  nextBytes.set(tail, targetIndex);
   return nextBytes;
 }
 
