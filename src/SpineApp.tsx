@@ -2567,6 +2567,86 @@ function ParticleField({ mode = "rich" }: { mode?: "quiet" | "rich" }) {
   return null;
 }
 
+function ProgressiveVideo({
+  sources,
+  poster,
+  className,
+  style,
+  onLoadedMetadata,
+}: {
+  sources: string[];
+  poster?: string;
+  className?: string;
+  style?: React.CSSProperties;
+  onLoadedMetadata?: (event: React.SyntheticEvent<HTMLVideoElement, Event>) => void;
+}) {
+  const validSources = sources.filter(Boolean);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  
+  const sourcesKey = validSources.join(",");
+
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [sourcesKey]);
+
+  useEffect(() => {
+    if (currentIndex >= validSources.length - 1) return;
+    const nextUrl = validSources[currentIndex + 1];
+    if (!nextUrl) return;
+    
+    const preloader = document.createElement("video");
+    preloader.src = nextUrl;
+    preloader.preload = "auto";
+    preloader.muted = true;
+    
+    const onReady = () => {
+      setCurrentIndex((prev) => prev + 1);
+      preloader.removeEventListener("canplaythrough", onReady);
+    };
+    
+    preloader.addEventListener("canplaythrough", onReady);
+    
+    return () => {
+      preloader.removeEventListener("canplaythrough", onReady);
+      preloader.src = "";
+    };
+  }, [currentIndex, sourcesKey]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video && currentIndex > 0) {
+      const time = video.currentTime;
+      const isPaused = video.paused;
+      
+      const onLoaded = () => {
+        video.currentTime = time;
+        if (!isPaused) video.play().catch(() => {});
+        video.removeEventListener("loadeddata", onLoaded);
+      };
+      
+      video.addEventListener("loadeddata", onLoaded);
+    }
+  }, [currentIndex]);
+
+  return (
+    <video
+      ref={videoRef}
+      className={className}
+      style={style}
+      src={validSources[currentIndex] || undefined}
+      poster={poster}
+      muted
+      loop
+      playsInline
+      preload="metadata"
+      autoPlay
+      controls
+      onLoadedMetadata={onLoadedMetadata}
+    />
+  );
+}
+
 export function App({ initialFiles, initialOpenLibrary = false, initialLogin = false, initialUpload = false }: AppProps) {
   const isEditPage = Boolean(editEntryIdFromLocation());
   const playerRef = useRef<SpinePlayerInstance | null>(null);
@@ -5131,16 +5211,18 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <div className="preview-card seo-video-card is-visible" id="seo-video-card">
                 <div className="section-title">Video preview</div>
                 <div className="seo-video-frame" style={videoPreviewAspectRatioStyle(currentLibraryEntry)}>
-                  <video
+                  <ProgressiveVideo
                     className="seo-video-preview"
-                    src={currentLibraryEntry?.webmPreview || undefined}
+                    sources={
+                      currentLibraryEntry
+                        ? [
+                            currentLibraryEntry.webmPreviewLow ? withAssetVersion(currentLibraryEntry.webmPreviewLow, assetVersionForLibraryEntry(currentLibraryEntry, "webm")) : "",
+                            currentLibraryEntry.webmPreviewMedium ? withAssetVersion(currentLibraryEntry.webmPreviewMedium, assetVersionForLibraryEntry(currentLibraryEntry, "webm")) : "",
+                            currentLibraryEntry.webmPreview ? withAssetVersion(currentLibraryEntry.webmPreview, assetVersionForLibraryEntry(currentLibraryEntry, "webm")) : "",
+                          ]
+                        : []
+                    }
                     poster={selectedPreviewImage}
-                    muted
-                    loop
-                    playsInline
-                    preload="metadata"
-                    autoPlay
-                    controls
                     onLoadedMetadata={(event) => applySeoVideoPreviewAspect(event.currentTarget)}
                   />
                 </div>
