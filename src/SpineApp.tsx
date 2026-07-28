@@ -1214,11 +1214,12 @@ function sanitizedSkelDataUriFromBuffer(buffer: ArrayBuffer, version = "") {
         cursor.skip(4);
       }
     }
+    // If parsing completes without errors, apply the replacements
+    return `data:application/octet-stream;base64,${bytesToBase64FromBytes(replaceByteRanges(bytes, replacements))}`;
   } catch {
+    // If parsing failed halfway, the replacements array might contain garbage from misaligned reads.
     return `data:application/octet-stream;base64,${bytesToBase64FromBytes(bytes)}`;
   }
-
-  return `data:application/octet-stream;base64,${bytesToBase64FromBytes(replaceByteRanges(bytes, replacements))}`;
 }
 
 
