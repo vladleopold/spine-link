@@ -1042,7 +1042,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
         }
         function scheduleChaos() {
           window.clearTimeout(chaosTimer);
-          chaosTimer = window.setTimeout(runChaos, 800 + Math.random() * 2000);
+          chaosTimer = window.setTimeout(runChaos, 1500 + Math.random() * 2500);
         }
         function randomSample(items, count) {
           return items
@@ -1057,19 +1057,24 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
             scheduleChaos();
             return;
           }
-          const activeLimit = Math.min(4, Math.max(2, Math.ceil(videos.length * 0.35)));
-          randomSample(videos.filter((video) => !video.paused && !manualVideos.has(video)), videos.length).slice(activeLimit).forEach(stopArchiveVideo);
-          randomSample(videos.filter((video) => video.paused && !manualVideos.has(video)), activeLimit).forEach((video) => {
-            if (Math.random() < 0.92) {
+          const maxActive = Math.min(4, Math.max(1, Math.ceil(videos.length * 0.35)));
+          const playing = videos.filter((video) => !video.paused && !manualVideos.has(video));
+          if (playing.length > maxActive) {
+            randomSample(playing, playing.length - maxActive).forEach(stopArchiveVideo);
+          }
+          const paused = videos.filter((video) => video.paused && !manualVideos.has(video));
+          if (paused.length && playing.length < maxActive) {
+            const toPlayCount = Math.min(maxActive - playing.length, Math.max(1, Math.floor(Math.random() * 2) + 1));
+            randomSample(paused, toPlayCount).forEach((video) => {
               playArchiveVideo(video);
+              const duration = 2500 + Math.random() * 4500;
               window.setTimeout(() => {
-                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.7) stopArchiveVideo(video);
-              }, 1200 + Math.random() * 3000);
-            }
-          });
-          videos.forEach((video) => {
-            if (!manualVideos.has(video) && !video.paused && Math.random() < 0.4) stopArchiveVideo(video);
-          });
+                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.6) {
+                  stopArchiveVideo(video);
+                }
+              }, duration);
+            });
+          }
           scheduleChaos();
         }
         document.querySelectorAll(".tile").forEach((tile) => {
@@ -1085,7 +1090,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
             entries.forEach((entry) => {
               const video = entry.target.querySelector("video");
               if (!video) return;
-              if (entry.isIntersecting && entry.intersectionRatio >= 0.42) {
+              if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
                 visibleVideos.add(video);
               } else {
                 visibleVideos.delete(video);
@@ -1093,7 +1098,7 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
               }
             });
             scheduleChaos();
-          }, { threshold: [0, 0.42, 0.68, 1] });
+          }, { threshold: [0, 0.15, 0.5, 1] });
           document.querySelectorAll(".tile").forEach((tile) => observer.observe(tile));
         } else {
           document.querySelectorAll(".tile video").forEach((video) => visibleVideos.add(video));

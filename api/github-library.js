@@ -601,6 +601,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
         }
         function scheduleChaos() {
           window.clearTimeout(chaosTimer);
+          chaosTimer = window.setTimeout(runChaos, 1200 + Math.random() * 2500);
         }
         function randomSample(items, count) {
           return items

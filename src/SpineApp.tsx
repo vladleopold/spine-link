@@ -4042,9 +4042,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     }
   }
 
-  const loadLibrary = useCallback(async () => {
-    setIsLibraryLoading(true);
-    setLibraryError("");
+  const loadLibrary = useCallback(async (silent = false) => {
+    if (!silent) setIsLibraryLoading(true);
+    if (!silent) setLibraryError("");
 
     try {
       const requestHeaders: Record<string, string> = {
@@ -4071,9 +4071,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       setLibraryEntries(nextEntries);
       setIsPortfolioMode(nextEntries.some((entry) => entry.portfolioMode === true));
     } catch (nextError) {
-      setLibraryError(nextError instanceof Error ? nextError.message : "Could not load library.");
+      if (!silent) setLibraryError(nextError instanceof Error ? nextError.message : "Could not load library.");
     } finally {
-      setIsLibraryLoading(false);
+      if (!silent) setIsLibraryLoading(false);
     }
   }, [anonymousAccount, googleIdToken]);
 
@@ -4087,7 +4087,19 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     if (!initialOpenLibraryRef.current) return;
     initialOpenLibraryRef.current = false;
     openLibrary();
-  }, [loadLibrary]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const hasPending = libraryEntries.some(entry => entry.webmStatus === "pending");
+    if (!hasPending) return;
+    
+    const interval = window.setInterval(() => {
+      void loadLibrary(true);
+    }, 15000); // Poll every 15 seconds for WebM completion
+    
+    return () => window.clearInterval(interval);
+  }, [libraryEntries, loadLibrary]);
 
   useEffect(() => {
     if (!initialLoginRef.current) return;
@@ -4649,7 +4661,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <span style={{ width: `${Math.min(100, Math.max(0, publishProgress.value))}%` }} />
             </div>
             <div className="publish-progress-meta">
-              <span>Converting WebM / WebP</span>
+              <span>Uploading files</span>
               <b>{Math.min(100, Math.max(0, publishProgress.value))}%</b>
             </div>
           </div>
@@ -5413,7 +5425,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <button className="library-add-button" type="button" onClick={(event) => startNewLibraryEntry(event.currentTarget)} title="Add new animation card">
                 <Plus size={18} />
               </button>
-              <button type="button" onClick={loadLibrary} disabled={isLibraryLoading} title="Refresh library">
+              <button type="button" onClick={() => void loadLibrary()} disabled={isLibraryLoading} title="Refresh library">
                 {isLibraryLoading ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
               </button>
               <button type="button" onClick={() => setIsLibraryOpen(false)} title="Close library">
