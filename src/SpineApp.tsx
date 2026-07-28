@@ -2729,7 +2729,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     
     const fallbackTimer = setTimeout(() => {
       if (!isCancelled) setVideosEnabled(true);
-    }, 3000);
+    }, 1500);
     
     return () => {
       isCancelled = true;
