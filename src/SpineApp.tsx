@@ -270,6 +270,11 @@ type LibraryEntry = {
   thumbnailPath?: string;
   thumbnailPosterPath?: string;
   webmPreviewPath?: string;
+  webmPreviewMedium?: string;
+  webmPreviewLow?: string;
+  webpPoster?: string;
+  webpPosterMedium?: string;
+  webpPosterLow?: string;
   previewWidth?: number;
   previewHeight?: number;
   thumbnailWidth?: number;
@@ -5591,12 +5596,14 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 const previewUrl = previewUrlForEntry(entry.id, entry.defaultAnimation);
                 const editUrl = new URL(`/?edit=${encodeURIComponent(entry.id)}`, window.location.origin).toString();
                 const uploadedDate = entry.uploadedAt ? new Date(entry.uploadedAt) : null;
-                const webmPreviewUrl = isWebmPreview(entry.webmPreview || "")
-                  ? withAssetVersion(entry.webmPreview || "", assetVersionForLibraryEntry(entry, "webm"))
+                const bestWebmPreview = entry.webmPreviewLow || entry.webmPreviewMedium || entry.webmPreview || "";
+                const webmPreviewUrl = isWebmPreview(bestWebmPreview)
+                  ? withAssetVersion(bestWebmPreview, assetVersionForLibraryEntry(entry, "webm"))
                   : derivedLibraryAssetUrl(entry, [".webm"]) || generatedWebmUrlForEntry(entry);
                 const safeThumbnail = withAssetVersion(safeLibraryAssetUrl(entry.thumbnail || ""), assetVersionForLibraryEntry(entry, "thumbnail"));
+                const bestWebpPoster = entry.webpPosterLow || entry.webpPosterMedium || entry.webpPoster || entry.thumbnailPoster || "";
                 const safePoster =
-                  withAssetVersion(safeLibraryAssetUrl(entry.thumbnailPoster || ""), assetVersionForLibraryEntry(entry, "poster")) ||
+                  withAssetVersion(safeLibraryAssetUrl(bestWebpPoster), assetVersionForLibraryEntry(entry, "poster")) ||
                   generatedPosterUrlForEntry(entry) ||
                   derivedLibraryAssetUrl(entry, [".webp", ".png", ".jpg", ".jpeg"]);
                 const isGifThumbnail = entry.thumbnailType === "gif" || /^data:image\/gif;base64,/i.test(entry.thumbnail || "");
