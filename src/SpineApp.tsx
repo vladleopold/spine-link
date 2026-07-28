@@ -2688,6 +2688,55 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [selectedPreviewImage, setSelectedPreviewImage] = useState("");
   const [selectedCardSize, setSelectedCardSize] = useState<LibraryCardSize>("auto");
   const [previewNote, setPreviewNote] = useState("");
+  const [videosEnabled, setVideosEnabled] = useState(false);
+  const libraryGridRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setVideosEnabled(false);
+    let isCancelled = false;
+    
+    const timer = setTimeout(() => {
+      if (isCancelled) return;
+      const grid = libraryGridRef.current;
+      if (!grid) {
+        setVideosEnabled(true);
+        return;
+      }
+      
+      const images = Array.from(grid.querySelectorAll<HTMLImageElement>("img.library-card-poster-img"));
+      if (images.length === 0) {
+        setVideosEnabled(true);
+        return;
+      }
+      
+      let loadedCount = 0;
+      const checkDone = () => {
+        if (isCancelled) return;
+        if (loadedCount >= images.length) setVideosEnabled(true);
+      };
+      
+      images.forEach(img => {
+        if (img.complete) {
+          loadedCount++;
+        } else {
+          const inc = () => { loadedCount++; checkDone(); };
+          img.addEventListener('load', inc, { once: true });
+          img.addEventListener('error', inc, { once: true });
+        }
+      });
+      checkDone();
+    }, 100);
+    
+    const fallbackTimer = setTimeout(() => {
+      if (!isCancelled) setVideosEnabled(true);
+    }, 3000);
+    
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+      clearTimeout(fallbackTimer);
+    };
+  }, [libraryEntries, isPortfolioMode, portfolioSearch, portfolioFilter, portfolioSort]);
   const [previewNoteStatus, setPreviewNoteStatus] = useState("");
   const [currentLibraryEntry, setCurrentLibraryEntry] = useState<LibraryEntry | null>(null);
   const [status, setStatus] = useState("Drop three Spine files here: json, atlas, and texture.");
@@ -5673,7 +5722,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <span>No uploads yet</span>
             </div>
           ) : (
-            <div className="library-grid">
+            <div className="library-grid" ref={libraryGridRef}>
               {(isPortfolioMode ? visiblePortfolioEntries : libraryEntries).map((entry, index) => {
                 const previewUrl = previewUrlForEntry(entry.id, entry.defaultAnimation);
                 const editUrl = new URL(`/?edit=${encodeURIComponent(entry.id)}`, window.location.origin).toString();
@@ -5742,9 +5791,10 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     )}
                     <div className="library-card-link" role="link" aria-label={`Edit ${entry.title || entry.id}`}>
                     <div className="library-card-visual">
+                      <img src={thumbnailForCard || undefined} className="library-card-poster-img" style={{ display: 'none' }} alt="" />
                       <video
                         className="library-card-webm"
-                        src={webmPreviewUrl || undefined}
+                        src={videosEnabled ? (webmPreviewUrl || undefined) : undefined}
                         poster={thumbnailForCard || undefined}
                         muted
                         playsInline
