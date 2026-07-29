@@ -289,6 +289,24 @@ type LibraryEntry = {
   sourceProofUrl?: string;
   blockchainAnchor?: BlockchainAnchor;
   webmStatus?: string;
+  fullExportStatus?: string;
+  fullExportGeneratedAt?: string;
+  allAnimationPreviews?: Record<string, {
+    webmPreview?: string;
+    webmPreviewMedium?: string;
+    webmPreviewLow?: string;
+    webpPoster?: string;
+    webpPosterMedium?: string;
+    webpPosterLow?: string;
+    mp4Preview?: string;
+    mp4PreviewMedium?: string;
+    mp4PreviewLow?: string;
+    webmAlpha?: string;
+    webmAlphaMedium?: string;
+    webmAlphaLow?: string;
+  }>;
+  downloadShareEnabled?: boolean;
+  downloadShareToken?: string;
 };
 
 type EntryMetric = {
@@ -2735,7 +2753,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       clearTimeout(timer);
       clearTimeout(fallbackTimer);
     };
-  }, [libraryEntries, isPortfolioMode, portfolioSearch, portfolioFilter, portfolioSort]);
+  });
   const [previewNoteStatus, setPreviewNoteStatus] = useState("");
   const [currentLibraryEntry, setCurrentLibraryEntry] = useState<LibraryEntry | null>(null);
   const [status, setStatus] = useState("Drop three Spine files here: json, atlas, and texture.");
