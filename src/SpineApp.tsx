@@ -1164,18 +1164,16 @@ function sanitizedSkelDataUriFromBuffer(buffer: ArrayBuffer, version = "") {
     try {
       patchCursor.readStringMeta(); // skip hash
       patchCursor.readStringMeta(); // skip version
-      patchCursor.skip(16);         // skip x, y, w, h floats
+      patchCursor.skip(8);          // skip w, h floats (Spine 3.8)
 
-      const imagesPathPos = patchCursor.index;
-      if (bytes[imagesPathPos] === 0x00) {
-        // bytes is a read-only view, so we need to work on a mutable copy below
-        bytes[imagesPathPos] = 0x01;
-      }
-      patchCursor.readStringMeta(); // skip imagesPath
-
-      const audioPathPos = patchCursor.index;
-      if (bytes[audioPathPos] === 0x00) {
-        bytes[audioPathPos] = 0x01;
+      const nonessential = patchCursor.readByte() !== 0;
+      if (nonessential) {
+        patchCursor.skip(4);        // skip fps float
+        const imagesPathPos = patchCursor.index;
+        if (bytes[imagesPathPos] === 0x00) bytes[imagesPathPos] = 0x01;
+        patchCursor.readStringMeta(); // skip imagesPath
+        const audioPathPos = patchCursor.index;
+        if (bytes[audioPathPos] === 0x00) bytes[audioPathPos] = 0x01;
       }
     } catch {
       // If parsing fails, continue with unpatched bytes — further sanitization may still help.
@@ -1190,12 +1188,13 @@ function sanitizedSkelDataUriFromBuffer(buffer: ArrayBuffer, version = "") {
     if (/^3\./.test(version)) {
       cursor.readStringMeta();
       cursor.readStringMeta();
+      cursor.skip(8); // w, h
     } else {
       cursor.skip(8);
       cursor.readStringMeta();
       cursor.skip(4);
+      cursor.skip(16); // x, y, w, h
     }
-    cursor.skip(16);
     const nonessential = cursor.readByte() !== 0;
     if (nonessential) {
       cursor.skip(4);
