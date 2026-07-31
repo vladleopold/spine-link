@@ -1188,11 +1188,8 @@ export default async function handler(request, response) {
       const userEmail = String(googlePayload?.email || '').toLowerCase();
       const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
       const entries = currentEntries.filter((currentEntry) => {
-        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
-        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
-        const isOwner = (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
         const isPublic = currentEntry?.hiddenFromPublicLibrary !== true;
-        return isOwner || isPublic;
+        return isPublic;
       }).sort(compareLibraryEntries);
       return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, entries) });
     }
