@@ -1237,6 +1237,7 @@ const pinchDistance = { value: null };
         const originalDrawFrame = loadedPlayer.drawFrame.bind(loadedPlayer);
         loadedPlayer.drawFrame = (requestNextFrame = true) => {
           if (loadedPlayer.disposed || loadedPlayer.error) return;
+          if (document.hidden) return; // stop rendering when tab hidden
           const now = performance.now();
           const paused = loadedPlayer.paused === true;
           const frameBudget = paused ? 1000 / Math.min(8, maxFps) : targetMs;
