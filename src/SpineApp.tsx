@@ -4695,31 +4695,37 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           "Content-Type": "application/json",
         };
         if (googleIdToken) anchorRequestHeaders.Authorization = `Bearer ${googleIdToken}`;
-        const anchorResponse = await fetch("/api/github-upload", {
-          method: "POST",
-          headers: anchorRequestHeaders,
-          body: JSON.stringify({
-            action: "anchor-source-proof",
-            googleIdToken,
-            anonymousAccount,
-            settings: nextSettings,
-            sourceProof,
-            uploadedFiles: uploadedProofFiles,
-            anchorPath,
-            uploadPath,
-            entryId: uploadId,
-            title: nextSettings.title || existingEntry?.title || spine.label,
-            uploadedAt,
-            proofPath,
-            proofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
-            commitPrefix,
-          }),
-        });
-        const anchorResult = await anchorResponse.json().catch(() => ({}));
-        if (!anchorResponse.ok) {
-          throw new Error(typeof anchorResult?.error === "string" ? anchorResult.error : `Blockchain anchor API ${anchorResponse.status}`);
-        }
-        const blockchainAnchor = anchorResult.anchor as BlockchainAnchor | undefined;
+         let blockchainAnchor: BlockchainAnchor | undefined;
+         try {
+           const anchorController = new AbortController();
+           const anchorTimeout = setTimeout(() => anchorController.abort(), 12000);
+           const anchorResponse = await fetch("/api/github-upload", {
+             method: "POST",
+             headers: anchorRequestHeaders,
+             body: JSON.stringify({
+               action: "anchor-source-proof",
+               googleIdToken,
+               anonymousAccount,
+               settings: nextSettings,
+               sourceProof,
+               uploadedFiles: uploadedProofFiles,
+               anchorPath,
+               uploadPath,
+               entryId: uploadId,
+               title: nextSettings.title || existingEntry?.title || spine.label,
+               uploadedAt,
+               proofPath,
+               proofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
+               commitPrefix,
+             }),
+             signal: anchorController.signal,
+           });
+           clearTimeout(anchorTimeout);
+           const anchorResult = await anchorResponse.json().catch(() => ({}));
+           if (anchorResponse.ok) {
+             blockchainAnchor = anchorResult.anchor as BlockchainAnchor | undefined;
+           }
+         } catch { /* blockchain anchor is optional — continue without it */ }
         const entryFiles = files.map((file) => file.name);
         if (blockchainAnchor?.anchorPath && !entryFiles.includes(anchorFileName)) entryFiles.push(anchorFileName);
 

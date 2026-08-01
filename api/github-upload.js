@@ -237,7 +237,10 @@ async function createBlockchainAnchor({ sourceProof, uploadedFiles, body, settin
     },
   };
   const anchorHash = sha256Hex(canonicalJson(anchorBase));
-  const blockchain = await maybeAnchorOnEvm(anchorHash);
+   const blockchain = await Promise.race([
+     maybeAnchorOnEvm(anchorHash),
+     new Promise((resolve) => setTimeout(() => resolve({ status: 'timeout', chain: 'evm', transactionData: `0x${anchorHash}`, message: 'Blockchain anchor timed out' }), 10000)),
+   ]);
   return {
     ...anchorBase,
     anchorHash,
