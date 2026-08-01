@@ -463,8 +463,8 @@ function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, a
   if (video) {
     const videoSource = eagerVideo ? ` src="${escapeHtml(video)}" controls` : ` data-video-src="${escapeHtml(video)}"`;
     const preload = eagerVideo ? 'metadata' : 'none';
-    const dataPoster = poster || thumbnail ? ` data-poster="${escapeHtml(poster || thumbnail)}"` : '';
-    return `<video class="${posterClass}"${dataPoster}${videoSource} muted playsinline preload="${preload}" autoplay aria-label="${alt}"${fp}></video>`;
+    const posterAttr = poster || thumbnail ? (fetchpriority === 'high' ? ` poster="${escapeHtml(poster || thumbnail)}"` : ` data-poster="${escapeHtml(poster || thumbnail)}"`) : '';
+    return `<video class="${posterClass}"${posterAttr}${videoSource} muted playsinline preload="${preload}" autoplay aria-label="${alt}"${fp}></video>`;
   }
   if (thumbnail) {
     return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="${alt}"${loading} decoding="async"${fp} />`;
