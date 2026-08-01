@@ -2772,6 +2772,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [isIntroDocking, setIsIntroDocking] = useState(false);
   const [isUploadPage, setIsUploadPage] = useState(initialUpload);
   const [blockchainEnabled, setBlockchainEnabled] = useState(true);
+  const [addMoreWorkEnabled, setAddMoreWorkEnabled] = useState(true);
 
   useEffect(() => {
     if (!isAdminPage) return;
@@ -5370,6 +5371,20 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                      }}
                    />
                  </label>
+                 <div className="portfolio-upload-form-top" style={{ marginTop: 16 }}>
+                   <div>
+                     <div className="section-title">Add More Work</div>
+                     <strong>Allow extra spine players on animation pages</strong>
+                   </div>
+                 </div>
+                 <label className="admin-setting-row">
+                   <span>Enable add more work</span>
+                   <input
+                     type="checkbox"
+                     checked={addMoreWorkEnabled}
+                     onChange={(event) => setAddMoreWorkEnabled(event.target.checked)}
+                   />
+                 </label>
                </div>
              ) : isUploadPage && !preparedSpine && spineOptions.length === 0 && extraSpineSets.length === 0 && !generatedPreviewUrl ? (
               <form
@@ -5560,7 +5575,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               )}
             </div>
 
-            {preparedSpine && !isEditPage && (
+             {preparedSpine && !isEditPage && addMoreWorkEnabled && (
               <div className="add-more-work-panel">
                 <div className="add-more-work-top">
                   <div>
