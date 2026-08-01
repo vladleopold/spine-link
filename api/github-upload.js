@@ -1213,6 +1213,18 @@ export default async function handler(request, response) {
       return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, entries), merged: changed });
     }
 
+    if (action === 'get-admin-settings') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const blockchainEnabled = String(process.env.BLOCKCHAIN_ENABLED || 'false').toLowerCase() === 'true';
+      return response.status(200).json({ ok: true, blockchainEnabled });
+    }
+
+    if (action === 'set-admin-settings') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const blockchainEnabled = Boolean(body?.blockchainEnabled);
+      return response.status(200).json({ ok: true, blockchainEnabled, message: blockchainEnabled ? 'Blockchain anchoring enabled' : 'Blockchain anchoring disabled' });
+    }
+
     if (!settings.owner || !settings.repo || !uploadPath || !entry || !previewHtml || files.length < 3) {
       return response.status(400).json({ error: 'Invalid upload payload' });
     }
@@ -1261,20 +1273,6 @@ export default async function handler(request, response) {
        dataScience,
        dispatch,
      });
-
-   if (action === 'get-admin-settings') {
-     if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
-     const blockchainEnabled = String(process.env.BLOCKCHAIN_ENABLED || 'false').toLowerCase() === 'true';
-     return response.status(200).json({ ok: true, blockchainEnabled });
-   }
-
-   if (action === 'set-admin-settings') {
-     if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
-     const blockchainEnabled = Boolean(body?.blockchainEnabled);
-     return response.status(200).json({ ok: true, blockchainEnabled, message: blockchainEnabled ? 'Blockchain anchoring enabled' : 'Blockchain anchoring disabled' });
-   }
-
-   return response.status(400).json({ error: 'Unknown action' });
   } catch (error) {
     const statusCode = Number(error?.statusCode) || 500;
     const message = error instanceof Error ? error.message : 'Upload failed';
