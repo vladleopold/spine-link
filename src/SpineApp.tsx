@@ -2666,6 +2666,7 @@ function ProgressiveVideo({
 
 export function App({ initialFiles, initialOpenLibrary = false, initialLogin = false, initialUpload = false }: AppProps) {
   const isEditPage = Boolean(editEntryIdFromLocation());
+  const isAdminPage = new URLSearchParams(window.location.search).get("admin") === "1";
   const playerRef = useRef<SpinePlayerInstance | null>(null);
   const previewPanelRef = useRef<HTMLDivElement | null>(null);
   const playerHostRef = useRef<HTMLDivElement | null>(null);
@@ -2762,6 +2763,18 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [isLoading, setIsLoading] = useState(false);
   const [isIntroDocking, setIsIntroDocking] = useState(false);
   const [isUploadPage, setIsUploadPage] = useState(initialUpload);
+  const [blockchainEnabled, setBlockchainEnabled] = useState(true);
+
+  useEffect(() => {
+    if (!isAdminPage) return;
+    fetch("/api/github-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get-admin-settings" }),
+    }).then((r) => r.json().catch(() => ({}))).then((data) => {
+      if (typeof data.blockchainEnabled === "boolean") setBlockchainEnabled(data.blockchainEnabled);
+    });
+  }, [isAdminPage]);
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() => readStoredGoogleSession()?.user ?? null);
   const [googleIdToken, setGoogleIdToken] = useState(() => getValidStoredGoogleToken());
   const [profileNameInput, setProfileNameInput] = useState(() => cleanAccountDisplayName(readStoredGoogleSession()?.user?.name || ""));
@@ -5322,8 +5335,35 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     onLoadedMetadata={(event) => applySeoVideoPreviewAspect(event.currentTarget)}
                   />
                 </div>
-              </div>
-            ) : isUploadPage && !preparedSpine && spineOptions.length === 0 && extraSpineSets.length === 0 && !generatedPreviewUrl ? (
+               </div>
+             ) : isAdminPage ? (
+               <div className="portfolio-upload-form">
+                 <div className="portfolio-upload-form-top">
+                   <div>
+                     <div className="section-title">Admin Settings</div>
+                     <strong>Blockchain anchoring</strong>
+                   </div>
+                 </div>
+                 <label className="admin-setting-row">
+                   <span>Enable blockchain anchoring</span>
+                   <input
+                     type="checkbox"
+                     checked={blockchainEnabled}
+                     onChange={async (event) => {
+                       const enabled = event.target.checked;
+                       try {
+                         const r = await fetch("/api/github-upload", {
+                           method: "POST",
+                           headers: { "Content-Type": "application/json" },
+                           body: JSON.stringify({ action: "set-admin-settings", blockchainEnabled: enabled }),
+                         });
+                         if (r.ok) setBlockchainEnabled(enabled);
+                       } catch { /* ignore */ }
+                     }}
+                   />
+                 </label>
+               </div>
+             ) : isUploadPage && !preparedSpine && spineOptions.length === 0 && extraSpineSets.length === 0 && !generatedPreviewUrl ? (
               <form
                 className="portfolio-upload-form"
                 action="/?upload=work"

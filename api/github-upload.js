@@ -149,47 +149,12 @@ function normalizeBrowserEnvironment(value) {
 }
 
 async function maybeAnchorOnEvm(anchorHash) {
-  const rpcUrl = String(process.env.BLOCKCHAIN_RPC_URL || '').trim();
-  const privateKey = String(process.env.BLOCKCHAIN_PRIVATE_KEY || '').trim();
-  const providedTo = String(process.env.BLOCKCHAIN_ANCHOR_TO || '').trim();
-  const explorerBaseUrl = String(process.env.BLOCKCHAIN_EXPLORER_TX_URL || '').trim().replace(/\/+$/g, '');
-  const transactionData = `0x${anchorHash}`;
-
-  if (!rpcUrl || !privateKey) {
-    return {
-      status: 'ready-to-anchor',
-      chain: 'evm',
-      transactionData,
-      message: 'Set BLOCKCHAIN_RPC_URL and BLOCKCHAIN_PRIVATE_KEY in the server environment to write this proof hash to an EVM blockchain transaction.',
-    };
-  }
-
-  try {
-    const { JsonRpcProvider, Wallet } = await import('ethers');
-    const provider = new JsonRpcProvider(rpcUrl);
-    const wallet = new Wallet(privateKey, provider);
-    const network = await provider.getNetwork();
-    const to = /^0x[a-f0-9]{40}$/i.test(providedTo) ? providedTo : wallet.address;
-    const tx = await wallet.sendTransaction({ to, value: 0n, data: transactionData });
-    return {
-      status: 'submitted',
-      chain: 'evm',
-      chainId: Number(network.chainId),
-      network: network.name,
-      from: wallet.address,
-      to,
-      transactionHash: tx.hash,
-      transactionData,
-      ...(explorerBaseUrl ? { explorerUrl: `${explorerBaseUrl}/${tx.hash}` } : {}),
-    };
-  } catch (error) {
-    return {
-      status: 'failed',
-      chain: 'evm',
-      transactionData,
-      message: error instanceof Error ? error.message : 'Blockchain transaction failed',
-    };
-  }
+  return {
+    status: 'disabled',
+    chain: 'evm',
+    transactionData: `0x${anchorHash}`,
+    message: 'Blockchain anchoring is temporarily disabled.',
+  };
 }
 
 async function createBlockchainAnchor({ sourceProof, uploadedFiles, body, settings, googlePayload, anonymousAccount, origin }) {
@@ -237,10 +202,7 @@ async function createBlockchainAnchor({ sourceProof, uploadedFiles, body, settin
     },
   };
   const anchorHash = sha256Hex(canonicalJson(anchorBase));
-   const blockchain = await Promise.race([
-     maybeAnchorOnEvm(anchorHash),
-     new Promise((resolve) => setTimeout(() => resolve({ status: 'timeout', chain: 'evm', transactionData: `0x${anchorHash}`, message: 'Blockchain anchor timed out' }), 10000)),
-   ]);
+   const blockchain = await maybeAnchorOnEvm(anchorHash);
   return {
     ...anchorBase,
     anchorHash,
@@ -1295,15 +1257,30 @@ export default async function handler(request, response) {
       ok: true,
       repositoryUrl: entry.repositoryUrl,
       previewUrl: `/api/github-preview?path=${encodeURIComponent(entry.previewPath)}`,
-      uploaded: files.length + 3,
-      dataScience,
-      dispatch,
-    });
+       uploaded: files.length + 3,
+       dataScience,
+       dispatch,
+     });
+   }
+
+   if (action === 'get-admin-settings') {
+     if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+     const blockchainEnabled = String(process.env.BLOCKCHAIN_ENABLED || 'false').toLowerCase() === 'true';
+     return response.status(200).json({ ok: true, blockchainEnabled });
+   }
+
+   if (action === 'set-admin-settings') {
+     if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+     const blockchainEnabled = Boolean(body?.blockchainEnabled);
+     return response.status(200).json({ ok: true, blockchainEnabled, message: blockchainEnabled ? 'Blockchain anchoring enabled' : 'Blockchain anchoring disabled' });
+   }
+
+   return response.status(400).json({ error: 'Unknown action' });
   } catch (error) {
-    const statusCode = Number(error?.statusCode) || 500;
-    const message = error instanceof Error ? error.message : 'Upload failed';
-    console.error('[UPLOAD] error:', message);
-    if (error instanceof Error && error.stack) console.error('[UPLOAD] stack:', error.stack);
-    return response.status(statusCode).json({ error: message });
-  }
-}
+     const statusCode = Number(error?.statusCode) || 500;
+     const message = error instanceof Error ? error.message : 'Upload failed';
+     console.error('[UPLOAD] error:', message);
+     if (error instanceof Error && error.stack) console.error('[UPLOAD] stack:', error.stack);
+     return response.status(statusCode).json({ error: message });
+   }
+ }
