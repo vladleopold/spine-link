@@ -1,13 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
-
-// Lazy load CSS to avoid blocking render
-if (!document.getElementById("spine-app-styles")) {
-  const style = document.createElement("link");
-  style.id = "spine-app-styles";
-  style.rel = "stylesheet";
-  style.href = new URL("./styles.css", import.meta.url).href;
-  document.head.appendChild(style);
-}
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "./styles.css";
 import {
   Calendar,
   Copy,
@@ -4894,7 +4886,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           Google.
         </p>
       </section>
-      <ParticleField mode={isEditPage ? "quiet" : "rich"} />
+      {isEditPage && <ParticleField mode="quiet" />}
       {publishProgress.isOpen && (
         <div className={`publish-progress-overlay ${isPublishProgressCompact ? "is-compact" : ""}`} role="status" aria-live="polite">
           <div className="publish-progress-dialog">
@@ -5029,18 +5021,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                       style={cardStyle}
                       aria-label={`Open ${entry.title}`}
                     >
-                      {entry.webmPreview ? (
-                        <video
-                          className="home-feed-video"
-                          src={entry.webmPreview}
-                          poster={poster || undefined}
-                          muted
-                          playsInline
-                          preload="metadata"
-                          autoPlay
-                          aria-hidden="true"
-                        />
-                      ) : poster ? (
+                      {poster ? (
                         <img src={poster} alt="" loading="lazy" decoding="async" />
                       ) : (
                         <span className="home-feed-fallback">{entry.animations ?? 0}</span>

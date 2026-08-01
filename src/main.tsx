@@ -1,3 +1,5 @@
+import "./styles.css";
+
 const root = document.getElementById("root");
 export {};
 let isAppLoading = false;
@@ -5,14 +7,44 @@ let isAppMounted = false;
 let mountedFileReceiver: ((files: File[]) => void) | null = null;
 let pendingMountedFiles: File[] | null = null;
 let bootDraggingState: boolean | null = null;
-let stopBootParticles: (() => void) | null = null;
-let bootParticleStartFrame = 0;
 
 declare global {
   interface Window {
     __spineLinkReceiveFiles?: (files: File[]) => void;
   }
 }
+
+type HomeFeedItem = {
+  id?: string;
+  title?: string;
+  ownerName?: string;
+  previewUrl?: string;
+  thumbnailPoster?: string;
+  thumbnail?: string;
+  previewWidth?: number;
+  previewHeight?: number;
+  mediaAspectRatio?: number;
+  animations?: number;
+  pageMode?: string;
+  metrics?: { likes?: number; views?: number };
+};
+
+const siteReadingPages = [
+  { href: "/spine-link.html", title: "Spine-Link", description: "Platform overview" },
+  { href: "/spine-preview.html", title: "Spine Preview", description: "Open JSON, SKEL and atlas files" },
+  { href: "/spine-preview-online.html", title: "Preview Online", description: "Browser Spine preview guide" },
+  { href: "/spine-web-viewer.html", title: "Web Viewer", description: "Open Spine files online" },
+  { href: "/spine-animation-preview.html", title: "Animation Preview", description: "Preview Spine animations" },
+  { href: "/spine-animation-dataset.html", title: "Animation Dataset", description: "Commercial source database" },
+  { href: "/spine-library.html", title: "Spine Library", description: "Online animation gallery" },
+  { href: "/spine-portfolio.html", title: "Spine Portfolio", description: "Portfolio animation library" },
+  { href: "/share-spine-animation-link.html", title: "Share Animation Link", description: "Create shareable previews" },
+  { href: "/spine-portfolio-link.html", title: "Portfolio Link", description: "Public portfolio sharing" },
+  { href: "/spine-animator.html", title: "Spine Animator", description: "Animator workflow notes" },
+  { href: "/spine-animations.html", title: "Spine Animations", description: "Preview, save and share" },
+  { href: "/spine-work.html", title: "Spine Work", description: "Share work previews" },
+  { href: "/spine-link-manifesto.html", title: "Manifesto", description: "AI animator agreement" },
+];
 
 function receiveFiles(files: File[]) {
   if (!files.length) return;
@@ -35,20 +67,18 @@ function receiveFiles(files: File[]) {
     mountedFileReceiver(files);
     return;
   }
-  // Defer app mounting to allow UI to render first, preventing UI thread blocking
   window.setTimeout(() => {
     void mountApp(files);
   }, 50);
 }
 
-function renderBootShell(isDragging = false) {
+function renderHomeShell(isDragging = false) {
   if (!root || isAppMounted) return;
   if (bootDraggingState === isDragging && root.querySelector(".app-shell")) return;
   bootDraggingState = isDragging;
-  stopBootParticles?.();
 
   root.innerHTML = `
-    <main class="app-shell is-empty ${isDragging ? "is-docking" : ""}">
+    <main class="app-shell is-empty">
       <section class="seo-intro" aria-label="Spine-Link SEO description">
         <h1>Spine-Link is an animation portfolio platform with Google accounts and uploads</h1>
         <p>World SPINE ARCHIVE is the public archive of user Spine animation works. Anyone can create an anonymous preview with the Create preview button, or sign in with Google to create a profile, choose public portfolio mode with likes, views, showcase and archive publishing, or keep a private library profile that is not listed on the site or in Google.</p>
@@ -58,82 +88,93 @@ function renderBootShell(isDragging = false) {
           <a class="brand-link" href="/" aria-label="Spine-Link home">
             <span class="brand-mobile-text">spine link</span>
             <span class="brand-logo" aria-hidden="true">
-              <span>S</span><span>P</span>
+              <span>s</span>
+              <span>p</span>
               <span class="brand-spine-mark"><i></i><i></i><i></i><i></i><i></i></span>
-              <span>N</span><span>E</span><span class="brand-plus">LINK</span>
+              <span>n</span>
+              <span>e</span>
+              <span class="brand-plus">link</span>
             </span>
-            <img class="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="Spine-Link logo" aria-hidden="true">
+            <img class="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="" aria-hidden="true">
           </a>
-          <details class="site-menu">
-            <summary class="site-menu-toggle" aria-label="Open site menu" title="Menu">
-              <span></span><span></span><span></span>
-            </summary>
-            <nav class="site-menu-panel" aria-label="Site pages">
-              <a href="/spine-animation-dataset.html">
-                <strong>Buy Spine Dataset</strong>
-                <span>Commercial source database</span>
-              </a>
-              <a href="/spine-web-viewer.html">
-                <strong>Web Viewer</strong>
-                <span>Open Spine files online</span>
-              </a>
-              <a href="/spine-animation-preview.html">
-                <strong>Animation Preview</strong>
-                <span>Preview Spine animations</span>
-              </a>
-              <a href="/share-spine-animation-link.html">
-                <strong>Share Link Guide</strong>
-                <span>Create and share Spine animation URL</span>
-              </a>
-              <a href="/site-map.html">
-                <strong>Site Map</strong>
-                <span>All SEO pages in one list</span>
-              </a>
-            </nav>
-          </details>
-          <div class="auth-panel">
-            <a class="my-library-button" href="/?portfolio=1" data-open-library>MY PORTFOLIO</a>
-            <a class="google-fallback-button" href="/?login=google" data-open-login><span aria-hidden="true">G</span><span>Sign in with Google</span></a>
+          <div class="top-actions-row">
+            <a class="world-archive-link" href="/world-spine-archive">BROWSE</a>
+            <div class="auth-panel">
+              <a class="my-library-button" href="/?portfolio=1" data-open-library>Portfolio database</a>
+              <button class="guest-account-button" type="button" data-open-login title="Sign in" aria-label="Sign in">
+                <svg class="user_icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </button>
+            </div>
+            <div class="site-menu-group">
+              <button class="site-add-button" type="button" data-open-upload aria-label="Add new animation card" title="Add new animation card">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+              <details class="site-menu">
+                <summary class="site-menu-toggle" aria-label="Open site menu" title="Menu"><span></span><span></span><span></span></summary>
+                <nav class="site-menu-panel" aria-label="Site pages">
+                  ${siteReadingPages.map((page) => `<a href="${page.href}"><strong>${page.title}</strong><span>${page.description}</span></a>`).join("")}
+                </nav>
+              </details>
+            </div>
           </div>
         </header>
+        <section class="home-portfolio-feed" id="home-feed" aria-label="World SPINE ARCHIVE public portfolio and library work feed" style="display:none">
+          <div class="home-feed-heading">
+            <span class="home-feed-archive-label">World SPINE ARCHIVE</span>
+            <strong>Public user works from portfolios and libraries</strong>
+            <small>Anyone can add a Spine animation with Create preview or publish through a Google account profile.</small>
+          </div>
+          <div class="home-feed-viewport">
+            <div class="home-feed-track" id="home-feed-track"></div>
+          </div>
+        </section>
         <div class="stage">
           <div class="home-drop-panel">
-            <label class="drop-zone boot-drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}">
+            <label class="drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}" id="home-drop-zone">
               <input name="spine-files" type="file" multiple accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp" aria-label="Upload Spine JSON SKEL atlas and texture files" data-file-input>
-              <svg class="boot-upload-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 3v13m0-13 5 5m-5-5-5 5M5 15v4h14v-4" />
-              </svg>
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13m0-13 5 5m-5-5-5 5M5 15v4h14v-4"/></svg>
               <strong>Drag'and'Drop files here</strong>
               <span>JSON or SKEL, atlas, and textures become a Spine preview.</span>
             </label>
+            <p class="home-drop-caption" style="font-size: 8px; line-height: 1.2">
+              <strong>Upload agreement:</strong> by adding files here, you agree to the{" "}
+              <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public works and uploaded animation
+              files may be analyzed by automated systems and used as learning, testing, and reference material for
+              AI animator agents. Personal account data is not sold or shared for unrelated marketing.
+            </p>
+            <p class="upload-agreement main-upload-agreement" style="font-size: 8px; line-height: 1.2">
+              Upload agreement: by dropping or choosing files here, you agree to the{" "}
+              <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public animation files may be
+              processed, indexed, studied, and used to build educational datasets, evaluation material, and
+              training examples for AI animator agents. Upload only work you own or have permission to publish.
+            </p>
           </div>
         </div>
       </section>
     </main>
   `;
 
-  root.querySelectorAll<HTMLElement>("[data-open-app], [data-open-library], [data-open-login], [data-open-upload]").forEach((button) => {
+  wireHomeShell();
+}
+
+function wireHomeShell() {
+  if (!root) return;
+
+  root.querySelectorAll<HTMLElement>("[data-open-library], [data-open-login]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.preventDefault();
-      // Defer mounting to prevent blocking UI thread
-      window.setTimeout(() => {
-        void mountApp([], {
-          openLibrary: button.hasAttribute("data-open-library"),
-          login: button.hasAttribute("data-open-login"),
-          upload: button.hasAttribute("data-open-upload"),
-        });
-      }, 50);
+      const isLibrary = button.hasAttribute("data-open-library");
+      void mountApp([], { openLibrary: isLibrary, login: !isLibrary });
     });
   });
-  root.querySelectorAll<HTMLFormElement>("[data-upload-form]").forEach((form) => {
-    form.addEventListener("submit", (event) => {
+
+  root.querySelectorAll<HTMLElement>("[data-open-upload]").forEach((button) => {
+    button.addEventListener("click", (event) => {
       event.preventDefault();
-      // Defer mounting to prevent blocking UI thread
-      window.setTimeout(() => {
-        void mountApp([], { upload: true });
-      }, 50);
+      void mountApp([], { upload: true });
     });
   });
+
   const bootFileInput = root.querySelector<HTMLInputElement>("[data-file-input]");
   const handleBootFileInput = (event: Event) => {
     const input = event.currentTarget as HTMLInputElement;
@@ -148,13 +189,97 @@ function renderBootShell(isDragging = false) {
   });
   bootFileInput?.addEventListener("input", handleBootFileInput);
   bootFileInput?.addEventListener("change", handleBootFileInput);
-  startBootParticles();
+
+  void loadHomeFeed();
+}
+
+async function loadHomeFeed() {
+  if (!root) return;
+  const feedSection = root.querySelector<HTMLElement>("#home-feed");
+  const track = root.querySelector<HTMLElement>("#home-feed-track");
+  if (!feedSection || !track) return;
+
+  let entries: HomeFeedItem[] = [];
+  try {
+    const response = await fetch("/api/github-archive?feed=home", { credentials: "same-origin" });
+    const payload = (await response.json().catch(() => ({}))) as { entries?: HomeFeedItem[] };
+    entries = (Array.isArray(payload.entries) ? payload.entries : []).filter((entry) => entry?.id).slice(0, 10);
+  } catch {
+    return;
+  }
+  if (!entries.length) return;
+
+  const fragment = document.createDocumentFragment();
+  const pushCard = (entry: HomeFeedItem, keySuffix: string) => {
+    const id = String(entry.id || "");
+    const title = String(entry.title || id || "Spine preview");
+    const ownerName = String(entry.ownerName || "Spine creator");
+    const poster = entry.thumbnailPoster || entry.thumbnail || "";
+    const likes = Number(entry.metrics?.likes || 0);
+    const views = Number(entry.metrics?.views || 0);
+    const previewWidth = Number(entry.previewWidth || 0);
+    const previewHeight = Number(entry.previewHeight || 0);
+    const mediaRatio =
+      previewWidth > 0 && previewHeight > 0
+        ? previewWidth / previewHeight
+        : Number(entry.mediaAspectRatio || 0);
+
+    const card = document.createElement("a");
+    card.className = "home-feed-card";
+    card.href = String(entry.previewUrl || "/world-spine-archive");
+    card.setAttribute("aria-label", `Open ${title}`);
+    if (Number.isFinite(mediaRatio) && mediaRatio > 0) {
+      card.style.setProperty("--home-feed-ratio", `${Math.max(1, Math.round(mediaRatio * 1000))} / 1000`);
+      card.style.setProperty("--home-feed-card-width", `${Math.round(Math.max(260, Math.min(860, 320 * mediaRatio)))}px`);
+    }
+    if (poster) card.style.setProperty("--home-feed-poster", `url("${poster}")`);
+
+    if (poster) {
+      const img = document.createElement("img");
+      img.src = poster;
+      img.alt = "";
+      img.loading = "lazy";
+      img.decoding = "async";
+      card.appendChild(img);
+    } else {
+      const fallback = document.createElement("span");
+      fallback.className = "home-feed-fallback";
+      fallback.textContent = String(entry.animations ?? 0);
+      card.appendChild(fallback);
+    }
+
+    const like = document.createElement("span");
+    like.className = "home-feed-like";
+    like.setAttribute("aria-hidden", "true");
+    like.innerHTML =
+      '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>';
+    like.appendChild(document.createTextNode(` ${likes}`));
+    card.appendChild(like);
+
+    const overlay = document.createElement("span");
+    overlay.className = "home-feed-overlay";
+    const strong = document.createElement("strong");
+    strong.textContent = title;
+    const em = document.createElement("em");
+    em.textContent = `${ownerName} · ${entry.pageMode || "Library"} · ${views} views`;
+    overlay.appendChild(strong);
+    overlay.appendChild(em);
+    card.appendChild(overlay);
+
+    fragment.appendChild(card);
+    if (keySuffix === "a") void keySuffix;
+  };
+
+  entries.forEach((entry) => pushCard(entry, "a"));
+  entries.forEach((entry) => pushCard(entry, "b"));
+
+  track.appendChild(fragment);
+  feedSection.style.display = "";
 }
 
 function renderLoadingShell() {
   if (!root) return;
   bootDraggingState = null;
-  stopBootParticles?.();
   root.innerHTML = `
     <main class="app-shell is-empty">
       <section class="workspace">
@@ -169,13 +294,6 @@ function renderLoadingShell() {
       </section>
     </main>
   `;
-  startBootParticles();
-}
-
-function startBootParticles() {
-  window.cancelAnimationFrame(bootParticleStartFrame);
-  stopBootParticles?.();
-  stopBootParticles = null;
 }
 
 async function mountApp(initialFiles: File[] = [], options: { openLibrary?: boolean; login?: boolean; upload?: boolean } = {}) {
@@ -190,8 +308,6 @@ async function mountApp(initialFiles: File[] = [], options: { openLibrary?: bool
   ]);
 
   isAppMounted = true;
-  window.cancelAnimationFrame(bootParticleStartFrame);
-  stopBootParticles?.();
   mountedFileReceiver = (files: File[]) => {
     window.__spineLinkReceiveFiles?.(files);
   };
@@ -214,33 +330,28 @@ const bootSearchParams = new URLSearchParams(window.location.search);
 const shouldOpenLogin = bootSearchParams.get("login") === "google";
 const shouldOpenPortfolio = bootSearchParams.has("portfolio") || bootSearchParams.has("library");
 const shouldOpenUpload = bootSearchParams.get("upload") === "work";
+const shouldOpenEdit = bootSearchParams.has("edit");
+const shouldOpenAdmin = bootSearchParams.get("admin") === "1";
 
-renderBootShell();
+renderHomeShell();
 
-if (bootSearchParams.has("edit") || shouldOpenLogin || shouldOpenPortfolio || shouldOpenUpload) {
-  // Defer mounting to prevent blocking initial page render
+// The heavy React app loads ONLY when the user actually needs it:
+// upload, portfolio, login, edit, or admin pages. The homepage stays
+// a static lightweight shell with a CSS-transform poster feed.
+if (shouldOpenEdit || shouldOpenLogin || shouldOpenPortfolio || shouldOpenUpload || shouldOpenAdmin) {
   globalThis.setTimeout(() => {
     void mountApp([], { login: shouldOpenLogin, openLibrary: shouldOpenPortfolio, upload: shouldOpenUpload });
   }, 100);
-} else {
-  const mountHomepageApp = () => {
-    void mountApp();
-  };
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(mountHomepageApp, { timeout: 1200 });
-  } else {
-    globalThis.setTimeout(mountHomepageApp, 250);
-  }
 }
 
 document.addEventListener("dragover", (event) => {
   event.preventDefault();
-  renderBootShell(true);
+  renderHomeShell(true);
 });
 
 document.addEventListener("dragleave", (event) => {
   if (!root || root.contains(event.relatedTarget as Node | null)) return;
-  renderBootShell(false);
+  renderHomeShell(false);
 });
 
 document.addEventListener("drop", (event) => {
@@ -248,7 +359,7 @@ document.addEventListener("drop", (event) => {
   if (!files.length) return;
   event.preventDefault();
   event.stopPropagation();
-  renderBootShell(false);
+  renderHomeShell(false);
   receiveFiles(files);
 });
 

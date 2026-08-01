@@ -170,21 +170,9 @@
   0%,
   100% {
     transform: translate3d(0, 0, 0) scale(1);
-    box-shadow:
-      0 0 0 1px rgba(10, 17, 24, 0.86),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      0 0 34px rgba(125, 190, 255, 0.16),
-      0 0 72px rgba(255, 170, 92, 0.08);
-    filter: saturate(1) brightness(1);
   }
   50% {
-    transform: translate3d(0, 0, 0) scale(1.022);
-    box-shadow:
-      0 0 0 1px rgba(10, 17, 24, 0.86),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1),
-      0 0 44px rgba(125, 190, 255, 0.34),
-      0 0 96px rgba(255, 170, 92, 0.18);
-    filter: saturate(1.08) brightness(1.06);
+    transform: translate3d(0, 0, 0) scale(1.011);
   }
 }
 
@@ -203,9 +191,8 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --home-drop-shift-x: 0px;
   transform: translateX(var(--home-drop-shift-x));
-  will-change: transform, box-shadow, filter;
   pointer-events: auto;
-  animation: homeDropBreath 3.2s ease-in-out infinite;
+  animation: homeDropBreath 4.6s ease-in-out infinite;
 }
 
 .app-shell.is-empty:not(.is-edit-page) .main-drop-zone::after {
@@ -5159,10 +5146,10 @@ h1 {
     0 0 36px rgba(140, 199, 255, 0.28),
     0 0 72px rgba(255, 106, 40, 0.11),
     inset 0 0 42px rgba(140, 199, 255, 0.08);
-  will-change: transform, box-shadow, filter;
+  will-change: transform;
   filter: saturate(1) brightness(1);
   pointer-events: auto;
-  animation: mainDropZoneBreathe 3.2s ease-in-out infinite;
+  animation: mainDropZoneBreathe 4.6s ease-in-out infinite;
 }
 
 .app-shell.is-empty:not(.is-edit-page):not(.is-docking) .main-drop-zone::after {
@@ -5175,9 +5162,9 @@ h1 {
     radial-gradient(circle at 18% 20%, rgba(255, 106, 40, 0.25), transparent 34%),
     radial-gradient(circle at 82% 70%, rgba(140, 199, 255, 0.22), transparent 36%);
   filter: blur(18px);
-  opacity: 0.58;
+  opacity: 0.5;
   pointer-events: none;
-  animation: mainDropZoneAura 4.4s ease-in-out infinite;
+  animation: none;
 }
 
 .app-shell.is-empty:not(.is-edit-page) .main-drop-zone.is-dragging,
@@ -5194,21 +5181,9 @@ h1 {
   0%,
   100% {
     transform: translateX(var(--home-drop-shift-x, 0px)) translateY(0) scale(1);
-    box-shadow:
-      0 0 0 1px rgba(140, 199, 255, 0.2),
-      0 0 30px rgba(140, 199, 255, 0.22),
-      0 0 64px rgba(255, 106, 40, 0.08),
-      inset 0 0 34px rgba(140, 199, 255, 0.06);
-    filter: saturate(1) brightness(1);
   }
   50% {
-    transform: translateX(var(--home-drop-shift-x, 0px)) translateY(10px) scale(1.022);
-    box-shadow:
-      0 0 0 1px rgba(140, 199, 255, 0.42),
-      0 0 62px rgba(140, 199, 255, 0.44),
-      0 0 140px rgba(255, 106, 40, 0.22),
-      inset 0 0 64px rgba(140, 199, 255, 0.15);
-    filter: saturate(1.12) brightness(1.08);
+    transform: translateX(var(--home-drop-shift-x, 0px)) translateY(5px) scale(1.012);
   }
 }
 
@@ -5216,11 +5191,11 @@ h1 {
   0%,
   100% {
     opacity: 0.42;
-    transform: scale(0.98);
+    transform: scale(0.99);
   }
   50% {
-    opacity: 0.78;
-    transform: scale(1.04);
+    opacity: 0.6;
+    transform: scale(1.02);
   }
 }
 
