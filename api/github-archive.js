@@ -463,7 +463,8 @@ function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, a
   if (video) {
     const videoSource = eagerVideo ? ` src="${escapeHtml(video)}" controls` : ` data-video-src="${escapeHtml(video)}"`;
     const preload = eagerVideo ? 'metadata' : 'none';
-    return `<video class="${posterClass}"${poster || thumbnail ? ` poster="${escapeHtml(poster || thumbnail)}"` : ''}${videoSource} muted playsinline preload="${preload}" autoplay aria-label="${alt}"${fp}></video>`;
+    const dataPoster = poster || thumbnail ? ` data-poster="${escapeHtml(poster || thumbnail)}"` : '';
+    return `<video class="${posterClass}"${dataPoster}${videoSource} muted playsinline preload="${preload}" autoplay aria-label="${alt}"${fp}></video>`;
   }
   if (thumbnail) {
     return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="${alt}"${loading} decoding="async"${fp} />`;
@@ -1012,112 +1013,146 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
         video.onended = null;
         try { video.currentTime = 0; } catch {}
       }
-      function installChaoticArchivePlayback() {
-        const visibleVideos = new Set();
-        const manualVideos = new WeakSet();
-        const hoverTimers = new WeakMap();
-        let chaosTimer = 0;
-        function clearHoverTimer(video) {
-          const timer = hoverTimers.get(video);
-          if (timer) window.clearTimeout(timer);
-          hoverTimers.delete(video);
-        }
-        function startHoverLoop(video) {
-          manualVideos.add(video);
-          clearHoverTimer(video);
-          video.onended = () => {
-            const timer = window.setTimeout(() => {
-              if (!manualVideos.has(video)) return;
-              try { video.currentTime = 0; } catch {}
-              playArchiveVideo(video);
-            }, 1000);
-            hoverTimers.set(video, timer);
-          };
-          playArchiveVideo(video);
-        }
-        function stopHoverLoop(video) {
-          manualVideos.delete(video);
-          clearHoverTimer(video);
-          stopArchiveVideo(video);
-        }
-        function scheduleChaos() {
-          window.clearTimeout(chaosTimer);
-          chaosTimer = window.setTimeout(runChaos, 1500 + Math.random() * 2500);
-        }
-        function randomSample(items, count) {
-          return items
-            .map((item) => ({ item, sort: Math.random() }))
-            .sort((a, b) => a.sort - b.sort)
-            .slice(0, count)
-            .map((entry) => entry.item);
-        }
-        function runChaos() {
-          const videos = Array.from(visibleVideos).filter((video) => video.isConnected && (video.dataset.videoSrc || video.getAttribute("src")));
-          if (!videos.length) {
-            scheduleChaos();
-            return;
-          }
-          const maxActive = Math.min(4, Math.max(1, Math.ceil(videos.length * 0.35)));
-          const playing = videos.filter((video) => !video.paused && !manualVideos.has(video));
-          if (playing.length > maxActive) {
-            randomSample(playing, playing.length - maxActive).forEach(stopArchiveVideo);
-          }
-          const paused = videos.filter((video) => video.paused && !manualVideos.has(video));
-          if (paused.length && playing.length < maxActive) {
-            const toPlayCount = Math.min(maxActive - playing.length, Math.max(1, Math.floor(Math.random() * 2) + 1));
-            randomSample(paused, toPlayCount).forEach((video) => {
-              playArchiveVideo(video);
-              const duration = 2500 + Math.random() * 4500;
-              window.setTimeout(() => {
-                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.6) {
-                  stopArchiveVideo(video);
-                }
-              }, duration);
-            });
-          }
-          scheduleChaos();
-        }
-        document.querySelectorAll(".tile").forEach((tile) => {
-          const video = tile.querySelector("video");
-          if (!video) return;
-          tile.addEventListener("pointerenter", () => startHoverLoop(video));
-          tile.addEventListener("focusin", () => startHoverLoop(video));
-          tile.addEventListener("pointerleave", () => stopHoverLoop(video));
-          tile.addEventListener("focusout", () => stopHoverLoop(video));
-        });
-        if ("IntersectionObserver" in window) {
-          const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-              const video = entry.target.querySelector("video");
-              if (!video) return;
-              if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
-                visibleVideos.add(video);
-              } else {
-                visibleVideos.delete(video);
-                if (!manualVideos.has(video)) stopArchiveVideo(video);
-              }
-            });
-            scheduleChaos();
-          }, { threshold: [0, 0.15, 0.5, 1] });
-          document.querySelectorAll(".tile").forEach((tile) => observer.observe(tile));
-        } else {
-          document.querySelectorAll(".tile video").forEach((video) => visibleVideos.add(video));
-        }
-        document.addEventListener("visibilitychange", () => {
-          if (document.hidden) {
-            window.clearTimeout(chaosTimer);
-            visibleVideos.forEach((video) => { if (!manualVideos.has(video)) stopArchiveVideo(video); });
-          } else {
-            scheduleChaos();
-          }
-        });
-        window.addEventListener("pagehide", () => {
-          window.clearTimeout(chaosTimer);
-          visibleVideos.forEach(stopArchiveVideo);
-        }, { once: true });
-        scheduleChaos();
-      }
-      installChaoticArchivePlayback();
+       function installLazyPosterLoading() {
+         if (!("IntersectionObserver" in window)) return;
+         const loadedPosters = new WeakSet();
+         function getLowQualityUrl(url) {
+           if (!url || typeof url !== "string") return url;
+           if (url.includes("generated-preview.webp")) {
+             return url + "?q=30&w=200";
+           }
+           return url;
+         }
+         const posterObserver = new IntersectionObserver((entries) => {
+           entries.forEach((entry) => {
+             const video = entry.target;
+             if (video.tagName !== "VIDEO") return;
+             if (entry.isIntersecting && entry.intersectionRatio >= 0.1 && !loadedPosters.has(video)) {
+               loadedPosters.add(video);
+               const highQualityUrl = video.dataset.posterHighQuality || video.dataset.poster;
+               if (highQualityUrl) {
+                 video.setAttribute("poster", highQualityUrl);
+               }
+             }
+           });
+         }, { threshold: [0, 0.1] });
+         document.querySelectorAll(".tile video[data-poster]").forEach((video) => {
+           const posterUrl = video.dataset.poster;
+           const lowQualityPoster = getLowQualityUrl(posterUrl);
+           video.dataset.posterHighQuality = posterUrl;
+           if (lowQualityPoster !== posterUrl) {
+             video.setAttribute("poster", lowQualityPoster);
+           }
+           posterObserver.observe(video);
+         });
+       }
+       function installChaoticArchivePlayback() {
+         const visibleVideos = new Set();
+         const manualVideos = new WeakSet();
+         const hoverTimers = new WeakMap();
+         let chaosTimer = 0;
+         function clearHoverTimer(video) {
+           const timer = hoverTimers.get(video);
+           if (timer) window.clearTimeout(timer);
+           hoverTimers.delete(video);
+         }
+         function startHoverLoop(video) {
+           manualVideos.add(video);
+           clearHoverTimer(video);
+           video.onended = () => {
+             const timer = window.setTimeout(() => {
+               if (!manualVideos.has(video)) return;
+               try { video.currentTime = 0; } catch {}
+               playArchiveVideo(video);
+             }, 1000);
+             hoverTimers.set(video, timer);
+           };
+           playArchiveVideo(video);
+         }
+         function stopHoverLoop(video) {
+           manualVideos.delete(video);
+           clearHoverTimer(video);
+           stopArchiveVideo(video);
+         }
+         function scheduleChaos() {
+           window.clearTimeout(chaosTimer);
+           chaosTimer = window.setTimeout(runChaos, 1500 + Math.random() * 2500);
+         }
+         function randomSample(items, count) {
+           return items
+             .map((item) => ({ item, sort: Math.random() }))
+             .sort((a, b) => a.sort - b.sort)
+             .slice(0, count)
+             .map((entry) => entry.item);
+         }
+         function runChaos() {
+           const videos = Array.from(visibleVideos).filter((video) => video.isConnected && (video.dataset.videoSrc || video.getAttribute("src")));
+           if (!videos.length) {
+             scheduleChaos();
+             return;
+           }
+           const maxActive = Math.min(4, Math.max(1, Math.ceil(videos.length * 0.35)));
+           const playing = videos.filter((video) => !video.paused && !manualVideos.has(video));
+           if (playing.length > maxActive) {
+             randomSample(playing, playing.length - maxActive).forEach(stopArchiveVideo);
+           }
+           const paused = videos.filter((video) => video.paused && !manualVideos.has(video));
+           if (paused.length && playing.length < maxActive) {
+             const toPlayCount = Math.min(maxActive - playing.length, Math.max(1, Math.floor(Math.random() * 2) + 1));
+             randomSample(paused, toPlayCount).forEach((video) => {
+               playArchiveVideo(video);
+               const duration = 2500 + Math.random() * 4500;
+               window.setTimeout(() => {
+                 if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.6) {
+                   stopArchiveVideo(video);
+                 }
+               }, duration);
+             });
+           }
+           scheduleChaos();
+         }
+         document.querySelectorAll(".tile").forEach((tile) => {
+           const video = tile.querySelector("video");
+           if (!video) return;
+           tile.addEventListener("pointerenter", () => startHoverLoop(video));
+           tile.addEventListener("focusin", () => startHoverLoop(video));
+           tile.addEventListener("pointerleave", () => stopHoverLoop(video));
+           tile.addEventListener("focusout", () => stopHoverLoop(video));
+         });
+         if ("IntersectionObserver" in window) {
+           const observer = new IntersectionObserver((entries) => {
+             entries.forEach((entry) => {
+               const video = entry.target.querySelector("video");
+               if (!video) return;
+               if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
+                 visibleVideos.add(video);
+               } else {
+                 visibleVideos.delete(video);
+                 if (!manualVideos.has(video)) stopArchiveVideo(video);
+               }
+             });
+             scheduleChaos();
+           }, { threshold: [0, 0.15, 0.5, 1] });
+           document.querySelectorAll(".tile").forEach((tile) => observer.observe(tile));
+         } else {
+           document.querySelectorAll(".tile video").forEach((video) => visibleVideos.add(video));
+         }
+         document.addEventListener("visibilitychange", () => {
+           if (document.hidden) {
+             window.clearTimeout(chaosTimer);
+             visibleVideos.forEach((video) => { if (!manualVideos.has(video)) stopArchiveVideo(video); });
+           } else {
+             scheduleChaos();
+           }
+         });
+         window.addEventListener("pagehide", () => {
+           window.clearTimeout(chaosTimer);
+           visibleVideos.forEach(stopArchiveVideo);
+         }, { once: true });
+         scheduleChaos();
+       }
+       installLazyPosterLoading();
+       installChaoticArchivePlayback();
     </script>
   </body>
 </html>`;
