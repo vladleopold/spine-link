@@ -2782,6 +2782,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       body: JSON.stringify({ action: "get-admin-settings" }),
     }).then((r) => r.json().catch(() => ({}))).then((data) => {
       if (typeof data.blockchainEnabled === "boolean") setBlockchainEnabled(data.blockchainEnabled);
+      if (typeof data.addMoreWorkEnabled === "boolean") setAddMoreWorkEnabled(data.addMoreWorkEnabled);
     });
   }, [isAdminPage]);
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() => readStoredGoogleSession()?.user ?? null);
@@ -5377,14 +5378,24 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                      <strong>Allow extra spine players on animation pages</strong>
                    </div>
                  </div>
-                 <label className="admin-setting-row">
-                   <span>Enable add more work</span>
-                   <input
-                     type="checkbox"
-                     checked={addMoreWorkEnabled}
-                     onChange={(event) => setAddMoreWorkEnabled(event.target.checked)}
-                   />
-                 </label>
+                  <label className="admin-setting-row">
+                    <span>Enable add more work</span>
+                    <input
+                      type="checkbox"
+                      checked={addMoreWorkEnabled}
+                      onChange={async (event) => {
+                        const enabled = event.target.checked;
+                        try {
+                          const r = await fetch("/api/github-upload", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ action: "set-admin-settings", addMoreWorkEnabled: enabled }),
+                          });
+                          if (r.ok) setAddMoreWorkEnabled(enabled);
+                        } catch { /* ignore */ }
+                      }}
+                    />
+                  </label>
                </div>
              ) : isUploadPage && !preparedSpine && spineOptions.length === 0 && extraSpineSets.length === 0 && !generatedPreviewUrl ? (
               <form
