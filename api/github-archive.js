@@ -1013,39 +1013,26 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
         video.onended = null;
         try { video.currentTime = 0; } catch {}
       }
-       function installLazyPosterLoading() {
-         if (!("IntersectionObserver" in window)) return;
-         const loadedPosters = new WeakSet();
-         function getLowQualityUrl(url) {
-           if (!url || typeof url !== "string") return url;
-           if (url.includes("generated-preview.webp")) {
-             return url + "?q=30&w=200";
-           }
-           return url;
-         }
-         const posterObserver = new IntersectionObserver((entries) => {
-           entries.forEach((entry) => {
-             const video = entry.target;
-             if (video.tagName !== "VIDEO") return;
-             if (entry.isIntersecting && entry.intersectionRatio >= 0.1 && !loadedPosters.has(video)) {
-               loadedPosters.add(video);
-               const highQualityUrl = video.dataset.posterHighQuality || video.dataset.poster;
-               if (highQualityUrl) {
-                 video.setAttribute("poster", highQualityUrl);
-               }
-             }
-           });
-         }, { threshold: [0, 0.1] });
-         document.querySelectorAll(".tile video[data-poster]").forEach((video) => {
-           const posterUrl = video.dataset.poster;
-           const lowQualityPoster = getLowQualityUrl(posterUrl);
-           video.dataset.posterHighQuality = posterUrl;
-           if (lowQualityPoster !== posterUrl) {
-             video.setAttribute("poster", lowQualityPoster);
-           }
-           posterObserver.observe(video);
-         });
-       }
+        function installLazyPosterLoading() {
+          if (!("IntersectionObserver" in window)) return;
+          const loadedPosters = new WeakSet();
+          const posterObserver = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+              const video = entry.target;
+              if (video.tagName !== "VIDEO") return;
+              if (entry.isIntersecting && entry.intersectionRatio >= 0.1 && !loadedPosters.has(video)) {
+                loadedPosters.add(video);
+                const posterUrl = video.dataset.poster;
+                if (posterUrl) {
+                  video.setAttribute("poster", posterUrl);
+                }
+              }
+            });
+          }, { threshold: [0, 0.1] });
+          document.querySelectorAll(".tile video[data-poster]").forEach((video) => {
+            posterObserver.observe(video);
+          });
+        }
        function installChaoticArchivePlayback() {
          const visibleVideos = new Set();
          const manualVideos = new WeakSet();
