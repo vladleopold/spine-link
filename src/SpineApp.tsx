@@ -2959,7 +2959,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         scheduleChaos();
         return;
       }
-      const activeLimit = Math.min(2, Math.max(1, Math.ceil(videos.length * 0.25)));
+      const activeLimit = Math.min(1, Math.max(1, Math.ceil(videos.length * 0.1)));
       randomSample(
         videos.filter((video) => !video.paused && !manualVideos.has(video)),
         videos.length,
@@ -3098,7 +3098,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         scheduleChaos();
         return;
       }
-      const activeLimit = Math.min(2, Math.max(1, Math.ceil(videos.length * 0.2)));
+      const activeLimit = Math.min(1, Math.max(1, Math.ceil(videos.length * 0.08)));
       randomSample(
         videos.filter((video) => !video.paused && !manualVideos.has(video)),
         videos.length,
@@ -5900,8 +5900,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                         poster={thumbnailForCard || undefined}
                         muted
                         playsInline
-                        preload="metadata"
-                        autoPlay
+                        preload="none"
                         aria-hidden="true"
                         onLoadedMetadata={(event) => applyLibraryCardVideoAspect(event.currentTarget)}
                       />
