@@ -4613,7 +4613,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
          const uploadedProofFiles: GitHubProofReceipt[] = [];
          const MAX_BODY = 4_000_000;
-         const CHUNK = 3_500_000;
+         const CHUNK = 2_000_000;
 
          const uploadOneFile = async (f: { name: string; contentBase64: string }, idx: number): Promise<GitHubProofReceipt> => {
            const fp = joinRepoPath(uploadPath, f.name);
