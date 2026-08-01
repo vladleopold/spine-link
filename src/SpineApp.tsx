@@ -4854,7 +4854,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   };
 
   const showHomeFeed = !preparedSpine && !isEditPage && homeFeedEntries.length > 0;
-  const homeFeedLoop = showHomeFeed ? [...homeFeedEntries, ...homeFeedEntries] : [];
+  const homeFeedLoop = showHomeFeed ? homeFeedEntries.slice(0, 12) : [];
   const isHomeDropOnly = !preparedSpine && !isEditPage && !isUploadPage && extraSpineSets.length === 0;
   const siteReadingPages = [
     { href: "/spine-link.html", title: "Spine-Link", description: "Platform overview" },

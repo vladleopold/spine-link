@@ -70,9 +70,6 @@ body {
     220px 220px,
     280px 280px,
     340px 340px;
-  transform: translate3d(0, 0, 0);
-  will-change: transform;
-  animation: spineLowPowerParticles 160s linear infinite;
 }
 
 .spine-low-power-particles.is-static::before {
@@ -109,16 +106,6 @@ body > :not(.particle-field--seo):not(.spine-low-power-particles) {
   }
 }
 
-@keyframes spineLowPowerParticles {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    transform: translate3d(-96px, -128px, 0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
   ::view-transition-new(root) {
@@ -129,10 +116,5 @@ body > :not(.particle-field--seo):not(.spine-low-power-particles) {
   body {
     transition-duration: 1ms;
     transform: none;
-  }
-
-  .spine-low-power-particles::before {
-    animation: none;
-    will-change: auto;
   }
 }

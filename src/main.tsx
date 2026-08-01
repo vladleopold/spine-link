@@ -210,7 +210,7 @@ async function loadHomeFeed() {
   if (!entries.length) return;
 
   const fragment = document.createDocumentFragment();
-  const pushCard = (entry: HomeFeedItem, keySuffix: string) => {
+  const pushCard = (entry: HomeFeedItem) => {
     const id = String(entry.id || "");
     const title = String(entry.title || id || "Spine preview");
     const ownerName = String(entry.ownerName || "Spine creator");
@@ -230,7 +230,6 @@ async function loadHomeFeed() {
     card.setAttribute("aria-label", `Open ${title}`);
     if (Number.isFinite(mediaRatio) && mediaRatio > 0) {
       card.style.setProperty("--home-feed-ratio", `${Math.max(1, Math.round(mediaRatio * 1000))} / 1000`);
-      card.style.setProperty("--home-feed-card-width", `${Math.round(Math.max(260, Math.min(860, 320 * mediaRatio)))}px`);
     }
     if (poster) card.style.setProperty("--home-feed-poster", `url("${poster}")`);
 
@@ -267,11 +266,9 @@ async function loadHomeFeed() {
     card.appendChild(overlay);
 
     fragment.appendChild(card);
-    if (keySuffix === "a") void keySuffix;
   };
 
-  entries.forEach((entry) => pushCard(entry, "a"));
-  entries.forEach((entry) => pushCard(entry, "b"));
+  entries.slice(0, 12).forEach(pushCard);
 
   track.appendChild(fragment);
   feedSection.style.display = "";

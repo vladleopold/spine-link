@@ -175,7 +175,6 @@
     transform: translate3d(0, 0, 0) scale(1.011);
   }
 }
-
 .app-shell.is-empty:not(.is-edit-page) .main-drop-zone {
   width: 100%;
   min-height: clamp(390px, 43svh, 520px);
@@ -192,7 +191,6 @@
   --home-drop-shift-x: 0px;
   transform: translateX(var(--home-drop-shift-x));
   pointer-events: auto;
-  animation: homeDropBreath 4.6s ease-in-out infinite;
 }
 
 .app-shell.is-empty:not(.is-edit-page) .main-drop-zone::after {
@@ -504,10 +502,6 @@ input {
   border-color: rgba(140, 199, 255, 0.58);
   background: rgba(25, 31, 38, 0.82);
   transform: translateY(-1px);
-}
-
-.site-add-button {
-  animation: addButtonGreenBlink 8.5s ease-in-out infinite;
 }
 
 .site-menu[open] .site-menu-toggle {
@@ -959,26 +953,23 @@ h1 {
 .home-feed-viewport {
   min-width: 0;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
 }
 
 .home-feed-track {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 88vw), 1fr));
+  align-items: stretch;
   gap: 14px;
-  width: max-content;
+  width: 100%;
   min-width: 100%;
   padding: 20px 0;
-  animation: homeFeedMarquee 247s linear infinite;
-  will-change: transform;
+  contain: content;
 }
 
 .home-feed-card {
   position: relative;
   display: block;
-  flex: 0 0 clamp(280px, var(--home-feed-card-width, 38vw), 860px);
-  height: clamp(310px, 30vw, 460px);
+  min-width: 0;
   aspect-ratio: var(--home-feed-ratio, 16 / 9);
   overflow: hidden;
   isolation: isolate;
@@ -1102,24 +1093,9 @@ h1 {
   line-height: 1.15;
 }
 
-@keyframes homeFeedMarquee {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    transform: translate3d(calc(-50% - 7px), 0, 0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .app-shell {
     animation-duration: 1ms;
-  }
-
-  .home-feed-track {
-    animation: none;
-    transform: none;
   }
 }
 
@@ -2987,11 +2963,9 @@ h1 {
 }
 
 .library-add-button {
-  animation: addButtonGreenBlink 8.5s ease-in-out infinite;
 }
 
-@keyframes addButtonGreenBlink {
-  0%,
+@keyframes addButtonGreenBlink {  0%,
   64%,
   100% {
     border-color: rgba(255, 255, 255, 0.12);
@@ -5146,10 +5120,8 @@ h1 {
     0 0 36px rgba(140, 199, 255, 0.28),
     0 0 72px rgba(255, 106, 40, 0.11),
     inset 0 0 42px rgba(140, 199, 255, 0.08);
-  will-change: transform;
-  filter: saturate(1) brightness(1);
+  will-change: auto;
   pointer-events: auto;
-  animation: mainDropZoneBreathe 4.6s ease-in-out infinite;
 }
 
 .app-shell.is-empty:not(.is-edit-page):not(.is-docking) .main-drop-zone::after {
@@ -5161,10 +5133,8 @@ h1 {
   background:
     radial-gradient(circle at 18% 20%, rgba(255, 106, 40, 0.25), transparent 34%),
     radial-gradient(circle at 82% 70%, rgba(140, 199, 255, 0.22), transparent 36%);
-  filter: blur(18px);
   opacity: 0.5;
   pointer-events: none;
-  animation: none;
 }
 
 .app-shell.is-empty:not(.is-edit-page) .main-drop-zone.is-dragging,
