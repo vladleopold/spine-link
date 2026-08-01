@@ -1061,10 +1061,10 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
            clearHoverTimer(video);
            stopArchiveVideo(video);
          }
-         function scheduleChaos() {
-           window.clearTimeout(chaosTimer);
-           chaosTimer = window.setTimeout(runChaos, 1500 + Math.random() * 2500);
-         }
+          function scheduleChaos() {
+            window.clearTimeout(chaosTimer);
+            chaosTimer = window.setTimeout(runChaos, 3000 + Math.random() * 3000);
+          }
          function randomSample(items, count) {
            return items
              .map((item) => ({ item, sort: Math.random() }))
@@ -1072,40 +1072,72 @@ function archiveHtml({ origin, entries, exclusions, metrics }) {
              .slice(0, count)
              .map((entry) => entry.item);
          }
-         function runChaos() {
-           const videos = Array.from(visibleVideos).filter((video) => video.isConnected && (video.dataset.videoSrc || video.getAttribute("src")));
-           if (!videos.length) {
-             scheduleChaos();
-             return;
-           }
-           const maxActive = Math.min(4, Math.max(1, Math.ceil(videos.length * 0.35)));
-           const playing = videos.filter((video) => !video.paused && !manualVideos.has(video));
-           if (playing.length > maxActive) {
-             randomSample(playing, playing.length - maxActive).forEach(stopArchiveVideo);
-           }
-           const paused = videos.filter((video) => video.paused && !manualVideos.has(video));
-           if (paused.length && playing.length < maxActive) {
-             const toPlayCount = Math.min(maxActive - playing.length, Math.max(1, Math.floor(Math.random() * 2) + 1));
-             randomSample(paused, toPlayCount).forEach((video) => {
-               playArchiveVideo(video);
-               const duration = 2500 + Math.random() * 4500;
-               window.setTimeout(() => {
-                 if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.6) {
-                   stopArchiveVideo(video);
-                 }
-               }, duration);
-             });
-           }
-           scheduleChaos();
-         }
-         document.querySelectorAll(".tile").forEach((tile) => {
-           const video = tile.querySelector("video");
-           if (!video) return;
-           tile.addEventListener("pointerenter", () => startHoverLoop(video));
-           tile.addEventListener("focusin", () => startHoverLoop(video));
-           tile.addEventListener("pointerleave", () => stopHoverLoop(video));
-           tile.addEventListener("focusout", () => stopHoverLoop(video));
-         });
+          function runChaos() {
+            const videoArray = Array.from(visibleVideos);
+            const videos = videoArray.filter((video) => video.isConnected && (video.dataset.videoSrc || video.getAttribute("src")));
+            if (!videos.length) {
+              scheduleChaos();
+              return;
+            }
+            const maxActive = Math.min(4, Math.max(1, Math.ceil(Math.min(videos.length, 20) * 0.25)));
+            const playing = [];
+            const paused = [];
+            for (const video of videos) {
+              if (manualVideos.has(video)) continue;
+              if (video.paused) {
+                paused.push(video);
+              } else {
+                playing.push(video);
+              }
+            }
+            if (playing.length > maxActive) {
+              randomSample(playing, playing.length - maxActive).forEach(stopArchiveVideo);
+            }
+            if (paused.length && playing.length < maxActive) {
+              const toPlayCount = Math.min(maxActive - playing.length, Math.max(1, Math.floor(Math.random() * 2) + 1));
+              randomSample(paused, toPlayCount).forEach((video) => {
+                playArchiveVideo(video);
+                const duration = 2500 + Math.random() * 4500;
+                window.setTimeout(() => {
+                  if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.6) {
+                    stopArchiveVideo(video);
+                  }
+                }, duration);
+              });
+            }
+            scheduleChaos();
+          }
+          const gridElement = document.querySelector(".grid");
+          if (gridElement) {
+            gridElement.addEventListener("pointerenter", (event) => {
+              const tile = event.target.closest(".tile");
+              if (tile) {
+                const video = tile.querySelector("video");
+                if (video) startHoverLoop(video);
+              }
+            }, true);
+            gridElement.addEventListener("pointerleave", (event) => {
+              const tile = event.target.closest(".tile");
+              if (tile) {
+                const video = tile.querySelector("video");
+                if (video) stopHoverLoop(video);
+              }
+            }, true);
+            gridElement.addEventListener("focusin", (event) => {
+              const tile = event.target.closest(".tile");
+              if (tile) {
+                const video = tile.querySelector("video");
+                if (video) startHoverLoop(video);
+              }
+            }, true);
+            gridElement.addEventListener("focusout", (event) => {
+              const tile = event.target.closest(".tile");
+              if (tile) {
+                const video = tile.querySelector("video");
+                if (video) stopHoverLoop(video);
+              }
+            }, true);
+          }
          if ("IntersectionObserver" in window) {
            const observer = new IntersectionObserver((entries) => {
              entries.forEach((entry) => {
