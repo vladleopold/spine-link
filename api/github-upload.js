@@ -1261,7 +1261,6 @@ export default async function handler(request, response) {
        dataScience,
        dispatch,
      });
-   }
 
    if (action === 'get-admin-settings') {
      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
@@ -1277,10 +1276,10 @@ export default async function handler(request, response) {
 
    return response.status(400).json({ error: 'Unknown action' });
   } catch (error) {
-     const statusCode = Number(error?.statusCode) || 500;
-     const message = error instanceof Error ? error.message : 'Upload failed';
-     console.error('[UPLOAD] error:', message);
-     if (error instanceof Error && error.stack) console.error('[UPLOAD] stack:', error.stack);
-     return response.status(statusCode).json({ error: message });
-   }
- }
+    const statusCode = Number(error?.statusCode) || 500;
+    const message = error instanceof Error ? error.message : 'Upload failed';
+    console.error('[UPLOAD] error:', message);
+    if (error instanceof Error && error.stack) console.error('[UPLOAD] stack:', error.stack);
+    return response.status(statusCode).json({ error: message });
+  }
+}
