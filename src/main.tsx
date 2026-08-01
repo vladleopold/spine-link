@@ -35,7 +35,10 @@ function receiveFiles(files: File[]) {
     mountedFileReceiver(files);
     return;
   }
-  void mountApp(files);
+  // Defer app mounting to allow UI to render first, preventing UI thread blocking
+  window.setTimeout(() => {
+    void mountApp(files);
+  }, 50);
 }
 
 function renderBootShell(isDragging = false) {
@@ -112,17 +115,23 @@ function renderBootShell(isDragging = false) {
   root.querySelectorAll<HTMLElement>("[data-open-app], [data-open-library], [data-open-login], [data-open-upload]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.preventDefault();
-      void mountApp([], {
-        openLibrary: button.hasAttribute("data-open-library"),
-        login: button.hasAttribute("data-open-login"),
-        upload: button.hasAttribute("data-open-upload"),
-      });
+      // Defer mounting to prevent blocking UI thread
+      window.setTimeout(() => {
+        void mountApp([], {
+          openLibrary: button.hasAttribute("data-open-library"),
+          login: button.hasAttribute("data-open-login"),
+          upload: button.hasAttribute("data-open-upload"),
+        });
+      }, 50);
     });
   });
   root.querySelectorAll<HTMLFormElement>("[data-upload-form]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      void mountApp([], { upload: true });
+      // Defer mounting to prevent blocking UI thread
+      window.setTimeout(() => {
+        void mountApp([], { upload: true });
+      }, 50);
     });
   });
   const bootFileInput = root.querySelector<HTMLInputElement>("[data-file-input]");
@@ -209,7 +218,10 @@ const shouldOpenUpload = bootSearchParams.get("upload") === "work";
 renderBootShell();
 
 if (bootSearchParams.has("edit") || shouldOpenLogin || shouldOpenPortfolio || shouldOpenUpload) {
-  void mountApp([], { login: shouldOpenLogin, openLibrary: shouldOpenPortfolio, upload: shouldOpenUpload });
+  // Defer mounting to prevent blocking initial page render
+  globalThis.setTimeout(() => {
+    void mountApp([], { login: shouldOpenLogin, openLibrary: shouldOpenPortfolio, upload: shouldOpenUpload });
+  }, 100);
 } else {
   const mountHomepageApp = () => {
     void mountApp();

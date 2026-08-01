@@ -1,5 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "./styles.css";
+import React, { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
+
+// Lazy load CSS to avoid blocking render
+if (!document.getElementById("spine-app-styles")) {
+  const style = document.createElement("link");
+  style.id = "spine-app-styles";
+  style.rel = "stylesheet";
+  style.href = new URL("./styles.css", import.meta.url).href;
+  document.head.appendChild(style);
+}
 import {
   Calendar,
   Copy,
