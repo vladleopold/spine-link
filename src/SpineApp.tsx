@@ -4635,10 +4635,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
              const sp = sourceProof.files.find((pf) => pf.name === f.name);
              return { name: f.name, path: fp, bytes: Number(res.bytes || sp?.bytes || byteLengthFromBase64(f.contentBase64)), sha256: String(res.sha256 || sp?.sha256 || (await sha256HexFromBytes(base64ToBytes(f.contentBase64)))), github: { contentSha: typeof res.github?.contentSha === "string" ? res.github.contentSha : "", commitSha: typeof res.github?.commitSha === "string" ? res.github.commitSha : "", commitUrl: typeof res.github?.commitUrl === "string" ? res.github.commitUrl : "", downloadUrl: typeof res.github?.downloadUrl === "string" ? res.github.downloadUrl : "" } };
            }
-           const base64 = f.contentBase64.replace(/\s/g, "");
-           const totalChunks = Math.ceil(base64.length / CHUNK);
+            const base64 = f.contentBase64.replace(/\s/g, "");
+            const totalChunks = Math.ceil(base64.length / CHUNK);
             const MAX_CHUNK_RETRIES = 3;
-            const results = await Promise.all(Array.from({ length: totalChunks }, async (_, i) => {
+            const results = [];
+            for (let i = 0; i < totalChunks; i += 1) {
               const chunk = base64.slice(i * CHUNK, (i + 1) * CHUNK);
               const chunkPath = `${fp}.__chunks/${String(i).padStart(5, "0")}`;
               const cb = JSON.stringify({ action: "multipart-upload-chunk", googleIdToken, anonymousAccount, settings: nextSettings, path: chunkPath, chunkIndex: i, contentBase64: chunk, message: `${commitPrefix}: chunk ${i} of ${f.name}` });
@@ -4647,7 +4648,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 try {
                   const cr = await fetch("/api/github-upload", { method: "POST", headers: rh, body: cb });
                   const cres = await cr.json().catch(() => ({}));
-                  if (cr.ok) return { chunkPath, bytes: Number(cres.bytes), sha256: String(cres.sha256) };
+                  if (cr.ok) { results.push({ chunkPath, bytes: Number(cres.bytes), sha256: String(cres.sha256) }); break; }
                   if (cr.status >= 500 && attempt < MAX_CHUNK_RETRIES - 1) { lastErr = new Error(`Chunk ${i} upload failed: ${cr.status}`); await new Promise((r) => setTimeout(r, 1500 * (attempt + 1))); continue; }
                   throw new Error(`Chunk ${i} upload failed: ${cr.status}`);
                 } catch (err) {
@@ -4655,8 +4656,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                   if (attempt < MAX_CHUNK_RETRIES - 1) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
                 }
               }
-              throw lastErr;
-            }));
+              if (results.length <= i) throw lastErr;
+            }
            for (const cr of results) { uploadedProofFiles.push({ name: `${f.name}.__chunks/${cr.chunkPath.split("/").pop()}`, path: cr.chunkPath, bytes: cr.bytes, sha256: cr.sha256, github: { contentSha: "", commitSha: "", commitUrl: "", downloadUrl: "" } }); }
             const rb = JSON.stringify({ action: "reassemble-file", googleIdToken, anonymousAccount, settings: nextSettings, path: fp, chunkCount: totalChunks, message: `${commitPrefix}: reassemble ${f.name}` });
             let rr;
