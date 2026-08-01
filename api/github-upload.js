@@ -640,26 +640,32 @@ async function getGitHubContent(settings, path) {
 async function putGitHubContent(settings, path, contentBase64, message, sha, origin = '') {
   const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
   const normalizedContentBase64 = normalizePreviewHtml(settings, path, contentBase64, origin);
-  const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}`, {
-    method: 'PUT',
-    headers: {
-      ...githubHeaders(settings.token),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      message,
-      content: normalizedContentBase64,
-      branch: settings.branch,
-      ...(sha ? { sha } : {}),
-    }),
-  });
-
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`);
+  const body = JSON.stringify({ message, content: normalizedContentBase64, branch: settings.branch, ...(sha ? { sha } : {}) });
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}`, {
+        method: 'PUT',
+        headers: {
+          ...githubHeaders(settings.token),
+          'Content-Type': 'application/json',
+        },
+        body,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok) return result;
+      if (response.status >= 500 && response.status < 600 && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        lastError = new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`);
+        continue;
+      }
+      throw new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`);
+    } catch (err) {
+      lastError = err;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
   }
-
-  return result;
+  throw lastError;
 }
 
 async function deleteGitHubContent(settings, path, message, sha) {

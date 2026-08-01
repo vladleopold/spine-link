@@ -4620,10 +4620,16 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
            const rh: Record<string, string> = { "Content-Type": "application/json" };
            if (googleIdToken) rh.Authorization = `Bearer ${googleIdToken}`;
            const sb = JSON.stringify({ action: "put-file", googleIdToken, anonymousAccount, settings: nextSettings, file: { path: fp, contentBase64: f.contentBase64 }, message: `${commitPrefix}: ${f.name}` });
-           if (sb.length <= MAX_BODY) {
-             const r = await fetch("/api/github-upload", { method: "POST", headers: rh, body: sb });
-             const res = await r.json().catch(() => ({}));
-             if (!r.ok) throw new Error(typeof res?.error === "string" ? res.error : `Upload API ${r.status}`);
+            if (sb.length <= MAX_BODY) {
+              let r;
+              for (let attempt = 0; attempt < 3; attempt += 1) {
+                r = await fetch("/api/github-upload", { method: "POST", headers: rh, body: sb });
+                if (r.ok) break;
+                if (r.status >= 500 && attempt < 2) { await new Promise((res) => setTimeout(res, 1500 * (attempt + 1))); continue; }
+                break;
+              }
+               const res = await r!.json().catch(() => ({}));
+               if (!r!.ok) throw new Error(typeof res?.error === "string" ? res.error : `Upload API ${r!.status}`);
              setPublishProgress((c) => ({ ...c, label: `Saving files ${idx + 1}/${files.length}`, value: Math.max(c.value, Math.round(((idx + 1) / Math.max(files.length + 1, 1)) * 88)) }));
              setStatus(`Files ready. Uploading: ${idx + 1}/${files.length}...`);
              const sp = sourceProof.files.find((pf) => pf.name === f.name);
@@ -4631,20 +4637,37 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
            }
            const base64 = f.contentBase64.replace(/\s/g, "");
            const totalChunks = Math.ceil(base64.length / CHUNK);
-           const results = await Promise.all(Array.from({ length: totalChunks }, async (_, i) => {
-             const chunk = base64.slice(i * CHUNK, (i + 1) * CHUNK);
-             const chunkPath = `${fp}.__chunks/${String(i).padStart(5, "0")}`;
-             const cb = JSON.stringify({ action: "multipart-upload-chunk", googleIdToken, anonymousAccount, settings: nextSettings, path: chunkPath, chunkIndex: i, contentBase64: chunk, message: `${commitPrefix}: chunk ${i} of ${f.name}` });
-             const cr = await fetch("/api/github-upload", { method: "POST", headers: rh, body: cb });
-             const cres = await cr.json().catch(() => ({}));
-             if (!cr.ok) throw new Error(`Chunk ${i} upload failed: ${cr.status}`);
-             return { chunkPath, bytes: Number(cres.bytes), sha256: String(cres.sha256) };
-           }));
+            const MAX_CHUNK_RETRIES = 3;
+            const results = await Promise.all(Array.from({ length: totalChunks }, async (_, i) => {
+              const chunk = base64.slice(i * CHUNK, (i + 1) * CHUNK);
+              const chunkPath = `${fp}.__chunks/${String(i).padStart(5, "0")}`;
+              const cb = JSON.stringify({ action: "multipart-upload-chunk", googleIdToken, anonymousAccount, settings: nextSettings, path: chunkPath, chunkIndex: i, contentBase64: chunk, message: `${commitPrefix}: chunk ${i} of ${f.name}` });
+              let lastErr;
+              for (let attempt = 0; attempt < MAX_CHUNK_RETRIES; attempt += 1) {
+                try {
+                  const cr = await fetch("/api/github-upload", { method: "POST", headers: rh, body: cb });
+                  const cres = await cr.json().catch(() => ({}));
+                  if (cr.ok) return { chunkPath, bytes: Number(cres.bytes), sha256: String(cres.sha256) };
+                  if (cr.status >= 500 && attempt < MAX_CHUNK_RETRIES - 1) { lastErr = new Error(`Chunk ${i} upload failed: ${cr.status}`); await new Promise((r) => setTimeout(r, 1500 * (attempt + 1))); continue; }
+                  throw new Error(`Chunk ${i} upload failed: ${cr.status}`);
+                } catch (err) {
+                  lastErr = err;
+                  if (attempt < MAX_CHUNK_RETRIES - 1) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+                }
+              }
+              throw lastErr;
+            }));
            for (const cr of results) { uploadedProofFiles.push({ name: `${f.name}.__chunks/${cr.chunkPath.split("/").pop()}`, path: cr.chunkPath, bytes: cr.bytes, sha256: cr.sha256, github: { contentSha: "", commitSha: "", commitUrl: "", downloadUrl: "" } }); }
-           const rb = JSON.stringify({ action: "reassemble-file", googleIdToken, anonymousAccount, settings: nextSettings, path: fp, chunkCount: totalChunks, message: `${commitPrefix}: reassemble ${f.name}` });
-           const rr = await fetch("/api/github-upload", { method: "POST", headers: rh, body: rb });
-           const rres = await rr.json().catch(() => ({}));
-           if (!rr.ok) throw new Error(typeof rres?.error === "string" ? rres.error : `Reassembly API ${rr.status}`);
+            const rb = JSON.stringify({ action: "reassemble-file", googleIdToken, anonymousAccount, settings: nextSettings, path: fp, chunkCount: totalChunks, message: `${commitPrefix}: reassemble ${f.name}` });
+            let rr;
+            for (let attempt = 0; attempt < 3; attempt += 1) {
+              rr = await fetch("/api/github-upload", { method: "POST", headers: rh, body: rb });
+              if (rr.ok) break;
+              if (rr.status >= 500 && attempt < 2) { await new Promise((res) => setTimeout(res, 1500 * (attempt + 1))); continue; }
+              break;
+            }
+            const rres = await rr!.json().catch(() => ({}));
+            if (!rr!.ok) throw new Error(typeof rres?.error === "string" ? rres.error : `Reassembly API ${rr!.status}`);
            setPublishProgress((c) => ({ ...c, label: `Saving files ${idx + 1}/${files.length}`, value: Math.max(c.value, Math.round(((idx + 1) / Math.max(files.length + 1, 1)) * 88)) }));
            setStatus(`Files ready. Uploading: ${idx + 1}/${files.length}...`);
            const sp = sourceProof.files.find((pf) => pf.name === f.name);
