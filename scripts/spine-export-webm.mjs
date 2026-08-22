@@ -103,9 +103,35 @@ function detectSkeletonVersion(filePath) {
     }
     if (ext === '.skel') {
       const buffer = fs.readFileSync(filePath);
-      const versionEnd = buffer.indexOf(0);
-      if (versionEnd > 0) return buffer.toString('utf8', 0, versionEnd).trim();
-      return buffer.toString('utf8', 0, Math.min(buffer.length, 80)).split('\0')[0].trim();
+      const bytes = new Uint8Array(buffer);
+      let idx = 0;
+      function readInt() {
+        let byte = bytes[idx++];
+        let result = byte & 0x7f;
+        if ((byte & 0x80) !== 0) {
+          byte = bytes[idx++]; result |= (byte & 0x7f) << 7;
+          if ((byte & 0x80) !== 0) {
+            byte = bytes[idx++]; result |= (byte & 0x7f) << 14;
+            if ((byte & 0x80) !== 0) {
+              byte = bytes[idx++]; result |= (byte & 0x7f) << 21;
+              if ((byte & 0x80) !== 0) {
+                byte = bytes[idx++]; result |= (byte & 0x7f) << 28;
+              }
+            }
+          }
+        }
+        return result;
+      }
+      function readString() {
+        const byteCount = readInt();
+        if (byteCount <= 1) return '';
+        const start = idx;
+        idx += byteCount - 1;
+        return new TextDecoder().decode(bytes.slice(start, idx));
+      }
+      readString();
+      const version = readString();
+      return version.trim() || '4.0';
     }
   } catch { }
   return '4.0';
@@ -146,6 +172,149 @@ function readSkeletonBounds(filePath) {
     }
   } catch { }
   return { width: 0, height: 0 };
+}
+
+class SpineBinaryCursor {
+  constructor(bytes) {
+    this.bytes = bytes;
+    this.index = 0;
+  }
+  readByte() { return this.bytes[this.index++] ?? 0; }
+  skip(length) { this.index += length; }
+  readInt(optimizePositive) {
+    let byte = this.readByte();
+    let result = byte & 0x7f;
+    if ((byte & 0x80) !== 0) {
+      byte = this.readByte(); result |= (byte & 0x7f) << 7;
+      if ((byte & 0x80) !== 0) {
+        byte = this.readByte(); result |= (byte & 0x7f) << 14;
+        if ((byte & 0x80) !== 0) {
+          byte = this.readByte(); result |= (byte & 0x7f) << 21;
+          if ((byte & 0x80) !== 0) {
+            byte = this.readByte(); result |= (byte & 0x7f) << 28;
+          }
+        }
+      }
+    }
+    return optimizePositive ? result : (result >>> 1) ^ -(result & 1);
+  }
+  readStringMeta() {
+    const start = this.index;
+    const byteCount = this.readInt(true);
+    const contentStart = this.index;
+    if (byteCount === 0) return { start, end: this.index, value: null };
+    if (byteCount === 1) return { start, end: this.index, value: "" };
+    this.skip(byteCount - 1);
+    return {
+      start, end: this.index,
+      value: new TextDecoder().decode(this.bytes.slice(contentStart, this.index)),
+    };
+  }
+}
+
+function encodeSpineBinaryString(value) {
+  const textBytes = new TextEncoder().encode(value);
+  const byteCount = textBytes.length + 1;
+  const lengthBytes = [];
+  let remaining = byteCount;
+  while (true) {
+    let byte = remaining & 0x7f;
+    remaining >>>= 7;
+    if (remaining) byte |= 0x80;
+    lengthBytes.push(byte);
+    if (!remaining) break;
+  }
+  return new Uint8Array([...lengthBytes, ...textBytes]);
+}
+
+function replaceByteRanges(bytes, replacements) {
+  if (!replacements.length) return bytes;
+  const sorted = [...replacements].sort((a, b) => a.start - b.start);
+  const nextLength = sorted.reduce((length, replacement) => length - (replacement.end - replacement.start) + replacement.bytes.length, bytes.length);
+  if (nextLength < 0) return bytes;
+  const nextBytes = new Uint8Array(nextLength);
+  let sourceIndex = 0, targetIndex = 0;
+  for (const replacement of sorted) {
+    const prefix = bytes.slice(sourceIndex, replacement.start);
+    if (targetIndex + prefix.length > nextLength) return bytes;
+    nextBytes.set(prefix, targetIndex);
+    targetIndex += prefix.length;
+    if (targetIndex + replacement.bytes.length > nextLength) return bytes;
+    nextBytes.set(replacement.bytes, targetIndex);
+    targetIndex += replacement.bytes.length;
+    sourceIndex = replacement.end;
+  }
+  const tail = bytes.slice(sourceIndex);
+  if (targetIndex + tail.length > nextLength) return bytes;
+  nextBytes.set(tail, targetIndex);
+  return nextBytes;
+}
+
+function sanitizedSkelBuffer(buffer, version = "") {
+  const bytes = new Uint8Array(buffer);
+  
+  if (/^3\./.test(version)) {
+    const patchCursor = new SpineBinaryCursor(new Uint8Array(bytes));
+    try {
+      patchCursor.readStringMeta();
+      patchCursor.readStringMeta();
+      patchCursor.skip(8);
+      const nonessential = patchCursor.readByte() !== 0;
+      if (nonessential) {
+        patchCursor.skip(4);
+        const imagesPathPos = patchCursor.index;
+        if (bytes[imagesPathPos] === 0x00) bytes[imagesPathPos] = 0x01;
+        patchCursor.readStringMeta();
+        const audioPathPos = patchCursor.index;
+        if (bytes[audioPathPos] === 0x00) bytes[audioPathPos] = 0x01;
+      }
+    } catch {}
+  }
+
+  const cursor = new SpineBinaryCursor(bytes);
+  const replacements = [];
+  try {
+    if (/^3\./.test(version)) {
+      cursor.readStringMeta(); cursor.readStringMeta();
+      cursor.skip(8);
+    } else {
+      cursor.skip(8); cursor.readStringMeta(); cursor.skip(4);
+      cursor.skip(16);
+    }
+    const nonessential = cursor.readByte() !== 0;
+    if (nonessential) {
+      cursor.skip(4); cursor.readStringMeta(); cursor.readStringMeta();
+    }
+
+    const stringCount = cursor.readInt(true);
+    for (let index = 0; index < stringCount; index += 1) {
+      const stringStart = cursor.index;
+      const stringMeta = cursor.readStringMeta();
+      if (stringMeta.value === null) {
+        replacements.push({
+          start: stringStart, end: stringMeta.end,
+          bytes: encodeSpineBinaryString(''),
+        });
+      }
+    }
+
+    const boneCount = cursor.readInt(true);
+    for (let index = 0; index < boneCount; index += 1) {
+      const name = cursor.readStringMeta();
+      if (!name.value) {
+        replacements.push({
+          start: name.start, end: name.end,
+          bytes: encodeSpineBinaryString(`__placeholder_bone_${index}`),
+        });
+      }
+      if (index > 0) cursor.readInt(true);
+      cursor.skip(32); cursor.readInt(true); cursor.skip(1);
+      if (nonessential) cursor.skip(4);
+    }
+    return Buffer.from(replaceByteRanges(bytes, replacements));
+  } catch {
+    return Buffer.from(bytes);
+  }
 }
 
 const skeletonFilePath = path.join(firstSet.path, skeletonFile);
@@ -233,12 +402,10 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
 
   var player;
   var config = {
-    skelUrl: skeletonKey === 'skelUrl' ? skeletonRawUrl : undefined,
-    skeleton: skeletonKey === 'skeleton' ? skeletonRawUrl : undefined,
-    atlasUrl: atlasKey === 'atlasUrl' ? atlasRawUrl : undefined,
-    atlas: atlasKey === 'atlas' ? atlasRawUrl : undefined,
-    textures: textureRawUrls,
-    animation: targetAnimation,
+    ${isLegacy ? (skeletonKey === 'skelUrl' ? `skelUrl: '${skeletonRawUrl}'` : `jsonUrl: '${skeletonRawUrl}'`) : (skeletonKey === 'skelUrl' ? `skelUrl: '${skeletonRawUrl}'` : `skeleton: '${skeletonRawUrl}'`)},
+    ${isLegacy ? `atlasUrl: '${atlasRawUrl}'` : `atlas: '${atlasRawUrl}'`},
+    textures: ${JSON.stringify(textureRawUrls)},
+    animation: '${targetAnimation}',
     showLoading: false,
     premultipliedAlpha: false,
     preserveDrawingBuffer: true,
@@ -362,6 +529,33 @@ try {
       body: atlasContent,
     });
   });
+  await page.route(skeletonRawUrl, async route => {
+    let body;
+    if (skeletonFile.toLowerCase().endsWith('.skel')) {
+      const rawBuffer = fs.readFileSync(skeletonFilePath);
+      body = sanitizedSkelBuffer(rawBuffer, skeletonVersion);
+    } else {
+      body = fs.readFileSync(skeletonFilePath, 'utf8');
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: skeletonFile.toLowerCase().endsWith('.skel') ? 'application/octet-stream' : 'application/json',
+      body: body,
+    });
+  });
+  for (const texFile of textureFiles) {
+    const texUrl = rawUrl(texFile);
+    const texPath = path.join(firstSet.path, texFile);
+    const texExt = path.extname(texFile).toLowerCase();
+    const texContentType = texExt === '.png' ? 'image/png' : texExt === '.webp' ? 'image/webp' : texExt === '.jpg' || texExt === '.jpeg' ? 'image/jpeg' : 'application/octet-stream';
+    await page.route(texUrl, async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: texContentType,
+        body: fs.readFileSync(texPath),
+      });
+    });
+  }
   await page.setContent(captureHtml, { waitUntil: 'networkidle', timeout: 60000 });
 
   await page.waitForFunction(() => window.__ready === true || window.__captureError, { timeout: 60000, polling: 200 });

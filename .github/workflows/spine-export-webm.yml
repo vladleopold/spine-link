@@ -221,6 +221,7 @@ jobs:
             console.log("Total entries:", entries.length);
             
             const entryIndex = entries.findIndex(e => e.id === uploadId);
+            const webmExists = fs.existsSync(webmPath);
             console.log("Entry index:", entryIndex);
 
             if (entryIndex === -1) {
@@ -230,9 +231,9 @@ jobs:
 
             entries[entryIndex] = {
               ...entries[entryIndex],
-              webmPreview: webmUrl,
-              webmPreviewPath: `${basePath}/${uploadId}/preview.webm`,
-              webmStatus: 'ready',
+              webmPreview: webmExists ? webmUrl : undefined,
+              webmPreviewPath: webmExists ? `${basePath}/${uploadId}/preview.webm` : undefined,
+              webmStatus: webmExists ? 'ready' : 'error',
               webmGeneratedAt: new Date().toISOString(),
             };
 
