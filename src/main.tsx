@@ -100,7 +100,7 @@ function renderHomeShell(isDragging = false) {
           <div class="top-actions-row">
             <a class="world-archive-link" href="/world-spine-archive">BROWSE</a>
             <div class="auth-panel">
-              <a class="my-library-button" href="/?portfolio=1" data-open-library>Portfolio database</a>
+              <a class="my-library-button" href="/?portfolio=1" data-open-library>Portfolio</a>
               <button class="guest-account-button" type="button" data-open-login title="Sign in" aria-label="Sign in">
                 <svg class="user_icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               </button>
@@ -271,6 +271,13 @@ async function loadHomeFeed() {
   entries.slice(0, 12).forEach(pushCard);
 
   track.appendChild(fragment);
+  const cards = track.querySelectorAll(".home-feed-card");
+  const cloneFragment = document.createDocumentFragment();
+  cards.forEach((card) => {
+    cloneFragment.appendChild(card.cloneNode(true));
+  });
+  track.appendChild(cloneFragment);
+  track.classList.add("is-scrolling");
   feedSection.style.display = "";
 }
 

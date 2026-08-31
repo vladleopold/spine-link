@@ -2584,6 +2584,20 @@ function ParticleField({ mode = "rich" }: { mode?: "quiet" | "rich" }) {
   return null;
 }
 
+async function loadLibraryEntryFiles(entry: LibraryEntry): Promise<File[]> {
+  const files = Array.isArray(entry.files) ? entry.files : [];
+  if (!files.length) throw new Error("This preview has no editable files.");
+  return Promise.all(files.map((fileName) => fileFromLibraryPath(entry, fileName)));
+}
+
+async function prepareFilesForModal(files: File[]): Promise<PreparedSpine | null> {
+  const preparedSets = await loadFiles(files);
+  if (!preparedSets.length) throw new Error("Could not load Spine files for preview.");
+  const baseName = preparedSets[0].skeletonName.split(/[\\/]/).pop()?.toLowerCase() || "";
+  const matched = preparedSets.find((s) => s.skeletonName.split(/[\\/]/).pop()?.toLowerCase() === baseName) ?? preparedSets[0];
+  return matched;
+}
+
 function ProgressiveVideo({
   sources,
   poster,
@@ -2708,6 +2722,21 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [previewNote, setPreviewNote] = useState("");
   const [videosEnabled, setVideosEnabled] = useState(false);
   const libraryGridRef = useRef<HTMLDivElement>(null);
+  const selectedHomeEntryRef = useRef<HomeFeedEntry | null>(null);
+  const selectedLibraryEntryRef = useRef<LibraryEntry | null>(null);
+  const modalPlayerHostRef = useRef<HTMLDivElement | null>(null);
+  const modalPlayerRef = useRef<SpinePlayerInstance | null>(null);
+  const modalPreparedSpineRef = useRef<PreparedSpine | null>(null);
+  const [selectedHomeEntry, setSelectedHomeEntry] = useState<HomeFeedEntry | null>(null);
+  const [selectedLibraryEntry, setSelectedLibraryEntry] = useState<LibraryEntry | null>(null);
+  const [modalAnimations, setModalAnimations] = useState<string[]>([]);
+  const [modalActiveAnimation, setModalActiveAnimation] = useState("");
+  const [modalIsLoading, setModalIsLoading] = useState(false);
+  const [modalError, setModalError] = useState("");
+  const modalScrollRafRef = useRef<number>(0);
+  const homeFeedCenterVideoRef = useRef<HTMLVideoElement | null>(null);
+  const homeFeedAllVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const homeFeedPlayedSet = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setVideosEnabled(false);
@@ -2828,6 +2857,84 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     [libraryEntries],
   );
 
+  const openDetailModal = async (entry: HomeFeedEntry | LibraryEntry) => {
+    if (selectedHomeEntryRef.current || selectedLibraryEntryRef.current) return;
+    setModalIsLoading(true);
+    setModalError("");
+    setModalAnimations([]);
+    setModalActiveAnimation("");
+    modalPlayerRef.current = null;
+    modalPreparedSpineRef.current = null;
+
+    try {
+      if ("previewPath" in entry) {
+        const libraryEntry = entry as LibraryEntry;
+        selectedLibraryEntryRef.current = libraryEntry;
+        setSelectedLibraryEntry(libraryEntry);
+        const files = await loadLibraryEntryFiles(libraryEntry);
+        const prepared = await prepareFilesForModal(files);
+        if (!prepared) throw new Error("Could not load Spine files.");
+        modalPreparedSpineRef.current = prepared;
+        setModalIsLoading(false);
+      } else {
+        const homeEntry = entry as HomeFeedEntry;
+        selectedHomeEntryRef.current = homeEntry;
+        setSelectedHomeEntry(homeEntry);
+        const idMatch = homeEntry.previewUrl.match(/\/([^\/?#]+)$/);
+        const entryId = idMatch?.[1] || homeEntry.id;
+        const response = await fetch("/api/github-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "get-entry", entryId }),
+        });
+        if (!response.ok) throw new Error(`Library API ${response.status}`);
+        const result = await response.json();
+        const libraryEntry = result.entry as LibraryEntry;
+        if (!libraryEntry) throw new Error("Preview not found.");
+        const files = await loadLibraryEntryFiles(libraryEntry);
+        const prepared = await prepareFilesForModal(files);
+        if (!prepared) throw new Error("Could not load Spine files.");
+        modalPreparedSpineRef.current = prepared;
+        selectedLibraryEntryRef.current = libraryEntry;
+        setSelectedLibraryEntry(libraryEntry);
+        setModalIsLoading(false);
+      }
+    } catch (err) {
+      setModalError(err instanceof Error ? err.message : "Could not load preview.");
+      setModalIsLoading(false);
+    }
+  };
+
+  const closeDetailModal = useCallback(() => {
+    if (modalPlayerRef.current) {
+      try { modalPlayerRef.current.dispose?.(); } catch {}
+      modalPlayerRef.current = null;
+    }
+    if (modalPlayerHostRef.current) modalPlayerHostRef.current.innerHTML = "";
+    selectedHomeEntryRef.current = null;
+    selectedLibraryEntryRef.current = null;
+    modalPreparedSpineRef.current = null;
+    setSelectedHomeEntry(null);
+    setSelectedLibraryEntry(null);
+    setModalAnimations([]);
+    setModalActiveAnimation("");
+    setModalIsLoading(false);
+    setModalError("");
+  }, []);
+
+  const playModalAnimation = useCallback((name: string) => {
+    const player = modalPlayerRef.current;
+    const prepared = modalPreparedSpineRef.current;
+    if (!player || !prepared || !name) return;
+    try {
+      player.setAnimation(name, true);
+      player.play();
+      setModalActiveAnimation(name);
+    } catch (err) {
+      console.warn(`Could not play animation "${name}".`, err);
+    }
+  }, []);
+
   useEffect(() => {
     const ids = Array.from(new Set(libraryEntries.map((entry) => entry.id).filter(Boolean)));
     if (!ids.length) {
@@ -2910,113 +3017,130 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
   useEffect(() => {
     const root = homeFeedRef.current;
-    if (!root || !homeFeedEntries.length) return;
+    if (!root) return;
     const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     const saveData = Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
     if (prefersReducedMotion || saveData) return;
 
-    const videos = Array.from(root.querySelectorAll<HTMLVideoElement>(".home-feed-video"));
-    if (!videos.length) return;
-
-    const visibleVideos = new Set<HTMLVideoElement>();
-    const manualVideos = new WeakSet<HTMLVideoElement>();
-    let chaosTimer = 0;
+    const stopVideo = (video: HTMLVideoElement) => {
+      video.pause();
+      video.onended = null;
+      try { video.currentTime = 0; } catch {}
+    };
 
     const playVideo = (video: HTMLVideoElement) => {
       if (!video.currentSrc && !video.src) return;
       video.muted = true;
       video.loop = false;
       video.playsInline = true;
-      try {
-        video.currentTime = 0;
-      } catch {}
+      try { video.currentTime = 0; } catch {}
       void video.play().catch(() => undefined);
     };
 
-    const stopVideo = (video: HTMLVideoElement) => {
-      video.pause();
-      video.onended = null;
-      try {
-        video.currentTime = 0;
-      } catch {}
-    };
+    const getCardFromVideo = (video: HTMLVideoElement) => video.closest(".home-feed-card") as HTMLElement | null;
+    const isMobile = window.innerWidth < 768;
 
-    const randomSample = <T,>(items: T[], count: number) =>
-      items
-        .map((item) => ({ item, sort: Math.random() }))
-        .sort((a, b) => a.sort - b.sort)
-        .slice(0, count)
-        .map((entry) => entry.item);
+    const updateAutoplay = () => {
+      const videos = Array.from(root.querySelectorAll<HTMLVideoElement>(".home-feed-video"));
+      if (!videos.length) return;
 
-    const scheduleChaos = () => {
-      window.clearTimeout(chaosTimer);
-      chaosTimer = window.setTimeout(runChaos, 3000 + Math.random() * 4000);
-    };
+      const rects: Array<{ video: HTMLVideoElement; dist: number; index: number }> = [];
+      videos.forEach((video, i) => {
+        if (!video.isConnected || !(video.currentSrc || video.src)) return;
+        const card = getCardFromVideo(video);
+        if (!card) return;
+        const rect = card.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const dist = Math.hypot(cx - window.innerWidth / 2, cy - window.innerHeight / 2);
+        rects.push({ video, dist, index: i });
+      });
 
-    const runChaos = () => {
-      const videos = Array.from(visibleVideos).filter((video) => video.isConnected && (video.currentSrc || video.src));
-      if (!videos.length) {
-        scheduleChaos();
-        return;
+      rects.sort((a, b) => a.dist - b.dist);
+      const limit = isMobile ? 1 : 2;
+      const toPlay = rects.slice(0, limit);
+      const toStop = rects.slice(limit);
+
+      if (isMobile && homeFeedCenterVideoRef.current && homeFeedCenterVideoRef.current.isConnected) {
+        const stillCenter = toPlay.some((r) => r.video === homeFeedCenterVideoRef.current);
+        if (!stillCenter) stopVideo(homeFeedCenterVideoRef.current);
       }
-      const activeLimit = Math.min(1, Math.max(1, Math.ceil(videos.length * 0.1)));
-      randomSample(
-        videos.filter((video) => !video.paused && !manualVideos.has(video)),
-        videos.length,
-      )
-        .slice(activeLimit)
-        .forEach(stopVideo);
-      randomSample(
-        videos.filter((video) => video.paused && !manualVideos.has(video)),
-        activeLimit,
-      ).forEach((video) => {
-        if (Math.random() < 0.7) {
-          playVideo(video);
-          window.setTimeout(() => {
-            if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.85) stopVideo(video);
-          }, 500 + Math.random() * 2000);
+
+      toStop.forEach(({ video }) => {
+        if (isMobile) {
+          stopVideo(video);
+        } else {
+          const pos = rects.findIndex((r) => r.video === video);
+          const nearest = rects[0];
+          if (nearest && pos - (rects.findIndex((r) => r.video === nearest.video) ?? 0) >= 3) {
+            stopVideo(video);
+          }
         }
       });
-      scheduleChaos();
+
+      toPlay.forEach(({ video }) => {
+        if (video.paused) playVideo(video);
+        if (isMobile) homeFeedCenterVideoRef.current = video;
+      });
     };
 
     let observer: IntersectionObserver | null = null;
-    const cards = root.querySelectorAll<HTMLAnchorElement>(".home-feed-card");
+    const cards = root.querySelectorAll<HTMLElement>(".home-feed-card");
     if ("IntersectionObserver" in window) {
       observer = new IntersectionObserver(
         (entries) => {
           entries.forEach((entry) => {
             const video = entry.target.querySelector<HTMLVideoElement>(".home-feed-video");
             if (!video) return;
-            if (entry.isIntersecting && entry.intersectionRatio >= 0.4) {
-              visibleVideos.add(video);
-              if (video.readyState < 1) {
-                video.preload = "metadata";
-                video.load();
-              }
-            } else {
-              visibleVideos.delete(video);
-              if (!manualVideos.has(video)) stopVideo(video);
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.15 && video.readyState < 2) {
+              video.preload = "metadata";
+              video.load();
             }
           });
-          scheduleChaos();
         },
-        { threshold: [0, 0.4, 0.7, 1] },
+        { threshold: [0, 0.15, 0.5, 1] },
       );
       cards.forEach((card) => observer?.observe(card));
-    } else {
-      cards.forEach((card) => {
-        const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
-        if (video) visibleVideos.add(video);
-      });
-      scheduleChaos();
     }
 
+    const handleScroll = () => {
+      window.cancelAnimationFrame(modalScrollRafRef.current);
+      modalScrollRafRef.current = window.requestAnimationFrame(updateAutoplay);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    const viewport = root.querySelector<HTMLElement>(".home-feed-viewport");
+    if (viewport) viewport.addEventListener("scroll", handleScroll, { passive: true });
+
+    const handleResize = () => { updateAutoplay(); };
+    window.addEventListener("resize", handleResize, { passive: true });
+
+    const initialTimer = window.setTimeout(updateAutoplay, 300);
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        homeFeedAllVideoRefs.current.forEach((video) => stopVideo(video));
+      } else {
+        window.setTimeout(updateAutoplay, 200);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", () => {
+      homeFeedAllVideoRefs.current.forEach(stopVideo);
+    });
+
     return () => {
-      window.clearTimeout(chaosTimer);
+      window.clearTimeout(initialTimer);
+      window.cancelAnimationFrame(modalScrollRafRef.current);
+      window.removeEventListener("scroll", handleScroll);
+      if (viewport) viewport.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleResize);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      homeFeedAllVideoRefs.current.forEach(stopVideo);
+      homeFeedAllVideoRefs.current.clear();
+      homeFeedCenterVideoRef.current = null;
       observer?.disconnect();
     };
-  }, [homeFeedEntries]);
+  }, [homeFeedEntries.length]);
 
   useEffect(() => {
     const cards = Array.from(document.querySelectorAll<HTMLElement>(".library-card"));
@@ -4873,6 +4997,123 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     { href: "/spine-link-manifesto.html", title: "Manifesto", description: "AI animator agreement" },
   ];
 
+  function DetailModalInner() {
+    const entry = selectedHomeEntry ?? selectedLibraryEntry;
+    if (!entry) return null;
+    const prepared = modalPreparedSpineRef.current;
+
+    useEffect(() => {
+      if (!prepared || !modalPlayerHostRef.current) return;
+      let cancelled = false;
+      setModalIsLoading(true);
+      setModalError("");
+      setModalAnimations([]);
+      setModalActiveAnimation("");
+
+      loadSpinePlayerForSet(prepared)
+        .then(({ SpinePlayer }) => {
+          if (cancelled || !modalPlayerHostRef.current) return;
+          modalPlayerHostRef.current.innerHTML = "";
+          const player = new SpinePlayer(modalPlayerHostRef.current, {
+            skeleton: prepared.skeletonName,
+            ...(extensionOf(prepared.skeletonName) === "skel" ? { skelUrl: prepared.skeletonName } : { jsonUrl: prepared.skeletonName }),
+            atlas: prepared.atlasName,
+            atlasUrl: prepared.atlasName,
+            rawDataURIs: prepared.rawDataURIs,
+            animation: prepared.defaultAnimation,
+            ...(prepared.defaultSkin ? { skin: prepared.defaultSkin } : {}),
+            premultipliedAlpha: prepared.premultipliedAlpha,
+            showControls: true,
+            showLoading: true,
+            alpha: true,
+            preserveDrawingBuffer: true,
+            backgroundColor: "00000000",
+            viewport: {
+              ...(prepared.viewport || {}),
+              padLeft: "14%",
+              padRight: "14%",
+              padTop: "14%",
+              padBottom: "14%",
+            },
+            success: (player: SpinePlayerInstance) => {
+              if (cancelled) return;
+              const names = player.skeleton?.data.animations.map((a: { name: string }) => a.name) ?? [];
+              const initial = prepared.defaultAnimation && names.includes(prepared.defaultAnimation) ? prepared.defaultAnimation : names[0];
+              setModalAnimations(names);
+              setModalActiveAnimation(initial || "");
+              setModalIsLoading(false);
+              if (initial) {
+                try { player.setAnimation(initial, true); player.play(); } catch {}
+              }
+            },
+            error: (_player: SpinePlayerInstance, message: unknown) => {
+              if (cancelled) return;
+              setModalError(typeof message === "string" ? message : "Player error.");
+              setModalIsLoading(false);
+            },
+          } as unknown as SpinePlayerConfig);
+          modalPlayerRef.current = player as unknown as SpinePlayerInstance;
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setModalError(err instanceof Error ? err.message : "Could not load Spine player.");
+          setModalIsLoading(false);
+        });
+
+      return () => {
+        cancelled = true;
+        if (modalPlayerRef.current) {
+          try { modalPlayerRef.current.dispose?.(); } catch {}
+          modalPlayerRef.current = null;
+        }
+        if (modalPlayerHostRef.current) modalPlayerHostRef.current.innerHTML = "";
+      };
+    }, [prepared?.label]);
+
+    const handleOverlayClick = (event: React.MouseEvent) => {
+      if (event.target === event.currentTarget) closeDetailModal();
+    };
+
+    return (
+      <div className="detail-modal-overlay" onClick={handleOverlayClick}>
+        <div className="detail-modal-content" role="dialog" aria-modal="true" aria-label={entry.title || "Preview"}>
+          <div className="detail-modal-header">
+            <strong>{entry.title || "Preview"}</strong>
+            <button className="detail-modal-close" type="button" onClick={closeDetailModal} aria-label="Close preview">
+              <X size={22} />
+            </button>
+          </div>
+          {modalIsLoading && (
+            <div className="detail-modal-loading">
+              <Loader2 size={28} className="spin" />
+              <span>Loading preview...</span>
+            </div>
+          )}
+          {modalError && <div className="detail-modal-error">{modalError}</div>}
+          {!modalIsLoading && !modalError && prepared && (
+            <>
+              <div className="detail-modal-player" ref={modalPlayerHostRef} />
+              {modalAnimations.length > 1 && (
+                <div className="detail-modal-animations">
+                  <label htmlFor="detail-animation-select">Animation:</label>
+                  <select
+                    id="detail-animation-select"
+                    value={modalActiveAnimation}
+                    onChange={(e) => playModalAnimation(e.target.value)}
+                  >
+                    {modalAnimations.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <main
       className={`app-shell ${!preparedSpine ? "is-empty" : ""} ${isIntroDocking ? "is-docking" : ""} ${isEditPage ? "is-edit-page" : ""} ${isUploadPage ? "is-upload-page" : ""}`}
@@ -4953,7 +5194,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               ) : (
                 <>
                   <a className="my-library-button" href="/?portfolio=1" onClick={(event) => { event.preventDefault(); openLibrary(); }}>
-                    Portfolio database
+                    Portfolio
                   </a>
                   <button className="guest-account-button" type="button" onClick={() => { setIsAccountMenuOpen(false); void openGoogleSignIn(); }} title="Sign in" aria-label="Sign in">
                     <User className="user_icon" size={22} />
@@ -4993,8 +5234,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <small>Anyone can add a Spine animation with Create preview or publish through a Google account profile.</small>
             </div>
             <div className="home-feed-viewport">
-              <div className="home-feed-track">
-                {homeFeedLoop.map((entry, index) => {
+              <div className="home-feed-track is-scrolling">
+                {[...homeFeedLoop, ...homeFeedLoop].map((entry, index) => {
                   const metric = entryMetrics[entry.id] ?? entry.metrics ?? emptyEntryMetric();
                   const poster = entry.thumbnailPoster || entry.thumbnail || "";
                   const likedEntry = Boolean(metric.liked);
@@ -5013,18 +5254,37 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                         }
                       : {}),
                   } as React.CSSProperties;
+                  const bestWebm = entry.webmPreview || "";
+                  const webmSrc = videosEnabled && bestWebm ? bestWebm : undefined;
                   return (
-                    <a
+                    <div
                       className="home-feed-card"
-                      href={entry.previewUrl}
                       key={`${entry.id}-${index}`}
                       style={cardStyle}
-                      aria-label={`Open ${entry.title}`}
                     >
                       {poster ? (
                         <img src={poster} alt="" loading="lazy" decoding="async" />
                       ) : (
                         <span className="home-feed-fallback">{entry.animations ?? 0}</span>
+                      )}
+                      {webmSrc && (
+                        <video
+                          className="home-feed-video"
+                          src={webmSrc}
+                          poster={poster || undefined}
+                          muted
+                          playsInline
+                          preload="none"
+                          aria-hidden="true"
+                          ref={(el) => {
+                            if (el) {
+                              homeFeedAllVideoRefs.current.set(entry.id, el);
+                              if (el.readyState < 1) { el.preload = "metadata"; el.load(); }
+                            } else {
+                              homeFeedAllVideoRefs.current.delete(entry.id);
+                            }
+                          }}
+                        />
                       )}
                       <button
                         className={`home-feed-like ${likedEntry ? "is-liked" : ""}`}
@@ -5044,7 +5304,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                         <strong>{entry.title}</strong>
                         <em>{entry.ownerName || "Spine creator"} · {entry.pageMode || "Library"} · {metric.views} views</em>
                       </span>
-                    </a>
+                    </div>
                   );
                 })}
               </div>
@@ -5459,9 +5719,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                   </label>
                   <label>
                     <span>Profile</span>
-                    <a href="/?portfolio=1" onClick={(event) => { event.preventDefault(); openLibrary(); }}>
-                      Portfolio database
-                    </a>
+                      <a href="/?portfolio=1" onClick={(event) => { event.preventDefault(); openLibrary(); }}>
+                        Portfolio
+                      </a>
                   </label>
                   <label>
                     <span>Publish</span>
@@ -5847,9 +6107,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 const shouldIgnoreCardOpen = (target: EventTarget | null) =>
                   target instanceof HTMLElement &&
                   Boolean(target.closest(".library-card-actions, .library-card-order-actions, .portfolio-like-button"));
-                const openEntryEditor = () => {
-                  window.location.href = editUrl;
-                };
                 return (
                   <div
                     className={`library-card-shell ${libraryCardSizeClass(entry, index)}${entry.hiddenFromPublicLibrary ? " is-hidden" : ""}`}
@@ -5865,13 +6122,13 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     onClickCapture={(event) => {
                       if (shouldIgnoreCardOpen(event.target)) return;
                       event.preventDefault();
-                      openEntryEditor();
+                      void openDetailModal(entry);
                     }}
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
                       if (shouldIgnoreCardOpen(event.target)) return;
                       event.preventDefault();
-                      openEntryEditor();
+                      void openDetailModal(entry);
                     }}
                     tabIndex={0}
                   >
@@ -5951,6 +6208,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           )}
         </div>
       )}
+      <DetailModalInner />
       <a className="site-credit" href="https://t.me/vladleopold" target="_blank" rel="noreferrer">
         by leopold
       </a>

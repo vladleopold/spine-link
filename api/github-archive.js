@@ -53,6 +53,23 @@ function entryVideoAsset(value = '', entry = {}, fallback = '') {
   return appendAssetVersion(safeVideo(value), assetVersionForEntry(entry, fallback));
 }
 
+function entryVideoSrc(origin, entry = {}) {
+  const direct = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  if (direct) return direct;
+  const low = entryVideoAsset(entry?.webmPreviewLow || '', entry, 'preview-low');
+  if (low) return low;
+  const medium = entryVideoAsset(entry?.webmPreviewMedium || '', entry, 'preview-medium');
+  if (medium) return medium;
+  const previewPath = cleanRepoPath(entry?.previewPath || '');
+  if (previewPath) {
+    const lowUrl = `${origin}/assets/${encodeRepoPath(`${previewPath}/preview-low.webm`)}`;
+    const version = assetVersionForEntry(entry, 'preview-low');
+    if (version) return appendAssetVersion(lowUrl, version);
+    return lowUrl;
+  }
+  return '';
+}
+
 function safeAsset(value = '') {
   const url = String(value).trim();
   return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
@@ -344,10 +361,10 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
   const image = entryImageUrl(origin, entry);
-  const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const video = entryVideoSrc(origin, entry);
   const lowPoster = entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low') || lightweightAssetUrl(origin, entry, 'preview-low.webp', image);
   const lowVideo = video
-    ? entryVideoAsset(entry?.webmPreviewLow || '', entry, 'preview-low') || lightweightAssetUrl(origin, entry, 'preview-low.webm', video)
+    ? entryVideoSrc(origin, { ...entry, webmPreview: entry?.webmPreviewLow || entry?.webmPreviewMedium || '' }) || lightweightAssetUrl(origin, entry, 'preview-low.webm', video)
     : '';
   return {
     id,
@@ -378,14 +395,17 @@ function lightweightCardHtml(item, index = 0) {
   const media = item.poster
     ? `<img src="${poster}"${posterFallback && posterFallback !== poster ? ` data-fallback-src="${posterFallback}"` : ''} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'low'}" />`
     : '<span class="feed-placeholder" aria-hidden="true">SPINE</span>';
-  const mediaControl = item.video
-    ? `<button class="feed-media" type="button" data-play-preview data-video-src="${video}" data-video-fallback="${videoFallback}" aria-label="Play lightweight video preview for ${title}">${media}<span class="play-mark" aria-hidden="true">Play</span></button>`
-    : `<a class="feed-media" href="${escapeHtml(item.playerUrl)}" aria-label="Open ${title} in Spine player">${media}</a>`;
-  return `<article class="feed-card" data-entry-id="${escapeHtml(item.id)}" style="--media-ratio:${ratio}">
-    ${mediaControl}
+  const mediaVideo = item.video
+    ? `<video src="${video}" poster="${poster || posterFallback}" muted playsinline preload="none" loop data-video-src="${video}" data-video-fallback="${videoFallback}"></video>`
+    : '';
+  const mediaInner = mediaVideo || media;
+  const playerUrlAttr = item.playerUrl ? ` data-player-url="${escapeHtml(item.playerUrl)}"` : '';
+  const clickHandler = item.playerUrl ? ` onclick="if(this.dataset.playerUrl)window.location.href=this.dataset.playerUrl"` : '';
+  return `<article class="feed-card"${playerUrlAttr}${clickHandler} data-entry-id="${escapeHtml(item.id)}" style="--media-ratio:${ratio}">
+    <div class="feed-media">${mediaInner}</div>
     <div class="feed-info">
-      <div><a class="feed-title" href="${escapeHtml(item.playerUrl)}">${title}</a><span class="feed-mode">${escapeHtml(item.mode)}</span></div>
-      <div class="feed-meta">${item.ownerUrl ? `<a href="${escapeHtml(item.ownerUrl)}">${escapeHtml(item.ownerName)}</a>` : `<span>${escapeHtml(item.ownerName)}</span>`}<span>${item.animations} animations</span><span>${item.metrics.likes} likes</span><span>${item.metrics.views} views</span></div>
+      <div><span class="feed-title">${title}</span><span class="feed-mode">${escapeHtml(item.mode)}</span></div>
+      <div class="feed-meta"><span>${escapeHtml(item.ownerName)}</span><span>${item.animations} animations</span><span>${item.metrics.likes} likes</span><span>${item.metrics.views} views</span></div>
     </div>
   </article>`;
 }
@@ -521,7 +541,7 @@ function entryImageUrl(origin, entry) {
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, altText = '', fetchpriority = '' } = {}) {
-  const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const video = entryVideoSrc(origin, entry);
   const poster = entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
   const thumbnail = isGifThumbnail ? poster : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
@@ -587,7 +607,6 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
   const cards = entries
     .map((entry, index) => {
       const title = escapeHtml(entry?.title || entry?.id || 'Spine preview');
-      const itemUrl = previewUrl(entry);
       const archiveUrl = archiveItemUrl(entry);
       const metricId = String(entry?.id || entry?.title || '');
       const metric = metricCountsForId(metrics, metricId);
@@ -596,7 +615,7 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
       const cardSizeMode = entry?.cardSize && entry.cardSize !== 'auto' ? 'manual' : 'auto';
       const entryId = escapeHtml(String(entry?.id || ''));
       const fp = index < 6 ? 'high' : '';
-      return `<a class="${tileClassForEntry(entry, index)}" data-entry-id="${entryId}" data-archive-url="${escapeHtml(archiveUrl)}" data-card-size-mode="${cardSizeMode}" href="${escapeHtml(itemUrl)}" aria-label="Open ${title} in the interactive Spine player">
+      return `<div class="${tileClassForEntry(entry, index)}" data-entry-id="${entryId}" data-archive-url="${escapeHtml(archiveUrl)}" data-card-size-mode="${cardSizeMode}" aria-label="${escapeHtml(title)}">
         <div class="tile-media">${mediaHtml(entry, { origin, fetchpriority: fp })}</div>
         <span class="tile-select-check" aria-hidden="true">✓</span>
         <div class="tile-overlay">
@@ -606,7 +625,7 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
             <span class="tile-stat" data-metric-id="${entryId}" data-metric-current-likes="${likes}" data-metric-current-views="${views}"><span aria-hidden="true">◉</span><strong data-metric-views>${views}</strong></span>
           </span>
         </div>
-      </a>`;
+      </div>`;
     })
     .join('');
 
@@ -1266,7 +1285,7 @@ function archiveHtml({ origin, entries, metrics }) {
     <link rel="canonical" href="${origin}/world-spine-archive" />
     <script type="application/ld+json">${jsonScript(structuredData)}</script>
     <style>
-      *{box-sizing:border-box}html{color-scheme:dark;background:#080a0c}body{margin:0;color:#f4f7fa;background:#080a0c;font:14px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit}.shell{width:min(100%,1120px);margin:auto;padding:12px}.top{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0 12px;background:rgba(8,10,12,.96)}.logo{font-size:18px;font-weight:900;letter-spacing:.13em;text-decoration:none}.logo b{color:#ff6a2a}.create{padding:9px 12px;border:1px solid #9adc45;border-radius:999px;color:#dfffb5;text-decoration:none;font-weight:800}.intro{padding:18px 0 16px}.intro h1{max-width:720px;margin:0;font-size:clamp(27px,7vw,52px);line-height:.95;letter-spacing:-.045em}.intro p{max-width:680px;margin:12px 0 0;color:#9aa4ad}.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}.legend span{padding:5px 8px;border:1px solid #293139;border-radius:999px;color:#bdc6ce;font-size:12px}.feed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.feed-card{content-visibility:auto;contain-intrinsic-size:320px;overflow:hidden;border:1px solid #20262c;border-radius:12px;background:#101419}.feed-media{position:relative;display:grid;width:100%;aspect-ratio:var(--media-ratio);min-height:160px;padding:0;overflow:hidden;border:0;color:#fff;background:#050607;cursor:pointer}.feed-media img,.feed-media video{width:100%;height:100%;object-fit:contain;background:#050607}.feed-placeholder{display:grid;place-items:center;color:#59636d;font-weight:900}.play-mark{position:absolute;right:10px;bottom:10px;padding:6px 9px;border-radius:999px;background:rgba(0,0,0,.76);font-size:12px;font-weight:800}.feed-info{display:grid;gap:6px;padding:10px}.feed-info>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:8px}.feed-title{overflow:hidden;font-weight:850;text-decoration:none;text-overflow:ellipsis;white-space:nowrap}.feed-mode{flex:none;color:#9adc45;font-size:11px}.feed-meta{display:flex;gap:8px;overflow:hidden;color:#8d98a2;font-size:11px;white-space:nowrap}.feed-meta a{text-decoration:none}.sentinel{min-height:70px;display:grid;place-items:center;color:#7d8790}.footer{padding:28px 0;color:#737e87;font-size:12px;text-align:center}@media(max-width:620px){.shell{padding:8px}.top{padding-top:max(8px,env(safe-area-inset-top))}.feed{grid-template-columns:1fr;gap:8px}.feed-card{contain-intrinsic-size:420px}.feed-media{min-height:230px}.intro{padding-top:12px}.feed-meta{gap:7px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+      *{box-sizing:border-box}html{color-scheme:dark;background:#080a0c}body{margin:0;color:#f4f7fa;background:#080a0c;font:14px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit}.shell{width:min(100%,1120px);margin:auto;padding:12px}.top{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0 12px;background:rgba(8,10,12,.96)}.logo{font-size:18px;font-weight:900;letter-spacing:.13em;text-decoration:none}.logo b{color:#ff6a2a}.create{padding:9px 12px;border:1px solid #9adc45;border-radius:999px;color:#dfffb5;text-decoration:none;font-weight:800}.intro{padding:18px 0 16px}.intro h1{max-width:720px;margin:0;font-size:clamp(27px,7vw,52px);line-height:.95;letter-spacing:-.045em}.intro p{max-width:680px;margin:12px 0 0;color:#9aa4ad}.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}.legend span{padding:5px 8px;border:1px solid #293139;border-radius:999px;color:#bdc6ce;font-size:12px}.feed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.feed-card{content-visibility:auto;contain-intrinsic-size:320px;overflow:hidden;border:1px solid #20262c;border-radius:12px;background:#101419}.feed-media{position:relative;display:grid;width:100%;aspect-ratio:var(--media-ratio);min-height:160px;padding:0;overflow:hidden;border:0;color:#fff;background:#050607}.feed-media img,.feed-media video{width:100%;height:100%;object-fit:contain;background:#050607}.feed-placeholder{display:grid;place-items:center;color:#59636d;font-weight:900}.feed-info{display:grid;gap:6px;padding:10px}.feed-info>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:8px}.feed-title{overflow:hidden;font-weight:850;text-overflow:ellipsis;white-space:nowrap}.feed-mode{flex:none;color:#9adc45;font-size:11px}.feed-meta{display:flex;gap:8px;overflow:hidden;color:#8d98a2;font-size:11px;white-space:nowrap}.sentinel{min-height:70px;display:grid;place-items:center;color:#7d8790}.footer{padding:28px 0;color:#737e87;font-size:12px;text-align:center}@media(max-width:620px){.shell{padding:8px}.top{padding-top:max(8px,env(safe-area-inset-top))}.feed{grid-template-columns:1fr;gap:8px}.feed-card{contain-intrinsic-size:420px}.feed-media{min-height:230px}.intro{padding-top:12px}.feed-meta{gap:7px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
     </style>
   </head>
   <body>
@@ -1288,50 +1307,49 @@ function archiveHtml({ origin, entries, metrics }) {
         let offset = ${initialItems.length};
         let loading = false;
         let finished = offset >= ${entries.length};
-        let activeVideo = null;
 
-        function releaseVideo(video) {
+        function stopVideo(video) {
           if (!video) return;
           video.pause();
-          video.removeAttribute('src');
-          video.load();
-          const button = video.closest('[data-play-preview]');
-          if (button) {
-            const image = button.querySelector('img');
-            if (image) image.hidden = false;
-            const mark = button.querySelector('.play-mark');
-            if (mark) mark.hidden = false;
-          }
-          video.remove();
-          if (activeVideo === video) activeVideo = null;
+          try { video.currentTime = 0; } catch {}
         }
 
-        function playPreview(button) {
-          if (activeVideo && activeVideo.closest('[data-play-preview]') === button) {
-            releaseVideo(activeVideo);
-            return;
-          }
-          releaseVideo(activeVideo);
-          const src = button.dataset.videoSrc || '';
-          if (!src) return;
-          const video = document.createElement('video');
+        function playVideo(video) {
+          if (!video.currentSrc && !video.src) return;
           video.muted = true;
           video.loop = true;
           video.playsInline = true;
-          video.preload = 'none';
-          video.src = src;
-          video.addEventListener('error', () => {
-            const fallback = button.dataset.videoFallback || '';
-            if (fallback && video.src !== fallback) video.src = fallback;
-            else releaseVideo(video);
-          }, { once: true });
-          const image = button.querySelector('img');
-          if (image) image.hidden = true;
-          const mark = button.querySelector('.play-mark');
-          if (mark) mark.hidden = true;
-          button.append(video);
-          activeVideo = video;
-          video.play().catch(() => releaseVideo(video));
+          try { video.currentTime = 0; } catch {}
+          void video.play().catch(() => undefined);
+        }
+
+        function updateAutoplay() {
+          const cards = Array.from(feed.querySelectorAll('.feed-card'));
+          if (!cards.length) return;
+
+          const rects = [];
+          cards.forEach((card) => {
+            const video = card.querySelector('video');
+            if (!video || !video.isConnected || (!video.currentSrc && !video.src)) return;
+            const media = card.querySelector('.feed-media');
+            if (!media) return;
+            const rect = media.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const dist = Math.hypot(cx - window.innerWidth / 2, cy - window.innerHeight / 2);
+            rects.push({ video, dist });
+          });
+
+          rects.sort((a, b) => a.dist - b.dist);
+          const isMobile = window.innerWidth < 768;
+          const limit = isMobile ? 1 : 2;
+          const toPlay = rects.slice(0, limit);
+          const toStop = rects.slice(limit);
+
+          toStop.forEach(({ video }) => stopVideo(video));
+          toPlay.forEach(({ video }) => {
+            if (video.paused) playVideo(video);
+          });
         }
 
         function makeCard(item) {
@@ -1340,39 +1358,48 @@ function archiveHtml({ origin, entries, metrics }) {
           card.dataset.entryId = item.id;
           const ratio = item.width && item.height ? Math.min(1.8, Math.max(.62, item.width / item.height)) : 1;
           card.style.setProperty('--media-ratio', ratio);
-          const media = document.createElement(item.video ? 'button' : 'a');
+          const media = document.createElement('div');
           media.className = 'feed-media';
           if (item.video) {
-            media.type = 'button'; media.dataset.playPreview = ''; media.dataset.videoSrc = item.video; media.dataset.videoFallback = item.videoFallback || '';
-          } else media.href = item.playerUrl;
-          if (item.poster) {
-            const image = document.createElement('img');
-            image.src = item.poster; image.alt = item.title + ' Spine animation preview'; image.loading = 'lazy'; image.decoding = 'async';
-            image.addEventListener('error', () => { if (item.posterFallback && image.src !== item.posterFallback) image.src = item.posterFallback; }, { once: true });
-            media.append(image);
+            const video = document.createElement('video');
+            video.src = item.video;
+            video.poster = item.poster || item.posterFallback || '';
+            video.muted = true;
+            video.loop = true;
+            video.playsInline = true;
+            video.preload = 'none';
+            video.setAttribute('data-video-src', item.video);
+            if (item.videoFallback) video.setAttribute('data-video-fallback', item.videoFallback);
+            media.append(video);
+          } else if (item.poster) {
+            const img = document.createElement('img');
+            img.src = item.poster;
+            img.alt = item.title + ' Spine animation preview';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.addEventListener('error', () => { if (item.posterFallback && img.src !== item.posterFallback) img.src = item.posterFallback; }, { once: true });
+            media.append(img);
+          } else {
+            const placeholder = document.createElement('span');
+            placeholder.className = 'feed-placeholder';
+            placeholder.setAttribute('aria-hidden', 'true');
+            placeholder.textContent = 'SPINE';
+            media.append(placeholder);
           }
-          if (item.video) { const mark = document.createElement('span'); mark.className = 'play-mark'; mark.textContent = 'Play'; media.append(mark); }
           const info = document.createElement('div'); info.className = 'feed-info';
-          const heading = document.createElement('div'); const title = document.createElement('a'); title.className = 'feed-title'; title.href = item.playerUrl; title.textContent = item.title;
-          const mode = document.createElement('span'); mode.className = 'feed-mode'; mode.textContent = item.mode; heading.append(title, mode);
+          const heading = document.createElement('div');
+          const title = document.createElement('span'); title.className = 'feed-title'; title.textContent = item.title;
+          const mode = document.createElement('span'); mode.className = 'feed-mode'; mode.textContent = item.mode;
+          heading.append(title, mode);
           const meta = document.createElement('div'); meta.className = 'feed-meta';
           const values = [item.ownerName, item.animations + ' animations', item.metrics.likes + ' likes', item.metrics.views + ' views'];
-          values.forEach((value, index) => { const node = document.createElement(index === 0 && item.ownerUrl ? 'a' : 'span'); if (node.tagName === 'A') node.href = item.ownerUrl; node.textContent = value; meta.append(node); });
-          info.append(heading, meta); card.append(media, info); return card;
+          values.forEach((value) => { const node = document.createElement('span'); node.textContent = value; meta.append(node); });
+           info.append(heading, meta);
+          card.append(media, info);
+          card.style.cursor = 'pointer';
+          card.addEventListener('click', () => { if (item.playerUrl) window.location.href = item.playerUrl; });
+          return card;
         }
-
-        feed.addEventListener('click', (event) => {
-          const button = event.target.closest('[data-play-preview]');
-          if (button) playPreview(button);
-        });
-
-        const mediaObserver = new IntersectionObserver((records) => {
-          for (const record of records) {
-            const video = record.target.querySelector('video');
-            if (!record.isIntersecting && video) releaseVideo(video);
-          }
-        }, { rootMargin: '80px' });
-        document.querySelectorAll('.feed-card').forEach((card) => mediaObserver.observe(card));
 
         async function loadMore() {
           if (loading || finished) return;
@@ -1382,16 +1409,33 @@ function archiveHtml({ origin, entries, metrics }) {
             if (!response.ok) throw new Error('Archive request failed');
             const payload = await response.json();
             const fragment = document.createDocumentFragment();
-            for (const item of payload.entries || []) { const card = makeCard(item); mediaObserver.observe(card); fragment.append(card); }
+            for (const item of payload.entries || []) { const card = makeCard(item); fragment.append(card); }
             feed.append(fragment); offset += (payload.entries || []).length; finished = !payload.hasMore;
             sentinel.textContent = finished ? 'End of archive' : 'Scroll for more';
+            updateAutoplay();
           } catch { sentinel.textContent = 'Tap to retry'; }
           finally { loading = false; }
         }
+
+        const handleScroll = () => {
+          window.cancelAnimationFrame(handleScroll.raf);
+          handleScroll.raf = window.requestAnimationFrame(updateAutoplay);
+        };
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        window.addEventListener('resize', updateAutoplay, { passive: true });
+
+        const initialTimer = window.setTimeout(updateAutoplay, 300);
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) {
+            feed.querySelectorAll('video').forEach(stopVideo);
+          } else {
+            window.setTimeout(updateAutoplay, 200);
+          }
+        });
+        window.addEventListener('pagehide', () => { feed.querySelectorAll('video').forEach(stopVideo); });
+
         sentinel.addEventListener('click', loadMore);
         if (!finished) new IntersectionObserver((records) => { if (records.some((record) => record.isIntersecting)) loadMore(); }, { rootMargin: '500px' }).observe(sentinel);
-        document.addEventListener('visibilitychange', () => { if (document.hidden) releaseVideo(activeVideo); });
-        window.addEventListener('pagehide', () => releaseVideo(activeVideo), { once: true });
       })();
     </script>
   </body>
