@@ -153,11 +153,6 @@ function readSkeletonBounds(filePath) {
       return { width: w, height: h };
     }
     if (ext === '.skel') {
-      // Binary .skel header layout (Spine 4.x):
-      //   - length-prefixed version string
-      //   - hash string, x, y, width, height (all floats after strings)
-      // We do a heuristic: read the JSON skeleton metadata if a .json sibling exists,
-      // otherwise fall back to 0x0 (the script will use a safe default).
       const dir = path.dirname(filePath);
       const base = path.basename(filePath, '.skel');
       const jsonSibling = path.join(dir, base + '.json');
@@ -167,11 +162,30 @@ function readSkeletonBounds(filePath) {
         const h = Number(content?.skeleton?.height) || 0;
         return { width: w, height: h };
       }
-      // For .skel without a JSON sibling, return 0x0 — the browser will measure it live
       return { width: 0, height: 0 };
     }
   } catch { }
   return { width: 0, height: 0 };
+}
+
+function readAnimationNames(filePath) {
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.json') {
+      const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      return Object.keys(content?.animations || {});
+    }
+    if (ext === '.skel') {
+      const dir = path.dirname(filePath);
+      const base = path.basename(filePath, '.skel');
+      const jsonSibling = path.join(dir, base + '.json');
+      if (fs.existsSync(jsonSibling)) {
+        const content = JSON.parse(fs.readFileSync(jsonSibling, 'utf8'));
+        return Object.keys(content?.animations || {});
+      }
+    }
+  } catch { }
+  return [];
 }
 
 class SpineBinaryCursor {
@@ -320,7 +334,11 @@ function sanitizedSkelBuffer(buffer, version = "") {
 const skeletonFilePath = path.join(firstSet.path, skeletonFile);
 const skeletonVersion = detectSkeletonVersion(skeletonFilePath);
 const skeletonBounds = readSkeletonBounds(skeletonFilePath);
-const targetAnimation = args.animation || entry.defaultAnimation || '';
+let targetAnimation = args.animation || entry.defaultAnimation || '';
+const availableAnimations = readAnimationNames(skeletonFilePath);
+if (!targetAnimation || !availableAnimations.includes(targetAnimation)) {
+  targetAnimation = availableAnimations[0] || '';
+}
 
 // --- Calculate dynamic video dimensions from skeleton bounds ---
 const PAD_RATIO = 0.14; // 14% padding on each side
