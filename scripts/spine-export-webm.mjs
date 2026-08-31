@@ -382,6 +382,51 @@ const skeletonRawUrl = rawUrl(skeletonFile);
 const atlasRawUrl = rawUrl(atlasFile);
 const textureRawUrls = textureFiles.map(f => rawUrl(f));
 
+async function warmUpAnimations() {
+  const skelUrl = skeletonKey === 'skelUrl' ? skeletonRawUrl : skeletonRawUrl;
+  const atlasUrl = atlasRawUrl;
+  const texUrls = JSON.stringify(textureRawUrls);
+  const legacy = isLegacy;
+  const skelKey = skeletonKey;
+  const aKey = atlasKey;
+
+  const page = await browser.newPage();
+  try {
+    const warmupHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="${playerCssUrl}"><style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;background:transparent;overflow:hidden}#player{width:100%;height:100%}</style></head><body><div id="player"></div><script src="${playerJsUrl}"></script><script>(function(){window.__warmup=null;var cfg={${legacy ? (skelKey==='skelUrl'?'skelUrl':'jsonUrl')+':\''+skelUrl+'\'' : skelKey+':\''+skelUrl+'\''},${legacy?'atlasUrl':'atlas'}:'${atlasUrl}',textures:${texUrls},showLoading:false,premultipliedAlpha:false,preserveDrawingBuffer:true,alpha:true,backgroundColor:'#00000000',success:function(p){window.__warmup=p;},error:function(p,e){window.__warmupError=e;}};try{if(typeof spine.SpinePlayer==='function'){new spine.SpinePlayer('player',cfg);}else{window.__warmupError='spine.SpinePlayer is not a function';}}catch(e){window.__warmupError=e.message||e;}})();</script></body></html>`;
+    await page.setContent(warmupHtml, { waitUntil: 'networkidle', timeout: 60000 });
+    let names = [];
+    for (let i = 0; i < 40; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      if (page.isClosed()) break;
+      try {
+        const w = await page.evaluate(() => window);
+        if (w.__warmup && w.__warmup.skeletonData && w.__warmup.skeletonData.animations) {
+          names = w.__warmup.skeletonData.animations.map(a => a.name).filter(Boolean);
+          break;
+        }
+        if (w.__warmupError) {
+          if (w.spine && w.spine.SkeletonData) {
+            try {
+              const sd = await page.evaluate(() => {
+                if (window.spine && window.spine.SkeletonData) {
+                  const s = new window.spine.SkeletonData();
+                  return { hasAnimations: !!s.animations, animNames: s.animations ? Object.keys(s.animations) : [] };
+                }
+                return null;
+              });
+              if (sd && sd.animNames.length > 0) { names = sd.animNames; break; }
+            } catch {}
+          }
+          break;
+        }
+      } catch {}
+    }
+    return names;
+  } finally {
+    try { await page.close(); } catch {}
+  }
+}
+
 const atlasLocalPath = path.join(firstSet.path, atlasFile);
 let atlasContent = fs.readFileSync(atlasLocalPath, 'utf8');
 atlasContent = atlasContent.replace(/^\.\.[\/\\]textures[\/\\]/gm, '');
