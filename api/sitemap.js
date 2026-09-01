@@ -126,10 +126,18 @@ function entryExcludedFromArchive(entry, exclusions) {
   return rules.some((rule) => exclusionRuleMatches(entry, rule));
 }
 
+function hasBrokenOrMissingPreview(entry) {
+  if (!entry || typeof entry !== 'object') return false;
+  if (entry?.webmPreview || entry?.webmPreviewLow || entry?.webmPreviewMedium) return false;
+  const status = String(entry?.webmStatus || '').toLowerCase();
+  return status === 'error' || status === 'pending' || status === 'failed';
+}
+
 function archiveEntries(entries, exclusions) {
   return (Array.isArray(entries) ? entries : [])
     .filter((entry) => (
       entry?.hiddenFromPublicLibrary !== true &&
+      !hasBrokenOrMissingPreview(entry) &&
       (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster) &&
       !entryExcludedFromArchive(entry, exclusions)
     ))
