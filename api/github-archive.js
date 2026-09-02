@@ -1345,7 +1345,7 @@ function archiveHtml({ origin, entries, metrics }) {
       </section>
       <section class="feed" id="feed" aria-label="Spine animation video gallery">${cards}</section>
       <div class="sentinel" id="sentinel">${entries.length > initialItems.length ? 'Scroll for more' : 'End of archive'}</div>
-      <footer class="footer">Only one video can run at a time. Open a title for the full interactive Spine player.</footer>
+      <footer class="footer">Video previews autoplay while in view. Open a title for the full interactive Spine player.</footer>
     </main>
     <script>
       (() => {
@@ -1374,28 +1374,19 @@ function archiveHtml({ origin, entries, metrics }) {
           const cards = Array.from(feed.querySelectorAll('.feed-card'));
           if (!cards.length) return;
 
-          const rects = [];
+          const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
           cards.forEach((card) => {
             const video = card.querySelector('video');
             if (!video || !video.isConnected || (!video.currentSrc && !video.src)) return;
             const media = card.querySelector('.feed-media');
             if (!media) return;
             const rect = media.getBoundingClientRect();
-            const cx = rect.left + rect.width / 2;
-            const cy = rect.top + rect.height / 2;
-            const dist = Math.hypot(cx - window.innerWidth / 2, cy - window.innerHeight / 2);
-            rects.push({ video, dist });
-          });
-
-          rects.sort((a, b) => a.dist - b.dist);
-          const isMobile = window.innerWidth < 768;
-          const limit = isMobile ? 1 : 2;
-          const toPlay = rects.slice(0, limit);
-          const toStop = rects.slice(limit);
-
-          toStop.forEach(({ video }) => stopVideo(video));
-          toPlay.forEach(({ video }) => {
-            if (video.paused) playVideo(video);
+            const visible = rect.bottom > -40 && rect.top < viewportHeight + 40 && rect.width > 0 && rect.height > 0;
+            if (visible) {
+              if (video.paused) playVideo(video);
+            } else {
+              stopVideo(video);
+            }
           });
         }
 
