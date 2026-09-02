@@ -19,11 +19,14 @@ function base64ToBuffer(base64) {
 }
 
 function githubHeaders(token) {
-  return {
+  const headers = {
     Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${token}`,
     'X-GitHub-Api-Version': '2022-11-28',
   };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 async function githubText(settings, path) {

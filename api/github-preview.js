@@ -548,11 +548,14 @@ function seoHead({
 }
 
 function githubHeaders(token) {
-  return {
+  const headers = {
     Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${token}`,
     'X-GitHub-Api-Version': '2022-11-28',
   };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 function isSkeleton(name) {
@@ -629,7 +632,7 @@ async function githubFileHead(settings, path, maxBytes = 256) {
   const rawUrl = `https://raw.githubusercontent.com/${settings.owner}/${settings.repo}/${settings.branch}/${encodeRepoPath(path)}`;
   const response = await fetch(rawUrl, {
     headers: {
-      Authorization: `Bearer ${settings.token}`,
+      ...(settings.token ? { Authorization: `Bearer ${settings.token}` } : {}),
       Range: `bytes=0-${maxBytes - 1}`,
       Accept: 'application/octet-stream',
     },

@@ -43,9 +43,7 @@ async function contentBufferFromGitHubContent(data, token) {
 
   if (typeof data?.download_url === 'string' && data.download_url) {
     const rawResponse = await fetch(data.download_url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: githubHeaders(token),
     });
     if (!rawResponse.ok) throw new Error(`Raw asset did not load: ${rawResponse.status}`);
     return Buffer.from(await rawResponse.arrayBuffer());
@@ -227,11 +225,14 @@ function withAtlasPageCacheBuster(buffer, version) {
 }
 
 function githubHeaders(token) {
-  return {
+  const headers = {
     Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${token}`,
     'X-GitHub-Api-Version': '2022-11-28',
   };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 async function findFallbackGitHubPath({ owner, repo, branch, token, path }) {
@@ -312,7 +313,7 @@ async function sendGitHubRangeAsset(request, response, { path, assetVersion, dat
 
   const rawResponse = await fetch(data.download_url, {
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       Range: rangeHeader,
     },
   });
