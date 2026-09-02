@@ -17,6 +17,7 @@ const args = {
   repo: 'spine',
   branch: 'main',
   githubToken: '',
+  sanitizeSkel: false,
 };
 
 for (let i = 2; i < process.argv.length; i++) {
@@ -31,6 +32,7 @@ for (let i = 2; i < process.argv.length; i++) {
   else if (arg.startsWith('--owner=')) args.owner = arg.split('=')[1];
   else if (arg.startsWith('--repo=')) args.repo = arg.split('=')[1];
   else if (arg.startsWith('--github-token=')) args.githubToken = arg.split('=')[1];
+  else if (arg.startsWith('--sanitize-skel=')) args.sanitizeSkel = arg.split('=')[1] !== 'false';
 }
 
 if (!args.uploadId) {
@@ -188,6 +190,48 @@ function readAnimationNames(filePath) {
   return [];
 }
 
+/**
+ * Compute animation duration from JSON skeleton timeline data as a fallback
+ * when the player reports duration=0 (Spine 4.2.x JSON exports sometimes
+ * omit the top-level 'duration' field on animations).
+ * Walks all timeline keys for the given animation and returns the max 'time'.
+ */
+function readJsonAnimationDuration(filePath, animationName) {
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    let content = null;
+    if (ext === '.json') {
+      content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } else if (ext === '.skel') {
+      const dir = path.dirname(filePath);
+      const base = path.basename(filePath, '.skel');
+      const jsonSibling = path.join(dir, base + '.json');
+      if (fs.existsSync(jsonSibling)) {
+        content = JSON.parse(fs.readFileSync(jsonSibling, 'utf8'));
+      }
+    }
+    if (!content || !content.animations || !content.animations[animationName]) return 0;
+    const anim = content.animations[animationName];
+    let maxTime = 0;
+    const collect = (obj) => {
+      if (!obj) return;
+      if (Array.isArray(obj)) {
+        for (const v of obj) {
+          if (v && typeof v === 'object' && 'time' in v && typeof v.time === 'number') {
+            if (v.time > maxTime) maxTime = v.time;
+          }
+        }
+        return;
+      }
+      if (typeof obj !== 'object') return;
+      for (const k of Object.keys(obj)) collect(obj[k]);
+    };
+    collect(anim);
+    return maxTime;
+  } catch { }
+  return 0;
+}
+
 class SpineBinaryCursor {
   constructor(bytes) {
     this.bytes = bytes;
@@ -336,8 +380,10 @@ const skeletonVersion = detectSkeletonVersion(skeletonFilePath);
 const skeletonBounds = readSkeletonBounds(skeletonFilePath);
 let targetAnimation = args.animation || entry.defaultAnimation || '';
 const availableAnimations = readAnimationNames(skeletonFilePath);
-if (!targetAnimation || !availableAnimations.includes(targetAnimation)) {
-  targetAnimation = availableAnimations[0] || '';
+if (availableAnimations.length > 0) {
+  if (!targetAnimation || !availableAnimations.includes(targetAnimation)) {
+    targetAnimation = availableAnimations[0] || '';
+  }
 }
 
 // --- Calculate dynamic video dimensions from skeleton bounds ---
@@ -565,6 +611,7 @@ fs.mkdirSync(tempDir, { recursive: true });
 
 const browser = await chromium.launch({
   headless: true,
+  ...(process.env.PLAYWRIGHT_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE } : {}),
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -596,7 +643,7 @@ try {
     let body;
     if (skeletonFile.toLowerCase().endsWith('.skel')) {
       const rawBuffer = fs.readFileSync(skeletonFilePath);
-      body = sanitizedSkelBuffer(rawBuffer, skeletonVersion);
+      body = args.sanitizeSkel ? sanitizedSkelBuffer(rawBuffer, skeletonVersion) : rawBuffer;
     } else {
       body = fs.readFileSync(skeletonFilePath, 'utf8');
     }
@@ -619,7 +666,7 @@ try {
       });
     });
   }
-  await page.setContent(captureHtml, { waitUntil: 'networkidle', timeout: 60000 });
+  await page.setContent(captureHtml, { waitUntil: 'load', timeout: 60000 });
 
   await page.waitForFunction(() => window.__ready === true || window.__captureError, { timeout: 60000, polling: 200 });
 
@@ -633,9 +680,20 @@ try {
   const canvasWidth = await page.evaluate(() => window.__canvasWidth || 0) || videoWidth;
   const canvasHeight = await page.evaluate(() => window.__canvasHeight || 0) || videoHeight;
 
+  // Fallback: if the player reported duration=0 (e.g. Spine 4.2.x JSON with no
+  // top-level 'duration' field), compute it from the raw JSON timeline data.
+  let effectiveDuration = animDuration;
+  if (effectiveDuration <= 0 && targetAnimation) {
+    const fallbackDuration = readJsonAnimationDuration(skeletonFilePath, targetAnimation);
+    if (fallbackDuration > 0) {
+      console.error(`Player reported duration=0, using JSON timeline max time=${fallbackDuration}s for '${targetAnimation}'`);
+      effectiveDuration = fallbackDuration;
+    }
+  }
+
   console.error(`Animation ready, duration=${animDuration}s, canvas=${canvasWidth}x${canvasHeight}`);
 
-  const captureDuration = animDuration > 0 ? animDuration : 1; // Exactly animDuration, no stretching/padding
+  const captureDuration = Math.max(effectiveDuration > 0 ? effectiveDuration : 1, 2); // Record at least 2s so short animations (e.g. 0.33s loops) show meaningful preview content
   await new Promise(resolve => setTimeout(resolve, captureDuration * 1000));
 
   await page.evaluate(() => {
@@ -709,14 +767,36 @@ try {
     execSync(`ffmpeg -y -i "${videoPath}" -r 30 -s ${dimLow} -c:v libvpx-vp9 -b:v ${bitrates.low} -pix_fmt yuv420p "${outPaths.webmLow}"`, { stdio: 'inherit' });
 
     // WebP Generation (extract first frame)
-    // High Quality WebP
-    execSync(`ffmpeg -y -i "${videoPath}" -vframes 1 -s ${dimHigh} -c:v libwebp "${outPaths.webpHigh}"`, { stdio: 'inherit' });
-    // Medium Quality WebP
-    execSync(`ffmpeg -y -i "${videoPath}" -vframes 1 -s ${dimMedium} -c:v libwebp "${outPaths.webpMedium}"`, { stdio: 'inherit' });
-    // Low Quality WebP
-    execSync(`ffmpeg -y -i "${videoPath}" -vframes 1 -s ${dimLow} -c:v libwebp "${outPaths.webpLow}"`, { stdio: 'inherit' });
-
-    console.error(`FFmpeg processing complete. Generated 3x WebM and 3x WebP.`);
+    // Prefer cwebp (webp CLI) when libwebp ffmpeg encoder is unavailable (multiple ffmpeg builds omit libwebp).
+    function convertToWebp(source, out, dim) {
+      try {
+        const pngPath = `${source}.frame.png`;
+        execSync(`ffmpeg -y -i "${videoPath}" -vframes 1 -s ${dim} -c:v png "${pngPath}"`, { stdio: 'inherit' });
+        try {
+          execSync(`cwebp -quiet "${pngPath}" -o "${out}"`, { stdio: 'inherit' });
+        } catch (e) {
+          execSync(`convert "${pngPath}" "${out}"`, { stdio: 'inherit' });
+        }
+        fs.rmSync(pngPath, { force: true });
+      } catch (err) {
+        throw new Error(`WebP generation failed for ${out}: ${err.message}`);
+      }
+    }
+    const webpDims = {
+      high: dimHigh,
+      medium: dimMedium,
+      low: dimLow,
+    };
+    let webpOk = true;
+    for (const q of ['high', 'medium', 'low']) {
+      try {
+        convertToWebp(outPaths[`webp${q[0].toUpperCase()}${q.slice(1)}`], outPaths[`webp${q[0].toUpperCase()}${q.slice(1)}`], webpDims[q]);
+      } catch (err) {
+        console.error(`WebP (${q}) failed: ${err.message}`);
+        webpOk = false;
+      }
+    }
+    if (webpOk) console.error(`WebP posters generated.`);
   } catch (err) {
     console.error(`FFmpeg processing failed or skipped: ${err.message}`);
     // Fallback if ffmpeg fails: just copy the original capture to the main output
