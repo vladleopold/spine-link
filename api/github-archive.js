@@ -145,14 +145,6 @@ function entryExcludedFromArchive(entry, exclusions) {
   return rules.some((rule) => exclusionRuleMatches(entry, rule));
 }
 
-function hasBrokenOrMissingPreview(entry) {
-  if (!entry || typeof entry !== 'object') return false;
-  const webmPreview = entry?.webmPreview || entry?.webmPreviewLow || entry?.webmPreviewMedium;
-  if (webmPreview) return false;
-  const status = String(entry?.webmStatus || '').toLowerCase();
-  return status === 'error' || status === 'pending' || status === 'failed';
-}
-
 function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
   const poster = String(entry?.thumbnailPoster || '');
@@ -1949,7 +1941,6 @@ export default async function handler(request, response) {
     const entries = Array.isArray(allEntries)
       ? allEntries.filter((entry) => (
           entry?.hiddenFromPublicLibrary !== true &&
-          !hasBrokenOrMissingPreview(entry) &&
           (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster) &&
           !entryExcludedFromArchive(entry, exclusions)
         ))
