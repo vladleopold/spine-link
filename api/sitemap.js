@@ -134,12 +134,32 @@ function entryFileStamp(value) {
   return String(match?.[1] || '').replace(/-(\d{2})-(\d{2})Z?$/i, 'T$1:$2:00Z');
 }
 
+function entryBaseTitle(entry) {
+  const id = String(entry?.id || '').trim();
+  const match = id.match(/^(.*?)(?:-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d{3})?Z?)$/i);
+  const base = match?.[1] ?? String(entry?.title || '').trim();
+  return base.toLowerCase();
+}
+
 function dedupeArchiveEntries(entries) {
   const byFile = new Map();
   const result = [];
   for (const entry of entries) {
-    const file = String(entry?.skeleton || '').trim().toLowerCase();
-    const key = file || String(entry?.previewPath || '').trim().toLowerCase() || String(entry?.title || '').trim().toLowerCase();
+    const file = String(entry?.skeleton || '').trim();
+    if (file) {
+      const base = file.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase();
+      if (!byFile.has(base)) {
+        byFile.set(base, result.length);
+        result.push(entry);
+        continue;
+      }
+      const prev = result[byFile.get(base)];
+      const prevId = entryFileStamp(prev?.id || prev?.uploadedAt || '');
+      const curId = entryFileStamp(entry?.id || entry?.uploadedAt || '');
+      if (curId && (!prevId || curId > prevId)) result[byFile.get(base)] = entry;
+      continue;
+    }
+    const key = entryBaseTitle(entry) || String(entry?.previewPath || '').trim().toLowerCase() || String(entry?.title || '').trim().toLowerCase();
     if (!byFile.has(key)) {
       byFile.set(key, result.length);
       result.push(entry);
@@ -148,9 +168,7 @@ function dedupeArchiveEntries(entries) {
     const prev = result[byFile.get(key)];
     const prevId = entryFileStamp(prev?.id || prev?.uploadedAt || '');
     const curId = entryFileStamp(entry?.id || entry?.uploadedAt || '');
-    if (curId && (!prevId || curId > prevId)) {
-      result[byFile.get(key)] = entry;
-    }
+    if (curId && (!prevId || curId > prevId)) result[byFile.get(key)] = entry;
   }
   return result;
 }
