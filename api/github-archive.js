@@ -206,6 +206,32 @@ function compareArchiveEntries(a, b) {
   return String(b?.uploadedAt || '').localeCompare(String(a?.uploadedAt || ''));
 }
 
+function entryFileStamp(value) {
+  const match = String(value || '').match(/(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d{3})?Z?)/i);
+  return String(match?.[1] || '').replace(/-(\d{2})-(\d{2})Z?$/i, 'T$1:$2:00Z');
+}
+
+function dedupeArchiveEntries(entries) {
+  const byFile = new Map();
+  const result = [];
+  for (const entry of entries) {
+    const file = String(entry?.skeleton || '').trim().toLowerCase();
+    const key = file || String(entry?.previewPath || '').trim().toLowerCase() || String(entry?.title || '').trim().toLowerCase();
+    if (!byFile.has(key)) {
+      byFile.set(key, result.length);
+      result.push(entry);
+      continue;
+    }
+    const prev = result[byFile.get(key)];
+    const prevId = entryFileStamp(prev?.id || prev?.uploadedAt || '');
+    const curId = entryFileStamp(entry?.id || entry?.uploadedAt || '');
+    if (curId && (!prevId || curId > prevId)) {
+      result[byFile.get(key)] = entry;
+    }
+  }
+  return result;
+}
+
 function previewUrl(entry) {
   const id = encodeURIComponent(String(entry?.id || ''));
   const animation = String(entry?.defaultAnimation || '').trim();
@@ -1942,11 +1968,11 @@ export default async function handler(request, response) {
     const metrics = parseMetricsJson(metricsText);
     const allEntries = indexText ? JSON.parse(indexText) : [];
     const entries = Array.isArray(allEntries)
-      ? allEntries.filter((entry) => (
+      ? dedupeArchiveEntries(allEntries.filter((entry) => (
           entry?.hiddenFromPublicLibrary !== true &&
           (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster) &&
           !entryExcludedFromArchive(entry, exclusions)
-        ))
+        )))
       : [];
     entries.sort(compareArchiveEntries);
 

@@ -129,14 +129,42 @@ function entryExcludedFromArchive(entry, exclusions) {
   return rules.some((rule) => exclusionRuleMatches(entry, rule));
 }
 
+function entryFileStamp(value) {
+  const match = String(value || '').match(/(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d{3})?Z?)/i);
+  return String(match?.[1] || '').replace(/-(\d{2})-(\d{2})Z?$/i, 'T$1:$2:00Z');
+}
+
+function dedupeArchiveEntries(entries) {
+  const byFile = new Map();
+  const result = [];
+  for (const entry of entries) {
+    const file = String(entry?.skeleton || '').trim().toLowerCase();
+    const key = file || String(entry?.previewPath || '').trim().toLowerCase() || String(entry?.title || '').trim().toLowerCase();
+    if (!byFile.has(key)) {
+      byFile.set(key, result.length);
+      result.push(entry);
+      continue;
+    }
+    const prev = result[byFile.get(key)];
+    const prevId = entryFileStamp(prev?.id || prev?.uploadedAt || '');
+    const curId = entryFileStamp(entry?.id || entry?.uploadedAt || '');
+    if (curId && (!prevId || curId > prevId)) {
+      result[byFile.get(key)] = entry;
+    }
+  }
+  return result;
+}
+
 function archiveEntries(entries, exclusions) {
-  return (Array.isArray(entries) ? entries : [])
-    .filter((entry) => (
-      entry?.hiddenFromPublicLibrary !== true &&
-      (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster) &&
-      !entryExcludedFromArchive(entry, exclusions)
-    ))
-    .sort((a, b) => String(b?.uploadedAt || '').localeCompare(String(a?.uploadedAt || '')));
+  return dedupeArchiveEntries(
+    (Array.isArray(entries) ? entries : [])
+      .filter((entry) => (
+        entry?.hiddenFromPublicLibrary !== true &&
+        (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster) &&
+        !entryExcludedFromArchive(entry, exclusions)
+      ))
+      .sort((a, b) => String(b?.uploadedAt || '').localeCompare(String(a?.uploadedAt || '')))
+  );
 }
 
 function spinePlayerUrl(entry) {
