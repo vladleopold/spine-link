@@ -3131,7 +3131,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       observer?.disconnect();
       cancelAnimationFrame(rafId);
     };
-  }, [homeFeedEntries.length]);
+  }, [homeFeedEntries.length, videosEnabled]);
 
   useEffect(() => {
     const cards = Array.from(document.querySelectorAll<HTMLElement>(".library-card"));
