@@ -9,9 +9,31 @@
     <meta name="description" content="SEO audit dashboard and roadmap for Spine-Link (spine-link.vercel.app)" />
     <meta name="site-measurement-date" content="2026-09-04" />
     <style>
-      * { box-sizing: border-box; }
-      body { margin: 0; color: #edf5ff; background: #050607; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .shell { max-width: 980px; margin: 0 auto; padding: 32px 20px 64px; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { min-height: 100vh; color: #edf5ff; background: #050607; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+      .marquee-container {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; overflow: hidden; z-index: 0;
+      }
+      .marquee-track {
+        position: absolute; top: 0; left: 100vw; height: 100%; display: flex; align-items: center; white-space: nowrap;
+        animation: marquee-scroll 45s linear infinite;
+      }
+      .marquee-track:hover { animation-play-state: paused; }
+      .marquee-text {
+        display: inline-flex; align-items: center; color: rgba(140,199,255,.04); font-size: clamp(14vw, 18vw, 320px); font-weight: 950; line-height: 1; text-transform: uppercase; letter-spacing: .15em; white-space: nowrap;
+        text-shadow: 0 0 30px rgba(179,255,64,.15), 0 0 60px rgba(80,180,255,.1);
+      }
+      .marquee-text .highlight { color: rgba(179,255,64,.08); }
+      .marquee-text .highlight-alt { color: rgba(79,133,255,.06); }
+      @keyframes marquee-scroll {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-100%); }
+      }
+      @media (max-width: 768px) {
+        .marquee-text { font-size: 24vw; letter-spacing: .08em; }
+        @keyframes marquee-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-200%); } }
+      }
+      .shell { position: relative; z-index: 1; max-width: 980px; margin: 0 auto; padding: 32px 20px 64px; }
       h1 { margin: 0 0 4px; color: #fff; font-size: clamp(28px, 4vw, 42px); line-height: 1; }
       h2 { margin: 32px 0 12px; color: #fff; font-size: clamp(18px, 2.5vw, 24px); border-bottom: 1px solid rgba(140,199,255,.18); padding-bottom: 8px; }
       h3 { margin: 18px 0 8px; color: #9aa4ad; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
@@ -34,22 +56,30 @@
       .tag-alert { background: rgba(255,106,40,.15); color: #ff6a2a; }
       .note { color: #9aa4ad; font-size: 13px; margin: 8px 0; line-height: 1.5; }
       .muted { color: #5a626d; font-size: 15px; }
+      code { background: rgba(140,199,255,.1); padding: 2px 6px; border-radius: 3px; color: #4fc3ff; font-size: 12px; }
       a { color: #4fc3ff; }
+      .note-outdated { background: #1a2027; }
       @media (max-width: 700px) { .stats { grid-template-columns: 1fr; } .shell { padding: 20px 12px 40px; } }
     </style>
   </head>
   <body>
+    <div class="marquee-container">
+      <div class="marquee-track">
+        <span class="marquee-text">SEO <span class="highlight">Optimization</span> <span class="highlight-alt">Performance</span> <span class="highlight">Indexing</span> <span class="highlight-alt">Crawling</span> <span class="highlight">Titles</span> <span class="highlight-alt">Descriptions</span> <span class="highlight">Structured Data</span> <span class="highlight-alt">Sitemaps</span> <span class="highlight">VideoObject</span> <span class="highlight-alt">CTR</span> <span class="highlight">Archive Pages</span> <span class="highlight-alt">Player Pages</span> <span class="highlight">Watch Pages</span> <span class="highlight-alt">Meta Tags</span> <span class="highlight">Google Search Console</span> <span class="highlight-alt">WebM</span> <span class="highlight">Spine-Link</span> <span class="highlight-alt">SEO Dashboard</span> <span class="highlight">Optimization</span> <span class="highlight-alt">Performance</span></span>
+      </div>
+    </div>
     <div class="shell">
       <header style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
         <div>
-        <h1>SEO Dashboard</h1>
-        <p class="subtitle">spine-link.vercel.app — Google Search Console Audit & Optimization</p>
-        <p class="note" style="font-size:13px;margin-top:0;">Site audit date: September 4, 2026 · Last deployed fixes: September 3, 2026</p>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span class="tag tag-done">Live</span>
-        <span class="tag tag-fix">Updated Sep 3</span>
-      </div>
+          <h1>SEO Dashboard</h1>
+          <p class="subtitle">spine-link.vercel.app — Google Search Console Audit & Optimization</p>
+          <p class="note" style="font-size:13px;margin-top:0;">Site audit date: September 4, 2026 · Last deployed fixes: September 3, 2026</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="tag tag-done">Live</span>
+          <span class="tag tag-fix">Updated Sep 3</span>
+        </div>
+      </header>
 
       <h2>Traffic Metrics (90 days)</h2>
       <div class="stats card">
@@ -120,67 +150,7 @@
             </tr>
           </tbody>
         </table>
-        <p class="note">Archive detail pages had poor CTR despite ranking positions 5-8. Title tags showed raw IDs like "book - World SPINE ARCHIVE". Now shows "Book Spine Animations - Preview Online | Spine-Link".</p>
-      </div>
-
-      <h2>Fixes Applied</h2>
-      <div class="card">
-        <table>
-          <thead>
-            <tr><th>Fix</th><th>File</th><th>Date</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Archive title SEO optimization</td><td>api/github-archive.js</td><td>Sep 3, 2026</td><td><span class="tag tag-done">Deployed</span></td></tr>
-            <tr><td>Video page title SEO optimization</td><td>api/github-archive.js</td><td>Sep 3, 2026</td><td><span class="tag tag-done">Deployed</span></td></tr>
-            <tr><td>Improved meta descriptions</td><td>api/github-archive.js</td><td>Sep 3, 2026</td><td><span class="tag tag-done">Deployed</span></td></tr>
-            <tr><td>Added seo-text content blocks</td><td>api/github-archive.js</td><td>Sep 3, 2026</td><td><span class="tag tag-done">Deployed</span></td></tr>
-            <tr><td>Fixed VideoObject URLs</td><td>api/github-preview.js</td><td>Sep 3, 2026</td><td><span class="tag tag-done">Deployed</span></td></tr>
-            <tr><td>Dynamic sitemap lastmod</td><td>api/sitemap.js</td><td>Sep 3, 2026</td><td><span class="tag tag-done">Deployed</span></td></tr>
-            <tr><td>Portfolio sitemap lastmod</td><td>api/sitemap-portfolios.js</td><td>Sep 3, 2026</td><td><span class="tag tag-done">Deployed</span></td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h2>Before / After Examples</h2>
-      <div class="card">
-        <table>
-          <thead>
-            <tr><th>URL Pattern</th><th>Before</th><th>After</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Archive detail</td>
-              <td><code>book - World SPINE ARCHIVE</code></td>
-              <td><code>Book Spine Animations - Preview Online | Spine-Link</code></td>
-            </tr>
-            <tr>
-              <td>Video watch</td>
-              <td><code>book - Spine animation video</code></td>
-              <td><code>Book Spine Animations - Watch Video | Spine-Link</code></td>
-            </tr>
-            <tr>
-              <td>Meta description</td>
-              <td><code>book is a public Spine animation work...</code></td>
-              <td><code>book — watch the Spine animation video preview...</code></td>
-            </tr>
-            <tr>
-              <td>VideoObject url</td>
-              <td><code>/p/{id}</code> (player page)</td>
-              <td><code>/video/{id}</code> (watch page)</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h2>Next Steps</h2>
-      <div class="card">
-        <ol style="color:#9aa4ad;line-height:1.8;">
-          <li>Request indexing for 5 key pages in Search Console (URL Inspection)</li>
-          <li>Monitor CTR improvements (target: 1%+ for archive pages)</li>
-          <li>Check video indexing status after Google recrawl (7-14 days)</li>
-          <li>Add structured data testing to validate VideoObject fix</li>
-          <li>Consider adding more SEO text to player pages (/p/)</li>
-        </ol>
+        <p class="note">Archive detail pages had poor CTR despite ranking positions 5-8. Title tags showed raw IDs like <code>book - World SPINE ARCHIVE</code>. Now shows <code>Book Spine Animations - Preview Online | Spine-Link</code>.</p>
       </div>
 
       <h2>SEO Roadmap — Spine-Link Growth Path</h2>
@@ -192,7 +162,7 @@
             <tr><th>Task</th><th>Status</th><th>Impact</th><th>Details</th></tr>
           </thead>
           <tbody>
-            <tr><td>Dynamic sitemap lastmod</td><td><span class="tag tag-done">Done</span></td><td>Medium</td><td>lastmod now auto-updates from new Date() in sitemap.js</td></tr>
+            <tr><td>Dynamic sitemap lastmod</td><td><span class="tag tag-done">Done</span></td><td>Medium</td><td>lastmod now auto-updates from <code>new Date()</code> in sitemap.js</td></tr>
             <tr><td>Sitemap submission</td><td><span class="tag tag-done">Done</span></td><td>Medium</td><td>All 7 sitemaps submitted in Search Console</td></tr>
             <tr><td>VideoObject URL fix</td><td><span class="tag tag-done">Done</span></td><td>High</td><td>Fixed 130 "Video isn't on a watch page" errors</td></tr>
           </tbody>
@@ -209,7 +179,7 @@
             <tr><td>Archive detail titles</td><td><span class="tag tag-done">Done</span></td><td>High</td><td>book → "Book Spine Animations - Preview Online | Spine-Link"</td></tr>
             <tr><td>Video watch titles</td><td><span class="tag tag-done">Done</span></td><td>High</td><td>eagle → "Eagle Spine Animations - Watch Video | Spine-Link"</td></tr>
             <tr><td>Meta descriptions</td><td><span class="tag tag-done">Done</span></td><td>Medium</td><td>Action-oriented CTAs with brand name</td></tr>
-            <tr><td>SEO text content</td><td><span class="tag tag-done">Done</span></td><td>Medium</td><td>Added crawlable text blocks to archive detail pages</td></tr>
+            <tr><td>SEO text content</td><td><span class="tag tag-done">Done</span></td><td>Medium</td><td>Added crawlable <code>seo-text</code> blocks to archive detail pages</td></tr>
           </tbody>
         </table>
       </div>
@@ -262,4 +232,3 @@
     </div>
   </body>
 </html>
-<!-- seo-dashboard-v2 -->
