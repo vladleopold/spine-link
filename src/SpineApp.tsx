@@ -5237,7 +5237,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <div className="home-feed-track is-scrolling">
                 {[...homeFeedLoop, ...homeFeedLoop].map((entry, index) => {
                   const metric = entryMetrics[entry.id] ?? entry.metrics ?? emptyEntryMetric();
-                  const poster = entry.thumbnailPoster || entry.thumbnail || "";
+                  const poster = entry.webpPosterLow || entry.webpPosterMedium || entry.webpPoster || entry.thumbnailPoster || entry.thumbnail || "";
                   const likedEntry = Boolean(metric.liked);
                   const previewWidth = Number(entry.previewWidth || 0);
                   const previewHeight = Number(entry.previewHeight || 0);
@@ -6100,7 +6100,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                   generatedPosterUrlForEntry(entry) ||
                   derivedLibraryAssetUrl(entry, [".webp", ".png", ".jpg", ".jpeg"]);
                 const isGifThumbnail = entry.thumbnailType === "gif" || /^data:image\/gif;base64,/i.test(entry.thumbnail || "");
-                const thumbnailForCard = isGifThumbnail ? safePoster : safeThumbnail || safePoster;
+                const thumbnailForCard = isGifThumbnail ? safePoster : safePoster || safeThumbnail;
                 const entryMetric = entryMetrics[entry.id] ?? emptyEntryMetric();
                 const likedEntry = Boolean(entryMetric.liked);
                 const likeCount = entryMetric.likes;

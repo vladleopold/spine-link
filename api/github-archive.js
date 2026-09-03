@@ -147,7 +147,7 @@ function entryExcludedFromArchive(entry, exclusions) {
 
 function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
-  const poster = String(entry?.thumbnailPoster || '');
+  const poster = String(entry?.webpPosterLow || entry?.webpPosterMedium || entry?.webpPoster || entry?.thumbnailPoster || '');
   return origin && id && /^data:image\/webp;base64,/i.test(poster)
     ? appendAssetVersion(`${origin}/assets/library/${encodeURIComponent(id)}/generated-preview.webp`, assetVersionForEntry(entry, 'generated-preview'))
     : '';
@@ -366,7 +366,7 @@ function homepageFeedEntries(origin, entries, metrics) {
     const metric = metricCountsForId(metrics, id);
     const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
     const thumbnail = isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
-    const poster = entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || thumbnail;
+    const poster = entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low') || entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || thumbnail;
     return {
       id,
       title: String(entry?.title || id || 'Spine preview'),
@@ -519,7 +519,7 @@ async function enrichArchiveEntryLayout(settings, origin, entry) {
     return { ...entry, mediaAspectRatio: width / height };
   }
 
-  const posterUrl = entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail');
+  const posterUrl = entryImageAsset(entry.webpPosterLow || '', entry, 'preview-low') || entryImageAsset(entry.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry.webpPoster || '', entry, 'poster') || entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail');
   const repoPath = repoPathFromAssetUrl(entry, posterUrl);
   if (!repoPath || repoPath.includes('/generated-preview.webp')) return entry;
   const buffer = await githubBuffer(settings, repoPath);
@@ -584,12 +584,12 @@ function tileClassForEntry(entry, index = 0) {
 
 function entryImageUrl(origin, entry) {
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-  return entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || (isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'));
+  return entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low') || entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || (isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'));
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, altText = '', fetchpriority = '' } = {}) {
   const video = entryVideoSrc(origin, entry);
-  const poster = entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
+  const poster = entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low') || entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
   const thumbnail = isGifThumbnail ? poster : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
   const alt = altText || escapeHtml(entry?.title || entry?.id || 'Spine animation preview');
