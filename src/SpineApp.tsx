@@ -2783,7 +2783,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       clearTimeout(timer);
       clearTimeout(fallbackTimer);
     };
-  });
+  }, []);
   const [previewNoteStatus, setPreviewNoteStatus] = useState("");
   const [currentLibraryEntry, setCurrentLibraryEntry] = useState<LibraryEntry | null>(null);
   const [status, setStatus] = useState("Drop three Spine files here: json, atlas, and texture.");
