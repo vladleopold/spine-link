@@ -1,0 +1,1046 @@
+{
+  "generatedAt": "2026-09-03T14:34:19.058Z",
+  "siteUrl": "https://spine-link.vercel.app/",
+  "summary": {
+    "totalClicks": 0,
+    "totalImpressions": 0,
+    "averageCtr": "0%",
+    "averagePosition": "0.0",
+    "uniqueQueries": 120,
+    "uniquePages": 88,
+    "sitemapsCount": 0
+  },
+  "topQueries": [
+    {
+      "query": "spine viewer online"
+    },
+    {
+      "query": "spine viewer"
+    },
+    {
+      "query": "spine preview online"
+    },
+    {
+      "query": "the spine archive"
+    },
+    {
+      "query": "online spine viewer"
+    },
+    {
+      "query": "spine player online"
+    },
+    {
+      "query": "spine preview"
+    },
+    {
+      "query": "spine archive"
+    },
+    {
+      "query": "spine online viewer"
+    },
+    {
+      "query": "spine link"
+    },
+    {
+      "query": "skel file viewer"
+    },
+    {
+      "query": "spine editor online"
+    },
+    {
+      "query": "spine 在线 预览"
+    },
+    {
+      "query": "i'm using the website"
+    },
+    {
+      "query": "links pls"
+    },
+    {
+      "query": "more pages"
+    },
+    {
+      "query": "que sea web"
+    },
+    {
+      "query": "spine 2d viewer"
+    },
+    {
+      "query": "spine animation viewer"
+    },
+    {
+      "query": "spine file viewer"
+    },
+    {
+      "query": "spine files"
+    },
+    {
+      "query": "spine web player"
+    },
+    {
+      "query": "spine web viewer"
+    },
+    {
+      "query": "spinearchive"
+    },
+    {
+      "query": ".spine file"
+    },
+    {
+      "query": "any others?"
+    },
+    {
+      "query": "archive spine"
+    },
+    {
+      "query": "atlas file viewer"
+    },
+    {
+      "query": "browser based?"
+    },
+    {
+      "query": "daiblos core l2d viewer"
+    },
+    {
+      "query": "from blue archive"
+    },
+    {
+      "query": "google spine"
+    },
+    {
+      "query": "how can i upload it"
+    },
+    {
+      "query": "how do i do that?"
+    },
+    {
+      "query": "is this it?"
+    },
+    {
+      "query": "jifen"
+    },
+    {
+      "query": "me salió esto"
+    },
+    {
+      "query": "more research"
+    },
+    {
+      "query": "none are working"
+    },
+    {
+      "query": "online spine"
+    },
+    {
+      "query": "open spine"
+    },
+    {
+      "query": "papper animation"
+    },
+    {
+      "query": "pixel spine"
+    },
+    {
+      "query": "skel viewer"
+    },
+    {
+      "query": "skeleton viewer"
+    },
+    {
+      "query": "skeleton viewer online"
+    },
+    {
+      "query": "skeleton viewer spine"
+    },
+    {
+      "query": "skeletonviewer"
+    },
+    {
+      "query": "spine 2d online"
+    },
+    {
+      "query": "spine animation online"
+    }
+  ],
+  "topPages": [
+    {
+      "page": "https://spine-link.vercel.app/spine-preview.html"
+    },
+    {
+      "page": "https://spine-link.vercel.app/"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/book-2026-06-13T19-00-43-423Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/spine-2026-08-14T18-11-43-456Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/book-2026-06-13T18-50-18-329Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/character-2026-08-04T20-28-43-068Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/spine-animator.html"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/book-2026-06-12T19-33-52-186Z?animation=Hit"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/big-win-parts-2026-06-07T06-45-45-206Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/symbols-2026-05-11T22-00-04-484Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/spine-animation-dataset.html"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/book-2026-06-12T19-33-52-186Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/eagle-2026-08-05T14-02-37-245Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/needle-2026-06-13T19-29-26-990Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/?edit=qv_-2026-08-16T20-58-30-857Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/bag-2026-06-12T19-30-07-441Z?animation=Hit"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/basic_mythic-water-queen-thalassa_3_v1_hd_spine-3-8-59_atitc-2026-06-09T03-03-28-053Z?animation=attack"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/carpet-wild-2026-06-08T18-05-29-614Z?animation=Idle"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/carpet-wild-2026-06-12T19-29-02-192Z?animation=Idle"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/centaur-2026-08-16T00-52-34-139Z?animation=Attack"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/char_blue-2026-05-24T20-54-17-339Z?animation=idle"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/eagle-2026-08-05T14-02-37-245Z?animation=Eagle_Idle"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/hero_rosamia_1-2026-07-23T20-03-38-799Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/loadingscreen-es-2026-05-01T22-48-45-761Z?animation=loading"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/mr_e-2026-05-24T21-47-52-993Z?animation=blink"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/n10026-2026-08-05T04-29-04-330Z?animation=DamageIn"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/papper-2026-06-12T19-31-59-270Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/papper-2026-06-13T19-03-23-789Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/phoebe-sidescroller-2026-05-11T22-51-07-841Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/phoebe-sidescroller-2026-05-11T22-51-07-841Z?animation=idle"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/qv2_-2026-08-16T20-55-06-110Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/rainbow-feature-2026-05-12T15-19-07-391Z?animation=level-1-loop"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/scatter-2026-06-13T18-49-11-770Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/skeleton-2026-07-02T13-52-18-678Z?animation=idle"
+    },
+    {
+      "page": "https://spine-link.vercel.app/p/uihitenemy_chocolatedie-2026-06-05T14-14-40-641Z?animation=idle"
+    },
+    {
+      "page": "https://spine-link.vercel.app/spine-link-manifesto.html"
+    },
+    {
+      "page": "https://spine-link.vercel.app/video/big-win-parts-2026-06-07T06-45-45-206Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/video/book-2026-06-12T19-33-52-186Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/video/hero_01c4-2026-05-30T09-30-45-649Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/video/papper-2026-06-12T19-31-59-270Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/video/spine-pet-127-2026-07-05T19-37-50-347Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/01-a-pose-2026-08-10T19-04-40-947Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/129_1-2026-05-30T16-27-42-606Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/143301-2026-07-27T09-54-38-131Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/200003-2026-07-27T09-48-50-691Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/200003-2026-07-27T09-50-33-835Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/backgroud-2026-07-03T13-58-53-106Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/bag-2026-06-12T19-30-07-441Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/bag-2026-06-13T16-07-43-674Z"
+    },
+    {
+      "page": "https://spine-link.vercel.app/world-spine-archive/bag-2026-06-13T17-26-33-613Z"
+    }
+  ],
+  "countries": [
+    {
+      "country": "usa"
+    },
+    {
+      "country": "vnm"
+    },
+    {
+      "country": "ind"
+    },
+    {
+      "country": "kor"
+    },
+    {
+      "country": "esp"
+    },
+    {
+      "country": "tur"
+    },
+    {
+      "country": "idn"
+    },
+    {
+      "country": "deu"
+    },
+    {
+      "country": "twn"
+    },
+    {
+      "country": "bra"
+    },
+    {
+      "country": "ukr"
+    },
+    {
+      "country": "ita"
+    },
+    {
+      "country": "rus"
+    },
+    {
+      "country": "gbr"
+    },
+    {
+      "country": "can"
+    },
+    {
+      "country": "phl"
+    },
+    {
+      "country": "chn"
+    },
+    {
+      "country": "pol"
+    },
+    {
+      "country": "jpn"
+    },
+    {
+      "country": "mys"
+    },
+    {
+      "country": "nld"
+    },
+    {
+      "country": "sgp"
+    },
+    {
+      "country": "aus"
+    },
+    {
+      "country": "mex"
+    },
+    {
+      "country": "arg"
+    },
+    {
+      "country": "blr"
+    },
+    {
+      "country": "cri"
+    },
+    {
+      "country": "fra"
+    },
+    {
+      "country": "geo"
+    },
+    {
+      "country": "srb"
+    },
+    {
+      "country": "fin"
+    },
+    {
+      "country": "hkg"
+    },
+    {
+      "country": "irn"
+    },
+    {
+      "country": "mng"
+    },
+    {
+      "country": "pak"
+    },
+    {
+      "country": "ven"
+    },
+    {
+      "country": "aze"
+    },
+    {
+      "country": "bgr"
+    },
+    {
+      "country": "chl"
+    },
+    {
+      "country": "dnk"
+    },
+    {
+      "country": "grc"
+    },
+    {
+      "country": "hun"
+    },
+    {
+      "country": "isr"
+    },
+    {
+      "country": "lva"
+    },
+    {
+      "country": "uzb"
+    },
+    {
+      "country": "are"
+    },
+    {
+      "country": "egy"
+    },
+    {
+      "country": "irq"
+    },
+    {
+      "country": "khm"
+    },
+    {
+      "country": "mdg"
+    },
+    {
+      "country": "nga"
+    },
+    {
+      "country": "nzl"
+    },
+    {
+      "country": "per"
+    },
+    {
+      "country": "sau"
+    },
+    {
+      "country": "swe"
+    },
+    {
+      "country": "tha"
+    },
+    {
+      "country": "arm"
+    },
+    {
+      "country": "bel"
+    },
+    {
+      "country": "bih"
+    },
+    {
+      "country": "civ"
+    },
+    {
+      "country": "col"
+    },
+    {
+      "country": "est"
+    },
+    {
+      "country": "kgz"
+    },
+    {
+      "country": "kwt"
+    },
+    {
+      "country": "ltu"
+    },
+    {
+      "country": "mar"
+    },
+    {
+      "country": "mda"
+    },
+    {
+      "country": "mlt"
+    },
+    {
+      "country": "mmr"
+    },
+    {
+      "country": "pry"
+    },
+    {
+      "country": "pse"
+    },
+    {
+      "country": "sdn"
+    },
+    {
+      "country": "slv"
+    },
+    {
+      "country": "svk"
+    },
+    {
+      "country": "svn"
+    },
+    {
+      "country": "ury"
+    },
+    {
+      "country": "zaf"
+    },
+    {
+      "country": "alb"
+    },
+    {
+      "country": "aut"
+    },
+    {
+      "country": "bgd"
+    },
+    {
+      "country": "bhr"
+    },
+    {
+      "country": "bol"
+    },
+    {
+      "country": "brn"
+    },
+    {
+      "country": "che"
+    },
+    {
+      "country": "cog"
+    },
+    {
+      "country": "cub"
+    },
+    {
+      "country": "cyp"
+    },
+    {
+      "country": "cze"
+    },
+    {
+      "country": "dom"
+    },
+    {
+      "country": "dza"
+    },
+    {
+      "country": "ecu"
+    },
+    {
+      "country": "eth"
+    },
+    {
+      "country": "flk"
+    },
+    {
+      "country": "gib"
+    },
+    {
+      "country": "grl"
+    },
+    {
+      "country": "gtm"
+    },
+    {
+      "country": "hnd"
+    },
+    {
+      "country": "hrv"
+    },
+    {
+      "country": "irl"
+    },
+    {
+      "country": "isl"
+    },
+    {
+      "country": "jam"
+    },
+    {
+      "country": "jor"
+    },
+    {
+      "country": "kaz"
+    },
+    {
+      "country": "ken"
+    },
+    {
+      "country": "lao"
+    },
+    {
+      "country": "lbn"
+    },
+    {
+      "country": "lka"
+    },
+    {
+      "country": "lux"
+    },
+    {
+      "country": "mac"
+    },
+    {
+      "country": "mdv"
+    },
+    {
+      "country": "mkd"
+    },
+    {
+      "country": "mne"
+    },
+    {
+      "country": "mus"
+    },
+    {
+      "country": "nic"
+    },
+    {
+      "country": "nor"
+    },
+    {
+      "country": "npl"
+    },
+    {
+      "country": "omn"
+    },
+    {
+      "country": "pan"
+    },
+    {
+      "country": "pri"
+    },
+    {
+      "country": "prt"
+    },
+    {
+      "country": "qat"
+    },
+    {
+      "country": "reu"
+    },
+    {
+      "country": "rou"
+    },
+    {
+      "country": "sen"
+    },
+    {
+      "country": "syr"
+    },
+    {
+      "country": "tto"
+    },
+    {
+      "country": "tun"
+    },
+    {
+      "country": "tza"
+    },
+    {
+      "country": "xkk"
+    },
+    {
+      "country": "yem"
+    }
+  ],
+  "devices": [
+    {
+      "device": "DESKTOP"
+    },
+    {
+      "device": "MOBILE"
+    },
+    {
+      "device": "TABLET"
+    }
+  ],
+  "byDate": [
+    {
+      "date": "2026-06-05"
+    },
+    {
+      "date": "2026-06-06"
+    },
+    {
+      "date": "2026-06-07"
+    },
+    {
+      "date": "2026-06-08"
+    },
+    {
+      "date": "2026-06-09"
+    },
+    {
+      "date": "2026-06-10"
+    },
+    {
+      "date": "2026-06-11"
+    },
+    {
+      "date": "2026-06-12"
+    },
+    {
+      "date": "2026-06-13"
+    },
+    {
+      "date": "2026-06-14"
+    },
+    {
+      "date": "2026-06-15"
+    },
+    {
+      "date": "2026-06-16"
+    },
+    {
+      "date": "2026-06-17"
+    },
+    {
+      "date": "2026-06-18"
+    },
+    {
+      "date": "2026-06-19"
+    },
+    {
+      "date": "2026-06-20"
+    },
+    {
+      "date": "2026-06-21"
+    },
+    {
+      "date": "2026-06-22"
+    },
+    {
+      "date": "2026-06-23"
+    },
+    {
+      "date": "2026-06-24"
+    },
+    {
+      "date": "2026-06-25"
+    },
+    {
+      "date": "2026-06-26"
+    },
+    {
+      "date": "2026-06-27"
+    },
+    {
+      "date": "2026-06-28"
+    },
+    {
+      "date": "2026-06-29"
+    },
+    {
+      "date": "2026-06-30"
+    },
+    {
+      "date": "2026-07-01"
+    },
+    {
+      "date": "2026-07-02"
+    },
+    {
+      "date": "2026-07-03"
+    },
+    {
+      "date": "2026-07-04"
+    },
+    {
+      "date": "2026-07-05"
+    },
+    {
+      "date": "2026-07-06"
+    },
+    {
+      "date": "2026-07-07"
+    },
+    {
+      "date": "2026-07-08"
+    },
+    {
+      "date": "2026-07-09"
+    },
+    {
+      "date": "2026-07-10"
+    },
+    {
+      "date": "2026-07-11"
+    },
+    {
+      "date": "2026-07-12"
+    },
+    {
+      "date": "2026-07-13"
+    },
+    {
+      "date": "2026-07-14"
+    },
+    {
+      "date": "2026-07-15"
+    },
+    {
+      "date": "2026-07-16"
+    },
+    {
+      "date": "2026-07-17"
+    },
+    {
+      "date": "2026-07-18"
+    },
+    {
+      "date": "2026-07-19"
+    },
+    {
+      "date": "2026-07-20"
+    },
+    {
+      "date": "2026-07-21"
+    },
+    {
+      "date": "2026-07-22"
+    },
+    {
+      "date": "2026-07-23"
+    },
+    {
+      "date": "2026-07-24"
+    },
+    {
+      "date": "2026-07-25"
+    },
+    {
+      "date": "2026-07-26"
+    },
+    {
+      "date": "2026-07-27"
+    },
+    {
+      "date": "2026-07-28"
+    },
+    {
+      "date": "2026-07-29"
+    },
+    {
+      "date": "2026-07-30"
+    },
+    {
+      "date": "2026-07-31"
+    },
+    {
+      "date": "2026-08-01"
+    },
+    {
+      "date": "2026-08-02"
+    },
+    {
+      "date": "2026-08-03"
+    },
+    {
+      "date": "2026-08-04"
+    },
+    {
+      "date": "2026-08-05"
+    },
+    {
+      "date": "2026-08-06"
+    },
+    {
+      "date": "2026-08-07"
+    },
+    {
+      "date": "2026-08-08"
+    },
+    {
+      "date": "2026-08-09"
+    },
+    {
+      "date": "2026-08-10"
+    },
+    {
+      "date": "2026-08-11"
+    },
+    {
+      "date": "2026-08-12"
+    },
+    {
+      "date": "2026-08-13"
+    },
+    {
+      "date": "2026-08-14"
+    },
+    {
+      "date": "2026-08-15"
+    },
+    {
+      "date": "2026-08-16"
+    },
+    {
+      "date": "2026-08-17"
+    },
+    {
+      "date": "2026-08-18"
+    },
+    {
+      "date": "2026-08-19"
+    },
+    {
+      "date": "2026-08-20"
+    },
+    {
+      "date": "2026-08-21"
+    },
+    {
+      "date": "2026-08-22"
+    },
+    {
+      "date": "2026-08-23"
+    },
+    {
+      "date": "2026-08-24"
+    },
+    {
+      "date": "2026-08-25"
+    },
+    {
+      "date": "2026-08-26"
+    },
+    {
+      "date": "2026-08-27"
+    },
+    {
+      "date": "2026-08-28"
+    },
+    {
+      "date": "2026-08-29"
+    },
+    {
+      "date": "2026-08-30"
+    },
+    {
+      "date": "2026-08-31"
+    },
+    {
+      "date": "2026-09-01"
+    }
+  ],
+  "searchAppearance": [
+    {
+      "searchAppearance": "AMP_BLUE_LINK"
+    },
+    {
+      "searchAppearance": "VIDEO"
+    }
+  ],
+  "sitemaps": [],
+  "urlInspections": [
+    {
+      "url": "https://spine-link.vercel.app/",
+      "verdict": "PASS",
+      "coverageState": "Submitted and indexed",
+      "robotsTxtState": "ALLOWED",
+      "referringUrls": [
+        "https://spine-link.vercel.app/?edit=qv_-2026-08-16T20-51-52-371Z",
+        "https://spine-link.vercel.app/?edit=qv_-2026-08-16T20-58-30-857Z",
+        "https://spine-link.vercel.app/p/spine_warlock_11-2026-05-11T19-16-56-383Z?animation=animation"
+      ],
+      "crawledAs": "MOBILE",
+      "lastCrawlTime": "2026-09-02T22:37:15Z",
+      "pageFetchState": "SUCCESSFUL"
+    },
+    {
+      "url": "https://spine-link.vercel.app/world-spine-archive",
+      "verdict": "NEUTRAL",
+      "coverageState": "Discovered - currently not indexed",
+      "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "referringUrls": [
+        "https://spine-link.vercel.app/"
+      ],
+      "crawledAs": "CRAWLING_USER_AGENT_UNSPECIFIED",
+      "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED"
+    },
+    {
+      "url": "https://spine-link.vercel.app/spine-link.html",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED"
+    },
+    {
+      "url": "https://spine-link.vercel.app/spine-preview-online.html",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED"
+    },
+    {
+      "url": "https://spine-link.vercel.app/spine-web-viewer.html",
+      "verdict": "NEUTRAL",
+      "coverageState": "URL is unknown to Google",
+      "robotsTxtState": "ROBOTS_TXT_STATE_UNSPECIFIED",
+      "pageFetchState": "PAGE_FETCH_STATE_UNSPECIFIED"
+    }
+  ]
+}
