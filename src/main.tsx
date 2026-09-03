@@ -19,6 +19,7 @@ type HomeFeedItem = {
   title?: string;
   ownerName?: string;
   previewUrl?: string;
+  webmPreview?: string;
   thumbnailPoster?: string;
   thumbnail?: string;
   previewWidth?: number;
@@ -247,6 +248,19 @@ async function loadHomeFeed() {
       card.appendChild(fallback);
     }
 
+    const webmSrc = entry.webmPreview || "";
+    if (webmSrc) {
+      const video = document.createElement("video");
+      video.className = "home-feed-video";
+      video.src = webmSrc;
+      if (poster) video.poster = poster;
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "none";
+      video.setAttribute("aria-hidden", "true");
+      card.appendChild(video);
+    }
+
     const like = document.createElement("span");
     like.className = "home-feed-like";
     like.setAttribute("aria-hidden", "true");
@@ -279,6 +293,115 @@ async function loadHomeFeed() {
   track.appendChild(cloneFragment);
   track.classList.add("is-scrolling");
   feedSection.style.display = "";
+
+  startHomeFeedAutoplay(track);
+}
+
+function startHomeFeedAutoplay(track: HTMLElement) {
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const saveData = Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
+  if (prefersReducedMotion || saveData) return;
+
+  const stopVideo = (video: HTMLVideoElement) => {
+    video.pause();
+    video.onended = null;
+    try { video.currentTime = 0; } catch {}
+  };
+
+  const playVideo = (video: HTMLVideoElement) => {
+    if (!video.currentSrc && !video.src) return;
+    video.muted = true;
+    video.loop = false;
+    video.playsInline = true;
+    const doPlay = () => {
+      try { video.currentTime = 0; } catch {}
+      void video.play().catch(() => undefined);
+    };
+    if (video.readyState >= 1) {
+      doPlay();
+    } else {
+      video.onloadedmetadata = doPlay;
+      video.load();
+    }
+  };
+
+  const visibleCards = new Set<Element>();
+  let currentPlayIdx = 0;
+  let rotationTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const stopAllVisible = () => {
+    visibleCards.forEach((card) => {
+      const v = (card as HTMLElement).querySelector<HTMLVideoElement>(".home-feed-video");
+      if (v && !v.paused) stopVideo(v);
+    });
+  };
+
+  const rotateVisible = () => {
+    const cardsArr = Array.from(visibleCards);
+    if (!cardsArr.length) { rotationTimer = null; return; }
+
+    stopAllVisible();
+
+    if (currentPlayIdx >= cardsArr.length) currentPlayIdx = 0;
+    const card = cardsArr[currentPlayIdx];
+    const video = (card as HTMLElement).querySelector<HTMLVideoElement>(".home-feed-video");
+    if (video) playVideo(video);
+
+    rotationTimer = setTimeout(() => {
+      currentPlayIdx = (currentPlayIdx + 1) % cardsArr.length;
+      rotateVisible();
+    }, 3500);
+  };
+
+  const scheduleRotate = () => {
+    if (rotationTimer) clearTimeout(rotationTimer);
+    rotationTimer = null;
+    if (visibleCards.size > 0) {
+      currentPlayIdx = 0;
+      rotateVisible();
+    }
+  };
+
+  if ("IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let changed = false;
+        entries.forEach((entry) => {
+          const video = (entry.target as HTMLElement).querySelector<HTMLVideoElement>(".home-feed-video");
+          if (!video) return;
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
+            visibleCards.add(entry.target);
+            if (video.readyState < 2) { video.preload = "metadata"; video.load(); }
+            changed = true;
+          } else if (visibleCards.has(entry.target)) {
+            visibleCards.delete(entry.target);
+            stopVideo(video);
+            changed = true;
+          }
+        });
+        if (changed) scheduleRotate();
+      },
+      { threshold: [0, 0.15, 0.5, 1] },
+    );
+    track.querySelectorAll<HTMLElement>(".home-feed-card").forEach((card) => observer.observe(card));
+  }
+
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      if (rotationTimer) clearTimeout(rotationTimer);
+      rotationTimer = null;
+      track.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+    } else {
+      scheduleRotate();
+    }
+  };
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  window.addEventListener("pagehide", () => {
+    if (rotationTimer) clearTimeout(rotationTimer);
+    track.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+  });
+
+  setTimeout(scheduleRotate, 500);
 }
 
 function renderLoadingShell() {
