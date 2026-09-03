@@ -1707,7 +1707,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
         </a>
         <div class="item-header-title">
           <a class="back" href="/world-spine-archive">World SPINE ARCHIVE</a>
-          <span>${title}</span>
+          <span>${displayTitle}</span>
         </div>
         <div class="archive-header-right">
           <a class="back" href="/">Create preview</a>
