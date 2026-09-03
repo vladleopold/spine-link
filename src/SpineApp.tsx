@@ -3040,48 +3040,42 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     const getCardFromVideo = (video: HTMLVideoElement) => video.closest(".home-feed-card") as HTMLElement | null;
     const isMobile = window.innerWidth < 768;
 
-    const updateAutoplay = () => {
-      const videos = Array.from(root.querySelectorAll<HTMLVideoElement>(".home-feed-video"));
-      if (!videos.length) return;
+    const visibleCards = new Set<HTMLElement>();
+    let currentPlayIdx = 0;
+    let rotationTimer: ReturnType<typeof setTimeout> | null = null;
+    let rafId = 0;
 
-      const rects: Array<{ video: HTMLVideoElement; dist: number; index: number }> = [];
-      videos.forEach((video, i) => {
-        if (!video.isConnected || !(video.currentSrc || video.src)) return;
-        const card = getCardFromVideo(video);
-        if (!card) return;
-        const rect = card.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        const dist = Math.hypot(cx - window.innerWidth / 2, cy - window.innerHeight / 2);
-        rects.push({ video, dist, index: i });
+    const stopAllVisible = () => {
+      visibleCards.forEach((card) => {
+        const v = card.querySelector<HTMLVideoElement>(".home-feed-video");
+        if (v && !v.paused) stopVideo(v);
       });
+    };
 
-      rects.sort((a, b) => a.dist - b.dist);
-      const limit = isMobile ? 1 : 2;
-      const toPlay = rects.slice(0, limit);
-      const toStop = rects.slice(limit);
+    const rotateVisible = () => {
+      const cards = Array.from(visibleCards);
+      if (!cards.length) { rotationTimer = null; return; }
 
-      if (isMobile && homeFeedCenterVideoRef.current && homeFeedCenterVideoRef.current.isConnected) {
-        const stillCenter = toPlay.some((r) => r.video === homeFeedCenterVideoRef.current);
-        if (!stillCenter) stopVideo(homeFeedCenterVideoRef.current);
+      stopAllVisible();
+
+      if (currentPlayIdx >= cards.length) currentPlayIdx = 0;
+      const card = cards[currentPlayIdx];
+      const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
+      if (video) playVideo(video);
+
+      rotationTimer = setTimeout(() => {
+        currentPlayIdx = (currentPlayIdx + 1) % cards.length;
+        rotateVisible();
+      }, 3500);
+    };
+
+    const scheduleRotate = () => {
+      if (rotationTimer) clearTimeout(rotationTimer);
+      rotationTimer = null;
+      if (visibleCards.size > 0) {
+        currentPlayIdx = 0;
+        rotateVisible();
       }
-
-      toStop.forEach(({ video }) => {
-        if (isMobile) {
-          stopVideo(video);
-        } else {
-          const pos = rects.findIndex((r) => r.video === video);
-          const nearest = rects[0];
-          if (nearest && pos - (rects.findIndex((r) => r.video === nearest.video) ?? 0) >= 3) {
-            stopVideo(video);
-          }
-        }
-      });
-
-      toPlay.forEach(({ video }) => {
-        if (video.paused) playVideo(video);
-        if (isMobile) homeFeedCenterVideoRef.current = video;
-      });
     };
 
     let observer: IntersectionObserver | null = null;
@@ -3089,56 +3083,53 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     if ("IntersectionObserver" in window) {
       observer = new IntersectionObserver(
         (entries) => {
+          let changed = false;
           entries.forEach((entry) => {
             const video = entry.target.querySelector<HTMLVideoElement>(".home-feed-video");
             if (!video) return;
-            if (entry.isIntersecting && entry.intersectionRatio >= 0.15 && video.readyState < 2) {
-              video.preload = "metadata";
-              video.load();
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
+              visibleCards.add(entry.target as HTMLElement);
+              if (video.readyState < 2) { video.preload = "metadata"; video.load(); }
+              changed = true;
+            } else if (visibleCards.has(entry.target as HTMLElement)) {
+              visibleCards.delete(entry.target as HTMLElement);
+              stopVideo(video);
+              changed = true;
             }
           });
+          if (changed) scheduleRotate();
         },
         { threshold: [0, 0.15, 0.5, 1] },
       );
       cards.forEach((card) => observer?.observe(card));
     }
 
-    const handleScroll = () => {
-      window.cancelAnimationFrame(modalScrollRafRef.current);
-      modalScrollRafRef.current = window.requestAnimationFrame(updateAutoplay);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    const viewport = root.querySelector<HTMLElement>(".home-feed-viewport");
-    if (viewport) viewport.addEventListener("scroll", handleScroll, { passive: true });
-
-    const handleResize = () => { updateAutoplay(); };
-    window.addEventListener("resize", handleResize, { passive: true });
-
-    const initialTimer = window.setTimeout(updateAutoplay, 300);
-
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        if (rotationTimer) clearTimeout(rotationTimer);
+        rotationTimer = null;
         homeFeedAllVideoRefs.current.forEach((video) => stopVideo(video));
       } else {
-        window.setTimeout(updateAutoplay, 200);
+        scheduleRotate();
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", () => {
+      if (rotationTimer) clearTimeout(rotationTimer);
       homeFeedAllVideoRefs.current.forEach(stopVideo);
     });
 
+    const initialTimer = setTimeout(scheduleRotate, 500);
+
     return () => {
-      window.clearTimeout(initialTimer);
-      window.cancelAnimationFrame(modalScrollRafRef.current);
-      window.removeEventListener("scroll", handleScroll);
-      if (viewport) viewport.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", handleResize);
+      clearTimeout(initialTimer);
+      if (rotationTimer) clearTimeout(rotationTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       homeFeedAllVideoRefs.current.forEach(stopVideo);
       homeFeedAllVideoRefs.current.clear();
       homeFeedCenterVideoRef.current = null;
       observer?.disconnect();
+      cancelAnimationFrame(rafId);
     };
   }, [homeFeedEntries.length]);
 
