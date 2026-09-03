@@ -5237,7 +5237,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <div className="home-feed-track is-scrolling">
                 {[...homeFeedLoop, ...homeFeedLoop].map((entry, index) => {
                   const metric = entryMetrics[entry.id] ?? entry.metrics ?? emptyEntryMetric();
-                  const poster = entry.webpPosterLow || entry.webpPosterMedium || entry.webpPoster || entry.thumbnailPoster || entry.thumbnail || "";
+                  const poster = entry.thumbnailPoster || entry.thumbnail || "";
                   const likedEntry = Boolean(metric.liked);
                   const previewWidth = Number(entry.previewWidth || 0);
                   const previewHeight = Number(entry.previewHeight || 0);
