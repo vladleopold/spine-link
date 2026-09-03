@@ -416,15 +416,17 @@ function videoMetadataForEntry(origin, entry, entryId, note = '', canonicalUrl =
   const description =
     cleanPublicText(note || entry?.note || `${name} Spine animation video preview and interactive Spine web player on Spine-Link.`, 260) ||
     `${name} Spine animation video preview and interactive Spine web player on Spine-Link.`;
+  const watchPageUrl = `${origin}/video/${encodeURIComponent(id)}`;
   return {
     id,
     name,
     description,
     thumbnailUrl: poster,
     contentUrl,
-    embedUrl: embedUrl || pageUrlForEntry(origin, id),
-    url: canonicalUrl || pageUrlForEntry(origin, id),
-    proofDocuments: proofDocumentsForEntry(origin, entry, canonicalUrl || pageUrlForEntry(origin, id)),
+    embedUrl: embedUrl || watchPageUrl,
+    url: watchPageUrl,
+    playerPageUrl: canonicalUrl || pageUrlForEntry(origin, id),
+    proofDocuments: proofDocumentsForEntry(origin, entry, watchPageUrl),
     sourceProofUrl: sourceProofUrlForEntry(origin, entry),
     blockchainAnchorUrl: blockchainAnchorUrlForEntry(origin, entry),
     proofHash: sanitizeSha256(entry?.sourceProof?.proofHash || entry?.blockchainAnchor?.sourceProofHash),
@@ -523,8 +525,8 @@ function seoHead({
     <meta name="application-name" content="Spine Portfolio" />
     <meta name="apple-mobile-web-app-title" content="Spine Portfolio" />
     <meta name="theme-color" content="#000000" />
-    <link rel="canonical" href="${escapeHtml(url)}" />
-    ${playerUrl && playerUrl !== url ? `<link rel="alternate" href="${escapeHtml(playerUrl)}" title="Interactive Spine player" />` : ''}
+    <link rel="canonical" href="${escapeHtml(video?.playerPageUrl || url)}" />
+    ${video?.url && video.url !== url ? `<link rel="alternate" href="${escapeHtml(video.url)}" title="${escapeHtml(video.name)} video watch page" />` : ''}
     ${archiveUrl && archiveUrl !== url ? `<link rel="alternate" href="${escapeHtml(archiveUrl)}" title="World SPINE ARCHIVE detail page" />` : ''}
     <meta property="og:type" content="${video ? 'video.other' : 'website'}" />
     <meta property="og:title" content="${escapeHtml(title)}" />

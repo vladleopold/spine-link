@@ -26,6 +26,8 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
+    "google-auth-library": "^11.0.2",
+    "googleapis": "^178.0.0",
     "playwright": "^1.59.1"
   }
 }

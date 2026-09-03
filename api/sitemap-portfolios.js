@@ -45,7 +45,7 @@ async function githubText(settings, path) {
   return cachedGithubText(settings, path);
 }
 
-function validDate(value, fallback = '2026-05-12') {
+function validDate(value, fallback = new Date().toISOString().slice(0, 10)) {
   const date = new Date(String(value || ''));
   if (Number.isNaN(date.getTime())) return fallback;
   return date.toISOString().slice(0, 10);

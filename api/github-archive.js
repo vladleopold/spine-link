@@ -1480,9 +1480,30 @@ function archiveHtml({ origin, entries, metrics }) {
 </html>`;
 }
 
+function humanizeEntryTitle(entry) {
+  const raw = String(entry?.title || entry?.id || '').trim();
+  if (!raw) return 'Spine animation';
+  const cleaned = raw
+    .replace(/-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d{3})?Z?$/i, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+  return cleaned || 'Spine animation';
+}
+
+function seoTitleForEntry(entry) {
+  const base = humanizeEntryTitle(entry);
+  const animations = Array.isArray(entry?.animations) ? entry.animations.length : 0;
+  const hasMultipleAnims = animations > 1;
+  const suffix = hasMultipleAnims ? 'Animations' : 'Animation';
+  return `${base} Spine ${suffix} - Preview Online | Spine-Link`;
+}
+
 function archiveItemHtml({ origin, entry, metrics }) {
   const rawTitle = cleanPublicText(entry?.title || entry?.id || 'Spine preview', 120);
-  const title = escapeHtml(rawTitle);
+  const seoTitle = seoTitleForEntry(entry);
+  const displayTitle = escapeHtml(rawTitle);
+  const seoTitleEscaped = escapeHtml(seoTitle);
   const animations = Array.isArray(entry?.animations) ? entry.animations.length : 0;
   const spineUrl = previewUrl(entry);
   const absoluteSpineUrl = `${origin}${spineUrl}`;
@@ -1497,7 +1518,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
   const ownerName = cleanPublicText(entry?.ownerName || 'Spine creator', 100);
   const description = cleanPublicText(
     entry?.note ||
-      `${rawTitle} is a public Spine animation work in World SPINE ARCHIVE. Open the interactive Spine player, watch the WebM preview, and view real likes and views on Spine Portfolio.`,
+      `${rawTitle} — watch the Spine animation video preview, open the interactive player, and view likes and views. Part of the World SPINE ARCHIVE collection on Spine-Link.`,
     280,
   );
   const uploadedAt = isoDate(entry?.uploadedAt) || '2026-05-12T00:00:00.000Z';
@@ -1576,7 +1597,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
       {
         '@type': 'WebPage',
         '@id': `${pageUrl}#webpage`,
-        name: `${rawTitle} - World SPINE ARCHIVE`,
+        name: seoTitle,
         description,
         url: pageUrl,
         isPartOf: {
@@ -1626,7 +1647,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title} - World SPINE ARCHIVE</title>
+    <title>${seoTitleEscaped}</title>
     <meta name="description" content="${escapeHtml(description)}" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
     <meta name="googlebot" content="index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1" />
@@ -1634,14 +1655,14 @@ function archiveItemHtml({ origin, entry, metrics }) {
     <meta name="theme-color" content="#000000" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="canonical" href="${escapeHtml(pageUrl)}" />
-    <link rel="alternate" href="${escapeHtml(playerPageUrl)}" title="${title} interactive Spine player video page" />
-    ${mediaVideo ? `<link rel="alternate" href="${escapeHtml(videoPageUrl)}" title="${title} dedicated WebM watch page" />` : ''}
+    <link rel="alternate" href="${escapeHtml(playerPageUrl)}" title="${displayTitle} interactive Spine player" />
+    ${mediaVideo ? `<link rel="alternate" href="${escapeHtml(videoPageUrl)}" title="${displayTitle} WebM video page" />` : ''}
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link rel="preconnect" href="https://accounts.google.com" crossorigin />
     <link rel="dns-prefetch" href="https://api.github.com" />
     <link rel="stylesheet" href="/page-transitions.css" />
     <meta property="og:type" content="${mediaVideo ? 'video.other' : 'article'}" />
-    <meta property="og:title" content="${title} - World SPINE ARCHIVE" />
+    <meta property="og:title" content="${seoTitleEscaped}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:url" content="${escapeHtml(pageUrl)}" />
     <meta property="og:site_name" content="Spine Portfolio" />
@@ -1650,7 +1671,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
     <meta property="og:video:secure_url" content="${escapeHtml(mediaVideo)}" />
     <meta property="og:video:type" content="video/webm" />` : ''}
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="${title} - World SPINE ARCHIVE" />
+    <meta name="twitter:title" content="${seoTitleEscaped}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <meta name="twitter:image" content="${escapeHtml(mediaImage)}" />
     <script type="application/ld+json">${jsonScript(itemStructuredData)}</script>
@@ -1673,6 +1694,8 @@ function archiveItemHtml({ origin, entry, metrics }) {
       .proof-panel a { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; padding: 0 10px; border: 1px solid rgba(140,199,255,.2); border-radius: 8px; color: #dff1ff; background: rgba(140,199,255,.08); font-size: 12px; font-weight: 850; text-decoration: none; }
       .proof-panel a:hover { border-color: rgba(179,255,64,.58); color: #fff; }
       .proof-panel code { overflow: hidden; max-width: 148px; color: rgba(237,245,255,.68); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+      .seo-text { max-width: 720px; margin: 18px auto 0; padding: 16px 20px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.03); }
+      .seo-text p { margin: 0; color: rgba(237,245,255,.58); font-size: 13px; line-height: 1.55; }
       @media (max-width: 860px) { .viewer { grid-template-columns: 1fr; } .media-panel, .media-panel img, .media-panel video { min-height: 58vh; } }
     </style>
   </head>
@@ -1691,12 +1714,12 @@ function archiveItemHtml({ origin, entry, metrics }) {
         </div>
       </header>
       <section class="viewer">
-        <h1 class="visually-hidden">${title} — World SPINE ARCHIVE</h1>
+        <h1 class="visually-hidden">${displayTitle} — Spine animation preview on Spine-Link</h1>
         <div class="media-panel">${mediaHtml(entry, { origin, posterClass: 'media-main', eagerVideo: true })}</div>
         <div class="side">
           <div>
             <p class="muted">Spine media preview</p>
-            <h2 class="item-title">${title}</h2>
+            <h2 class="item-title">${displayTitle}</h2>
             <p class="muted">${animations} animations</p>
             <div class="metric-row" data-metric-id="${safeEntryId}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views">
               <span class="metric-pill metric-like-button" data-metric-id="${safeEntryId}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" role="button" tabindex="0" aria-pressed="false" title="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></span>
@@ -1712,6 +1735,9 @@ function archiveItemHtml({ origin, entry, metrics }) {
           ${mediaVideo ? `<a class="spine-link" href="${videoWatchUrl(entry)}">Dedicated WebM page</a>` : ''}
         </div>
       </section>
+      <section class="seo-text" aria-label="About this Spine animation">
+        <p>${displayTitle} is a Spine animation${ownerName !== 'Spine creator' ? ` by ${escapeHtml(ownerName)}` : ''} with ${animations} animation${animations !== 1 ? 's' : ''} available in the World SPINE ARCHIVE. Open the interactive Spine player to preview the animation in real time, or watch the WebM video preview. You can like this work, view its metrics, and explore more Spine animations in the public archive.</p>
+      </section>
     </main>
     <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(entryId)} };</script>
     <script src="/spine-metrics.js" defer></script>
@@ -1721,7 +1747,9 @@ function archiveItemHtml({ origin, entry, metrics }) {
 
 function archiveVideoHtml({ origin, entry, metrics }) {
   const rawTitle = cleanPublicText(entry?.title || entry?.id || 'Spine animation video', 120);
+  const seoVideoTitle = seoTitleForEntry(entry).replace(' - Preview Online | Spine-Link', ' - Watch Video | Spine-Link');
   const title = escapeHtml(rawTitle);
+  const seoVideoTitleEscaped = escapeHtml(seoVideoTitle);
   const entryId = String(entry?.id || '');
   const safeEntryId = escapeHtml(entryId);
   const metric = metricCountsForId(metrics, entryId);
@@ -1733,7 +1761,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
   const ownerName = cleanPublicText(entry?.ownerName || 'Spine creator', 100);
   const description = cleanPublicText(
     entry?.note ||
-      `${rawTitle} is a dedicated Spine animation video watch page from World SPINE ARCHIVE on Spine Portfolio.`,
+      `${rawTitle} — watch the full Spine animation video, open the interactive player, or explore the archive detail page. Part of World SPINE ARCHIVE on Spine-Link.`,
     300,
   );
   const uploadedAt = isoDate(entry?.uploadedAt) || '2026-05-12T00:00:00.000Z';
@@ -1812,7 +1840,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
       {
         '@type': 'WebPage',
         '@id': `${pageUrl}#webpage`,
-        name: `${rawTitle} - Spine animation video`,
+        name: `${rawTitle} - Spine animation video on Spine-Link`,
         description,
         url: pageUrl,
         mainEntity: { '@id': videoStructuredData['@id'] },
@@ -1861,7 +1889,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title} - Spine animation video</title>
+    <title>${seoVideoTitleEscaped}</title>
     <meta name="description" content="${escapeHtml(description)}" />
     <meta name="robots" content="${mediaVideo ? 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1' : 'noindex,follow'}" />
     <meta name="googlebot" content="${mediaVideo ? 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1' : 'noindex,follow'}" />
@@ -1870,7 +1898,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
     <link rel="alternate" href="${escapeHtml(playerPageUrl)}" title="${title} interactive Spine player" />
     <link rel="stylesheet" href="/page-transitions.css" />
     <meta property="og:type" content="${mediaVideo ? 'video.other' : 'article'}" />
-    <meta property="og:title" content="${title} - Spine animation video" />
+    <meta property="og:title" content="${seoVideoTitleEscaped}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:url" content="${escapeHtml(pageUrl)}" />
     <meta property="og:site_name" content="Spine Portfolio" />
@@ -1879,7 +1907,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
     <meta property="og:video:secure_url" content="${escapeHtml(mediaVideo)}" />
     <meta property="og:video:type" content="video/webm" />` : ''}
     <meta name="twitter:card" content="player" />
-    <meta name="twitter:title" content="${title} - Spine animation video" />
+    <meta name="twitter:title" content="${seoVideoTitleEscaped}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <meta name="twitter:image" content="${escapeHtml(mediaImage)}" />
     ${mediaVideo ? `<meta name="twitter:player" content="${escapeHtml(pageUrl)}" />` : ''}

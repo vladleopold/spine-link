@@ -6,28 +6,29 @@ const origin = 'https://spine-link.vercel.app';
 import { cachedGithubText } from '../lib/github-content-cache.js';
 import { cacheProfiles, setCacheHeaders } from '../lib/cache-headers.js';
 
+const today = new Date().toISOString().slice(0, 10);
 const staticUrls = [
-  { loc: 'https://spine-link.vercel.app/', lastmod: '2026-05-12', changefreq: 'weekly', priority: '1.0' },
-  { loc: 'https://spine-link.vercel.app/spine-link.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.9' },
-  { loc: 'https://spine-link.vercel.app/spine-preview.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.9' },
-  { loc: 'https://spine-link.vercel.app/spine-preview-online.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.9' },
-  { loc: 'https://spine-link.vercel.app/spine-web-viewer.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.9' },
-  { loc: 'https://spine-link.vercel.app/spine-animation-preview.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.9' },
-  { loc: 'https://spine-link.vercel.app/spine-animation-dataset.html', lastmod: '2026-05-12', changefreq: 'monthly', priority: '0.8' },
-  { loc: 'https://spine-link.vercel.app/spine-link-manifesto.html', lastmod: '2026-05-12', changefreq: 'monthly', priority: '0.86' },
-  { loc: 'https://spine-link.vercel.app/spine-library.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.85' },
-  { loc: 'https://spine-link.vercel.app/spine-portfolio.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.85' },
-  { loc: 'https://spine-link.vercel.app/share-spine-animation-link.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.86' },
-  { loc: 'https://spine-link.vercel.app/spine-portfolio-link.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.84' },
-  { loc: 'https://spine-link.vercel.app/spine-animator.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.8' },
-  { loc: 'https://spine-link.vercel.app/spine-animations.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.8' },
-  { loc: 'https://spine-link.vercel.app/spine-work.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.8' },
-  { loc: 'https://spine-link.vercel.app/spine-link-video.html', lastmod: '2026-05-12', changefreq: 'monthly', priority: '0.8' },
-  { loc: 'https://spine-link.vercel.app/spine-online-video.html', lastmod: '2026-05-12', changefreq: 'monthly', priority: '0.8' },
-  { loc: 'https://spine-link.vercel.app/world-spine-archive', lastmod: '2026-05-12', changefreq: 'daily', priority: '0.95' },
-  { loc: 'https://spine-link.vercel.app/spne-lib.html', lastmod: '2026-05-12', changefreq: 'monthly', priority: '0.65' },
-  { loc: 'https://spine-link.vercel.app/site-map.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.8' },
-  { loc: 'https://spine-link.vercel.app/amp.html', lastmod: '2026-05-12', changefreq: 'weekly', priority: '0.8' },
+  { loc: 'https://spine-link.vercel.app/', lastmod: today, changefreq: 'weekly', priority: '1.0' },
+  { loc: 'https://spine-link.vercel.app/spine-link.html', lastmod: today, changefreq: 'weekly', priority: '0.9' },
+  { loc: 'https://spine-link.vercel.app/spine-preview.html', lastmod: today, changefreq: 'weekly', priority: '0.9' },
+  { loc: 'https://spine-link.vercel.app/spine-preview-online.html', lastmod: today, changefreq: 'weekly', priority: '0.9' },
+  { loc: 'https://spine-link.vercel.app/spine-web-viewer.html', lastmod: today, changefreq: 'weekly', priority: '0.9' },
+  { loc: 'https://spine-link.vercel.app/spine-animation-preview.html', lastmod: today, changefreq: 'weekly', priority: '0.9' },
+  { loc: 'https://spine-link.vercel.app/spine-animation-dataset.html', lastmod: today, changefreq: 'monthly', priority: '0.8' },
+  { loc: 'https://spine-link.vercel.app/spine-link-manifesto.html', lastmod: today, changefreq: 'monthly', priority: '0.86' },
+  { loc: 'https://spine-link.vercel.app/spine-library.html', lastmod: today, changefreq: 'weekly', priority: '0.85' },
+  { loc: 'https://spine-link.vercel.app/spine-portfolio.html', lastmod: today, changefreq: 'weekly', priority: '0.85' },
+  { loc: 'https://spine-link.vercel.app/share-spine-animation-link.html', lastmod: today, changefreq: 'weekly', priority: '0.86' },
+  { loc: 'https://spine-link.vercel.app/spine-portfolio-link.html', lastmod: today, changefreq: 'weekly', priority: '0.84' },
+  { loc: 'https://spine-link.vercel.app/spine-animator.html', lastmod: today, changefreq: 'weekly', priority: '0.8' },
+  { loc: 'https://spine-link.vercel.app/spine-animations.html', lastmod: today, changefreq: 'weekly', priority: '0.8' },
+  { loc: 'https://spine-link.vercel.app/spine-work.html', lastmod: today, changefreq: 'weekly', priority: '0.8' },
+  { loc: 'https://spine-link.vercel.app/spine-link-video.html', lastmod: today, changefreq: 'monthly', priority: '0.8' },
+  { loc: 'https://spine-link.vercel.app/spine-online-video.html', lastmod: today, changefreq: 'monthly', priority: '0.8' },
+  { loc: 'https://spine-link.vercel.app/world-spine-archive', lastmod: today, changefreq: 'daily', priority: '0.95' },
+  { loc: 'https://spine-link.vercel.app/spne-lib.html', lastmod: today, changefreq: 'monthly', priority: '0.65' },
+  { loc: 'https://spine-link.vercel.app/site-map.html', lastmod: today, changefreq: 'weekly', priority: '0.8' },
+  { loc: 'https://spine-link.vercel.app/amp.html', lastmod: today, changefreq: 'weekly', priority: '0.8' },
 ];
 
 function cleanRepoPath(value = '') {
@@ -62,7 +63,7 @@ async function githubText(settings, path) {
   return cachedGithubText(settings, path);
 }
 
-function validDate(value, fallback = '2026-05-12') {
+function validDate(value, fallback = new Date().toISOString().slice(0, 10)) {
   const date = new Date(String(value || ''));
   return Number.isNaN(date.getTime()) ? fallback : date.toISOString().slice(0, 10);
 }
