@@ -284,6 +284,7 @@ type LibraryEntry = {
   mediaAspectRatio?: number;
   previewDuration?: number;
   cardSize?: LibraryCardSize;
+  layout?: PlayerViewport;
   sourceProof?: SourceProof;
   sourceProofPath?: string;
   sourceProofUrl?: string;
@@ -2716,6 +2717,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [isPublishingLink, setIsPublishingLink] = useState(false);
   const [publishProgress, setPublishProgress] = useState({ isOpen: false, value: 0, label: "" });
   const [isLinkBannerOpen, setIsLinkBannerOpen] = useState(false);
+  const [layoutDirty, setLayoutDirty] = useState(false);
+  const [showSaveLayoutButton, setShowSaveLayoutButton] = useState(false);
+  const [isSavingLayout, setIsSavingLayout] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const [selectedPreviewImage, setSelectedPreviewImage] = useState("");
   const [selectedCardSize, setSelectedCardSize] = useState<LibraryCardSize>("auto");
@@ -3522,6 +3526,24 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     baseViewportRef.current = { ...player.currentViewport };
   }, []);
 
+  const markLayoutDirty = useCallback(() => {
+    setLayoutDirty(true);
+  }, []);
+
+  const layoutDebounceRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!layoutDirty || !preparedSpine) return;
+    setShowSaveLayoutButton(false);
+    window.clearTimeout(layoutDebounceRef.current);
+    layoutDebounceRef.current = window.setTimeout(() => {
+      setShowSaveLayoutButton(true);
+    }, 2000);
+    return () => {
+      window.clearTimeout(layoutDebounceRef.current);
+    };
+  }, [layoutDirty, preparedSpine]);
+
   const panPlayerByPixels = useCallback((deltaX: number, deltaY: number) => {
     const player = playerRef.current as unknown as PlayerWithViewport | null;
     const baseViewport = baseViewportRef.current;
@@ -3541,7 +3563,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     baseViewport.y += worldDeltaY * baseScale;
     player.previousViewport = { ...currentViewport };
     player.viewportTransitionStart = performance.now();
-  }, []);
+    markLayoutDirty();
+  }, [markLayoutDirty]);
 
   const prepareFromFiles = useCallback(
     async (fileList: FileList | File[]) => {
@@ -3960,7 +3983,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     const clampedZoom = Math.min(4, Math.max(0.25, nextZoom));
     zoomRef.current = clampedZoom;
     setZoom(clampedZoom);
-  }, []);
+    markLayoutDirty();
+  }, [markLayoutDirty]);
 
   useEffect(() => {
     const panel = previewPanelRef.current;
@@ -4171,6 +4195,59 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
   const deletePreviewNote = () => {
     void savePreviewNote("");
+  };
+
+  const readPlayerLayout = (): PlayerViewport | null => {
+    const player = playerRef.current as unknown as PlayerWithViewport | null;
+    const current = player?.currentViewport;
+    if (!current) return null;
+    return { ...current };
+  };
+
+  const saveLayout = async () => {
+    const entry = currentLibraryEntry;
+    if (!entry) {
+      setStatus("Create the page first, then save the layout.");
+      return;
+    }
+    const layout = readPlayerLayout();
+    if (!layout) {
+      setStatus("No player layout to save yet.");
+      return;
+    }
+    setIsSavingLayout(true);
+    setStatus("Saving layout...");
+    try {
+      const requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (googleIdToken) requestHeaders.Authorization = `Bearer ${googleIdToken}`;
+      const response = await fetch("/api/github-upload", {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify({
+          action: "update-layout",
+          googleIdToken,
+          anonymousAccount,
+          settings: githubPublishSettings,
+          entryId: entry.id,
+          layout,
+          commitPrefix: `Update layout ${entry.title}`,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof result?.error === "string" ? result.error : `Library API ${response.status}`);
+      }
+      const nextEntry = { ...currentLibraryEntry, layout: { ...layout } };
+      setCurrentLibraryEntry(nextEntry);
+      setLibraryEntries((currentEntries) => currentEntries.map((e) => (e.id === nextEntry.id ? nextEntry : e)));
+      setLayoutDirty(false);
+      setShowSaveLayoutButton(false);
+      setStatus("Layout saved.");
+    } catch (nextError) {
+      setStatus(nextError instanceof Error ? nextError.message : "Could not save layout.");
+    } finally {
+      setIsSavingLayout(false);
+    }
   };
 
   const copyLibraryEntryLink = async (url: string) => {
@@ -4453,6 +4530,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     setSelectedCardSize("auto");
     setError("");
     setStatus("Choose files for a new library card.");
+    setLayoutDirty(false);
+    setShowSaveLayoutButton(false);
     publishedKeysRef.current.clear();
     if (openPicker) picker?.click();
   };
@@ -5389,6 +5468,18 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               </div>
             )}
             <div className="player-host" ref={playerHostRef} />
+            {showSaveLayoutButton && preparedSpine && (
+              <button
+                className={`save-layout-button ${isSavingLayout ? "is-saving" : ""}`}
+                type="button"
+                onClick={() => void saveLayout()}
+                disabled={isSavingLayout || !currentLibraryEntry}
+                title="Save current animation position and size"
+              >
+                {isSavingLayout ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                Save
+              </button>
+            )}
             {extraSpineSets.map((extraSet) => (
               <div key={extraSet.id} className="extra-player-shell">
                 <div className="extra-player-toolbar">

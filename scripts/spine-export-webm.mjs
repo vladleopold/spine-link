@@ -406,6 +406,24 @@ const versionMajor = skeletonVersion.split('.')[0] || '4';
 const isLegacy = parseInt(versionMajor, 10) < 4;
 const runtimeMinor = isLegacy ? (skeletonVersion.split('.')[1] || '8') : '';
 
+// Use the saved layout (position + size) when present so the video matches the
+// animation page exactly. The app saves its effective player viewport.
+const layout = entry?.layout && typeof entry.layout === 'object' ? entry.layout : null;
+const hasLayout = Boolean(layout && Number.isFinite(Number(layout.width)) && Number(layout.width) > 0);
+const viewportOption = hasLayout
+  ? {
+      x: Number(layout.x) || 0,
+      y: Number(layout.y) || 0,
+      width: Number(layout.width),
+      height: Number(layout.height) || 1,
+      padLeft: Number.isFinite(Number(layout.padLeft)) ? Number(layout.padLeft) : 0,
+      padRight: Number.isFinite(Number(layout.padRight)) ? Number(layout.padRight) : 0,
+      padTop: Number.isFinite(Number(layout.padTop)) ? Number(layout.padTop) : 0,
+      padBottom: Number.isFinite(Number(layout.padBottom)) ? Number(layout.padBottom) : 0,
+    }
+  : { padLeft: '0%', padRight: '0%', padTop: '0%', padBottom: '0%' };
+const viewportJson = JSON.stringify(viewportOption);
+
 // Use reliable Vercel domain for legacy player assets to avoid DNS resolution issues in GitHub Actions
 const stableOrigin = 'https://spine-link.vercel.app';
 const playerJsUrl = isLegacy
@@ -520,7 +538,7 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
     preserveDrawingBuffer: true,
     alpha: true,
     backgroundColor: '#050607',
-    viewport: { padLeft: '0%', padRight: '0%', padTop: '0%', padBottom: '0%' },
+    viewport: ${viewportJson},
     success: function (p) {
       player = p;
       window.__ready = true;

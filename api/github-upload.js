@@ -994,6 +994,34 @@ export default async function handler(request, response) {
       return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry) });
     }
 
+    if (action === 'update-layout') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const entryId = String(body?.entryId || '').trim();
+      const layout = body?.layout;
+      if (!entryId) return response.status(400).json({ error: 'Invalid layout payload' });
+      if (!layout || typeof layout !== 'object') return response.status(400).json({ error: 'Missing layout' });
+      const indexPath = joinRepoPath(settings.basePath, 'index.json');
+      const currentIndex = await getGitHubContent(settings, indexPath);
+      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
+      const entryIndex = currentEntries.findIndex((currentEntry) => String(currentEntry?.id || '') === entryId);
+      if (entryIndex < 0) return response.status(404).json({ error: 'Library entry not found' });
+      if (!canEditEntry(currentEntries[entryIndex], googlePayload, anonymousAccount)) throw unauthorized('Only the owner can edit this layout', 403);
+      const nextEntry = { ...currentEntries[entryIndex] };
+      const numbers = ['x', 'y', 'width', 'height', 'padLeft', 'padRight', 'padTop', 'padBottom'];
+      const layoutOut = {};
+      for (const key of numbers) {
+        const value = Number(layout[key]);
+        if (Number.isFinite(value)) layoutOut[key] = value;
+      }
+      if (Object.keys(layoutOut).length) nextEntry.layout = layoutOut;
+      else delete nextEntry.layout;
+      const nextEntries = [...currentEntries];
+      nextEntries[entryIndex] = nextEntry;
+      await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update preview layout`, currentIndex?.sha, origin);
+      dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {});
+      return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry) });
+    }
+
     if (action === 'update-entry-visibility') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const entryId = String(body?.entryId || '').trim();

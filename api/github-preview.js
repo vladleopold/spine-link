@@ -1463,9 +1463,20 @@ async function createDynamicPreview(settings, uploadPath, origin) {
       textures: textureUrls,
       skin: preferredSkinName(skinNames),
       premultipliedAlpha: hasPremultipliedAlpha(atlasText),
-      viewport: viewportFromJson(skeletonJson)
-        ? { ...viewportFromJson(skeletonJson), padLeft: '14%', padRight: '14%', padTop: '14%', padBottom: '14%' }
-        : { padLeft: '14%', padRight: '14%', padTop: '14%', padBottom: '14%' },
+      viewport: entry?.layout && Number.isFinite(Number(entry.layout.width)) && Number(entry.layout.width) > 0
+        ? {
+            x: Number(entry.layout.x) || 0,
+            y: Number(entry.layout.y) || 0,
+            width: Number(entry.layout.width),
+            height: Number(entry.layout.height) || 1,
+            padLeft: Number.isFinite(Number(entry.layout.padLeft)) ? Number(entry.layout.padLeft) : 0,
+            padRight: Number.isFinite(Number(entry.layout.padRight)) ? Number(entry.layout.padRight) : 0,
+            padTop: Number.isFinite(Number(entry.layout.padTop)) ? Number(entry.layout.padTop) : 0,
+            padBottom: Number.isFinite(Number(entry.layout.padBottom)) ? Number(entry.layout.padBottom) : 0,
+          }
+        : viewportFromJson(skeletonJson)
+          ? { ...viewportFromJson(skeletonJson), padLeft: '14%', padRight: '14%', padTop: '14%', padBottom: '14%' }
+          : { padLeft: '14%', padRight: '14%', padTop: '14%', padBottom: '14%' },
     });
   }
 
