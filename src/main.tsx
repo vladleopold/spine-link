@@ -129,33 +129,39 @@ function renderHomeShell(isDragging = false) {
             <div class="home-feed-track" id="home-feed-track"></div>
           </div>
         </section>
-        <div class="stage">
-          <div class="home-drop-panel">
-            <label class="drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}" id="home-drop-zone">
-              <input name="spine-files" type="file" multiple accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp" aria-label="Upload Spine JSON SKEL atlas and texture files" data-file-input>
-              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13m0-13 5 5m-5-5-5 5M5 15v4h14v-4"/></svg>
-              <strong>Drag'and'Drop files here</strong>
-              <span>JSON or SKEL, atlas, and textures become a Spine preview.</span>
-            </label>
-            <p class="home-drop-caption" style="font-size: 8px; line-height: 1.2">
-              <strong>Upload agreement:</strong> by adding files here, you agree to the{" "}
-              <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public works and uploaded animation
-              files may be analyzed by automated systems and used as learning, testing, and reference material for
-              AI animator agents. Personal account data is not sold or shared for unrelated marketing.
-            </p>
-            <p class="upload-agreement main-upload-agreement" style="font-size: 8px; line-height: 1.2">
-              Upload agreement: by dropping or choosing files here, you agree to the{" "}
-              <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public animation files may be
-              processed, indexed, studied, and used to build educational datasets, evaluation material, and
-              training examples for AI animator agents. Upload only work you own or have permission to publish.
-            </p>
-          </div>
-        </div>
+         <div class="stage">
+           <div class="home-drop-panel">
+             <label class="drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}" id="home-drop-zone">
+               <input name="spine-files" type="file" multiple accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp" aria-label="Upload Spine JSON SKEL atlas and texture files" data-file-input>
+               <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13m0-13 5 5m-5-5-5 5M5 15v4h14v-4"/></svg>
+               <strong>Drag'and'Drop files here</strong>
+               <span>JSON or SKEL, atlas, and textures become a Spine preview.</span>
+             </label>
+             <p class="home-drop-caption" style="font-size: 8px; line-height: 1.2">
+               <strong>Upload agreement:</strong> by adding files here, you agree to the{" "}
+               <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public works and uploaded animation
+               files may be analyzed by automated systems and used as learning, testing, and reference material for
+               AI animator agents. Personal account data is not sold or shared for unrelated marketing.
+             </p>
+             <p class="upload-agreement main-upload-agreement" style="font-size: 8px; line-height: 1.2">
+               Upload agreement: by dropping or choosing files here, you agree to the{" "}
+               <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public animation files may be
+               processed, indexed, studied, and used to build educational datasets, evaluation material, and
+               training examples for AI animator agents. Upload only work you own or have permission to publish.
+             </p>
+           </div>
+         </div>
+         <div id="upload-toast" class="upload-toast" style="display:none">
+           <strong>Upload complete</strong>
+           <a href="" target="_blank" rel="noreferrer">Open page</a>
+           <button class="upload-toast-close" type="button" aria-label="Close notification">&times;</button>
+         </div>
       </section>
     </main>
   `;
 
   wireHomeShell();
+  wireUploadToast();
 }
 
 function wireHomeShell() {
@@ -507,3 +513,52 @@ function clearSpineCacheWorker() {
 }
 
 clearSpineCacheWorker();
+
+function wireUploadToast() {
+  const toast = document.getElementById("upload-toast");
+  if (!toast) return;
+
+  const closeBtn = toast.querySelector(".upload-toast-close");
+  const link = toast.querySelector<HTMLAnchorElement>("a");
+  let hideTimer: number | undefined;
+
+  const show = (url: string) => {
+    if (link) link.href = url;
+    toast.style.display = "";
+    toast.classList.add("is-visible");
+    window.clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      toast.classList.remove("is-visible");
+      window.setTimeout(() => { toast.style.display = "none"; }, 300);
+    }, 10000);
+  };
+
+  closeBtn?.addEventListener("click", () => {
+    toast.classList.remove("is-visible");
+    window.setTimeout(() => { toast.style.display = "none"; }, 300);
+  });
+
+  window.addEventListener("spine-upload-complete", ((event: any) => {
+    const url = String(event.detail?.url || "");
+    if (url) show(url);
+  }) as EventListener);
+
+  window.addEventListener("storage", (event) => {
+    if (event.key === "__spineUploadComplete" && event.newValue) {
+      try {
+        const data = JSON.parse(event.newValue);
+        if (data?.url) show(data.url);
+      } catch {}
+    }
+  });
+
+  try {
+    const raw = localStorage.getItem("__spineUploadComplete");
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data?.url && Date.now() - Number(data.timestamp || 0) < 300000) {
+        show(data.url);
+      }
+    }
+  } catch {}
+}

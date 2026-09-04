@@ -2796,6 +2796,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [isLoading, setIsLoading] = useState(false);
   const [isIntroDocking, setIsIntroDocking] = useState(false);
   const [isUploadPage, setIsUploadPage] = useState(initialUpload);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [blockchainEnabled, setBlockchainEnabled] = useState(true);
   const [addMoreWorkEnabled, setAddMoreWorkEnabled] = useState(true);
 
@@ -4520,6 +4521,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       setIsSkeletonUploadTipVisible(true);
     }
     setIsUploadPage(true);
+    setIsUploadModalOpen(true);
     setIsLibraryOpen(false);
     setCurrentLibraryEntry(null);
     setGeneratedPreviewUrl("");
@@ -4530,11 +4532,36 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     setSelectedCardSize("auto");
     setError("");
     setStatus("Choose files for a new library card.");
-    setLayoutDirty(false);
-    setShowSaveLayoutButton(false);
     publishedKeysRef.current.clear();
     if (openPicker) picker?.click();
   };
+
+  const closeUploadModal = useCallback(() => {
+    setIsUploadModalOpen(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("upload");
+    history.pushState({}, "", url.toString());
+  }, []);
+
+  useEffect(() => {
+    if (!isUploadModalOpen) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("upload") !== "work") {
+      url.searchParams.set("upload", "work");
+      history.pushState({ upload: true }, "", url.toString());
+    }
+  }, [isUploadModalOpen]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("upload") !== "work" && isUploadModalOpen) {
+        setIsUploadModalOpen(false);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isUploadModalOpen]);
 
   const updateOwnerPortfolioMode = async (nextMode: boolean) => {
     setIsPortfolioMode(nextMode);
@@ -5011,6 +5038,10 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         window.setTimeout(() => {
           setPublishProgress({ isOpen: false, value: 0, label: "" });
         }, 650);
+        try {
+          localStorage.setItem("__spineUploadComplete", JSON.stringify({ url: permanentPreviewUrl, timestamp: Date.now() }));
+        } catch {}
+        window.dispatchEvent(new CustomEvent("spine-upload-complete", { detail: { url: permanentPreviewUrl } }));
       } catch (nextError) {
         setPublishProgress((current) => ({ ...current, isOpen: true, label: "Saving failed" }));
         window.setTimeout(() => {
@@ -5049,7 +5080,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
   const showHomeFeed = !preparedSpine && !isEditPage && homeFeedEntries.length > 0;
   const homeFeedLoop = showHomeFeed ? homeFeedEntries.slice(0, 12) : [];
-  const isHomeDropOnly = !preparedSpine && !isEditPage && !isUploadPage && extraSpineSets.length === 0;
+  const isHomeDropOnly = !preparedSpine && !isEditPage && extraSpineSets.length === 0 && !isUploadModalOpen;
   const siteReadingPages = [
     { href: "/spine-link.html", title: "Spine-Link", description: "Platform overview" },
     { href: "/spine-preview.html", title: "Spine Preview", description: "Open JSON, SKEL and atlas files" },
@@ -5384,7 +5415,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
         <div className="stage">
           <div className={isHomeDropOnly ? "home-drop-panel" : `preview-panel ${extraSpineSets.length ? "has-multiple-players" : ""}`} ref={previewPanelRef}>
-            {!preparedSpine && !isEditPage && !isLibraryOpen && !isUploadPage && (
+            {!preparedSpine && !isEditPage && !isLibraryOpen && !isUploadModalOpen && (
               <>
                 <label
                   className={`drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}`}
@@ -5720,98 +5751,65 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     />
                   </label>
                </div>
-             ) : isUploadPage && !preparedSpine && spineOptions.length === 0 && extraSpineSets.length === 0 && !generatedPreviewUrl ? (
-              <form
-                className="portfolio-upload-form"
-                action="/?upload=work"
-                method="get"
-                aria-label="Upload animation work to portfolio"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  startNewLibraryEntry(event.currentTarget);
-                }}
-              >
-                <div className="portfolio-upload-form-top">
-                  <div>
-                    <div className="section-title">Upload work</div>
-                    <strong>Add a Spine animation portfolio project</strong>
+              ) : isUploadPage && isUploadModalOpen && !preparedSpine && spineOptions.length === 0 && extraSpineSets.length === 0 && !generatedPreviewUrl ? (
+                <div className="upload-modal-overlay" onClick={(event) => { if (event.target === event.currentTarget) closeUploadModal(); }}>
+                  <div className="upload-modal-content" role="dialog" aria-modal="true" aria-label="Upload files">
+                    <div className="upload-modal-header">
+                      <strong>Upload</strong>
+                      <button className="upload-modal-close" type="button" onClick={closeUploadModal} aria-label="Close upload">
+                        <X size={20} />
+                      </button>
+                    </div>
+                    <div className="upload-modal-body">
+                      <label
+                        className={`drop-zone ${isDragging ? "is-dragging" : ""}`}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setIsDragging(true);
+                        }}
+                        onDragLeave={(event) => {
+                          event.stopPropagation();
+                          setIsDragging(false);
+                        }}
+                        onDrop={handleDrop}
+                      >
+                        <input
+                          ref={uploadInputRef}
+                          name="spine-files"
+                          type="file"
+                          multiple
+                          accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
+                          aria-label="Upload Spine JSON SKEL atlas and texture files"
+                          onDragOver={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setIsDragging(true);
+                          }}
+                          onDrop={handleDrop}
+                          onClick={clearFileInputBeforePick}
+                          onChange={handleFileInputChange}
+                          onInput={handleFileInputChange}
+                        />
+                        <Upload size={20} />
+                        <strong>Choose files</strong>
+                        <span>JSON or SKEL, atlas, and textures</span>
+                      </label>
+                      <p className="upload-modal-agreement">
+                        Upload agreement: by adding files here, you agree to the{" "}
+                        <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public works and uploaded animation
+                        files may be analyzed by automated systems and used as learning, testing, and reference material for
+                        AI animator agents. Personal account data is not sold or shared for unrelated marketing.
+                      </p>
+                      {googleUser && (
+                        <span className="portfolio-upload-status" title={googleUser.email}>
+                          Account connected
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {googleUser ? (
-                    <span className="portfolio-upload-status" title={googleUser.email}>
-                      Account connected
-                    </span>
-                  ) : (
-                    <a href="/?login=google" onClick={(event) => { event.preventDefault(); void openGoogleSignIn(); }}>
-                      Sign in
-                    </a>
-                  )}
                 </div>
-                <label
-                  className={`drop-zone ${isDragging ? "is-dragging" : ""}`}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setIsDragging(true);
-                  }}
-                  onDragLeave={(event) => {
-                    event.stopPropagation();
-                    setIsDragging(false);
-                  }}
-                  onDrop={handleDrop}
-                >
-                  <input
-                    ref={uploadInputRef}
-                    name="spine-files"
-                    type="file"
-                    multiple
-                    accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
-                    aria-label="Upload Spine JSON SKEL atlas and texture files"
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setIsDragging(true);
-                    }}
-                    onDrop={handleDrop}
-                    onClick={clearFileInputBeforePick}
-                    onChange={handleFileInputChange}
-                    onInput={handleFileInputChange}
-                  />
-                  <Upload size={22} />
-                  <strong>Choose files for portfolio</strong>
-                  <span>JSON or SKEL, atlas, and textures become an editable public portfolio card.</span>
-                </label>
-                <p className="upload-agreement">
-                  Upload agreement: by adding files here, you agree to the{" "}
-                  <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public works and uploaded animation
-                  files may be analyzed by automated systems and used as learning, testing, and reference material for
-                  AI animator agents. Personal account data is not sold or shared for unrelated marketing.
-                </p>
-                <div className="portfolio-upload-fields" aria-label="Portfolio upload fields">
-                  <label>
-                    <span>Account</span>
-                    {googleUser ? (
-                      <span className="portfolio-upload-status" title={googleUser.email}>
-                        Signed in
-                      </span>
-                    ) : (
-                      <a href="/?login=google" onClick={(event) => { event.preventDefault(); void openGoogleSignIn(); }}>
-                        Google sign-in / registration
-                      </a>
-                    )}
-                  </label>
-                  <label>
-                    <span>Profile</span>
-                      <a href="/?portfolio=1" onClick={(event) => { event.preventDefault(); openLibrary(); }}>
-                        Portfolio
-                      </a>
-                  </label>
-                  <label>
-                    <span>Publish</span>
-                    <button type="submit">Upload work</button>
-                  </label>
-                </div>
-              </form>
-            ) : null}
+              ) : null}
 
             {shouldShowStatus && (
               <div className="status-line" data-state={error ? "error" : "ready"}>
@@ -5909,40 +5907,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               )}
             </div>
 
-             {preparedSpine && !isEditPage && addMoreWorkEnabled && (
-              <div className="add-more-work-panel">
-                <div className="add-more-work-top">
-                  <div>
-                    <div className="section-title">Add more work</div>
-                    <strong>{extraSpineSets.length + 1}/10 players</strong>
-                  </div>
-                  <span>{extraSpineSets.length >= 9 ? "Limit reached" : "Add files"}</span>
-                </div>
-                <label className={`drop-zone add-more-work-drop ${isDragging ? "is-dragging" : ""} ${extraSpineSets.length >= 9 ? "is-disabled" : ""}`}>
-                  <input
-                    type="file"
-                    multiple
-                    disabled={extraSpineSets.length >= 9}
-                    accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
-                    aria-label="Add more Spine work"
-                    onClick={clearFileInputBeforePick}
-                    onChange={handleFileInputChange}
-                    onInput={handleFileInputChange}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setIsDragging(true);
-                    }}
-                    onDrop={handleDrop}
-                  />
-                  <Upload size={18} />
-                  <strong>Add more work</strong>
-                  <span>Drop another skeleton, atlas, and textures.</span>
-                </label>
-              </div>
-            )}
-
-            {isEditPage && (
+             {isEditPage && (
               <div className="card-size-panel">
                 <div className="section-title">Size</div>
                 <div className="card-size-grid">
@@ -5964,30 +5929,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 </p>
               </div>
             )}
-
-            <div className="note-panel">
-              <div className="section-title">Text</div>
-              <textarea
-                value={previewNote}
-                maxLength={240}
-                rows={3}
-                placeholder="Write up to 20 words for the generated page"
-                onChange={(event) => {
-                  setPreviewNote(limitWords(event.target.value));
-                  setPreviewNoteStatus("");
-                }}
-              />
-              <div className="note-actions">
-                <span>{previewNote ? `${previewNote.split(/\s+/).filter(Boolean).length}/20 words` : "0/20 words"}</span>
-                <button type="button" onClick={() => void savePreviewNote()} disabled={!currentLibraryEntry}>
-                  Save text
-                </button>
-                <button type="button" onClick={deletePreviewNote} disabled={!currentLibraryEntry || !previewNote}>
-                  Delete
-                </button>
-              </div>
-              <p className="link-note">{previewNoteStatus || "Only this library owner can edit or delete this text."}</p>
-            </div>
 
             <div className="animation-list">
               <div className="animation-list-top">
