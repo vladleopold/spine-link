@@ -64,7 +64,7 @@ export default async function handler(request, response) {
     const thumbnail = base64ToBuffer(match[1]);
     response.setHeader('Content-Type', 'image/webp');
     response.setHeader('Content-Length', String(thumbnail.length));
-    setCacheHeaders(response, cacheProfiles.immutable, cacheProfiles.immutableCdn);
+    setCacheHeaders(response, cacheProfiles.assetBrowser, cacheProfiles.assetCdn);
     if (request.method === 'HEAD') {
       return response.status(200).end();
     }

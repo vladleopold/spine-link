@@ -290,6 +290,7 @@ type LibraryEntry = {
   sourceProofUrl?: string;
   blockchainAnchor?: BlockchainAnchor;
   webmStatus?: string;
+  webmGeneratedAt?: string;
   fullExportStatus?: string;
   fullExportGeneratedAt?: string;
   allAnimationPreviews?: Record<string, {
@@ -4978,6 +4979,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           portfolioMode: existingEntry?.portfolioMode ?? isPortfolioMode,
           hiddenFromPublicLibrary: existingEntry?.hiddenFromPublicLibrary,
           uploadedAt: existingEntry?.uploadedAt || uploadedAt,
+          webmGeneratedAt: uploadedAt,
           skeleton: spine.skeletonName,
           atlas: spine.atlasName,
           textures: Array.from(new Set(setsForPublish.flatMap((nextSpine) => nextSpine.atlasPages.map(basename)))),
