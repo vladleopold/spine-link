@@ -379,6 +379,10 @@
   ],
   "rewrites": [
     {
+      "source": "/google2ea7251338911e7a.html",
+      "destination": "/google2ea7251338911e7a.html"
+    },
+    {
       "source": "/spine-link.webm",
       "destination": "/api/github-asset?path=spine-link.webm"
     },
