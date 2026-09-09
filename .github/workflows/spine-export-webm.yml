@@ -62,7 +62,16 @@ jobs:
       - name: Install system dependencies
         run: |
           echo "=== DEBUG: INSTALLING SYSTEM DEPENDENCIES ==="
-          sudo apt-get update
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+          for attempt in 1 2 3; do
+            if sudo apt-get update; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 5
+          done
           echo "=== DEBUG: APT UPDATE COMPLETE ==="
           sudo apt-get install -y ffmpeg \
             libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
