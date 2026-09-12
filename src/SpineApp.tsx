@@ -1813,7 +1813,7 @@ function assetVersionForLibraryEntry(entry: LibraryEntry, fallback = "") {
 
 function safeLibraryAssetUrl(value = "") {
   const url = value.trim();
-  return /^https:\/\/[^\s"'<>]+$/i.test(url) && !/^data:/i.test(url) ? url : "";
+  return /^https:\/\/[^\s"'<>]+$/i.test(url) || /^data:image\/webp;base64,/i.test(url) ? url : "";
 }
 
 function derivedLibraryAssetUrl(entry: LibraryEntry, extensions: string[]) {

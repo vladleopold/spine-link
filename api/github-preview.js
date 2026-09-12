@@ -160,7 +160,7 @@ function cleanPublicText(value = '', maxLength = 120) {
 
 function safePublicImage(value = '') {
   const url = String(value).trim();
-  return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
+  return /^https:\/\/[^\s"'<>]+$/i.test(url) || /^data:image\/webp;base64,/i.test(url) ? url : '';
 }
 
 function skinNamesFromSkeletonJson(skeletonJson) {
