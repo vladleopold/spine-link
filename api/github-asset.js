@@ -382,6 +382,7 @@ export default async function handler(request, response) {
 
   const path = normalizeRepoPath(request.query?.path || '');
   if (!path) return response.status(400).send('Invalid asset path');
+  if (/\bpreview-low\.webp$/i.test(path)) return response.status(404).send('Not found');
   const assetVersion = typeof request.query?.v === 'string' ? request.query.v : '';
 
   const owner = process.env.GITHUB_OWNER || defaultOwner;
