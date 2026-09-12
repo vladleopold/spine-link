@@ -56,17 +56,8 @@ function entryVideoAsset(value = '', entry = {}, fallback = '') {
 function entryVideoSrc(origin, entry = {}) {
   const direct = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
   if (direct) return direct;
-  const low = entryVideoAsset(entry?.webmPreviewLow || '', entry, 'preview-low');
-  if (low) return low;
   const medium = entryVideoAsset(entry?.webmPreviewMedium || '', entry, 'preview-medium');
   if (medium) return medium;
-  const previewPath = cleanRepoPath(entry?.previewPath || '');
-  if (previewPath) {
-    const lowUrl = `${origin}/assets/${encodeRepoPath(`${previewPath}/preview-low.webm`)}`;
-    const version = assetVersionForEntry(entry, 'preview-low');
-    if (version) return appendAssetVersion(lowUrl, version);
-    return lowUrl;
-  }
   return '';
 }
 
@@ -366,7 +357,7 @@ function homepageFeedEntries(origin, entries, metrics) {
     const metric = metricCountsForId(metrics, id);
     const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
     const thumbnail = isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
-    const poster = entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low') || entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || thumbnail;
+    const poster = entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || thumbnail;
     return {
       id,
       title: String(entry?.title || id || 'Spine preview'),
@@ -409,9 +400,9 @@ function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
   const image = entryImageUrl(origin, entry);
   const video = entryVideoSrc(origin, entry);
-  const lowPoster = entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low') || lightweightAssetUrl(origin, entry, 'preview-low.webp', image);
+  const lowPoster = image;
   const lowVideo = video
-    ? entryVideoSrc(origin, { ...entry, webmPreview: entry?.webmPreviewLow || entry?.webmPreviewMedium || '' }) || lightweightAssetUrl(origin, entry, 'preview-low.webm', video)
+    ? entryVideoSrc(origin, { ...entry, webmPreview: entry?.webmPreviewLow || entry?.webmPreviewMedium || '' }) || video
     : '';
   return {
     id,
@@ -519,7 +510,7 @@ async function enrichArchiveEntryLayout(settings, origin, entry) {
     return { ...entry, mediaAspectRatio: width / height };
   }
 
-  const posterUrl = entryImageAsset(entry.webpPosterLow || '', entry, 'preview-low') || entryImageAsset(entry.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry.webpPoster || '', entry, 'poster') || entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail');
+  const posterUrl = entryImageAsset(entry.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry.webpPoster || '', entry, 'poster') || entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail');
   const repoPath = repoPathFromAssetUrl(entry, posterUrl);
   if (!repoPath || repoPath.includes('/generated-preview.webp')) return entry;
   const buffer = await githubBuffer(settings, repoPath);
@@ -584,12 +575,12 @@ function tileClassForEntry(entry, index = 0) {
 
 function entryImageUrl(origin, entry) {
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-  return entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low') || entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || (isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'));
+  return entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || (isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'));
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, altText = '', fetchpriority = '' } = {}) {
   const video = entryVideoSrc(origin, entry);
-  const poster = entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low') || entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
+  const poster = entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
   const thumbnail = isGifThumbnail ? poster : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
   const alt = altText || escapeHtml(entry?.title || entry?.id || 'Spine animation preview');
