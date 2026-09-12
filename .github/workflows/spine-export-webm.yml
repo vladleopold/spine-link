@@ -79,7 +79,8 @@ jobs:
             libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
             libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
             libatspi2.0-0 libwayland-client0 libwayland-cursor0 \
-            libwayland-egl1
+            libwayland-egl1 \
+            libwebp-tools imagemagick
           echo "=== DEBUG: SYSTEM DEPENDENCIES INSTALLED ==="
 
       - name: Export WebM preview
@@ -199,6 +200,95 @@ jobs:
             }
             
             core.setOutput('webm_url', webmUrl);
+
+      - name: Upload webp posters and update index
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const uploadId = '${{ github.event.client_payload.uploadId }}';
+            const basePath = 'library';
+            const origin = '${{ github.event.client_payload.origin }}';
+            const branch = '${{ github.event.client_payload.branch }}' || 'main';
+            const workspace = '${{ github.workspace }}';
+
+            const webpFiles = [
+              { local: `${workspace}/${uploadId}-preview.webp`, repoPath: `${basePath}/${uploadId}/preview.webp`, key: 'webpPoster' },
+              { local: `${workspace}/${uploadId}-preview-medium.webp`, repoPath: `${basePath}/${uploadId}/preview-medium.webp`, key: 'webpPosterMedium' },
+              { local: `${workspace}/${uploadId}-preview-low.webp`, repoPath: `${basePath}/${uploadId}/preview-low.webp`, key: 'webpPosterLow' },
+            ];
+
+            const webpResults = {};
+
+            for (const f of webpFiles) {
+              if (!fs.existsSync(f.local)) {
+                console.log(`WebP not found: ${f.local}, skipping`);
+                continue;
+              }
+              const content = fs.readFileSync(f.local, 'base64');
+              const stats = fs.statSync(f.local);
+              console.log(`Uploading WebP: ${f.local} (${stats.size} bytes)`);
+
+              let existingSha = null;
+              try {
+                const existing = await github.rest.repos.getContent({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  path: f.repoPath,
+                  ref: branch,
+                });
+                existingSha = existing.data.sha;
+              } catch {}
+
+              const result = await github.rest.repos.createOrUpdateFileContents({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: f.repoPath,
+                message: `Add WebP poster for ${uploadId}`,
+                content,
+                branch,
+                ...(existingSha ? { sha: existingSha } : {}),
+              });
+
+              const url = `${origin}/assets/${f.repoPath}`;
+              webpResults[f.key] = url;
+              console.log(`Uploaded WebP: ${url}`);
+            }
+
+            // Update index entry with webp poster URLs
+            const indexPath = `${basePath}/index.json`;
+            const { data: indexData } = await github.rest.repos.getContent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: indexPath,
+              ref: branch,
+            });
+
+            const content = Buffer.from(indexData.content, 'base64').toString('utf8');
+            const entries = JSON.parse(content);
+            const entryIndex = entries.findIndex(e => e.id === uploadId);
+
+            if (entryIndex !== -1) {
+              entries[entryIndex] = {
+                ...entries[entryIndex],
+                ...webpResults,
+                posterGeneratedAt: new Date().toISOString(),
+              };
+
+              const newContent = Buffer.from(JSON.stringify(entries, null, 2)).toString('base64');
+              await github.rest.repos.createOrUpdateFileContents({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: indexPath,
+                message: `Update WebP posters for ${uploadId}`,
+                content: newContent,
+                sha: indexData.sha,
+                branch,
+              });
+              console.log(`Updated index with WebP posters for ${uploadId}`);
+            }
+
+            core.setOutput('webp_urls', JSON.stringify(webpResults));
 
       - name: Update index entry with webmPreview
         uses: actions/github-script@v7
