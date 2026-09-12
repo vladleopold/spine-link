@@ -1823,16 +1823,6 @@ function derivedLibraryAssetUrl(entry: LibraryEntry, extensions: string[]) {
   return previewPath && file ? assetUrlForRepoPath(joinRepoPath(previewPath, file), assetVersionForLibraryEntry(entry, file)) : "";
 }
 
-function generatedPosterUrlForEntry(entry: LibraryEntry) {
-  return entry.id && /^data:image\/webp;base64,/i.test(entry.thumbnailPoster || "")
-    ? assetUrlForRepoPath(`library/${entry.id}/generated-preview.webp`, assetVersionForLibraryEntry(entry, "generated-preview"))
-    : "";
-}
-
-function generatedWebmUrlForEntry(entry: LibraryEntry) {
-  return entry.id ? `${window.location.origin}/v_holder.webm` : "";
-}
-
 const metricsVisitorStorageKey = "spine-link-metrics-visitor";
 
 function getStoredMetricsVisitorId() {
@@ -3388,7 +3378,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     setSelectedPreviewImage(
       currentLibraryEntry.thumbnailPoster ||
         currentLibraryEntry.thumbnail ||
-        generatedPosterUrlForEntry(currentLibraryEntry) ||
         "",
     );
     setSelectedCardSize(currentLibraryEntry.cardSize || "auto");
@@ -6117,12 +6106,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 const bestWebmPreview = entry.webmPreviewLow || entry.webmPreviewMedium || entry.webmPreview || "";
                 const webmPreviewUrl = isWebmPreview(bestWebmPreview)
                   ? withAssetVersion(bestWebmPreview, assetVersionForLibraryEntry(entry, "webm"))
-                  : derivedLibraryAssetUrl(entry, [".webm"]) || generatedWebmUrlForEntry(entry);
+                  : derivedLibraryAssetUrl(entry, [".webm"]);
                 const safeThumbnail = withAssetVersion(safeLibraryAssetUrl(entry.thumbnail || ""), assetVersionForLibraryEntry(entry, "thumbnail"));
                 const bestWebpPoster = entry.webpPosterLow || entry.webpPosterMedium || entry.webpPoster || entry.thumbnailPoster || "";
                 const safePoster =
                   withAssetVersion(safeLibraryAssetUrl(bestWebpPoster), assetVersionForLibraryEntry(entry, "poster")) ||
-                  generatedPosterUrlForEntry(entry) ||
                   derivedLibraryAssetUrl(entry, [".webp", ".png", ".jpg", ".jpeg"]);
                 const isGifThumbnail = entry.thumbnailType === "gif" || /^data:image\/gif;base64,/i.test(entry.thumbnail || "");
                 const thumbnailForCard = isGifThumbnail ? safePoster : safePoster || safeThumbnail;
