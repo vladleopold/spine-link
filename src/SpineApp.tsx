@@ -4874,14 +4874,18 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             const results = [];
             for (let i = 0; i < totalChunks; i += 1) {
               const chunk = base64.slice(i * CHUNK, (i + 1) * CHUNK);
-              const chunkPath = `${fp}.__chunks/${String(i).padStart(5, "0")}`;
-              const cb = JSON.stringify({ action: "multipart-upload-chunk", googleIdToken, anonymousAccount, settings: nextSettings, path: chunkPath, chunkIndex: i, contentBase64: chunk, message: `${commitPrefix}: chunk ${i} of ${f.name}` });
+               // Send the base file path: the server appends ".__chunks/NNNNN"
+               // itself. Sending the full chunk path here made it double up as
+               // "file.png.__chunks/00001.__chunks/00001", so reassemble-file
+               // never found the chunks and the upload failed before the
+               // library index was updated.
+               const cb = JSON.stringify({ action: "multipart-upload-chunk", googleIdToken, anonymousAccount, settings: nextSettings, path: fp, chunkIndex: i, contentBase64: chunk, message: `${commitPrefix}: chunk ${i} of ${f.name}` });
               let lastErr;
               for (let attempt = 0; attempt < MAX_CHUNK_RETRIES; attempt += 1) {
                 try {
                   const cr = await fetch("/api/github-upload", { method: "POST", headers: rh, body: cb });
                   const cres = await cr.json().catch(() => ({}));
-                  if (cr.ok) { results.push({ chunkPath, bytes: Number(cres.bytes), sha256: String(cres.sha256) }); break; }
+                  if (cr.ok) { results.push({ chunkPath: String(cres.chunkPath || `${fp}.__chunks/${String(i).padStart(5, "0")}`), bytes: Number(cres.bytes), sha256: String(cres.sha256) }); break; }
                   if (cr.status >= 500 && attempt < MAX_CHUNK_RETRIES - 1) { lastErr = new Error(`Chunk ${i} upload failed: ${cr.status}`); await new Promise((r) => setTimeout(r, 1500 * (attempt + 1))); continue; }
                   throw new Error(`Chunk ${i} upload failed: ${cr.status}`);
                 } catch (err) {
