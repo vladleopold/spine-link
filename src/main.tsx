@@ -8,6 +8,20 @@ let mountedFileReceiver: ((files: File[]) => void) | null = null;
 let pendingMountedFiles: File[] | null = null;
 let bootDraggingState: boolean | null = null;
 
+const backgroundUploadKey = "__spineBackgroundUpload";
+const uploadCompletePopupKey = "__spineUploadPopupShown";
+
+type BackgroundUploadEntry = {
+  id: string;
+  uploadId: string;
+  uploadPath: string;
+  uploadUrl: string;
+  files: Array<{ name: string; size: number }>;
+  startedAt: number;
+  status: "pending" | "uploading" | "ready" | "complete" | "failed";
+  error?: string;
+};
+
 declare global {
   interface Window {
     __spineLinkReceiveFiles?: (files: File[]) => void;
@@ -487,13 +501,270 @@ document.addEventListener("dragleave", (event) => {
   renderHomeShell(false);
 });
 
+function getAnonymousAccount(): { id: string; fingerprint: string } {
+  try {
+    const stored = localStorage.getItem("spine-link-anonymous-account");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed?.id?.startsWith("anon_") && parsed.fingerprint) return parsed;
+    }
+  } catch {}
+  const account = { id: `anon_${Math.random().toString(36).slice(2, 10)}_${Math.random().toString(36).slice(2, 12)}`, fingerprint: Math.random().toString(36).slice(2, 18) + Date.now().toString(36) };
+  try { localStorage.setItem("spine-link-anonymous-account", JSON.stringify(account)); } catch {}
+  return account;
+}
+
+function getBackgroundUploads(): BackgroundUploadEntry[] {
+  try {
+    const raw = localStorage.getItem(backgroundUploadKey);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBackgroundUploads(uploads: BackgroundUploadEntry[]) {
+  try {
+    localStorage.setItem(backgroundUploadKey, JSON.stringify(uploads));
+  } catch {}
+}
+
+function addBackgroundUpload(entry: Partial<BackgroundUploadEntry>) {
+  const uploads = getBackgroundUploads();
+  const newEntry: BackgroundUploadEntry = { id: crypto.randomUUID(), uploadId: "", uploadPath: "", uploadUrl: "", files: [], startedAt: Date.now(), status: "pending", ...entry };
+  uploads.unshift(newEntry);
+  saveBackgroundUploads(uploads.slice(0, 20));
+  return newEntry;
+}
+
+function updateBackgroundUpload(id: string, updates: Partial<BackgroundUploadEntry>) {
+  const uploads = getBackgroundUploads();
+  const index = uploads.findIndex((u) => u.id === id);
+  if (index === -1) return;
+  uploads[index] = { ...uploads[index], ...updates };
+  saveBackgroundUploads(uploads);
+}
+
+const KEEPALIVE_MAX_BYTES = 60000;
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): Promise<{ ok: boolean; status: number; data?: unknown }> {
+  const file = data.file as File | undefined;
+  if (!file) return { ok: false, status: 0 };
+
+  const base64 = await fileToBase64(file);
+  const fileSize = file.size;
+
+  if (fileSize <= KEEPALIVE_MAX_BYTES) {
+    const body = JSON.stringify({
+      ...data,
+      fileName: file.name,
+      fileSize: file.size,
+      fileContentType: file.type || "application/octet-stream",
+      fileBase64: base64,
+    });
+    try {
+      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
+      return { ok: response.ok, status: response.status, data: await response.json().catch(() => ({})) };
+    } catch {
+      return { ok: false, status: 0 };
+    }
+  }
+
+  const chunkBase64 = base64;
+  const CHUNK_SIZE = KEEPALIVE_MAX_BYTES;
+  const totalChunks = Math.ceil(base64.length / CHUNK_SIZE);
+  const uploadId = String(data.uploadId || "");
+  let chunkIndex = 0;
+
+  const sendChunk = async (): Promise<{ ok: boolean; status: number; data?: unknown }> => {
+    if (chunkIndex >= totalChunks) return { ok: true, status: 200 };
+    const chunk = chunkBase64.slice(chunkIndex * CHUNK_SIZE, (chunkIndex + 1) * CHUNK_SIZE);
+    chunkIndex++;
+    const chunkBody = JSON.stringify({
+      action: "background-upload-chunk",
+      uploadId,
+      uploadPath: data.uploadPath || "",
+      fileName: file.name,
+      chunkIndex: chunkIndex - 1,
+      chunkCount: totalChunks,
+      chunkBase64: chunk,
+      totalBytes: fileSize,
+      anonymousAccount: data.anonymousAccount,
+      settings: data.settings,
+    });
+    try {
+      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: chunkBody, keepalive: true });
+      if (!response.ok) return { ok: false, status: response.status, data: await response.json().catch(() => ({})) };
+    } catch {
+      return { ok: false, status: 0 };
+    }
+    return sendChunk();
+  };
+
+  const result = await sendChunk();
+  if (!result.ok) return result;
+
+  const reassembleBody = JSON.stringify({
+    action: "background-upload-reassemble",
+    uploadId,
+    uploadPath: data.uploadPath || "",
+    fileName: file.name,
+    chunkCount: totalChunks,
+    totalBytes: fileSize,
+    anonymousAccount: data.anonymousAccount,
+    settings: data.settings,
+  });
+  try {
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: reassembleBody, keepalive: true });
+    return { ok: response.ok, status: response.status, data: await response.json().catch(() => ({})) };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}
+
+function escapeHtml(value: string): string {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function startBackgroundUpload(files: File[]) {
+  const anonymousAccount = getAnonymousAccount();
+  const uploadedAt = new Date().toISOString();
+  const title = files.find((f) => f.name.toLowerCase().endsWith(".json"))?.name.replace(/\.[^.]+$/, "") || "Spine animation";
+  const safeTitle = title.replace(/[^a-z0-9._-]/gi, "-").replace(/-+/g, "-").slice(0, 60);
+  const uploadId = `${safeTitle}-${uploadedAt.replace(/[:.]/g, "-")}`;
+  const uploadPath = `library/${uploadId}`;
+  const origin = window.location.origin;
+  const uploadEntry = addBackgroundUpload({
+    uploadId,
+    uploadPath,
+    uploadUrl: `${origin}/p/${encodeURIComponent(uploadId)}`,
+    files: files.map((f) => ({ name: f.name, size: f.size })),
+    status: "uploading",
+  });
+
+  let fileIndex = 0;
+  let error: string | null = null;
+
+  const uploadNextFile = async () => {
+    if (fileIndex >= files.length) {
+      await finalizeBackgroundUpload(uploadEntry.id, uploadId, uploadPath, uploadedAt);
+      return;
+    }
+    const file = files[fileIndex];
+    fileIndex++;
+    const result = await uploadFileKeepAlive("/api/github-upload", {
+      action: "background-upload",
+      uploadId,
+      uploadPath,
+      uploadedAt,
+      anonymousAccount,
+      settings: { owner: "vladleopold", repo: "spine", branch: "main", basePath: "library", title },
+      file,
+      anonymousAccountId: anonymousAccount.id,
+      anonymousFingerprint: anonymousAccount.fingerprint,
+    });
+    if (!result.ok) {
+      error = typeof (result.data as any)?.error === "string" ? (result.data as any).error : `Upload failed: ${result.status}`;
+      updateBackgroundUpload(uploadEntry.id, { status: "failed", error: error ?? undefined });
+      showBackgroundPopup(uploadEntry.id, null, error);
+      return;
+    }
+    updateBackgroundUpload(uploadEntry.id, { status: "uploading" });
+    uploadNextFile();
+  };
+
+  uploadNextFile();
+}
+
+async function finalizeBackgroundUpload(entryId: string, uploadId: string, uploadPath: string, uploadedAt: string) {
+  const anonymousAccount = getAnonymousAccount();
+  const body = JSON.stringify({
+    action: "background-finalize-index",
+    uploadedAt,
+    uploadId,
+    uploadPath,
+    anonymousAccount,
+    settings: { owner: "vladleopold", repo: "spine", branch: "main", basePath: "library" },
+    entry: { id: uploadId, uploadedAt, previewPath: uploadPath },
+    commitPrefix: "Background upload",
+  });
+  try {
+    const response = await fetch("/api/github-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      updateBackgroundUpload(entryId, { status: "failed", error: result?.error || "Index update failed" });
+      showBackgroundPopup(entryId, null, result?.error || "Index update failed");
+      return;
+    }
+  } catch {
+    updateBackgroundUpload(entryId, { status: "failed", error: "Finalization failed" });
+    showBackgroundPopup(entryId, null, "Finalization failed");
+    return;
+  }
+  const previewUrl = `${window.location.origin}/p/${encodeURIComponent(uploadId)}`;
+  updateBackgroundUpload(entryId, { status: "complete", uploadUrl: previewUrl });
+  try { localStorage.setItem("__spineUploadComplete", JSON.stringify({ url: previewUrl, timestamp: Date.now() })); } catch {}
+  window.dispatchEvent(new CustomEvent("spine-upload-complete", { detail: { url: previewUrl } }));
+  showBackgroundPopup(entryId, previewUrl, null);
+}
+
+function showBackgroundPopup(entryId: string, url: string | null, error: string | null) {
+  if (window.location.pathname.includes("/p/")) return;
+  const existing = document.getElementById("spine-upload-popup");
+  if (existing) existing.remove();
+  const popup = document.createElement("div");
+  popup.id = "spine-upload-popup";
+  popup.className = "upload-toast is-visible";
+  popup.innerHTML = `
+    <strong>${error ? "Upload failed" : url ? "Upload complete" : "Upload in progress"}</strong>
+    ${url ? `<a href="${url}" target="_blank" rel="noreferrer">Open animation</a>` : ""}
+    ${error ? `<span style="color:#ff76ab;font-size:12px">${escapeHtml(error)}</span>` : ""}
+    <button class="upload-toast-close" type="button" aria-label="Close notification">&times;</button>
+  `;
+  popup.querySelector(".upload-toast-close")?.addEventListener("click", () => {
+    popup.classList.remove("is-visible");
+    setTimeout(() => popup.remove(), 300);
+  });
+  document.body.appendChild(popup);
+}
+
+window.addEventListener("storage", (event: StorageEvent) => {
+  if (event.key === "__spineUploadComplete" && event.newValue) {
+    try {
+      const data = JSON.parse(event.newValue);
+      if (data?.url && !window.location.pathname.includes("/p/")) {
+        const existing = document.getElementById("spine-upload-popup");
+        if (!existing) showBackgroundPopup("storage-event", data.url, null);
+      }
+    } catch {}
+  }
+});
+
 document.addEventListener("drop", (event) => {
   const files = Array.from(event.dataTransfer?.files ?? []);
   if (!files.length) return;
   event.preventDefault();
   event.stopPropagation();
   renderHomeShell(false);
-  receiveFiles(files);
+  if (isAppMounted && mountedFileReceiver) {
+    mountedFileReceiver(files);
+  } else {
+    startBackgroundUpload(files);
+  }
 });
 
 function clearSpineCacheWorker() {
@@ -562,3 +833,19 @@ function wireUploadToast() {
     }
   } catch {}
 }
+
+window.addEventListener("load", () => {
+  const uploads = getBackgroundUploads();
+  for (const upload of uploads) {
+    if (upload.status === "complete" && upload.uploadUrl) {
+      try {
+        const lastShown = localStorage.getItem(uploadCompletePopupKey);
+        const alreadyShown = lastShown && typeof lastShown === "string" && lastShown.includes(upload.uploadUrl);
+        if (!alreadyShown) {
+          showBackgroundPopup(upload.id, upload.uploadUrl, null);
+          localStorage.setItem(uploadCompletePopupKey, JSON.stringify({ url: upload.uploadUrl, timestamp: Date.now() }));
+        }
+      } catch {}
+    }
+  }
+});

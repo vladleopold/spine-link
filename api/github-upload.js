@@ -726,6 +726,107 @@ export default async function handler(request, response) {
     const commitPrefix = String(body?.commitPrefix || 'Add Spine preview');
     const action = String(body?.action || '');
 
+    if (action === 'background-upload') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const uploadId = String(body?.uploadId || '').trim();
+      const uploadPathBg = cleanRepoPath(body?.uploadPath || '');
+      const uploadedAt = String(body?.uploadedAt || '').trim();
+      const fileName = String(body?.fileName || '').trim();
+      const fileBase64 = String(body?.fileBase64 || '').trim();
+      if (!uploadId || !uploadPathBg || !fileName || !fileBase64) {
+        return response.status(400).json({ error: 'Missing background upload field' });
+      }
+      const filePath = joinRepoPath(uploadPathBg, fileName.replace(/^\.+\//, ''));
+      const message = `${commitPrefix}: ${fileName} (single)`;
+      const contentBase64 = fileBase64.replace(/^data:[^;]+;base64,/, '');
+      const existingFile = await getGitHubContent(settings, filePath);
+      const writeResult = await putGitHubContent(settings, filePath, contentBase64, message, existingFile?.sha, origin);
+      return response.status(200).json({
+        ok: true,
+        path: filePath,
+        bytes: Buffer.from(contentBase64.replace(/\s/g, ''), 'base64').byteLength,
+        sha256: sha256HexFromBase64(contentBase64),
+        github: publicGitHubWrite(writeResult),
+      });
+    }
+
+    if (action === 'background-upload-chunk') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const uploadId = String(body?.uploadId || '').trim();
+      const uploadPathBg = cleanRepoPath(body?.uploadPath || '');
+      const fileName = String(body?.fileName || '').trim();
+      const chunkIndex = Number(body?.chunkIndex);
+      const chunkCount = Number(body?.chunkCount);
+      const chunkBase64 = String(body?.chunkBase64 || '').trim();
+      if (!uploadId || !uploadPathBg || !fileName || !Number.isFinite(chunkIndex) || !Number.isFinite(chunkCount)) {
+        return response.status(400).json({ error: 'Missing chunk field' });
+      }
+      const chunkDir = `${uploadPathBg}/${fileName}.__chunks`;
+      const chunkPath = `${chunkDir}/${String(chunkIndex).padStart(5, '0')}`;
+      const message = `${commitPrefix}: chunk ${chunkIndex} of ${fileName}`;
+      const existingChunk = await getGitHubContent(settings, chunkPath);
+      const writeResult = await putGitHubContent(settings, chunkPath, chunkBase64, message, existingChunk?.sha, origin);
+      return response.status(200).json({ ok: true, chunkPath, chunkIndex, sha256: sha256HexFromBase64(chunkBase64), github: publicGitHubWrite(writeResult) });
+    }
+
+    if (action === 'background-upload-reassemble') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const uploadId = String(body?.uploadId || '').trim();
+      const uploadPathBg = cleanRepoPath(body?.uploadPath || '');
+      const fileName = String(body?.fileName || '').trim();
+      const chunkCount = Number(body?.chunkCount);
+      if (!uploadId || !uploadPathBg || !fileName || !Number.isFinite(chunkCount)) {
+        return response.status(400).json({ error: 'Missing reassemble field' });
+      }
+      let fullBase64 = '';
+      const chunkDir = `${uploadPathBg}/${fileName}.__chunks`;
+      for (let i = 0; i < chunkCount; i++) {
+        const chunkPath = `${chunkDir}/${String(i).padStart(5, '0')}`;
+        const chunk = await getGitHubContent(settings, chunkPath);
+        if (!chunk || chunk.encoding !== 'base64') throw new Error(`Chunk ${i} not found at ${chunkPath}`);
+        fullBase64 += String(chunk.content).replace(/\s/g, '');
+      }
+      const filePath = joinRepoPath(uploadPathBg, fileName.replace(/^\.+\//, ''));
+      const message = `${commitPrefix}: reassembled ${fileName}`;
+      const existingFile = await getGitHubContent(settings, filePath);
+      const writeResult = await putGitHubContent(settings, filePath, fullBase64, message, existingFile?.sha, origin);
+      for (let i = 0; i < chunkCount; i++) {
+        const chunkPath = `${chunkDir}/${String(i).padStart(5, '0')}`;
+        const chunkSha = await getGitHubContent(settings, chunkPath);
+        try { await deleteGitHubContent(settings, chunkPath, `${commitPrefix}: cleanup chunk ${i} of ${fileName}`, chunkSha?.sha); } catch {}
+      }
+      return response.status(200).json({ ok: true, path: filePath, bytes: Buffer.from(fullBase64.replace(/\s/g, ''), 'base64').byteLength });
+    }
+
+    if (action === 'background-finalize-index') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const uploadId = String(body?.uploadId || '').trim();
+      const uploadPathBg = cleanRepoPath(body?.uploadPath || '');
+      const uploadedAt = String(body?.uploadedAt || '').trim();
+      if (!uploadId) return response.status(400).json({ error: 'Missing uploadId' });
+      const indexPath = joinRepoPath(settings.basePath, 'index.json');
+      const currentIndex = await getGitHubContent(settings, indexPath);
+      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
+      const existingEntry = currentEntries.find((c) => c.id === uploadId);
+      const nextEntry = publicLibraryEntry(origin, {
+        ...body?.entry,
+        id: uploadId,
+        uploadedAt,
+        previewPath: uploadPathBg,
+        ownerEmail: googlePayload?.email,
+        ownerAnonId: anonymousAccount?.id,
+        ownerAnonFingerprint: anonymousAccount?.fingerprint,
+        publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existingEntry?.publicOwnerId),
+        sourceProof: body?.entry?.sourceProof,
+      });
+      nextEntry.webmStatus = existingEntry?.webmStatus === 'ready' ? 'ready' : 'pending';
+      nextEntry.dispatchStatus = 'pending';
+      const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== uploadId)];
+      await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
+      try { dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {}); } catch {}
+      return response.status(200).json({ ok: true, indexed: nextEntries.length });
+    }
+
     if (action === 'get-metrics') {
       const ids = sanitizeMetricIds(body?.ids);
       const hash = metricsVisitorHash(request, body);

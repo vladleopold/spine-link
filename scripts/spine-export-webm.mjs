@@ -191,6 +191,33 @@ function readAnimationNames(filePath) {
 }
 
 /**
+ * Read skin names from a JSON skeleton file. The Spine player renders the
+ * 'default' skin when no skin is requested, but some skeletons keep their
+ * visible attachments on a named skin only (default renders nothing but the
+ * background). Returns [] for binary .skel files or unreadable data.
+ */
+function readSkinNames(filePath) {
+  try {
+    const tryParse = (p) => {
+      const content = JSON.parse(fs.readFileSync(p, 'utf8'));
+      const skins = content?.skins;
+      if (Array.isArray(skins)) return skins.map((s) => s && s.name).filter(Boolean);
+      if (skins && typeof skins === 'object') return Object.keys(skins);
+      return [];
+    };
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.json') return tryParse(filePath);
+    if (ext === '.skel') {
+      const dir = path.dirname(filePath);
+      const base = path.basename(filePath, '.skel');
+      const jsonSibling = path.join(dir, base + '.json');
+      if (fs.existsSync(jsonSibling)) return tryParse(jsonSibling);
+    }
+  } catch { }
+  return [];
+}
+
+/**
  * Compute animation duration from JSON skeleton timeline data as a fallback
  * when the player reports duration=0 (Spine 4.2.x JSON exports sometimes
  * omit the top-level 'duration' field on animations).
@@ -506,7 +533,12 @@ console.error(`Atlas: ${atlasFile}`);
 console.error(`Animation: ${targetAnimation}`);
 console.error(`Is default: ${isDefault}`);
 
-const captureHtml = `<!DOCTYPE html>
+// Capture page builder. activeSkin selects the Spine skin to render; when
+// null the player default is used. Some skeletons draw nothing with the
+// default skin, so the export retries with named skins (see skinCandidates).
+function buildCaptureHtml(activeSkin) {
+const skinLine = activeSkin ? `    skin: '${activeSkin}',\n` : '';
+return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -528,12 +560,66 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
   window.__ready = false;
 
   var player;
+  // Peak brightness of the currently rendered frame (center sample).
+  // Used by the exporter to detect "rendered nothing but background" and
+  // fall back to another skin. Requires preserveDrawingBuffer (set below).
+  window.__framePeak = function () {
+    try {
+      var c = player && player.canvas;
+      if (!c) return -1;
+      var g = c.getContext('webgl2') || c.getContext('webgl');
+      if (!g) return -1;
+      var w = g.drawingBufferWidth, h = g.drawingBufferHeight;
+      if (!w || !h) return -1;
+      var sw = Math.min(w, 160), sh = Math.min(h, 160);
+      var x = (w - sw) >> 1, y = (h - sh) >> 1;
+      var buf = new Uint8Array(sw * sh * 4);
+      g.readPixels(x, y, sw, sh, g.RGBA, g.UNSIGNED_BYTE, buf);
+      var mx = 0;
+      for (var i = 0; i < buf.length; i += 4) {
+        var m = Math.max(buf[i], buf[i + 1], buf[i + 2]);
+        if (m > mx) mx = m;
+      }
+      return mx;
+    } catch (e) { return -1; }
+  };
+  // Recording is started explicitly via window.__startRecording() AFTER the
+  // canvas has reached its final size. Starting captureStream on the initial
+  // 300x150 default canvas breaks the track when the player resizes it:
+  // every recorded frame comes out black even though the live canvas is fine.
+  window.__canvasSize = function () {
+    if (player && player.canvas) return [player.canvas.width, player.canvas.height];
+    return [0, 0];
+  };
+  window.__startRecording = function () {
+    try {
+      if (!player || !player.canvas) return 'no-canvas';
+      var stream = player.canvas.captureStream(30);
+      var recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+      var chunks = [];
+      recorder.ondataavailable = function(e) { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = function() {
+        var blob = new Blob(chunks, { type: 'video/webm' });
+        var reader = new FileReader();
+        reader.onload = function() { window.__videoData = reader.result; };
+        reader.readAsDataURL(blob);
+      };
+      recorder.start();
+
+      window.__stopRecording = function() {
+        if (recorder.state === 'recording') recorder.stop();
+      };
+      return 'recording';
+    } catch (err) {
+      return 'error: ' + err.message;
+    }
+  };
   var config = {
     ${isLegacy ? (skeletonKey === 'skelUrl' ? `skelUrl: '${skeletonRawUrl}'` : `jsonUrl: '${skeletonRawUrl}'`) : (skeletonKey === 'skelUrl' ? `skelUrl: '${skeletonRawUrl}'` : `skeleton: '${skeletonRawUrl}'`)},
     ${isLegacy ? `atlasUrl: '${atlasRawUrl}'` : `atlas: '${atlasRawUrl}'`},
     textures: ${JSON.stringify(textureRawUrls)},
     animation: '${targetAnimation}',
-    showLoading: false,
+${skinLine}    showLoading: false,
     premultipliedAlpha: false,
     preserveDrawingBuffer: true,
     alpha: true,
@@ -552,30 +638,6 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
         }
       } catch (e) {}
 
-      // Force 30 FPS playback by overriding requestAnimationFrame for the player?
-      // Not strictly necessary if we capture at 30fps and record for exact duration,
-      // but let's record using MediaRecorder.
-      if (player.canvas) {
-        try {
-          var stream = player.canvas.captureStream(30);
-          var recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
-          var chunks = [];
-          recorder.ondataavailable = function(e) { if (e.data.size > 0) chunks.push(e.data); };
-          recorder.onstop = function() {
-            var blob = new Blob(chunks, { type: 'video/webm' });
-            var reader = new FileReader();
-            reader.onload = function() { window.__videoData = reader.result; };
-            reader.readAsDataURL(blob);
-          };
-          recorder.start();
-          
-          window.__stopRecording = function() {
-            if (recorder.state === 'recording') recorder.stop();
-          };
-        } catch(err) {
-           window.__captureError = 'MediaRecorder failed: ' + err.message;
-        }
-      }
     },
     error: function (p, err) {
       window.__captureError = 'Player creation failed: ' + err;
@@ -623,6 +685,7 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
 </script>
 </body>
 </html>`;
+}
 
 const tempDir = path.join('/tmp', `spine-export-${Date.now()}`);
 fs.mkdirSync(tempDir, { recursive: true });
@@ -684,43 +747,113 @@ try {
       });
     });
   }
-  await page.setContent(captureHtml, { waitUntil: 'load', timeout: 60000 });
+  // Skin fallback: the player default skin sometimes renders nothing but the
+  // background (e.g. a skeleton whose visible attachments live on a named
+  // skin). Capture with the default first to preserve existing renders,
+  // then retry with each named non-default skin until a frame shows content.
+  const FRAME_PEAK_MIN = 40;
+  const skinNames = readSkinNames(skeletonFilePath);
+  const skinCandidates = [null, ...skinNames.filter((s) => s && s.toLowerCase() !== 'default')];
+  console.error(`Skin candidates: ${JSON.stringify(skinCandidates)}`);
 
-  await page.waitForFunction(() => window.__ready === true || window.__captureError, { timeout: 60000, polling: 200 });
+  let chosenSkin = null;
+  let animDuration = 0;
+  let effectiveDuration = 0;
+  let captureDuration = 1;
+  let canvasWidth = videoWidth;
+  let canvasHeight = videoHeight;
+  let videoDataUrl = null;
+  let lastCaptureError = null;
 
-  const error = await page.evaluate(() => window.__captureError || null);
-  if (error) {
-    console.error(`Capture failed: ${error}`);
-    process.exit(1);
-  }
-
-  const animDuration = await page.evaluate(() => window.__animDuration || 0);
-  const canvasWidth = await page.evaluate(() => window.__canvasWidth || 0) || videoWidth;
-  const canvasHeight = await page.evaluate(() => window.__canvasHeight || 0) || videoHeight;
-
-  // Fallback: if the player reported duration=0 (e.g. Spine 4.2.x JSON with no
-  // top-level 'duration' field), compute it from the raw JSON timeline data.
-  let effectiveDuration = animDuration;
-  if (effectiveDuration <= 0 && targetAnimation) {
-    const fallbackDuration = readJsonAnimationDuration(skeletonFilePath, targetAnimation);
-    if (fallbackDuration > 0) {
-      console.error(`Player reported duration=0, using JSON timeline max time=${fallbackDuration}s for '${targetAnimation}'`);
-      effectiveDuration = fallbackDuration;
+  for (const skin of skinCandidates) {
+    const label = skin === null ? '(default)' : `'${skin}'`;
+    await page.setContent(buildCaptureHtml(skin), { waitUntil: 'load', timeout: 60000 });
+    let ready = true;
+    try {
+      await page.waitForFunction(() => window.__ready === true || window.__captureError, { timeout: 60000, polling: 200 });
+    } catch {
+      ready = false;
     }
+    const error = ready ? await page.evaluate(() => window.__captureError || null) : 'Timed out waiting for player ready';
+    if (error) {
+      lastCaptureError = error;
+      console.error(`Capture with skin ${label} failed: ${error}`);
+      break; // player/skeleton broken — another skin will not fix it
+    }
+
+    animDuration = await page.evaluate(() => window.__animDuration || 0);
+
+    // Fallback: if the player reported duration=0 (e.g. Spine 4.2.x JSON with
+    // no top-level 'duration' field), compute it from raw JSON timeline data.
+    effectiveDuration = animDuration;
+    if (effectiveDuration <= 0 && targetAnimation) {
+      const fallbackDuration = readJsonAnimationDuration(skeletonFilePath, targetAnimation);
+      if (fallbackDuration > 0) {
+        console.error(`Player reported duration=0, using JSON timeline max time=${fallbackDuration}s for '${targetAnimation}'`);
+        effectiveDuration = fallbackDuration;
+      }
+    }
+
+    // Let a few frames render, then wait for the canvas backing store to
+    // settle at its final size. Starting the recorder earlier (on the
+    // initial 300x150 canvas) breaks the capture track on resize.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    let canvasSize = [0, 0];
+    let stableCount = 0;
+    for (let i = 0; i < 20; i++) {
+      const s = await page.evaluate(() => (typeof window.__canvasSize === 'function' ? window.__canvasSize() : [0, 0]));
+      if (s[0] > 0 && s[0] === canvasSize[0] && s[1] === canvasSize[1]) {
+        stableCount++;
+        if (stableCount >= 2) break;
+      } else {
+        stableCount = 0;
+      }
+      canvasSize = s;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    canvasWidth = canvasSize[0] || videoWidth;
+    canvasHeight = canvasSize[1] || videoHeight;
+    const framePeak = await page.evaluate(() => (typeof window.__framePeak === 'function' ? window.__framePeak() : -1));
+    console.error(`Skin ${label}: frame peak=${framePeak}, canvas=${canvasWidth}x${canvasHeight}, duration=${animDuration}s`);
+    const moreSkins = skinCandidates.indexOf(skin) < skinCandidates.length - 1;
+    if (framePeak < FRAME_PEAK_MIN && moreSkins) {
+      console.error(`Skin ${label} rendered no visible content, trying next skin...`);
+      continue;
+    }
+
+    // Start recording only now, on the settled canvas showing content.
+    const recState = await page.evaluate(() => (typeof window.__startRecording === 'function' ? window.__startRecording() : 'missing'));
+    console.error(`Skin ${label}: recorder ${recState}`);
+    if (recState !== 'recording') {
+      lastCaptureError = `MediaRecorder failed to start (${recState})`;
+      console.error(`Capture with skin ${label} failed: ${lastCaptureError}`);
+      break;
+    }
+
+    captureDuration = effectiveDuration > 0 ? effectiveDuration : 1; // Record exactly the animation duration (no artificial minimum)
+    await new Promise((resolve) => setTimeout(resolve, captureDuration * 1000));
+
+    await page.evaluate(() => {
+      if (window.__stopRecording) window.__stopRecording();
+    });
+
+    try {
+      videoDataUrl = await page.waitForFunction(() => window.__videoData, { timeout: 15000 }).then((h) => h.jsonValue());
+    } catch {
+      videoDataUrl = null;
+    }
+    if (!videoDataUrl) {
+      lastCaptureError = 'No video data captured by MediaRecorder';
+      console.error(`Capture with skin ${label} failed: ${lastCaptureError}`);
+      break;
+    }
+    chosenSkin = skin;
+    console.error(`Capture skin: ${label} (peak ${framePeak})`);
+    break;
   }
 
-  console.error(`Animation ready, duration=${animDuration}s, canvas=${canvasWidth}x${canvasHeight}`);
-
-  const captureDuration = effectiveDuration > 0 ? effectiveDuration : 1; // Record exactly the animation duration (no artificial minimum)
-  await new Promise(resolve => setTimeout(resolve, captureDuration * 1000));
-
-  await page.evaluate(() => {
-    if (window.__stopRecording) window.__stopRecording();
-  });
-
-  const videoDataUrl = await page.waitForFunction(() => window.__videoData, { timeout: 15000 }).then(h => h.jsonValue());
   if (!videoDataUrl) {
-    console.error('No video data captured by MediaRecorder');
+    console.error(`Capture failed: ${lastCaptureError || 'no skin produced visible content'}`);
     process.exit(1);
   }
 
@@ -834,6 +967,7 @@ try {
   
   const meta = {
     animation: targetAnimation,
+    skin: chosenSkin === null ? 'default' : chosenSkin,
     animationDuration: animDuration,
     capturedDuration: captureDuration,
     width: videoWidth,

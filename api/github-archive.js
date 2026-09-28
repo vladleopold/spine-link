@@ -434,7 +434,7 @@ function lightweightCardHtml(item, index = 0) {
     ? `<img src="${poster}"${posterFallback && posterFallback !== poster ? ` data-fallback-src="${posterFallback}"` : ''} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'low'}" />`
     : '<span class="feed-placeholder" aria-hidden="true">SPINE</span>';
   const mediaVideo = item.video
-    ? `<video src="${video}" poster="${poster || posterFallback}" muted playsinline preload="none" loop data-video-src="${video}" data-video-fallback="${videoFallback}"></video>`
+    ? `<video src="${video}" poster="${poster || posterFallback}" muted playsinline preload="metadata" loop data-video-src="${video}" data-video-fallback="${videoFallback}"></video>`
     : '';
   const mediaInner = mediaVideo || media;
   const playerUrlAttr = item.playerUrl ? ` data-player-url="${escapeHtml(item.playerUrl)}"` : '';
@@ -1358,6 +1358,7 @@ function archiveHtml({ origin, entries, metrics }) {
           video.loop = true;
           video.playsInline = true;
           try { video.currentTime = 0; } catch {}
+          void video.load();
           void video.play().catch(() => undefined);
         }
 
@@ -1396,7 +1397,7 @@ function archiveHtml({ origin, entries, metrics }) {
             video.muted = true;
             video.loop = true;
             video.playsInline = true;
-            video.preload = 'none';
+            video.preload = 'metadata';
             video.setAttribute('data-video-src', item.video);
             if (item.videoFallback) video.setAttribute('data-video-fallback', item.videoFallback);
             media.append(video);

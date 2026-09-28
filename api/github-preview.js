@@ -1334,6 +1334,13 @@ playerElement.addEventListener("touchstart", (event) => {
       setSelect.onchange = () => { activeSet.value = sets.find((set) => set.label === setSelect.value) || sets[0]; activeAnimation.name = activeSet.value?.animation || ""; syncSetInfo(); renderAnimationList(); syncUrl(); createPlayer(); };
       window.addEventListener("popstate", applySelectionFromUrl);
       renderSetList(); syncSetInfo(); renderOwnerCard(); installOwnerLibraryChaos(); syncPreviewLike(); syncLibraryNavigationButtons(); syncUrl(true); createPlayer(); renderAnimationList();
+      const seoVideo = document.querySelector('.video-watch-player');
+      if (seoVideo && seoVideo.getAttribute('autoplay') !== null) {
+        seoVideo.muted = true;
+        seoVideo.playsInline = true;
+        seoVideo.load();
+        seoVideo.play().catch(() => {});
+      }
     </script>
     <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(entryMetricId)} };</script>
     <script src="/spine-metrics.js" defer></script>
@@ -1380,7 +1387,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
     <main class="page">
       <div class="topbar"><div class="brand">Spine-Link</div><a class="back" href="${ownerUrl}">Open portfolio</a></div>
       <section class="video-card">
-        <video src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted playsinline preload="metadata" autoplay controls></video>
+        <video id="video-fallback-player" src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted playsinline preload="metadata" autoplay controls></video>
         <div class="body">
           <h1>${title}</h1>
           ${note ? `<p>${cleanPublicText(note, 240)}</p>` : '<p>This older library item uses the portfolio video holder because its original Spine source files are no longer available.</p>'}
@@ -1389,6 +1396,15 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
         </div>
       </section>
     </main>
+    <script>
+      const v = document.getElementById('video-fallback-player');
+      if (v) {
+        v.muted = true;
+        v.playsInline = true;
+        v.load();
+        v.play().catch(() => {});
+      }
+    </script>
     <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(metricId)} };</script>
     <script src="/spine-metrics.js" defer></script>
   </body>

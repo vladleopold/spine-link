@@ -291,6 +291,7 @@ type LibraryEntry = {
   blockchainAnchor?: BlockchainAnchor;
   webmStatus?: string;
   webmGeneratedAt?: string;
+  posterGeneratedAt?: string;
   fullExportStatus?: string;
   fullExportGeneratedAt?: string;
   allAnimationPreviews?: Record<string, {
@@ -1801,13 +1802,19 @@ function assetUrlForRepoPath(path: string, version = "") {
 }
 
 function assetVersionForLibraryEntry(entry: LibraryEntry, fallback = "") {
+  const webmAt = String(entry?.webmGeneratedAt || "").trim();
+  const posterAt = String(entry?.posterGeneratedAt || "").trim();
+  const hasWebm = webmAt && webmAt !== "null" && webmAt !== "undefined";
+  const hasPoster = posterAt && posterAt !== "null" && posterAt !== "undefined";
   return cleanAssetVersion(
-    entry.sourceProof?.proofHash ||
-      entry.blockchainAnchor?.sourceProofHash ||
-      entry.blockchainAnchor?.anchorHash ||
-      entry.uploadedAt ||
-      entry.id ||
-      fallback,
+    (hasWebm ? `${webmAt}-` : "") +
+      (hasPoster ? `${posterAt}-` : "") +
+      (entry.sourceProof?.proofHash ||
+        entry.blockchainAnchor?.sourceProofHash ||
+        entry.blockchainAnchor?.anchorHash ||
+        entry.uploadedAt ||
+        entry.id ||
+        fallback),
   );
 }
 
