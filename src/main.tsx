@@ -701,7 +701,11 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
         }));
         if (response.ok) return sendChunk();
         const payload = await response.json().catch(() => ({}));
-        if (attempt === CHUNK_ATTEMPTS - 1) {
+        // 4xx (other than 429) is a definitive answer from our own handler: the
+        // server already tried to fix it and could not. Replaying just spends
+        // the user's time and hides the real message behind retry noise.
+        const definitive = response.status >= 400 && response.status < 500 && response.status !== 429;
+        if (attempt === CHUNK_ATTEMPTS - 1 || definitive) {
           console.error(
             `[spine] upload chunk ${chunkIndex}/${totalChunks} for ${file.name} failed: HTTP ${response.status}`,
             payload?.error || payload,
@@ -713,7 +717,7 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
         // upload is diagnosable from the console without waiting for the end.
         if (waitMs > 0) {
           console.warn(
-            `[spine] chunk ${chunkIndex + 1}/${totalChunks} of ${file.name} got HTTP ${response.status}, retrying in ${Math.round(waitMs)}ms`,
+            `[spine] chunk ${chunkIndex}/${totalChunks} of ${file.name} got HTTP ${response.status}, retrying in ${Math.round(waitMs)}ms`,
             payload?.error || "",
           );
           await new Promise((resolve) => setTimeout(resolve, waitMs));

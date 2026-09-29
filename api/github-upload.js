@@ -712,9 +712,13 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       throw withGitHubStatus(githubFailure('write', path, response), response);
     } catch (err) {
       lastError = err;
-      if (attempt < GITHUB_RETRY_ATTEMPTS - 1) {
-        await new Promise((r) => setTimeout(r, githubRetryDelay(attempt)));
-      }
+      // Only retry what the retry set says is worth retrying. A definitive
+      // answer (422 "sha mismatch", 404, 401) must surface immediately: the
+      // chunk writer relies on seeing 422 to look the current sha up, and
+      // replaying it four times only burned seconds before failing anyway.
+      const definitive = Number(err?.status) >= 400 && !GITHUB_RETRY_STATUS.has(Number(err.status));
+      if (definitive || attempt >= GITHUB_RETRY_ATTEMPTS - 1) break;
+      await new Promise((r) => setTimeout(r, githubRetryDelay(attempt)));
     }
   }
   throw lastError;
@@ -843,8 +847,24 @@ export default async function handler(request, response) {
         writeResult = await putGitHubContent(settings, chunkPath, chunkBase64, message, '', origin);
       } catch (err) {
         if (Number(err?.status) !== 422) throw err;
-        const existingChunk = await getGitHubContent(settings, chunkPath);
-        writeResult = await putGitHubContent(settings, chunkPath, chunkBase64, message, existingChunk?.sha, origin);
+        // The blob already exists, so GitHub wants the current sha. If the blob
+        // is being written by something else at the same moment our sha is
+        // stale and the replay 422s too, so re-read and retry: a chunk that has
+        // already been stored correctly must not fail the whole upload.
+        let lastChunkError = err;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const existingChunk = await getGitHubContent(settings, chunkPath);
+          try {
+            writeResult = await putGitHubContent(settings, chunkPath, chunkBase64, message, existingChunk?.sha || '', origin);
+            lastChunkError = null;
+            break;
+          } catch (retryErr) {
+            lastChunkError = retryErr;
+            if (Number(retryErr?.status) !== 422) throw retryErr;
+            await new Promise((r) => setTimeout(r, githubRetryDelay(attempt)));
+          }
+        }
+        if (lastChunkError) throw lastChunkError;
       }
       return response.status(200).json({ ok: true, chunkPath, chunkIndex, sha256: sha256HexFromBase64(chunkBase64), github: publicGitHubWrite(writeResult) });
     }
@@ -1532,14 +1552,22 @@ export default async function handler(request, response) {
      });
   } catch (error) {
     const rateLimited = Number(error?.statusCode) === 429;
-    const statusCode = rateLimited ? 429 : (Number(error?.statusCode) || 500);
+    // A definitive GitHub 4xx is the real answer, not a server fault. Reporting
+    // it as a flat 500 threw away the only clue about what went wrong, which is
+    // what made this take three attempts to find. Pass the real status through
+    // so the client sees "422" instead of a meaningless "500".
+    const githubStatus = Number(error?.status);
+    const definitiveClientStatus = githubStatus >= 400 && githubStatus < 500 && githubStatus !== 429;
+    const statusCode = rateLimited ? 429 : definitiveClientStatus ? githubStatus : (Number(error?.statusCode) || 500);
     const message = error instanceof Error ? error.message : 'Upload failed';
-    console.error(`[UPLOAD] error (action=${failedAction}):`, message);
+    // GitHub's own wording explains the 422 far better than our summary does.
+    const detail = error?.githubMessage && error.githubMessage !== message ? ` (${error.githubMessage})` : '';
+    console.error(`[UPLOAD] error (action=${failedAction}):`, message + detail);
     if (error instanceof Error && error.stack) console.error('[UPLOAD] stack:', error.stack);
     // Tell the browser how long GitHub wants us to wait, so it backs off
     // instead of replaying the chunk and losing the whole upload.
     const retryAfter = Number(error?.retryAfter);
     if (rateLimited && Number.isFinite(retryAfter) && retryAfter > 0) response.setHeader('Retry-After', String(retryAfter));
-    return response.status(statusCode).json({ error: message, ...(rateLimited ? { retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null } : {}) });
+    return response.status(statusCode).json({ error: message + detail, ...(rateLimited ? { retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null } : {}) });
   }
 }
