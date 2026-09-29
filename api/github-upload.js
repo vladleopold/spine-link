@@ -1428,7 +1428,19 @@ export default async function handler(request, response) {
       const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
       const userEmail = String(googlePayload?.email || '').toLowerCase();
       const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
+      // "mine" powers the MY PORTFOLIO dialog, which must show only the works
+      // the caller owns. The default stays public because the archive and the
+      // edit page both look entries up by id across the whole library.
+      const scope = String(body?.scope || 'public');
+      const ownerScoped = scope === 'mine';
       const entries = currentEntries.filter((currentEntry) => {
+        if (ownerScoped) {
+          // Own entries only, and hidden ones included: a hidden work belongs in
+          // your own portfolio so you can unhide or delete it. Filtering by
+          // visibility here would make the portfolio's own "hidden" filter
+          // permanently empty.
+          return canEditEntry(currentEntry, googlePayload, anonymousAccount);
+        }
         const isPublic = currentEntry?.hiddenFromPublicLibrary !== true;
         return isPublic;
       }).sort(compareLibraryEntries);

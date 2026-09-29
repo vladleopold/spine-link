@@ -4530,6 +4530,10 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         headers: requestHeaders,
         body: JSON.stringify({
           action: "get-index",
+          // Scope to this account: the shared index holds every public work on
+          // the site, so without this a brand new visitor opening MY PORTFOLIO
+          // was shown the whole library instead of their own empty portfolio.
+          scope: "mine",
           googleIdToken,
           anonymousAccount,
           settings: githubPublishSettings,
