@@ -442,8 +442,9 @@ function lightweightCardHtml(item, index = 0) {
   const video = escapeHtml(item.video);
   const videoFallback = escapeHtml(item.videoFallback);
   const ratio = item.width && item.height ? Math.min(1.8, Math.max(0.62, item.width / item.height)) : 1;
+  const posterOnError = 'onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried=\'1\';this.src=this.dataset.fallbackSrc;}else{this.style.display=\'none\';}"';
   const media = item.poster
-    ? `<img src="${poster}"${posterFallback && posterFallback !== poster ? ` data-fallback-src="${posterFallback}"` : ''} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'low'}" />`
+    ? `<img src="${poster}"${posterFallback && posterFallback !== poster ? ` data-fallback-src="${posterFallback}"` : ''} ${posterOnError} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'low'}" />`
     : '<span class="feed-placeholder" aria-hidden="true">SPINE</span>';
   const mediaVideo = item.video
     ? `<video src="${video}" poster="${poster || posterFallback}" muted playsinline preload="metadata" loop data-video-src="${video}" data-video-fallback="${videoFallback}"></video>`
@@ -620,7 +621,8 @@ function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, a
     return `<video class="${posterClass}"${posterAttr}${videoSource} muted playsinline preload="${preload}" loop aria-label="${alt}"${fp} data-video-src="${escapeHtml(video)}"></video>`;
   }
   if (thumbnail) {
-    return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="${alt}"${loading} decoding="async"${fp} data-poster="${escapeHtml(poster || thumbnail)}" />`;
+    const fallback = poster && poster !== thumbnail ? ` data-fallback-src="${escapeHtml(poster)}"` : '';
+    return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="${alt}"${loading} decoding="async"${fp} data-poster="${escapeHtml(poster || thumbnail)}"${fallback} onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried='1';this.src=this.dataset.fallbackSrc;}else{this.style.display='none';}" />`;
   }
   return `<div class="media-fallback" aria-label="${alt}">${Array.isArray(entry?.animations) ? entry.animations.length : 0}</div>`;
 }
@@ -1435,7 +1437,14 @@ function archiveHtml({ origin, entries, metrics }) {
             img.alt = item.title + ' Spine animation preview';
             img.loading = 'lazy';
             img.decoding = 'async';
-            img.addEventListener('error', () => { if (item.posterFallback && img.src !== item.posterFallback) img.src = item.posterFallback; }, { once: true });
+            img.addEventListener('error', () => {
+              if (item.posterFallback && !img.dataset.fallbackTried && img.getAttribute('src') !== item.posterFallback) {
+                img.dataset.fallbackTried = '1';
+                img.src = item.posterFallback;
+                return;
+              }
+              img.style.display = 'none';
+            });
             media.append(img);
           } else {
             const placeholder = document.createElement('span');

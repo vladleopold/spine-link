@@ -80,7 +80,7 @@ function isPublicFeedRequest(url) {
 }
 
 function isRuntimeAssetRequest(url) {
-  return isVersionedAssetRequest(url) || ["/spine-link-video-thumbnail.png", "/video_tumbnail.png", "/v_holder.webm"].includes(url.pathname);
+  return isVersionedAssetRequest(url) || ["/spine-link-video-thumbnail.png", "/video_tumbnail.png"].includes(url.pathname);
 }
 
 async function putIfSmall(cache, request, response, { trim = false } = {}) {

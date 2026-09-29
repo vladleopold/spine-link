@@ -116,23 +116,6 @@
       ]
     },
     {
-      "source": "/v_holder.webm",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400, stale-while-revalidate=604800"
-        },
-        {
-          "key": "CDN-Cache-Control",
-          "value": "public, s-maxage=604800, stale-while-revalidate=2592000"
-        },
-        {
-          "key": "Vercel-CDN-Cache-Control",
-          "value": "public, s-maxage=604800, stale-while-revalidate=2592000"
-        }
-      ]
-    },
-    {
       "source": "/spine-link-video-thumbnail.png",
       "headers": [
         {
