@@ -287,11 +287,7 @@ async function findFallbackGitHubPath({ owner, repo, branch, token, path }) {
       && String(item?.path || '') === `${ownDirectory}${basename}`
       && ownDirectory.length > 0);
   if (match) return String(match?.path || '');
-  if (simplifiedBasename) {
-    const simplifiedMatch = tree.find((item) => item?.type === 'blob' && String(item?.path || '').endsWith(`/${simplifiedBasename}`));
-    if (simplifiedMatch) return String(simplifiedMatch?.path || '');
-  }
-  return String(match?.path || '');
+  return '';
 }
 
 function setAssetResponseHeaders(request, response, { path, assetVersion, etag }) {
