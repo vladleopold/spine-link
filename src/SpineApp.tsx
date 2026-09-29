@@ -3716,18 +3716,50 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     event.currentTarget.value = "";
   }, []);
 
+  // The visible drop zone is only a ~500x260 box in the middle of the page, so a
+  // drop anywhere else used to be swallowed silently: the document-level handler
+  // below called preventDefault() and the browser did nothing, leaving the user
+  // with no reaction at all. Treat the whole page as an accept target instead.
+  // Drops that already land inside a .drop-zone are left alone, so those keep
+  // going through the zone's own onDrop and are not handled twice.
   useEffect(() => {
-    const handleDocumentDrop = (event: DragEvent) => {
-      const hasFiles = Array.from(event.dataTransfer?.types ?? []).includes("Files");
-      if (!hasFiles) return;
+    const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
+    const insideDropZone = (target: EventTarget | null) => target instanceof Element && !!target.closest(".drop-zone");
+
+    const handleDocumentDragOver = (event: DragEvent) => {
+      if (!carriesFiles(event) || insideDropZone(event.target)) return;
+      // Without preventDefault on dragover the browser refuses the drop entirely.
       event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      setIsDragging(true);
     };
 
-    document.addEventListener("drop", handleDocumentDrop, true);
-    return () => {
-      document.removeEventListener("drop", handleDocumentDrop, true);
+    const handleDocumentDrop = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      if (insideDropZone(event.target)) return;
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      setIsDragging(false);
+      if (!files.length) return;
+      void handleSelectedFiles(files);
     };
-  }, []);
+
+    const handleDocumentDragLeave = (event: DragEvent) => {
+      if (!carriesFiles(event) || insideDropZone(event.target)) return;
+      // relatedTarget is null when the pointer actually left the window; while
+      // still inside, dragleave fires for every child element it crosses.
+      if (!event.relatedTarget) setIsDragging(false);
+    };
+
+    document.addEventListener("dragover", handleDocumentDragOver);
+    document.addEventListener("drop", handleDocumentDrop, true);
+    document.addEventListener("dragleave", handleDocumentDragLeave);
+    return () => {
+      document.removeEventListener("dragover", handleDocumentDragOver);
+      document.removeEventListener("drop", handleDocumentDrop, true);
+      document.removeEventListener("dragleave", handleDocumentDragLeave);
+    };
+  }, [handleSelectedFiles]);
 
   useEffect(() => {
     const disposers: Array<() => void> = [];
@@ -6332,6 +6364,14 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         </div>
       )}
       <DetailModalInner />
+      {isDragging && (
+        <div className="page-drop-overlay" aria-hidden="true">
+          <div className="page-drop-overlay-card">
+            <strong>Drop anywhere to add a Spine animation</strong>
+            <span>JSON or SKEL, atlas, and textures.</span>
+          </div>
+        </div>
+      )}
       <a className="site-credit" href="https://t.me/vladleopold" target="_blank" rel="noreferrer">
         by leopold
       </a>
