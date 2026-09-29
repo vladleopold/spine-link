@@ -5407,7 +5407,24 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                       style={cardStyle}
                     >
                       {poster ? (
-                        <img src={poster} alt="" loading="lazy" decoding="async" />
+                        <img
+                          src={poster}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          onError={(event) => {
+                            // Some stored thumbnail values name a per-animation
+                            // file that was deleted later. Fall back once to the
+                            // canonical poster the exporter writes for every entry.
+                            const image = event.currentTarget;
+                            if (image.dataset.fallbackApplied) return;
+                            const fallback = `/assets/library/${encodeURIComponent(entry.id)}/preview.webp`;
+                            if (!image.src.endsWith(fallback)) {
+                              image.dataset.fallbackApplied = "1";
+                              image.src = fallback;
+                            }
+                          }}
+                        />
                       ) : (
                         <span className="home-feed-fallback">{entry.animations ?? 0}</span>
                       )}
