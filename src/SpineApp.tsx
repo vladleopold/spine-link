@@ -1823,11 +1823,44 @@ function safeLibraryAssetUrl(value = "") {
   return /^https:\/\/[^\s"'<>]+$/i.test(url) || /^data:image\/webp;base64,/i.test(url) ? url : "";
 }
 
+// The asset API deliberately answers 404 for preview-low.webp: at 360px it is
+// too soft to read on a card. index.json still points thumbnailPoster at it for
+// most entries, so selecting it blindly wins the fallback chain and leaves the
+// card with a broken image. Skip those candidates and let the chain continue.
+function isBlockedPosterUrl(value = "") {
+  // The asset API matches on the repo path only (Vercel strips ?v= into the
+  // query string), so compare against the same part the server sees.
+  const path = value.trim().split(/[?#]/, 1)[0];
+  return /\bpreview-low\.webp$/i.test(path);
+}
+
+function firstUsablePoster(...candidates: (string | undefined)[]) {
+  const hit = candidates.find((value) => Boolean(value && value.trim()) && !isBlockedPosterUrl(value));
+  return hit ? hit.trim() : "";
+}
+
 function derivedLibraryAssetUrl(entry: LibraryEntry, extensions: string[]) {
   const previewPath = cleanRepoPath(entry.previewPath || "");
   const files = Array.isArray(entry.files) ? entry.files : [];
-  const file = files.find((fileName) => extensions.some((extension) => fileName.toLowerCase().endsWith(extension)));
-  return previewPath && file ? assetUrlForRepoPath(joinRepoPath(previewPath, file), assetVersionForLibraryEntry(entry, file)) : "";
+  const version = assetVersionForLibraryEntry(entry, "preview.webp");
+  // Respect the caller's extension priority instead of the order the files
+  // happen to be listed in: otherwise a source atlas PNG can win over the
+  // generated webp poster that sits later in the same list.
+  for (const extension of extensions) {
+    const file = files.find((fileName) => fileName.toLowerCase().endsWith(extension) && !isBlockedPosterUrl(fileName));
+    if (previewPath && file) {
+      return assetUrlForRepoPath(joinRepoPath(previewPath, file), assetVersionForLibraryEntry(entry, file));
+    }
+  }
+  // Entries whose file list never mentions a generated poster still ship one.
+  if (previewPath) {
+    for (const candidate of ["preview.webp", "preview-medium.webp"]) {
+      if (extensions.some((extension) => candidate.endsWith(extension))) {
+        return assetUrlForRepoPath(joinRepoPath(previewPath, candidate), version);
+      }
+    }
+  }
+  return "";
 }
 
 const metricsVisitorStorageKey = "spine-link-metrics-visitor";
@@ -2720,6 +2753,10 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [isSavingLayout, setIsSavingLayout] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const [selectedPreviewImage, setSelectedPreviewImage] = useState("");
+  // Some stored poster paths are stale (the animation they pointed at was
+  // renamed away), so remember how many candidates each entry has already
+  // burned through and step to the next one when an image fails to load.
+  const [posterAttempt, setPosterAttempt] = useState<Record<string, number>>({});
   const [selectedCardSize, setSelectedCardSize] = useState<LibraryCardSize>("auto");
   const [previewNote, setPreviewNote] = useState("");
   const [videosEnabled, setVideosEnabled] = useState(false);
@@ -3383,9 +3420,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   useEffect(() => {
     if (!currentLibraryEntry) return;
     setSelectedPreviewImage(
-      currentLibraryEntry.thumbnailPoster ||
-        currentLibraryEntry.thumbnail ||
-        "",
+      firstUsablePoster(currentLibraryEntry.thumbnailPoster, currentLibraryEntry.thumbnail),
     );
     setSelectedCardSize(currentLibraryEntry.cardSize || "auto");
   }, [currentLibraryEntry]);
@@ -5340,7 +5375,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <div className="home-feed-track is-scrolling">
                 {[...homeFeedLoop, ...homeFeedLoop].map((entry, index) => {
                   const metric = entryMetrics[entry.id] ?? entry.metrics ?? emptyEntryMetric();
-                  const poster = entry.thumbnailPoster || entry.thumbnail || "";
+                  const poster = firstUsablePoster(entry.thumbnailPoster, entry.thumbnail);
                   const likedEntry = Boolean(metric.liked);
                   const previewWidth = Number(entry.previewWidth || 0);
                   const previewHeight = Number(entry.previewHeight || 0);
@@ -6119,12 +6154,31 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                   ? withAssetVersion(bestWebmPreview, assetVersionForLibraryEntry(entry, "webm"))
                   : derivedLibraryAssetUrl(entry, [".webm"]);
                 const safeThumbnail = withAssetVersion(safeLibraryAssetUrl(entry.thumbnail || ""), assetVersionForLibraryEntry(entry, "thumbnail"));
-                const bestWebpPoster = entry.webpPosterLow || entry.webpPosterMedium || entry.webpPoster || entry.thumbnailPoster || "";
+                const bestWebpPoster = firstUsablePoster(
+                  entry.webpPosterLow,
+                  entry.webpPosterMedium,
+                  entry.webpPoster,
+                  entry.thumbnailPoster,
+                );
                 const safePoster =
                   withAssetVersion(safeLibraryAssetUrl(bestWebpPoster), assetVersionForLibraryEntry(entry, "poster")) ||
                   derivedLibraryAssetUrl(entry, [".webp", ".png", ".jpg", ".jpeg"]);
                 const isGifThumbnail = entry.thumbnailType === "gif" || /^data:image\/gif;base64,/i.test(entry.thumbnail || "");
-                const thumbnailForCard = isGifThumbnail ? safePoster : safePoster || safeThumbnail;
+                const posterCandidates = Array.from(
+                  new Set(
+                    [
+                      isGifThumbnail ? "" : safePoster,
+                      isGifThumbnail ? "" : safeThumbnail,
+                      derivedLibraryAssetUrl(entry, [".webp"]),
+                    ].filter((value) => Boolean(value) && !isBlockedPosterUrl(value)),
+                  ),
+                );
+                const thumbnailForCard = posterCandidates[posterAttempt[entry.id] ?? 0] || "";
+                const advancePoster = () =>
+                  setPosterAttempt((previous) => {
+                    const next = (previous[entry.id] ?? 0) + 1;
+                    return next < posterCandidates.length ? { ...previous, [entry.id]: next } : previous;
+                  });
                 const entryMetric = entryMetrics[entry.id] ?? emptyEntryMetric();
                 const likedEntry = Boolean(entryMetric.liked);
                 const likeCount = entryMetric.likes;
@@ -6174,11 +6228,18 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     )}
                     <div className="library-card-link" role="link" aria-label={`Edit ${entry.title || entry.id}`}>
                     <div className="library-card-visual">
-                      <img src={thumbnailForCard || undefined} className="library-card-poster-img" style={{ display: 'none' }} alt="" />
+                      <img
+                        src={thumbnailForCard || undefined}
+                        className="library-card-poster-img"
+                        style={{ display: 'none' }}
+                        alt=""
+                        onError={thumbnailForCard ? advancePoster : undefined}
+                      />
                       <video
                         className="library-card-webm"
                         src={videosEnabled ? (webmPreviewUrl || undefined) : undefined}
                         poster={thumbnailForCard || undefined}
+                        onError={thumbnailForCard ? advancePoster : undefined}
                         muted
                         playsInline
                         preload="none"
