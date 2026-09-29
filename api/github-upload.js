@@ -1363,6 +1363,10 @@ export default async function handler(request, response) {
           const next = { ...entry, canEdit: canEditEntry(entry, googlePayload, anonymousAccount) };
           delete next.ownerEmail;
           delete next.ownerAnonId;
+          // The browser fingerprint is what anonymous accounts are matched on;
+          // shipping it to every visitor lets anyone correlate entries across
+          // sessions, so it never leaves the server.
+          delete next.ownerAnonFingerprint;
           return next;
         }),
       });
