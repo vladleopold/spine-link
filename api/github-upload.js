@@ -607,11 +607,15 @@ function githubRetryDelay(attempt) {
 // (timeout, OOM, crash) is not JSON, so the client logs an empty object and the
 // real cause is invisible. `err.status` is read separately from statusCode
 // because statusCode is reserved for the HTTP reply we synthesise here.
-function withGitHubStatus(error, response) {
+function withGitHubStatus(error, response, githubMessage = '') {
   const status = Number(response?.status) || 0;
   if (!error || typeof error !== 'object' || status < 400) return error;
   error.status = status;
-  error.githubMessage = typeof error.message === 'string' ? error.message : String(error.message || '');
+  // Prefer GitHub's own explanation; fall back to ours only when GitHub said
+  // nothing useful. Without this the console showed our generic summary and
+  // the real reason stayed invisible.
+  const detail = String(githubMessage || '').trim();
+  error.githubMessage = detail && detail !== error.message ? detail : '';
   return error;
 }
 
@@ -656,7 +660,10 @@ async function getGitHubContent(settings, path) {
   }
 
   if (response.status === 404) return null;
-  if (!response.ok) throw githubFailure('read', path, response);
+  if (!response.ok) {
+    const detail = await response.json().then((r) => (typeof r?.message === 'string' ? r.message : '')).catch(() => '');
+    throw withGitHubStatus(githubFailure('read', path, response), response, detail);
+  }
 
   const data = await response.json();
   // GitHub Contents API omits the body for files larger than 1MB
@@ -706,10 +713,14 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       // blob sha, so a retry either succeeds or fails with 422 "sha mismatch".
       if (GITHUB_RETRY_STATUS.has(response.status) && attempt < GITHUB_RETRY_ATTEMPTS - 1) {
         await new Promise((r) => setTimeout(r, githubRetryDelay(attempt)));
-        lastError = withGitHubStatus(new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`), response);
+        lastError = withGitHubStatus(new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`), response, typeof result?.message === 'string' ? result.message : '');
         continue;
       }
-      throw withGitHubStatus(githubFailure('write', path, response), response);
+      // Carry GitHub's own wording into the error. Our summary line ("Storage
+      // write failed for <path>: 422") says nothing about why, and GitHub's
+      // message ("sha wasn't supplied") is the only clue that makes a failure
+      // diagnosable from the browser console.
+      throw withGitHubStatus(githubFailure('write', path, response), response, typeof result?.message === 'string' ? result.message : '');
     } catch (err) {
       lastError = err;
       // Only retry what the retry set says is worth retrying. A definitive
