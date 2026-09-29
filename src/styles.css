@@ -7726,7 +7726,7 @@ h1 {
   }
 }
 
-/* Ultra-narrow header: text brand above controls, no logo in control row. */
+/* Ultra-narrow header: no separate logo row, controls take the single row. */
 .brand-mobile-text {
   display: none;
 }
@@ -7753,35 +7753,17 @@ h1 {
     display: grid !important;
     grid-template-columns: 1fr !important;
     align-items: start !important;
-    gap: 5px !important;
-    min-height: 100px !important;
+    gap: 0 !important;
+    min-height: 0 !important;
   }
 
+  /* Narrowest screens: hide the brand entirely instead of spending a whole row on it. */
   .app-shell.is-empty:not(.is-edit-page) .brand-link {
-    display: block !important;
-    order: 1 !important;
-    width: 100% !important;
-    max-width: none !important;
-    min-height: 18px;
-  }
-
-  .app-shell.is-empty:not(.is-edit-page) .brand-link .brand-logo,
-  .app-shell.is-empty:not(.is-edit-page) .brand-logo-mobile {
     display: none !important;
   }
 
-  .app-shell.is-empty:not(.is-edit-page) .brand-mobile-text {
-    display: block !important;
-    color: #ffffff;
-    font-size: 16px;
-    font-weight: 900;
-    letter-spacing: 0.14em;
-    line-height: 1;
-    text-transform: uppercase;
-  }
-
   .app-shell.is-empty:not(.is-edit-page) .top-actions-row {
-    order: 2 !important;
+    order: 1 !important;
     justify-content: flex-end !important;
     width: 100% !important;
   }
