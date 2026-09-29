@@ -603,6 +603,18 @@ function githubRetryDelay(attempt) {
   return 250 * 2 ** attempt + Math.floor(Math.random() * 200);
 }
 
+// The response body a client sees when the platform terminates the function
+// (timeout, OOM, crash) is not JSON, so the client logs an empty object and the
+// real cause is invisible. `err.status` is read separately from statusCode
+// because statusCode is reserved for the HTTP reply we synthesise here.
+function withGitHubStatus(error, response) {
+  const status = Number(response?.status) || 0;
+  if (!error || typeof error !== 'object' || status < 400) return error;
+  error.status = status;
+  error.githubMessage = typeof error.message === 'string' ? error.message : String(error.message || '');
+  return error;
+}
+
 // A GitHub rate limit is not a server fault: it means "come back later", and
 // every anonymous upload shares one GITHUB_TOKEN, so the limit hits all users
 // at once. Surfacing that as a 500 made the browser look broken and gave the
@@ -694,10 +706,10 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       // blob sha, so a retry either succeeds or fails with 422 "sha mismatch".
       if (GITHUB_RETRY_STATUS.has(response.status) && attempt < GITHUB_RETRY_ATTEMPTS - 1) {
         await new Promise((r) => setTimeout(r, githubRetryDelay(attempt)));
-        lastError = new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`);
+        lastError = withGitHubStatus(new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`), response);
         continue;
       }
-      throw githubFailure('write', path, response);
+      throw withGitHubStatus(githubFailure('write', path, response), response);
     } catch (err) {
       lastError = err;
       if (attempt < GITHUB_RETRY_ATTEMPTS - 1) {
@@ -812,8 +824,20 @@ export default async function handler(request, response) {
       const chunkDir = `${uploadPathBg}/${fileName}.__chunks`;
       const chunkPath = `${chunkDir}/${String(chunkIndex).padStart(5, '0')}`;
       const message = `${commitPrefix}: chunk ${chunkIndex} of ${fileName}`;
-      const existingChunk = await getGitHubContent(settings, chunkPath);
-      const writeResult = await putGitHubContent(settings, chunkPath, chunkBase64, message, existingChunk?.sha, origin);
+      // Write the chunk before looking up its sha. A fresh chunk path does not
+      // exist yet, so GitHub creates it in one round trip; the extra GET first
+      // doubled the calls per chunk and, on a 21-chunk file, was the difference
+      // between ~1.8s and ~3.6s per chunk. GitHub rejects a blind write with 422
+      // when the blob is already there, and only then do we pay for the lookup
+      // and replay with the sha, so replays stay safe and idempotent.
+      let writeResult;
+      try {
+        writeResult = await putGitHubContent(settings, chunkPath, chunkBase64, message, '', origin);
+      } catch (err) {
+        if (Number(err?.status) !== 422) throw err;
+        const existingChunk = await getGitHubContent(settings, chunkPath);
+        writeResult = await putGitHubContent(settings, chunkPath, chunkBase64, message, existingChunk?.sha, origin);
+      }
       return response.status(200).json({ ok: true, chunkPath, chunkIndex, sha256: sha256HexFromBase64(chunkBase64), github: publicGitHubWrite(writeResult) });
     }
 

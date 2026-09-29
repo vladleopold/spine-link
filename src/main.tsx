@@ -629,7 +629,7 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
   const CHUNK_SIZE = KEEPALIVE_MAX_BYTES;
   // GitHub rate limits and transient 5xx responses are shared by every
   // anonymous upload, so replay a failed chunk instead of aborting the file.
-  const CHUNK_ATTEMPTS = 3;
+  const CHUNK_ATTEMPTS = 5;
   // Honour GitHub's own backoff when it tells us how long to wait, otherwise
   // back off exponentially with jitter so concurrent uploads don't resynchronise
   // and all retry in lockstep. Capped so a wedged upload still fails visibly
@@ -674,11 +674,15 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
     // for diagnosing it.
     for (let attempt = 0; attempt < CHUNK_ATTEMPTS; attempt += 1) {
       try {
+        // No keepalive here. It caps the body at 64 KB and fails the request at
+        // the transport layer ("TypeError: Failed to fetch") once several chunk
+        // uploads overlap, which loses the file. A chunked upload lasts far
+        // longer than a page unload can usefully cover anyway, and every chunk
+        // is replayed safely, so an aborted request is simply retried.
         const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: chunkBody,
-          keepalive: true,
         });
         if (response.ok) return sendChunk();
         const payload = await response.json().catch(() => ({}));
@@ -690,7 +694,15 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
           return { ok: false, status: response.status, data: payload };
         }
         const waitMs = chunkRetryDelayMs(response, payload, attempt);
-        if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+        // Say which chunk died even when we are about to retry, so a slow
+        // upload is diagnosable from the console without waiting for the end.
+        if (waitMs > 0) {
+          console.warn(
+            `[spine] chunk ${chunkIndex + 1}/${totalChunks} of ${file.name} got HTTP ${response.status}, retrying in ${Math.round(waitMs)}ms`,
+            payload?.error || "",
+          );
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
       } catch (error) {
         if (attempt === CHUNK_ATTEMPTS - 1) {
           console.error(`[spine] upload chunk ${chunkIndex}/${totalChunks} for ${file.name} failed:`, error);
