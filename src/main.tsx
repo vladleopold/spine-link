@@ -196,7 +196,10 @@ function wirePublishProgressMirror() {
     const progress = getPublishProgress();
     const existing = document.getElementById("spine-publish-mirror");
     // The mounted app renders the same popup; only one of the two should exist.
-    if (document.querySelector(".publish-progress-overlay") || !progress.open) {
+    // The mirror must not match itself here, otherwise it deletes itself on the
+    // next progress update and the popup disappears mid-save.
+    const appPopup = document.querySelector(".publish-progress-overlay:not(#spine-publish-mirror)");
+    if (appPopup || !progress.open) {
       existing?.remove();
       return;
     }
@@ -229,6 +232,16 @@ function wirePublishProgressMirror() {
 
   subscribePublishProgress(render);
   render();
+
+  // React's popup mounts/unmounts independently of progress notifications
+  // (e.g. the detail-modal early return), so keep the mirror in sync.
+  const sync = () => {
+    const appPopup = document.querySelector(".publish-progress-overlay:not(#spine-publish-mirror)");
+    const mirror = document.getElementById("spine-publish-mirror");
+    if (appPopup && mirror) mirror.remove();
+    else if (!appPopup && getPublishProgress().open && !mirror) render();
+  };
+  new MutationObserver(sync).observe(document.documentElement, { childList: true, subtree: true });
 }
 
 function wireHomeShell() {
