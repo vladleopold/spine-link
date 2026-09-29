@@ -5375,7 +5375,13 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <div className="home-feed-track is-scrolling">
                 {[...homeFeedLoop, ...homeFeedLoop].map((entry, index) => {
                   const metric = entryMetrics[entry.id] ?? entry.metrics ?? emptyEntryMetric();
-                  const poster = firstUsablePoster(entry.thumbnailPoster, entry.thumbnail);
+                  const poster = firstUsablePoster(
+                    entry.thumbnailPoster,
+                    entry.thumbnail,
+                    // Canonical name the exporter writes for every entry; a few
+                    // stored thumbnail values name a file that no longer exists.
+                    `/assets/library/${encodeURIComponent(entry.id)}/preview.webp`,
+                  );
                   const likedEntry = Boolean(metric.liked);
                   const previewWidth = Number(entry.previewWidth || 0);
                   const previewHeight = Number(entry.previewHeight || 0);
@@ -6170,6 +6176,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                       isGifThumbnail ? "" : safePoster,
                       isGifThumbnail ? "" : safeThumbnail,
                       derivedLibraryAssetUrl(entry, [".webp"]),
+                      // Canonical name written by the exporter for every entry.
+                      // Some stored thumbnail/thumbnailPoster values point at a
+                      // per-animation file that was deleted later, so this is the
+                      // final candidate before a card is left posterless.
+                      `/assets/library/${encodeURIComponent(entry.id)}/preview.webp`,
                     ].filter((value) => Boolean(value) && !isBlockedPosterUrl(value)),
                   ),
                 );

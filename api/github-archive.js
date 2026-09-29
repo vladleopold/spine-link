@@ -35,8 +35,20 @@ function cleanPublicText(value = '', maxLength = 240) {
   return String(value).replace(/\s+/g, ' ').trim().slice(0, maxLength);
 }
 
+// api/github-asset.js answers 404 for preview-low.webp on purpose, so the 360px
+// poster must never be handed to a client. Rejecting it here makes every
+// consumer (feed JSON, server-rendered markup, sitemap) fall through to the
+// next candidate instead of shipping a URL that cannot load.
+function isBlockedPosterUrl(value = '') {
+  const url = String(value).trim();
+  if (!url) return false;
+  const bare = url.split(/[?#]/, 1)[0];
+  return /\bpreview-low\.webp$/i.test(bare);
+}
+
 function safeImage(value = '') {
   const url = String(value).trim();
+  if (isBlockedPosterUrl(url)) return '';
   return /^https:\/\/[^\s"'<>]+$/i.test(url) || /^data:image\/webp;base64,/i.test(url) ? url : '';
 }
 
@@ -357,7 +369,7 @@ function homepageFeedEntries(origin, entries, metrics) {
     const metric = metricCountsForId(metrics, id);
     const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
     const thumbnail = isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
-    const poster = entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || thumbnail;
+    const poster = entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || thumbnail || fallbackPosterAssetUrl(origin, entry);
     return {
       id,
       title: String(entry?.title || id || 'Spine preview'),
@@ -510,7 +522,7 @@ async function enrichArchiveEntryLayout(settings, origin, entry) {
     return { ...entry, mediaAspectRatio: width / height };
   }
 
-  const posterUrl = entryImageAsset(entry.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry.webpPoster || '', entry, 'poster') || entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail');
+  const posterUrl = entryImageAsset(entry.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry.webpPoster || '', entry, 'poster') || entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail') || fallbackPosterAssetUrl(origin, entry);
   const repoPath = repoPathFromAssetUrl(entry, posterUrl);
   if (!repoPath || repoPath.includes('/generated-preview.webp')) return entry;
   const buffer = await githubBuffer(settings, repoPath);
@@ -573,9 +585,24 @@ function tileClassForEntry(entry, index = 0) {
   return `tile ${ratio ? tileClassForRatio(ratio) : fallbackTileClass(index)}`;
 }
 
+// Canonical poster fallback used when every poster field is empty or the blocked 360px
+// file. preview.webp is written by the exporter for every entry, so its
+// canonical name is the reliable guess; thumbnailPath is only tried after it
+// because many entries still point at an idle-preview.webp that no longer
+// exists in the repository.
+function fallbackPosterAssetUrl(origin, entry = {}) {
+  const id = String(entry?.id || '').trim();
+  if (!id || !origin) return '';
+  const direct = `${origin}/assets/library/${encodeURIComponent(id)}/preview.webp`;
+  if (!isBlockedPosterUrl(direct)) return appendAssetVersion(direct, assetVersionForEntry(entry, 'thumbnail'));
+  const path = cleanRepoPath(entry?.thumbnailPath || '');
+  if (!path.startsWith('library/') || isBlockedPosterUrl(path)) return '';
+  return appendAssetVersion(`${origin}/assets/${path}`, assetVersionForEntry(entry, 'thumbnail'));
+}
+
 function entryImageUrl(origin, entry) {
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-  return entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || (isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'));
+  return entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || (isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail')) || fallbackPosterAssetUrl(origin, entry);
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, altText = '', fetchpriority = '' } = {}) {
