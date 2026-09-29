@@ -593,6 +593,21 @@ function updateBackgroundUpload(id: string, updates: Partial<BackgroundUploadEnt
 
 const KEEPALIVE_MAX_BYTES = 60000;
 
+// Vercel refuses to run overlapping invocations of the upload function and
+// answers with a non-JSON "FUNCTION_INVOCATION_FAILED" 500, which loses the
+// file. It is a platform limit, not a bug in the handler, so the fix is to stop
+// asking: one request to this endpoint at a time, process-wide. Chunks are
+// already replayed safely, so serialising costs a little wall clock and buys
+// reliability.
+let uploadChain: Promise<unknown> = Promise.resolve();
+
+function withUploadSlot<T>(task: () => Promise<T>): Promise<T> {
+  const run = uploadChain.then(task, task);
+  // Keep the chain alive regardless of this task's outcome.
+  uploadChain = run.then(() => undefined, () => undefined);
+  return run;
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -618,7 +633,9 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
       fileBase64: base64,
     });
     try {
-      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
+      // Whole-file path. Kept on the same queue: it can run alongside a
+      // chunked upload, and overlapping invocations are what Vercel refuses.
+      const response = await withUploadSlot(() => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body }));
       return { ok: response.ok, status: response.status, data: await response.json().catch(() => ({})) };
     } catch {
       return { ok: false, status: 0 };
@@ -674,16 +691,14 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
     // for diagnosing it.
     for (let attempt = 0; attempt < CHUNK_ATTEMPTS; attempt += 1) {
       try {
-        // No keepalive here. It caps the body at 64 KB and fails the request at
-        // the transport layer ("TypeError: Failed to fetch") once several chunk
-        // uploads overlap, which loses the file. A chunked upload lasts far
-        // longer than a page unload can usefully cover anyway, and every chunk
-        // is replayed safely, so an aborted request is simply retried.
-        const response = await fetch(url, {
+        // No keepalive here: it caps the body at 64 KB and fails at the
+        // transport layer ("TypeError: Failed to fetch") under overlap. Queued
+        // through the shared slot so we never have two in flight.
+        const response = await withUploadSlot(() => fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: chunkBody,
-        });
+        }));
         if (response.ok) return sendChunk();
         const payload = await response.json().catch(() => ({}));
         if (attempt === CHUNK_ATTEMPTS - 1) {
@@ -728,7 +743,7 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
     settings: data.settings,
   });
   try {
-    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: reassembleBody, keepalive: true });
+      const response = await withUploadSlot(() => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: reassembleBody }));
     return { ok: response.ok, status: response.status, data: await response.json().catch(() => ({})) };
   } catch {
     return { ok: false, status: 0 };
@@ -807,7 +822,7 @@ async function finalizeBackgroundUpload(entryId: string, uploadId: string, uploa
     commitPrefix: "Background upload",
   });
   try {
-    const response = await fetch("/api/github-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
+    const response = await withUploadSlot(() => fetch("/api/github-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body }));
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       updateBackgroundUpload(entryId, { status: "failed", error: result?.error || "Index update failed" });
