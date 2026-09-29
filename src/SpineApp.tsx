@@ -5235,7 +5235,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               </div>
             )}
             <div className="publish-progress-meta">
-              <span>{publishProgress.status === "done" ? "Permanent link ready" : "Saving to library"}</span>
+              <span>{publishProgress.status === "done" ? "Permanent link ready" : publishProgress.status === "failed" ? "Save failed" : "Saving to library"}</span>
               <b>{publishProgress.status === "failed" ? "!" : `${Math.min(100, Math.max(0, publishProgress.value))}%`}</b>
             </div>
             <button

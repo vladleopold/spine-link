@@ -218,7 +218,7 @@ function wirePublishProgressMirror() {
         <strong>${escapeHtml(progress.label || "Saving Spine preview")}</strong>
         ${body}
         <div class="publish-progress-meta">
-          <span>${progress.status === "done" ? "Permanent link ready" : "Saving to library"}</span>
+          <span>${progress.status === "done" ? "Permanent link ready" : progress.status === "failed" ? "Save failed" : "Saving to library"}</span>
           <b>${progress.status === "failed" ? "!" : `${value}%`}</b>
         </div>
         <button type="button" class="publish-progress-close" aria-label="Close save status">&times;</button>
