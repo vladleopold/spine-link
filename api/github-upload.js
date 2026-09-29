@@ -764,6 +764,13 @@ export default async function handler(request, response) {
   const token = process.env.GITHUB_TOKEN;
   if (!token) return response.status(500).json({ error: 'GITHUB_TOKEN is not configured' });
 
+  // Declared out here on purpose: the catch block needs it for logging, and
+  // anything declared inside the try is out of scope there, so reading it
+  // would throw a ReferenceError from inside the catch and turn every real
+  // error into an unhandled exception (which Vercel renders as a non-JSON 500,
+  // losing the message entirely).
+  let failedAction = 'unknown';
+
   try {
     const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
     const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
@@ -785,6 +792,7 @@ export default async function handler(request, response) {
     const uploadPath = cleanRepoPath(body?.uploadPath || '');
     const commitPrefix = String(body?.commitPrefix || 'Add Spine preview');
     const action = String(body?.action || '');
+    failedAction = action || 'unknown';
 
     if (action === 'background-upload') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
@@ -1526,7 +1534,7 @@ export default async function handler(request, response) {
     const rateLimited = Number(error?.statusCode) === 429;
     const statusCode = rateLimited ? 429 : (Number(error?.statusCode) || 500);
     const message = error instanceof Error ? error.message : 'Upload failed';
-    console.error(`[UPLOAD] error (action=${action || 'unknown'}):`, message);
+    console.error(`[UPLOAD] error (action=${failedAction}):`, message);
     if (error instanceof Error && error.stack) console.error('[UPLOAD] stack:', error.stack);
     // Tell the browser how long GitHub wants us to wait, so it backs off
     // instead of replaying the chunk and losing the whole upload.
