@@ -5470,10 +5470,19 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                             // URL, so a relative path only ever matched by
                             // accident, and a wrongly-repeated swap could loop.
                             const image = event.currentTarget;
-                            if (image.dataset.fallbackApplied) return;
+                            if (image.dataset.fallbackApplied) {
+                              // The per-entry preview is missing too. Leave the
+                              // card neutral rather than letting a broken image
+                              // icon sit there: an entry that has no preview yet
+                              // should look empty, not wrong.
+                              image.style.display = "none";
+                              image.parentElement?.classList.add("home-feed-poster-missing");
+                              return;
+                            }
                             const attempted = image.dataset.posterAttempt || image.getAttribute("src") || "";
                             if (attempted.split(/[?#]/, 1)[0].endsWith("/preview.webp")) {
-                              image.dataset.fallbackApplied = "1";
+                              image.style.display = "none";
+                              image.parentElement?.classList.add("home-feed-poster-missing");
                               return;
                             }
                             const fallback = `/assets/library/${encodeURIComponent(entry.id)}/preview.webp`;

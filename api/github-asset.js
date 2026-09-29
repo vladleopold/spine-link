@@ -274,7 +274,18 @@ async function findFallbackGitHubPath({ owner, repo, branch, token, path }) {
     ...repeatedStemCandidates,
     duplicatedPrefix,
   ].filter(Boolean));
-  const match = tree.find((item) => item?.type === 'blob' && candidates.has(String(item?.path || ''))) || tree.find((item) => item?.type === 'blob' && basename && String(item?.path || '').endsWith(`/${basename}`));
+  // Never fall back to "any file anywhere with this basename". Every broken
+  // entry asks for library/<id>/preview.webp, so that matched whichever
+  // preview.webp happened to come first in the tree (155 of them, sorted, and
+  // the first was a 0_human asset) and every broken card ended up showing the
+  // same unrelated image. A wrong picture is worse than no picture: fall back
+  // only within the entry's own directory, and otherwise report it missing so
+  // the client can render its neutral placeholder instead.
+  const ownDirectory = path.slice(0, path.length - basename.length);
+  const match = tree.find((item) => item?.type === 'blob' && candidates.has(String(item?.path || '')))
+    || tree.find((item) => item?.type === 'blob' && basename
+      && String(item?.path || '') === `${ownDirectory}${basename}`
+      && ownDirectory.length > 0);
   if (match) return String(match?.path || '');
   if (simplifiedBasename) {
     const simplifiedMatch = tree.find((item) => item?.type === 'blob' && String(item?.path || '').endsWith(`/${simplifiedBasename}`));

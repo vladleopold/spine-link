@@ -1006,6 +1006,15 @@ h1 {
   background: #050607;
 }
 
+/* An entry whose poster is genuinely missing. Paint the frame neutral so a
+   broken upload reads as "no preview yet" instead of borrowing an unrelated
+   image from another entry. */
+.home-feed-poster-missing {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+
 .home-feed-fallback {
   position: absolute;
   inset: 0;
