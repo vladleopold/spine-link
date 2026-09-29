@@ -593,11 +593,37 @@ async function updateDataScienceCatalog(settings, body, entry, commitPrefix, ori
   return { basePath, itemPath, indexPath, schemaPath, animation_asset: animationAsset, inference: metadata.inference };
 }
 
+// Every anonymous upload shares one GITHUB_TOKEN, so GitHub rate limits and
+// transient API failures hit all users at once. Treat those as retryable
+// instead of letting them escape as a 500 that kills the whole upload.
+const GITHUB_RETRY_STATUS = new Set([403, 408, 429, 500, 502, 503, 504]);
+const GITHUB_RETRY_ATTEMPTS = 4;
+
+function githubRetryDelay(attempt) {
+  return 250 * 2 ** attempt + Math.floor(Math.random() * 200);
+}
+
 async function getGitHubContent(settings, path) {
   const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
-  const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`, {
-    headers: githubHeaders(settings.token),
-  });
+  let response = null;
+
+  for (let attempt = 0; attempt < GITHUB_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`, {
+        headers: githubHeaders(settings.token),
+      });
+    } catch (error) {
+      if (attempt === GITHUB_RETRY_ATTEMPTS - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
+      continue;
+    }
+    // Nothing to gain from retrying a definitive answer.
+    if (response.ok || response.status === 404) break;
+    if (!GITHUB_RETRY_STATUS.has(response.status)) break;
+    if (attempt < GITHUB_RETRY_ATTEMPTS - 1) {
+      await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
+    }
+  }
 
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Storage did not return ${path}: ${response.status}`);
@@ -634,7 +660,7 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
   const normalizedContentBase64 = normalizePreviewHtml(settings, path, contentBase64, origin);
   const body = JSON.stringify({ message, content: normalizedContentBase64, branch: settings.branch, ...(sha ? { sha } : {}) });
   let lastError;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < GITHUB_RETRY_ATTEMPTS; attempt += 1) {
     try {
       const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}`, {
         method: 'PUT',
@@ -646,15 +672,19 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       });
       const result = await response.json().catch(() => ({}));
       if (response.ok) return result;
-      if (response.status >= 500 && response.status < 600 && attempt < 2) {
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      // A rate-limited write is safe to replay: the PUT carries the expected
+      // blob sha, so a retry either succeeds or fails with 422 "sha mismatch".
+      if (GITHUB_RETRY_STATUS.has(response.status) && attempt < GITHUB_RETRY_ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, githubRetryDelay(attempt)));
         lastError = new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`);
         continue;
       }
       throw new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`);
     } catch (err) {
       lastError = err;
-      if (attempt < 2) await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      if (attempt < GITHUB_RETRY_ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, githubRetryDelay(attempt)));
+      }
     }
   }
   throw lastError;
@@ -1321,7 +1351,21 @@ export default async function handler(request, response) {
         const isPublic = currentEntry?.hiddenFromPublicLibrary !== true;
         return isPublic;
       }).sort(compareLibraryEntries);
-      return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, entries) });
+      // The browser must not decide this on its own: it used to render
+      // Edit/Hide/Delete for every card it received, so any anonymous visitor
+      // saw owner controls on the whole library. Ownership is decided here,
+      // with the same check the mutations use, and only the boolean is sent
+      // out. ownerEmail/ownerAnonId are stripped because shipping every
+      // user's address to every visitor is its own leak.
+      return response.status(200).json({
+        ok: true,
+        entries: publicLibraryEntries(origin, entries).map((entry) => {
+          const next = { ...entry, canEdit: canEditEntry(entry, googlePayload, anonymousAccount) };
+          delete next.ownerEmail;
+          delete next.ownerAnonId;
+          return next;
+        }),
+      });
     }
 
     if (action === 'get-entry') {

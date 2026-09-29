@@ -243,6 +243,8 @@ type BlockchainAnchor = {
 type LibraryEntry = {
   id: string;
   title: string;
+  /** Decided server-side by canEditEntry(); the only ownership signal the browser gets. */
+  canEdit?: boolean;
   ownerEmail?: string;
   ownerAnonId?: string;
   ownerAnonFingerprint?: string;
@@ -3383,10 +3385,19 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     () => new URL(`/u/${encodeURIComponent(publicLibraryOwnerId)}`, window.location.origin).toString(),
     [publicLibraryOwnerId],
   );
-  const accountDisplayName = useMemo(
-    () => cleanAccountDisplayName(profileNameInput || googleUser?.name || libraryEntries.find((entry) => entry.ownerName)?.ownerName || ""),
-    [googleUser?.name, libraryEntries, profileNameInput],
-  );
+  // The API decides this per entry (canEditEntry) and sends only the boolean,
+  // so the browser never has to guess who owns what. An anonymous visitor owns
+  // nothing, so every owner-only control stays hidden.
+  const ownsLibraryEntries = libraryEntries.some((entry) => entry.canEdit === true);
+  const accountDisplayName = useMemo(() => {
+    // Only borrow an owner name from the library when the viewer actually
+    // owns something. Without this check an anonymous visitor got another
+    // user's name pre-filled into the account-name field.
+    const libraryOwnerName = ownsLibraryEntries
+      ? libraryEntries.find((entry) => entry.ownerName)?.ownerName
+      : "";
+    return cleanAccountDisplayName(profileNameInput || googleUser?.name || libraryOwnerName || "");
+  }, [googleUser?.name, libraryEntries, ownsLibraryEntries, profileNameInput]);
   const isPublishProgressCompact = Boolean(preparedSpine && animations.length);
 
   useEffect(() => {
@@ -6084,9 +6095,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               </p>
             </div>
             <div className="library-modal-actions">
-              <button className="library-add-button" type="button" onClick={(event) => startNewLibraryEntry(event.currentTarget)} title="Add new animation card">
-                <Plus size={18} />
-              </button>
+              {ownsLibraryEntries && (
+                <button className="library-add-button" type="button" onClick={(event) => startNewLibraryEntry(event.currentTarget)} title="Add new animation card">
+                  <Plus size={18} />
+                </button>
+              )}
               <button type="button" onClick={() => void loadLibrary()} disabled={isLibraryLoading} title="Refresh library">
                 {isLibraryLoading ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
               </button>
@@ -6098,71 +6111,73 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
           {libraryError && <div className="library-error">{libraryError}</div>}
 
-          <div className="library-profile-settings">
-            <div className="library-profile-settings-copy">
-              <form
-                className="account-name-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void saveAccountDisplayName();
-                }}
-              >
-                <label htmlFor="spine-account-name">Account name</label>
-                <input
-                  id="spine-account-name"
-                  type="text"
-                  value={profileNameInput}
-                  onChange={(event) => setProfileNameInput(event.currentTarget.value)}
-                  placeholder="Spine creator"
-                  maxLength={80}
-                  autoComplete="name"
-                />
-                <button type="submit" disabled={isSavingProfileName || !cleanAccountDisplayName(profileNameInput)}>
-                  {isSavingProfileName ? <Loader2 className="spin" size={15} /> : <Save size={15} />}
-                  {isSavingProfileName ? "Saving" : "Save"}
+          {ownsLibraryEntries && (
+            <div className="library-profile-settings">
+              <div className="library-profile-settings-copy">
+                <form
+                  className="account-name-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveAccountDisplayName();
+                  }}
+                >
+                  <label htmlFor="spine-account-name">Account name</label>
+                  <input
+                    id="spine-account-name"
+                    type="text"
+                    value={profileNameInput}
+                    onChange={(event) => setProfileNameInput(event.currentTarget.value)}
+                    placeholder="Spine creator"
+                    maxLength={80}
+                    autoComplete="name"
+                  />
+                  <button type="submit" disabled={isSavingProfileName || !cleanAccountDisplayName(profileNameInput)}>
+                    {isSavingProfileName ? <Loader2 className="spin" size={15} /> : <Save size={15} />}
+                    {isSavingProfileName ? "Saving" : "Save"}
+                  </button>
+                </form>
+                {!isEditPage && <div className="section-title">{isPortfolioMode ? "Portfolio link" : "Library link"}</div>}
+                <strong>{isPortfolioMode ? "Public portfolio link" : "Private library link"}</strong>
+                <a href={publicLibraryUrl} target="_blank" rel="noreferrer">
+                  {publicLibraryUrl}
+                </a>
+                <span>
+                  {isPortfolioMode
+                    ? "Public portfolio mode is indexable, has real likes and views, can appear in the showcase, and publishes visible works to World SPINE ARCHIVE."
+                    : "Library mode is private by default: it stores uploaded works for the owner and is not listed through the site or Google like public portfolios."}
+                </span>
+                {profileVisibilityStatus && <em>{profileVisibilityStatus}</em>}
+              </div>
+              <div className="library-profile-settings-actions">
+                <button
+                  className={`portfolio-mode-button ${isPortfolioMode ? "active" : ""}`}
+                  type="button"
+                  onClick={() => {
+                    void updateOwnerPortfolioMode(!isPortfolioMode);
+                  }}
+                  aria-pressed={isPortfolioMode}
+                  title={isPortfolioMode ? "Switch to library mode" : "Switch to portfolio mode"}
+                >
+                  {isPortfolioMode ? <FileArchive size={17} /> : <Layers size={17} />}
+                  <span className="action-label">{isPortfolioMode ? "Library" : "Portfolio"}</span>
                 </button>
-              </form>
-              {!isEditPage && <div className="section-title">{isPortfolioMode ? "Portfolio link" : "Library link"}</div>}
-              <strong>{isPortfolioMode ? "Public portfolio link" : "Private library link"}</strong>
-              <a href={publicLibraryUrl} target="_blank" rel="noreferrer">
-                {publicLibraryUrl}
-              </a>
-              <span>
-                {isPortfolioMode
-                  ? "Public portfolio mode is indexable, has real likes and views, can appear in the showcase, and publishes visible works to World SPINE ARCHIVE."
-                  : "Library mode is private by default: it stores uploaded works for the owner and is not listed through the site or Google like public portfolios."}
-              </span>
-              {profileVisibilityStatus && <em>{profileVisibilityStatus}</em>}
+                <button type="button" onClick={copyPublicLibraryLink} title="Copy profile link">
+                  <Copy size={17} />
+                  <span className="action-label">Copy</span>
+                </button>
+                <button
+                  className={!showProfileOnSharedPages ? "active" : ""}
+                  type="button"
+                  onClick={() => void updateSharedProfileVisibility(!showProfileOnSharedPages)}
+                  aria-pressed={!showProfileOnSharedPages}
+                  title={showProfileOnSharedPages ? "Hide my name" : "Show my name"}
+                >
+                  {showProfileOnSharedPages ? <EyeOff size={17} /> : <Eye size={17} />}
+                  <span className="action-label">{showProfileOnSharedPages ? "Hide name" : "Show name"}</span>
+                </button>
+              </div>
             </div>
-            <div className="library-profile-settings-actions">
-              <button
-                className={`portfolio-mode-button ${isPortfolioMode ? "active" : ""}`}
-                type="button"
-                onClick={() => {
-                  void updateOwnerPortfolioMode(!isPortfolioMode);
-                }}
-                aria-pressed={isPortfolioMode}
-                title={isPortfolioMode ? "Switch to library mode" : "Switch to portfolio mode"}
-              >
-                {isPortfolioMode ? <FileArchive size={17} /> : <Layers size={17} />}
-                <span className="action-label">{isPortfolioMode ? "Library" : "Portfolio"}</span>
-              </button>
-              <button type="button" onClick={copyPublicLibraryLink} title="Copy profile link">
-                <Copy size={17} />
-                <span className="action-label">Copy</span>
-              </button>
-              <button
-                className={!showProfileOnSharedPages ? "active" : ""}
-                type="button"
-                onClick={() => void updateSharedProfileVisibility(!showProfileOnSharedPages)}
-                aria-pressed={!showProfileOnSharedPages}
-                title={showProfileOnSharedPages ? "Hide my name" : "Show my name"}
-              >
-                {showProfileOnSharedPages ? <EyeOff size={17} /> : <Eye size={17} />}
-                <span className="action-label">{showProfileOnSharedPages ? "Hide name" : "Show name"}</span>
-              </button>
-            </div>
-          </div>
+          )}
 
           {isPortfolioMode && (
             <div className="portfolio-gallery-tools" aria-label="Portfolio gallery controls">
@@ -6340,22 +6355,26 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     </div>
                     </div>
                     </div>
-                    <div className="library-card-actions" aria-label={`${entry.title || entry.id} actions`}>
-                      <a href={editUrl}>Edit</a>
-                      <button type="button" onClick={() => void updateLibraryEntryVisibility(entry, !entry.hiddenFromPublicLibrary)}>
-                        {entry.hiddenFromPublicLibrary ? "Show" : "Hide"}
-                      </button>
-                      <button type="button" onClick={() => void copyLibraryEntryLink(previewUrl)}>Link</button>
-                      <button className="danger" type="button" onClick={() => void deleteLibraryEntry(entry)}>Delete</button>
-                    </div>
-                    <div className="library-card-order-actions" aria-label={`${entry.title || entry.id} order`}>
-                      <button type="button" onClick={() => void moveLibraryEntry(entry, "up")} disabled={index === 0}>
-                        Up
-                      </button>
-                      <button type="button" onClick={() => void moveLibraryEntry(entry, "down")} disabled={index === libraryEntries.length - 1}>
-                        Down
-                      </button>
-                    </div>
+                    {entry.canEdit === true && (
+                      <>
+                        <div className="library-card-actions" aria-label={`${entry.title || entry.id} actions`}>
+                          <a href={editUrl}>Edit</a>
+                          <button type="button" onClick={() => void updateLibraryEntryVisibility(entry, !entry.hiddenFromPublicLibrary)}>
+                            {entry.hiddenFromPublicLibrary ? "Show" : "Hide"}
+                          </button>
+                          <button type="button" onClick={() => void copyLibraryEntryLink(previewUrl)}>Link</button>
+                          <button className="danger" type="button" onClick={() => void deleteLibraryEntry(entry)}>Delete</button>
+                        </div>
+                        <div className="library-card-order-actions" aria-label={`${entry.title || entry.id} order`}>
+                          <button type="button" onClick={() => void moveLibraryEntry(entry, "up")} disabled={index === 0}>
+                            Up
+                          </button>
+                          <button type="button" onClick={() => void moveLibraryEntry(entry, "down")} disabled={index === libraryEntries.length - 1}>
+                            Down
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })}

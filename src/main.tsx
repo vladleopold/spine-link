@@ -627,6 +627,9 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
 
   const chunkBase64 = base64;
   const CHUNK_SIZE = KEEPALIVE_MAX_BYTES;
+  // GitHub rate limits and transient 5xx responses are shared by every
+  // anonymous upload, so replay a failed chunk instead of aborting the file.
+  const CHUNK_ATTEMPTS = 3;
   const totalChunks = Math.ceil(base64.length / CHUNK_SIZE);
   const uploadId = String(data.uploadId || "");
   let chunkIndex = 0;
@@ -647,13 +650,32 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
       anonymousAccount: data.anonymousAccount,
       settings: data.settings,
     });
-    try {
-      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: chunkBody, keepalive: true });
-      if (!response.ok) return { ok: false, status: response.status, data: await response.json().catch(() => ({})) };
-    } catch {
-      return { ok: false, status: 0 };
+    // A failed chunk is not fatal: the server derives the chunk path from
+    // uploadPath + fileName + chunkIndex and writes it idempotently, so
+    // replaying the identical body is safe.
+    for (let attempt = 0; attempt < CHUNK_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: chunkBody,
+          keepalive: true,
+        });
+        if (response.ok) return sendChunk();
+        if (attempt < CHUNK_ATTEMPTS - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+          continue;
+        }
+        return { ok: false, status: response.status, data: await response.json().catch(() => ({})) };
+      } catch {
+        if (attempt < CHUNK_ATTEMPTS - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+          continue;
+        }
+        return { ok: false, status: 0 };
+      }
     }
-    return sendChunk();
+    return { ok: false, status: 0 };
   };
 
   const result = await sendChunk();
