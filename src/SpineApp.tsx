@@ -5415,14 +5415,24 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                           onError={(event) => {
                             // Some stored thumbnail values name a per-animation
                             // file that was deleted later. Fall back once to the
-                            // canonical poster the exporter writes for every entry.
+                            // canonical poster the exporter writes for every
+                            // entry.
+                            //
+                            // Compare against the src we last asked for rather
+                            // than endsWith(): image.src resolves to an absolute
+                            // URL, so a relative path only ever matched by
+                            // accident, and a wrongly-repeated swap could loop.
                             const image = event.currentTarget;
                             if (image.dataset.fallbackApplied) return;
-                            const fallback = `/assets/library/${encodeURIComponent(entry.id)}/preview.webp`;
-                            if (!image.src.endsWith(fallback)) {
+                            const attempted = image.dataset.posterAttempt || image.getAttribute("src") || "";
+                            if (attempted.split(/[?#]/, 1)[0].endsWith("/preview.webp")) {
                               image.dataset.fallbackApplied = "1";
-                              image.src = fallback;
+                              return;
                             }
+                            const fallback = `/assets/library/${encodeURIComponent(entry.id)}/preview.webp`;
+                            image.dataset.fallbackApplied = "1";
+                            image.dataset.posterAttempt = fallback;
+                            image.src = fallback;
                           }}
                         />
                       ) : (
