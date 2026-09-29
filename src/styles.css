@@ -2619,76 +2619,55 @@ h1 {
 
 .publish-progress-overlay {
   position: fixed;
-  inset: 0;
-  z-index: 1200;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.52);
-}
-
-.publish-progress-dialog {
-  width: min(520px, 100%);
-  padding: 28px;
-  border: 1px solid rgba(140, 199, 255, 0.38);
-  border-radius: 8px;
-  color: #f7fbff;
-  background:
-    radial-gradient(circle at 18% 8%, rgba(140, 199, 255, 0.2), transparent 34%),
-    linear-gradient(180deg, rgba(32, 35, 38, 0.98), rgba(9, 11, 13, 0.98));
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.72), 0 0 42px rgba(140, 199, 255, 0.16);
-}
-
-.publish-progress-overlay.is-compact {
-  inset: auto auto 28px 28px;
-  z-index: 35;
+  inset: 20px auto auto 20px;
+  z-index: 1400;
   display: block;
-  width: min(390px, calc(100vw - 56px));
+  width: min(360px, calc(100vw - 40px));
   padding: 0;
   background: transparent;
   pointer-events: none;
-  backdrop-filter: none;
 }
 
-.publish-progress-overlay.is-compact .publish-progress-dialog {
+.publish-progress-dialog {
+  position: relative;
   width: 100%;
   padding: 16px;
-  border-color: rgba(140, 199, 255, 0.28);
+  border: 1px solid rgba(140, 199, 255, 0.28);
+  border-radius: 8px;
+  color: #f7fbff;
   background:
     radial-gradient(circle at 18% 8%, rgba(140, 199, 255, 0.18), transparent 38%),
-    linear-gradient(180deg, rgba(24, 31, 38, 0.92), rgba(8, 12, 16, 0.92));
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42), 0 0 28px rgba(140, 199, 255, 0.12);
+    linear-gradient(180deg, rgba(24, 31, 38, 0.94), rgba(8, 12, 16, 0.94));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45), 0 0 28px rgba(140, 199, 255, 0.12);
   pointer-events: auto;
+  animation: publish-progress-in 220ms ease both;
 }
 
-.publish-progress-overlay.is-compact .publish-progress-kicker {
-  margin-bottom: 6px;
-  color: #8cc7ff;
-  font-size: 10px;
+@keyframes publish-progress-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.publish-progress-overlay.is-compact .publish-progress-dialog strong {
-  font-size: 16px;
-  line-height: 1.2;
+.publish-progress-overlay.is-done .publish-progress-dialog {
+  border-color: rgba(179, 255, 64, 0.45);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45), 0 0 34px rgba(179, 255, 64, 0.18);
 }
 
-.publish-progress-overlay.is-compact .publish-progress-bar {
-  height: 8px;
-  margin: 12px 0 8px;
-}
-
-.publish-progress-overlay.is-compact .publish-progress-meta {
-  font-size: 11px;
-}
-
-.publish-progress-overlay.is-compact .publish-progress-meta b {
-  font-size: 12px;
+.publish-progress-overlay.is-failed .publish-progress-dialog {
+  border-color: rgba(255, 106, 40, 0.55);
 }
 
 .publish-progress-kicker {
-  margin-bottom: 10px;
-  color: #ff6a28;
-  font-size: 12px;
+  margin-bottom: 6px;
+  padding-right: 26px;
+  color: #8cc7ff;
+  font-size: 10px;
   font-weight: 950;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -2696,13 +2675,14 @@ h1 {
 
 .publish-progress-dialog strong {
   display: block;
-  font-size: clamp(22px, 4vw, 34px);
-  line-height: 1.05;
+  padding-right: 26px;
+  font-size: 16px;
+  line-height: 1.2;
 }
 
 .publish-progress-bar {
-  height: 14px;
-  margin: 24px 0 12px;
+  height: 8px;
+  margin: 12px 0 8px;
   overflow: hidden;
   border: 1px solid rgba(140, 199, 255, 0.36);
   border-radius: 999px;
@@ -2719,18 +2699,57 @@ h1 {
   transition: width 220ms ease;
 }
 
+.publish-progress-error {
+  margin: 10px 0 0;
+  color: #ffb896;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.publish-progress-link {
+  display: inline-block;
+  margin-top: 10px;
+  color: #b3ff40;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .publish-progress-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  margin-top: 10px;
   color: rgba(237, 245, 255, 0.68);
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .publish-progress-meta b {
   color: #ffffff;
-  font-size: 16px;
+  font-size: 12px;
+}
+
+.publish-progress-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  color: rgba(237, 245, 255, 0.72);
+  background: rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.publish-progress-close:hover {
+  color: #ffffff;
+  border-color: rgba(140, 199, 255, 0.5);
 }
 
 .library-modal {

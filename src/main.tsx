@@ -1,4 +1,5 @@
 import "./styles.css";
+import { getPublishProgress, hidePublishProgress, resumePendingJobs, subscribePublishProgress } from "./publish-job";
 
 const root = document.getElementById("root");
 export {};
@@ -176,6 +177,58 @@ function renderHomeShell(isDragging = false) {
 
   wireHomeShell();
   wireUploadToast();
+  wirePublishProgressMirror();
+}
+
+/**
+ * The save popup is a document-level concern: a publish started on the upload
+ * screen keeps going while the reader is on another page, and the status has to
+ * be visible there too. The React tree only renders it once it is mounted, so
+ * until then (and on the home shell) this mirror draws the same node from the
+ * shared store.
+ */
+let publishProgressMirrorWired = false;
+function wirePublishProgressMirror() {
+  if (publishProgressMirrorWired) return;
+  publishProgressMirrorWired = true;
+
+  const render = () => {
+    const progress = getPublishProgress();
+    const existing = document.getElementById("spine-publish-mirror");
+    // The mounted app renders the same popup; only one of the two should exist.
+    if (document.querySelector(".publish-progress-overlay") || !progress.open) {
+      existing?.remove();
+      return;
+    }
+    const node = existing || document.createElement("div");
+    node.id = "spine-publish-mirror";
+    node.className = `publish-progress-overlay is-compact is-${progress.status}`;
+    node.setAttribute("role", "status");
+    node.setAttribute("aria-live", "polite");
+    const value = Math.min(100, Math.max(0, progress.value));
+    const body =
+      progress.status === "failed"
+        ? `<p class="publish-progress-error">${escapeHtml(progress.error || "Saving failed")}</p>`
+        : progress.status === "done" && progress.permalink
+          ? `<a class="publish-progress-link" href="${escapeHtml(progress.permalink)}">Open permanent page</a>`
+          : `<div class="publish-progress-bar"><span style="width:${value}%"></span></div>`;
+    node.innerHTML = `
+      <div class="publish-progress-dialog">
+        <div class="publish-progress-kicker">${escapeHtml(progress.kicker)}</div>
+        <strong>${escapeHtml(progress.label || "Saving Spine preview")}</strong>
+        ${body}
+        <div class="publish-progress-meta">
+          <span>${progress.status === "done" ? "Permanent link ready" : "Saving to library"}</span>
+          <b>${progress.status === "failed" ? "!" : `${value}%`}</b>
+        </div>
+        <button type="button" class="publish-progress-close" aria-label="Close save status">&times;</button>
+      </div>`;
+    if (!existing) document.body.appendChild(node);
+    node.querySelector(".publish-progress-close")?.addEventListener("click", () => hidePublishProgress());
+  };
+
+  subscribePublishProgress(render);
+  render();
 }
 
 function wireHomeShell() {
@@ -510,6 +563,9 @@ const shouldOpenEdit = bootSearchParams.has("edit");
 const shouldOpenAdmin = bootSearchParams.get("admin") === "1";
 
 renderHomeShell();
+
+// A publish that a previous page started continues here, before React mounts.
+void resumePendingJobs();
 
 const DROP_CACHE = "spine-drop-handoff";
 

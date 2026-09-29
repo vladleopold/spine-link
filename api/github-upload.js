@@ -558,7 +558,10 @@ function dataScienceBasePathFor(body) {
   return cleanRepoPath(process.env.DATA_SCIENCE_BASE_PATH || body?.dataScience?.basePath || 'data-science');
 }
 
-async function updateDataScienceCatalog(settings, body, entry, commitPrefix, origin) {
+// Reads the catalog and returns the exact bytes that would be written. The
+// single-commit publish path folds these into the same tree as the preview
+// files, so it must not write anything itself.
+async function prepareDataScienceCatalog(settings, body, entry) {
   if (body?.dataScience?.enabled === false) return null;
   const basePath = dataScienceBasePathFor(body);
   if (!basePath) return null;
@@ -569,9 +572,7 @@ async function updateDataScienceCatalog(settings, body, entry, commitPrefix, ori
   const itemPath = joinRepoPath(basePath, 'items', `${itemId}.json`);
   const indexPath = joinRepoPath(basePath, 'index.json');
   const schemaPath = joinRepoPath(basePath, 'schema.json');
-  const currentItem = await getGitHubContent(settings, itemPath);
   const currentIndex = await getGitHubContent(settings, indexPath);
-  const currentSchema = await getGitHubContent(settings, schemaPath);
   const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
   const indexRecord = {
     id: itemId,
@@ -585,10 +586,24 @@ async function updateDataScienceCatalog(settings, body, entry, commitPrefix, ori
   };
   const nextEntries = [indexRecord, ...currentEntries.filter((currentEntry) => String(currentEntry?.id || '') !== itemId)];
 
-  await putGitHubContent(settings, itemPath, textToBase64(JSON.stringify(metadata, null, 2)), `${commitPrefix}: data-science item`, currentItem?.sha, origin);
-  await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: data-science index`, currentIndex?.sha, origin);
-  await putGitHubContent(settings, schemaPath, textToBase64(JSON.stringify(dataScienceSchema(), null, 2)), `${commitPrefix}: data-science schema`, currentSchema?.sha, origin);
-  return { basePath, itemPath, indexPath, schemaPath, animation_asset: animationAsset, inference: metadata.inference };
+  return {
+    summary: { basePath, itemPath, indexPath, schemaPath, animation_asset: animationAsset, inference: metadata.inference },
+    writes: [
+      { path: itemPath, contentBase64: textToBase64(JSON.stringify(metadata, null, 2)), suffix: 'data-science item' },
+      { path: indexPath, contentBase64: textToBase64(JSON.stringify(nextEntries, null, 2)), suffix: 'data-science index' },
+      { path: schemaPath, contentBase64: textToBase64(JSON.stringify(dataScienceSchema(), null, 2)), suffix: 'data-science schema' },
+    ],
+  };
+}
+
+async function updateDataScienceCatalog(settings, body, entry, commitPrefix, origin) {
+  const prepared = await prepareDataScienceCatalog(settings, body, entry);
+  if (!prepared) return null;
+  for (const write of prepared.writes) {
+    const current = await getGitHubContent(settings, write.path);
+    await putGitHubContent(settings, write.path, write.contentBase64, `${commitPrefix}: ${write.suffix}`, current?.sha, origin);
+  }
+  return prepared.summary;
 }
 
 // Every anonymous upload shares one GITHUB_TOKEN, so GitHub rate limits and
@@ -766,6 +781,121 @@ async function deleteGitHubPath(settings, path, commitPrefix) {
   if (item.type === 'file' && item.sha) {
     await deleteGitHubContent(settings, item.path || path, `${commitPrefix}: ${item.name || path}`, item.sha);
   }
+}
+
+// One-commit writer (Git Data API).
+//
+// The old publish flow wrote one file per request: a Contents API PUT per file,
+// which is one commit each, plus a separate chunk staging and cleanup round trip
+// for every large texture. A five file animation cost 7-40 sequential Vercel
+// invocations, each paying GitHub round trips of its own. Everything a publish
+// needs - files, assembled chunks, the source-proof anchor, index.json and the
+// data-science catalog - is folded into a single commit here instead.
+async function githubApi(settings, method, apiPath, payload) {
+  let lastError;
+  for (let attempt = 0; attempt < GITHUB_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(`https://api.github.com${apiPath}`, {
+        method,
+        headers: { ...githubHeaders(settings.token), 'Content-Type': 'application/json' },
+        body: payload === undefined ? undefined : JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) return data;
+      const detail = typeof data?.message === 'string' ? data.message : '';
+      const failure = withGitHubStatus(githubFailure(method === 'GET' ? 'read' : 'write', apiPath, response), response, detail);
+      if (!GITHUB_RETRY_STATUS.has(response.status)) throw failure;
+      lastError = failure;
+      await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
+    } catch (error) {
+      lastError = error;
+      const definitive = Number(error?.status) >= 400 && !GITHUB_RETRY_STATUS.has(Number(error.status));
+      if (definitive || attempt >= GITHUB_RETRY_ATTEMPTS - 1) break;
+      await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
+    }
+  }
+  throw lastError;
+}
+
+async function commitGitHubChanges(settings, { writes, deletions = [], message, origin = '' }) {
+  const repoApi = `/repos/${settings.owner}/${settings.repo}`;
+  const branchRef = `${repoApi}/git/refs/heads/${encodeURIComponent(settings.branch)}`;
+  const normalized = Array.isArray(writes)
+    ? writes
+        .map((write) => ({
+          path: cleanRepoPath(String(write?.path || '')),
+          contentBase64: normalizePreviewHtml(settings, String(write?.path || ''), String(write?.contentBase64 || ''), origin),
+        }))
+        .filter((write) => write.path && write.contentBase64)
+    : [];
+
+  const attemptCommit = async () => {
+    const ref = await githubApi(settings, 'GET', branchRef);
+    const headSha = String(ref?.object?.sha || '');
+    if (!headSha) throw new Error(`GitHub branch ${settings.branch} not found`);
+    const headCommit = await githubApi(settings, 'GET', `${repoApi}/git/commits/${headSha}`);
+    const baseTree = String(headCommit?.tree?.sha || '');
+    if (!baseTree) throw new Error('GitHub head tree not found');
+
+    const treeEntries = [];
+    // Four at a time: GitHub throttles bursts of parallel writes against the
+    // shared upload token, and a secondary rate limit costs more than it saves.
+    const CONCURRENCY = 4;
+    for (let index = 0; index < normalized.length; index += CONCURRENCY) {
+      const slice = normalized.slice(index, index + CONCURRENCY);
+      const blobs = await Promise.all(
+        slice.map((write) => githubApi(settings, 'POST', `${repoApi}/git/blobs`, { content: write.contentBase64, encoding: 'base64' })),
+      );
+      blobs.forEach((blob, offset) => {
+        const sha = String(blob?.sha || '');
+        if (sha) treeEntries.push({ path: slice[offset].path, mode: '100644', type: 'blob', sha });
+      });
+    }
+    for (const path of deletions) {
+      const cleaned = cleanRepoPath(String(path || ''));
+      if (cleaned) treeEntries.push({ path: cleaned, mode: '100644', type: 'blob', sha: null });
+    }
+    if (!treeEntries.length) throw new Error('Nothing to write');
+
+    const tree = await githubApi(settings, 'POST', `${repoApi}/git/trees`, { base_tree: baseTree, tree: treeEntries });
+    const commit = await githubApi(settings, 'POST', `${repoApi}/git/commits`, { message, tree: tree.sha, parents: [headSha] });
+    await githubApi(settings, 'PATCH', branchRef, { sha: commit.sha });
+    return commit;
+  };
+
+  // A ref update that races another writer comes back 422 (not a fast forward).
+  // Re-reading head and rebuilding the tree makes the commit land on the new
+  // tip, so a concurrent publish is a retry and not a lost upload.
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const commit = await attemptCommit();
+      return {
+        commit,
+        content: { sha: '' },
+        blobs: normalized.map((write) => write.path),
+      };
+    } catch (error) {
+      lastError = error;
+      if (Number(error?.status) !== 422 || attempt === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
+    }
+  }
+  throw lastError;
+}
+
+// Receipts for the batch commit: one commit covers every path, so the per-file
+// identity is the blob sha the client hashes back into its source proof.
+function publicBatchReceipts(commit, writes) {
+  const commitSha = String(commit?.sha || '');
+  const commitUrl = String(commit?.html_url || '');
+  return writes.map((write) => ({
+    path: write.path,
+    name: String(write.path || '').split('/').pop() || '',
+    bytes: Buffer.from(String(write.contentBase64 || '').replace(/\s/g, ''), 'base64').byteLength,
+    sha256: sha256HexFromBase64(write.contentBase64),
+    github: { contentSha: '', commitSha, commitUrl, downloadUrl: '' },
+  }));
 }
 
 export default async function handler(request, response) {
@@ -1186,6 +1316,170 @@ export default async function handler(request, response) {
       return response.status(200).json({ ok: true, indexed: nextEntries.length, dataScience, dispatch });
     }
 
+
+    // One request for a whole publish: files, staged chunks, the source-proof
+    // anchor, index.json and the data-science catalog all land in one commit.
+    // The client used to make 7-40 sequential calls for the same result, which
+    // is why saving a page took tens of seconds.
+    if (action === 'publish-entry') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const entryPayload = entry && typeof entry === 'object' ? entry : null;
+      const batchFiles = Array.isArray(body?.files) ? body.files : [];
+      const stageChunks = Array.isArray(body?.stageChunks) ? body.stageChunks : [];
+      const assembles = Array.isArray(body?.assembles) ? body.assembles : [];
+      const finalize = Boolean(entryPayload);
+      if (!batchFiles.length && !stageChunks.length && !assembles.length && !finalize) {
+        return response.status(400).json({ error: 'Invalid publish payload' });
+      }
+
+      const writes = [];
+      const deletions = [];
+      const assetPaths = [];
+
+      for (const chunk of stageChunks) {
+        const filePath = cleanRepoPath(String(chunk?.path || ''));
+        const chunkIndex = Number(chunk?.index);
+        const contentBase64 = String(chunk?.contentBase64 || '');
+        if (!filePath || !contentBase64 || !Number.isInteger(chunkIndex) || chunkIndex < 0) continue;
+        writes.push({ path: `${filePath}.__chunks/${String(chunkIndex).padStart(5, '0')}`, contentBase64 });
+      }
+
+      for (const assemble of assembles) {
+        const filePath = cleanRepoPath(String(assemble?.path || ''));
+        const chunkCount = Number(assemble?.chunkCount);
+        if (!filePath || !Number.isInteger(chunkCount) || chunkCount < 1) continue;
+        const chunkDir = `${filePath}.__chunks`;
+        const parts = await Promise.all(
+          Array.from({ length: chunkCount }, (_, index) => getGitHubContent(settings, `${chunkDir}/${String(index).padStart(5, '0')}`)),
+        );
+        let assembled = '';
+        for (let index = 0; index < parts.length; index += 1) {
+          const part = parts[index];
+          if (!part || part.encoding !== 'base64') {
+            return response.status(400).json({ error: `Chunk ${index} of ${filePath} was not uploaded` });
+          }
+          assembled += String(part.content).replace(/\s/g, '');
+        }
+        writes.push({ path: filePath, contentBase64: assembled });
+        assetPaths.push(filePath);
+        for (let index = 0; index < chunkCount; index += 1) deletions.push(`${chunkDir}/${String(index).padStart(5, '0')}`);
+      }
+
+      for (const file of batchFiles) {
+        const filePath = cleanRepoPath(String(file?.path || ''));
+        const contentBase64 = String(file?.contentBase64 || '');
+        if (!filePath || !contentBase64) continue;
+        writes.push({ path: filePath, contentBase64 });
+        assetPaths.push(filePath);
+      }
+
+      let nextEntry = null;
+      let anchor = null;
+      let indexed = 0;
+      let dataScience = null;
+      let existingEntry = null;
+      let dispatch = null;
+
+      if (finalize) {
+        const sourceProof = body?.sourceProof && typeof body.sourceProof === 'object' ? body.sourceProof : null;
+        const indexPath = joinRepoPath(settings.basePath, 'index.json');
+        const currentIndex = await getGitHubContent(settings, indexPath);
+        const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
+        existingEntry = currentEntries.find((currentItem) => currentItem.id === entryPayload.id);
+        nextEntry = {
+          ...entryPayload,
+          ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
+          ...(entryPayload?.ownerName || googlePayload?.name
+            ? { ownerName: cleanPublicProfileText(entryPayload?.ownerName || googlePayload?.name) }
+            : {}),
+          ...(entryPayload?.ownerPicture || googlePayload?.picture
+            ? { ownerPicture: cleanPublicProfileImage(entryPayload?.ownerPicture || googlePayload?.picture) }
+            : {}),
+          ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id, ownerAnonFingerprint: anonymousAccount.fingerprint } : {}),
+          publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entryPayload?.publicOwnerId),
+          showOwnerLibrary: Boolean(entryPayload?.showOwnerLibrary),
+          portfolioMode: Boolean(entryPayload?.portfolioMode),
+          ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
+        };
+
+        // The anchor is optional. Building it here keeps it in the same commit
+        // as index.json instead of paying for a second request and a second
+        // round trip to GitHub on the critical path.
+        const anchorPath = cleanRepoPath(
+          String(body?.anchorPath || joinRepoPath(String(entryPayload?.previewPath || ''), 'blockchain-anchor.json')),
+        );
+        if (sourceProof && anchorPath) {
+          try {
+            // The commit sha does not exist yet (the anchor is part of this
+            // commit), so receipts are derived from the bytes being written.
+            // The client no longer makes a request per file and therefore has
+            // no per-file commit shas to hand over either.
+            const anchorUploads =
+              Array.isArray(body?.uploadedFiles) && body.uploadedFiles.length
+                ? body.uploadedFiles
+                : writes
+                    .filter((write) => assetPaths.includes(write.path))
+                    .map((write) => ({
+                      name: String(write.path).split('/').pop() || '',
+                      path: write.path,
+                      bytes: Buffer.from(String(write.contentBase64).replace(/\s/g, ''), 'base64').byteLength,
+                      sha256: sha256HexFromBase64(write.contentBase64),
+                    }));
+            const created = await createBlockchainAnchor({ sourceProof, uploadedFiles: anchorUploads, body, settings, googlePayload, anonymousAccount, origin });
+            anchor = { ...created, anchorPath, anchorUrl: assetUrlForRepoPath(origin, anchorPath) };
+            anchor.github = { ...(anchor.github || {}), anchorPath, anchorUrl: anchor.anchorUrl };
+            nextEntry.blockchainAnchor = anchor;
+            const anchorFileName = String(anchorPath).split('/').pop() || '';
+            const entryFiles = Array.isArray(nextEntry.files) ? nextEntry.files.map(String) : [];
+            if (anchorFileName && !entryFiles.includes(anchorFileName)) nextEntry.files = [...entryFiles, anchorFileName];
+            writes.push({ path: anchorPath, contentBase64: textToBase64(JSON.stringify(anchor, null, 2)) });
+          } catch (error) {
+            // A failed anchor never blocked a publish before, and it must not
+            // start doing so now that it shares the commit with the index.
+            console.error('[UPLOAD] anchor skipped:', error instanceof Error ? error.message : String(error));
+          }
+        }
+
+        const nextEntries = [nextEntry, ...currentEntries.filter((currentItem) => currentItem.id !== nextEntry.id)];
+        writes.push({ path: indexPath, contentBase64: textToBase64(JSON.stringify(nextEntries, null, 2)) });
+        indexed = nextEntries.length;
+
+        const preparedCatalog = await prepareDataScienceCatalog(settings, body, nextEntry);
+        if (preparedCatalog) {
+          writes.push(...preparedCatalog.writes);
+          dataScience = preparedCatalog.summary;
+        }
+      }
+
+      if (!writes.length) return response.status(400).json({ error: 'Nothing to publish' });
+
+      const commit = await commitGitHubChanges(settings, {
+        writes,
+        deletions,
+        message: String(body?.commitPrefix || 'Add Spine preview'),
+        origin,
+      });
+      const receipts = publicBatchReceipts(
+        commit,
+        writes.filter((write) => assetPaths.includes(write.path)),
+      );
+
+      if (finalize && nextEntry) {
+        const isNewUpload = !existingEntry || existingEntry.webmStatus !== 'ready';
+        dispatch = isNewUpload ? await dispatchSpineExportWebm(settings, nextEntry, origin) : null;
+      }
+
+      return response.status(200).json({
+        ok: true,
+        indexed,
+        entry: nextEntry,
+        anchor,
+        dataScience,
+        dispatch,
+        receipts,
+        github: { commitSha: String(commit?.sha || ''), commitUrl: String(commit?.html_url || '') },
+      });
+    }
 
     if (action === 'update-note') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');

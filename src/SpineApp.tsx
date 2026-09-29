@@ -1,5 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import "./styles.css";
+import {
+  getPublishProgress,
+  hidePublishProgress,
+  resumePendingJobs,
+  setPublishProgress,
+  startPublishJob,
+  subscribePublishProgress,
+  type PublishJob,
+} from "./publish-job";
 import {
   Calendar,
   Copy,
@@ -2759,7 +2768,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [activeTreeDrawer, setActiveTreeDrawer] = useState<"render" | "zoom" | null>(null);
   const [generatedPreviewUrl, setGeneratedPreviewUrl] = useState("");
   const [isPublishingLink, setIsPublishingLink] = useState(false);
-  const [publishProgress, setPublishProgress] = useState({ isOpen: false, value: 0, label: "" });
+  // The publish popup belongs to the page, not to this component: a save that
+  // started on another screen (or before a reload) keeps reporting here too.
+  const publishProgress = useSyncExternalStore(subscribePublishProgress, getPublishProgress);
   const [isLinkBannerOpen, setIsLinkBannerOpen] = useState(false);
   const [layoutDirty, setLayoutDirty] = useState(false);
   const [showSaveLayoutButton, setShowSaveLayoutButton] = useState(false);
@@ -3366,28 +3377,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     };
   }, [isLibraryOpen, visiblePortfolioEntries]);
 
-  useEffect(() => {
-    if (!publishProgress.isOpen || publishProgress.value >= 95) return;
-
-    const duration = 4000 + Math.random() * 4000;
-    const startedAt = performance.now();
-    const startedValue = publishProgress.value;
-    const targetValue = 95;
-    let animationFrame = 0;
-
-    const tick = (time: number) => {
-      const elapsed = Math.min(1, (time - startedAt) / duration);
-      const eased = 1 - Math.pow(1 - elapsed, 2.6);
-      setPublishProgress((current) => {
-        if (!current.isOpen || current.value >= targetValue) return current;
-        return { ...current, value: Math.max(current.value, Math.round(startedValue + (targetValue - startedValue) * eased)) };
-      });
-      if (elapsed < 1) animationFrame = window.requestAnimationFrame(tick);
-    };
-
-    animationFrame = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [publishProgress.isOpen]);
   const publicLibraryOwnerId = useMemo(
     () => libraryEntries.find((entry) => entry.publicOwnerId)?.publicOwnerId || publicOwnerIdFor(googleUser, anonymousAccount),
     [anonymousAccount, googleUser, libraryEntries],
@@ -3409,7 +3398,32 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       : "";
     return cleanAccountDisplayName(profileNameInput || googleUser?.name || libraryOwnerName || "");
   }, [googleUser?.name, libraryEntries, ownsLibraryEntries, profileNameInput]);
-  const isPublishProgressCompact = Boolean(preparedSpine && animations.length);
+
+  // Pick up a save that a previous page (or a reload) left running.
+  useEffect(() => {
+    void resumePendingJobs();
+  }, []);
+
+  // The job may finish long after this component queued it - or on a page that
+  // never queued it at all - so the visible result arrives as an event.
+  useEffect(() => {
+    const handlePublishComplete = (event: Event) => {
+      const detail = (event as CustomEvent<{ url?: string; entry?: LibraryEntry }>).detail || {};
+      const completed = detail.entry as LibraryEntry | undefined;
+      if (!completed?.id) return;
+      setLibraryEntries((currentEntries) => [completed, ...currentEntries.filter((currentEntry) => currentEntry.id !== completed.id)]);
+      setCurrentLibraryEntry(completed);
+      setIsLibraryOpen(false);
+      if (completed.note) setPreviewNote(completed.note);
+      setSelectedCardSize(completed.cardSize || "auto");
+      setGeneratedPreviewUrl(detail.url || previewUrlForEntry(completed.id, completed.defaultAnimation || ""));
+      setIsLinkBannerOpen(true);
+      setCopyStatus("Permanent link ready");
+      setStatus(`Ready. Animations found: ${completed.animations?.length || 0}. Uploaded.`);
+    };
+    window.addEventListener("spine-publish-complete", handlePublishComplete);
+    return () => window.removeEventListener("spine-publish-complete", handlePublishComplete);
+  }, []);
 
   useEffect(() => {
     const savedOwnerName = cleanAccountDisplayName(libraryEntries.find((entry) => entry.ownerName)?.ownerName || "");
@@ -4872,288 +4886,158 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   };
 
   async function publishToGitHub(spine: PreparedSpine, animationNames: string[], defaultAnimation: string) {
-      const existingEntry = currentLibraryEntry;
-      const nextSettings = {
-        ...githubPublishSettings,
-        owner: githubPublishSettings.owner.trim(),
-        repo: githubPublishSettings.repo.trim(),
-        branch: githubPublishSettings.branch.trim() || "main",
-        basePath: cleanRepoPath(githubPublishSettings.basePath || "library"),
-        title: existingEntry?.title || githubPublishSettings.title.trim() || spine.label,
+    const existingEntry = currentLibraryEntry;
+    const nextSettings = {
+      ...githubPublishSettings,
+      owner: githubPublishSettings.owner.trim(),
+      repo: githubPublishSettings.repo.trim(),
+      branch: githubPublishSettings.branch.trim() || "main",
+      basePath: cleanRepoPath(githubPublishSettings.basePath || "library"),
+      title: existingEntry?.title || githubPublishSettings.title.trim() || spine.label,
+    };
+
+    if (!nextSettings.owner || !nextSettings.repo || isPublishingRef.current) return;
+
+    const isEditingEntry = Boolean(existingEntry?.id);
+    const publishKey = `${existingEntry?.id || spine.label}:${spine.skeletonName}:${spine.atlasName}:${defaultAnimation}`;
+    if (!isEditingEntry && publishedKeysRef.current.has(publishKey)) return;
+
+    isPublishingRef.current = true;
+    setIsPublishingLink(true);
+    setPublishProgress({
+      open: true,
+      status: "running",
+      value: 4,
+      kicker: isEditingEntry ? "Updating page" : "Creating page",
+      label: isEditingEntry ? "Updating Spine page" : "Converting Spine preview",
+      error: "",
+      permalink: "",
+      jobId: "",
+    });
+    publishedKeysRef.current.add(publishKey);
+
+    let uploadId = "";
+    try {
+      const uploadedAt = new Date().toISOString();
+      uploadId = existingEntry?.id || `${safePathSegment(nextSettings.title)}-${uploadedAt.replace(/[:.]/g, "-")}`;
+      const uploadPath = cleanRepoPath(existingEntry?.previewPath || joinRepoPath(nextSettings.basePath, uploadId));
+      const permanentPreviewUrl = previewUrlForEntry(uploadId, defaultAnimation);
+      const setsForPublish = spineOptions.length ? spineOptions : [spine];
+      const note = limitWords(previewNote);
+      const playerCanvas = (playerRef.current as unknown as { canvas?: HTMLCanvasElement | null } | null)?.canvas;
+      setPublishProgress({ jobId: uploadId, label: "Capturing thumbnail", value: 8 });
+      const thumbnailPoster = await createCanvasImageThumbnail(playerCanvas);
+      const fileMap = new Map<string, string>();
+      for (const nextSpine of setsForPublish) {
+        for (const file of filesForLibrary(nextSpine)) {
+          fileMap.set(`${nextSpine.label}/${file.name}`, file.dataUri);
+        }
+      }
+      const thumbnailPosterName = safePreviewFileName(defaultAnimation || "animation", "preview.webp");
+      const thumbnailPosterPath = thumbnailPoster ? joinRepoPath(uploadPath, thumbnailPosterName) : "";
+      if (thumbnailPoster) fileMap.set(thumbnailPosterName, thumbnailPoster);
+      const proofFileName = "source-proof.json";
+      const proofPath = joinRepoPath(uploadPath, proofFileName);
+      let files = Array.from(fileMap.entries()).map(([name, dataUri]) => ({ name, contentBase64: dataUriToBase64(dataUri) }));
+      const sourceProof = await createSourceProof(files, {
+        uploadId,
+        title: nextSettings.title || existingEntry?.title || spine.label,
+        uploadedAt,
+        uploadPath,
+        proofPath,
+        proofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
+        settings: nextSettings,
+        user: googleUser ? { ...googleUser, name: accountDisplayName || googleUser.name } : googleUser,
+        anonymousAccount,
+      });
+      fileMap.set(proofFileName, textDataUri("application/json", JSON.stringify(sourceProof, null, 2)));
+      files = Array.from(fileMap.entries()).map(([name, dataUri]) => ({ name, contentBase64: dataUriToBase64(dataUri) }));
+      const commitPrefix = `${isEditingEntry ? "Update" : "Add"} Spine preview ${nextSettings.title}`;
+
+      if (files.length < 3) {
+        throw new Error("Could not collect skeleton, atlas, and texture for publishing.");
+      }
+
+      // Everything below is handed to the background job: it batches the files
+      // into as few requests as the platform allows, writes the job to
+      // IndexedDB first and reports progress through the shared store, so the
+      // popup stays alive across navigation instead of dying with this screen.
+      const anchorPath = joinRepoPath(uploadPath, "blockchain-anchor.json");
+      const entry: LibraryEntry = {
+        id: uploadId,
+        title: nextSettings.title || existingEntry?.title || spine.label,
+        ownerEmail: googleUser?.email || existingEntry?.ownerEmail,
+        ownerName: accountDisplayName || existingEntry?.ownerName || googleUser?.name,
+        ownerPicture: googleUser?.picture || existingEntry?.ownerPicture,
+        publicOwnerId: existingEntry?.publicOwnerId || publicOwnerIdFor(googleUser, anonymousAccount),
+        ownerAnonId: existingEntry?.ownerAnonId || anonymousAccount.id,
+        ownerAnonFingerprint: existingEntry?.ownerAnonFingerprint || anonymousAccount.fingerprint,
+        showOwnerLibrary: existingEntry?.showOwnerLibrary ?? showProfileOnSharedPages,
+        portfolioMode: existingEntry?.portfolioMode ?? isPortfolioMode,
+        hiddenFromPublicLibrary: existingEntry?.hiddenFromPublicLibrary,
+        uploadedAt: existingEntry?.uploadedAt || uploadedAt,
+        webmGeneratedAt: uploadedAt,
+        skeleton: spine.skeletonName,
+        atlas: spine.atlasName,
+        textures: Array.from(new Set(setsForPublish.flatMap((nextSpine) => nextSpine.atlasPages.map(basename)))),
+        animations: animationNames,
+        defaultAnimation,
+        files: files.map((file) => file.name),
+        previewPath: uploadPath,
+        repositoryUrl: existingEntry?.repositoryUrl || "",
+        ...(note ? { note } : {}),
+        ...(thumbnailPosterPath ? { thumbnail: assetUrlForRepoPath(thumbnailPosterPath, uploadedAt), thumbnailPath: thumbnailPosterPath } : {}),
+        ...(thumbnailPosterPath
+          ? {
+              thumbnailPoster: assetUrlForRepoPath(thumbnailPosterPath, uploadedAt),
+              thumbnailPosterPath,
+              cardSize: selectedCardSize === "auto" ? undefined : selectedCardSize,
+            }
+          : existingEntry?.thumbnailPoster && /^https:\/\//i.test(existingEntry.thumbnailPoster)
+            ? { thumbnailPoster: existingEntry.thumbnailPoster, ...(existingEntry.thumbnailPosterPath ? { thumbnailPosterPath: existingEntry.thumbnailPosterPath } : {}) }
+            : {}),
+        ...(thumbnailPosterPath ? { thumbnailType: "image" } : {}),
+        webmStatus: existingEntry?.webmStatus === "ready" ? "ready" : "pending",
+        sourceProof,
+        sourceProofPath: proofPath,
+        sourceProofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
       };
 
-      if (!nextSettings.owner || !nextSettings.repo || isPublishingRef.current) return;
+      setStatus(`Files ready. Publishing ${files.length} files in a single request...`);
 
-      const isEditingEntry = Boolean(existingEntry?.id);
-      const publishKey = `${existingEntry?.id || spine.label}:${spine.skeletonName}:${spine.atlasName}:${defaultAnimation}`;
-      if (!isEditingEntry && publishedKeysRef.current.has(publishKey)) return;
+      await startPublishJob({
+        id: uploadId,
+        permalink: permanentPreviewUrl,
+        kicker: isEditingEntry ? "Updating page" : "Creating page",
+        settings: nextSettings,
+        commitPrefix,
+        entry: entry as unknown as PublishJob["entry"],
+        files: files.map((file) => ({ path: joinRepoPath(uploadPath, file.name), contentBase64: file.contentBase64 })),
+        sourceProof: sourceProof as unknown as PublishJob["sourceProof"],
+        anchorPath,
+        googleIdToken,
+        anonymousAccount,
+        startedAt: Date.now(),
+        attempts: 0,
+      });
 
-      isPublishingRef.current = true;
-      setIsPublishingLink(true);
-      setPublishProgress({ isOpen: true, value: 0, label: isEditingEntry ? "Updating Spine page" : "Converting Spine preview" });
-      publishedKeysRef.current.add(publishKey);
-
-      try {
-        const uploadedAt = new Date().toISOString();
-        const uploadId = existingEntry?.id || `${safePathSegment(nextSettings.title)}-${uploadedAt.replace(/[:.]/g, "-")}`;
-        const uploadPath = cleanRepoPath(existingEntry?.previewPath || joinRepoPath(nextSettings.basePath, uploadId));
-        const permanentPreviewUrl = previewUrlForEntry(uploadId, defaultAnimation);
-        const setsForPublish = spineOptions.length ? spineOptions : [spine];
-        const note = limitWords(previewNote);
-        const playerCanvas = (playerRef.current as unknown as { canvas?: HTMLCanvasElement | null } | null)?.canvas;
-        setPublishProgress((current) => ({ ...current, label: "Capturing thumbnail" }));
-        const thumbnailPoster = await createCanvasImageThumbnail(playerCanvas);
-        const fileMap = new Map<string, string>();
-        for (const nextSpine of setsForPublish) {
-          for (const file of filesForLibrary(nextSpine)) {
-            fileMap.set(`${nextSpine.label}/${file.name}`, file.dataUri);
-          }
-        }
-        const thumbnailPosterName = safePreviewFileName(defaultAnimation || "animation", "preview.webp");
-        const thumbnailPosterPath = thumbnailPoster ? joinRepoPath(uploadPath, thumbnailPosterName) : "";
-        if (thumbnailPoster) fileMap.set(thumbnailPosterName, thumbnailPoster);
-        const proofFileName = "source-proof.json";
-        const proofPath = joinRepoPath(uploadPath, proofFileName);
-        let files = Array.from(fileMap.entries()).map(([name, dataUri]) => ({ name, contentBase64: dataUriToBase64(dataUri) }));
-        const sourceProof = await createSourceProof(files, {
-          uploadId,
-          title: nextSettings.title || existingEntry?.title || spine.label,
-          uploadedAt,
-          uploadPath,
-          proofPath,
-          proofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
-          settings: nextSettings,
-          user: googleUser ? { ...googleUser, name: accountDisplayName || googleUser.name } : googleUser,
-          anonymousAccount,
-        });
-        fileMap.set(proofFileName, textDataUri("application/json", JSON.stringify(sourceProof, null, 2)));
-        files = Array.from(fileMap.entries()).map(([name, dataUri]) => ({ name, contentBase64: dataUriToBase64(dataUri) }));
-        const commitPrefix = `${isEditingEntry ? "Update" : "Add"} Spine preview ${nextSettings.title}`;
-
-        if (files.length < 3) {
-          throw new Error("Could not collect skeleton, atlas, and texture for publishing.");
-        }
-
-        setPublishProgress((current) => ({ ...current, label: "Saving files to library" }));
-        setStatus(`Files ready. Uploading: 0/${files.length}...`);
-
-         const uploadedProofFiles: GitHubProofReceipt[] = [];
-         const MAX_BODY = 4_000_000;
-         const CHUNK = 2_000_000;
-
-         const uploadOneFile = async (f: { name: string; contentBase64: string }, idx: number): Promise<GitHubProofReceipt> => {
-           const fp = joinRepoPath(uploadPath, f.name);
-           const rh: Record<string, string> = { "Content-Type": "application/json" };
-           if (googleIdToken) rh.Authorization = `Bearer ${googleIdToken}`;
-           const sb = JSON.stringify({ action: "put-file", googleIdToken, anonymousAccount, settings: nextSettings, file: { path: fp, contentBase64: f.contentBase64 }, message: `${commitPrefix}: ${f.name}` });
-            if (sb.length <= MAX_BODY) {
-              let r;
-              for (let attempt = 0; attempt < 3; attempt += 1) {
-                r = await fetch("/api/github-upload", { method: "POST", headers: rh, body: sb });
-                if (r.ok) break;
-                if (r.status >= 500 && attempt < 2) { await new Promise((res) => setTimeout(res, 1500 * (attempt + 1))); continue; }
-                break;
-              }
-               const res = await r!.json().catch(() => ({}));
-               if (!r!.ok) throw new Error(typeof res?.error === "string" ? res.error : `Upload API ${r!.status}`);
-             setPublishProgress((c) => ({ ...c, label: `Saving files ${idx + 1}/${files.length}`, value: Math.max(c.value, Math.round(((idx + 1) / Math.max(files.length + 1, 1)) * 88)) }));
-             setStatus(`Files ready. Uploading: ${idx + 1}/${files.length}...`);
-             const sp = sourceProof.files.find((pf) => pf.name === f.name);
-             return { name: f.name, path: fp, bytes: Number(res.bytes || sp?.bytes || byteLengthFromBase64(f.contentBase64)), sha256: String(res.sha256 || sp?.sha256 || (await sha256HexFromBytes(base64ToBytes(f.contentBase64)))), github: { contentSha: typeof res.github?.contentSha === "string" ? res.github.contentSha : "", commitSha: typeof res.github?.commitSha === "string" ? res.github.commitSha : "", commitUrl: typeof res.github?.commitUrl === "string" ? res.github.commitUrl : "", downloadUrl: typeof res.github?.downloadUrl === "string" ? res.github.downloadUrl : "" } };
-           }
-            const base64 = f.contentBase64.replace(/\s/g, "");
-            const totalChunks = Math.ceil(base64.length / CHUNK);
-            const MAX_CHUNK_RETRIES = 3;
-            const results = [];
-            for (let i = 0; i < totalChunks; i += 1) {
-              const chunk = base64.slice(i * CHUNK, (i + 1) * CHUNK);
-               // Send the base file path: the server appends ".__chunks/NNNNN"
-               // itself. Sending the full chunk path here made it double up as
-               // "file.png.__chunks/00001.__chunks/00001", so reassemble-file
-               // never found the chunks and the upload failed before the
-               // library index was updated.
-               const cb = JSON.stringify({ action: "multipart-upload-chunk", googleIdToken, anonymousAccount, settings: nextSettings, path: fp, chunkIndex: i, contentBase64: chunk, message: `${commitPrefix}: chunk ${i} of ${f.name}` });
-              let lastErr;
-              for (let attempt = 0; attempt < MAX_CHUNK_RETRIES; attempt += 1) {
-                try {
-                  const cr = await fetch("/api/github-upload", { method: "POST", headers: rh, body: cb });
-                  const cres = await cr.json().catch(() => ({}));
-                  if (cr.ok) { results.push({ chunkPath: String(cres.chunkPath || `${fp}.__chunks/${String(i).padStart(5, "0")}`), bytes: Number(cres.bytes), sha256: String(cres.sha256) }); break; }
-                  if (cr.status >= 500 && attempt < MAX_CHUNK_RETRIES - 1) { lastErr = new Error(`Chunk ${i} upload failed: ${cr.status}`); await new Promise((r) => setTimeout(r, 1500 * (attempt + 1))); continue; }
-                  throw new Error(`Chunk ${i} upload failed: ${cr.status}`);
-                } catch (err) {
-                  lastErr = err;
-                  if (attempt < MAX_CHUNK_RETRIES - 1) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-                }
-              }
-              if (results.length <= i) throw lastErr;
-            }
-           for (const cr of results) { uploadedProofFiles.push({ name: `${f.name}.__chunks/${cr.chunkPath.split("/").pop()}`, path: cr.chunkPath, bytes: cr.bytes, sha256: cr.sha256, github: { contentSha: "", commitSha: "", commitUrl: "", downloadUrl: "" } }); }
-            const rb = JSON.stringify({ action: "reassemble-file", googleIdToken, anonymousAccount, settings: nextSettings, path: fp, chunkCount: totalChunks, message: `${commitPrefix}: reassemble ${f.name}` });
-            let rr;
-            for (let attempt = 0; attempt < 3; attempt += 1) {
-              rr = await fetch("/api/github-upload", { method: "POST", headers: rh, body: rb });
-              if (rr.ok) break;
-              if (rr.status >= 500 && attempt < 2) { await new Promise((res) => setTimeout(res, 1500 * (attempt + 1))); continue; }
-              break;
-            }
-            const rres = await rr!.json().catch(() => ({}));
-            if (!rr!.ok) throw new Error(typeof rres?.error === "string" ? rres.error : `Reassembly API ${rr!.status}`);
-           setPublishProgress((c) => ({ ...c, label: `Saving files ${idx + 1}/${files.length}`, value: Math.max(c.value, Math.round(((idx + 1) / Math.max(files.length + 1, 1)) * 88)) }));
-           setStatus(`Files ready. Uploading: ${idx + 1}/${files.length}...`);
-           const sp = sourceProof.files.find((pf) => pf.name === f.name);
-           return { name: f.name, path: fp, bytes: Number(rres.bytes || sp?.bytes || byteLengthFromBase64(f.contentBase64)), sha256: String(rres.sha256 || sp?.sha256 || sha256HexFromBytes(base64ToBytes(base64))), github: { contentSha: typeof rres.github?.contentSha === "string" ? rres.github.contentSha : "", commitSha: typeof rres.github?.commitSha === "string" ? rres.github.commitSha : "", commitUrl: typeof rres.github?.commitUrl === "string" ? rres.github.commitUrl : "", downloadUrl: typeof rres.github?.downloadUrl === "string" ? rres.github.downloadUrl : "" } };
-         };
-
-         for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
-           const file = files[fileIndex];
-           try {
-             const receipt = await uploadOneFile(file, fileIndex);
-             uploadedProofFiles.push(receipt);
-           } catch (uploadErr) {
-             const msg = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
-             setError(`Failed to upload ${file.name}: ${msg}`);
-             setStatus("Upload stopped.");
-             return;
-           }
-         }
-
-        setPublishProgress((current) => ({ ...current, label: "Writing source proof anchor", value: Math.max(current.value, 92) }));
-        const anchorFileName = "blockchain-anchor.json";
-        const anchorPath = joinRepoPath(uploadPath, anchorFileName);
-        const anchorRequestHeaders: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-        if (googleIdToken) anchorRequestHeaders.Authorization = `Bearer ${googleIdToken}`;
-         let blockchainAnchor: BlockchainAnchor | undefined;
-         try {
-           const anchorController = new AbortController();
-           const anchorTimeout = setTimeout(() => anchorController.abort(), 12000);
-           const anchorResponse = await fetch("/api/github-upload", {
-             method: "POST",
-             headers: anchorRequestHeaders,
-             body: JSON.stringify({
-               action: "anchor-source-proof",
-               googleIdToken,
-               anonymousAccount,
-               settings: nextSettings,
-               sourceProof,
-               uploadedFiles: uploadedProofFiles,
-               anchorPath,
-               uploadPath,
-               entryId: uploadId,
-               title: nextSettings.title || existingEntry?.title || spine.label,
-               uploadedAt,
-               proofPath,
-               proofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
-               commitPrefix,
-             }),
-             signal: anchorController.signal,
-           });
-           clearTimeout(anchorTimeout);
-           const anchorResult = await anchorResponse.json().catch(() => ({}));
-           if (anchorResponse.ok) {
-             blockchainAnchor = anchorResult.anchor as BlockchainAnchor | undefined;
-           }
-         } catch { /* blockchain anchor is optional — continue without it */ }
-        const entryFiles = files.map((file) => file.name);
-        if (blockchainAnchor?.anchorPath && !entryFiles.includes(anchorFileName)) entryFiles.push(anchorFileName);
-
-        const entry: LibraryEntry = {
-          id: uploadId,
-          title: nextSettings.title || existingEntry?.title || spine.label,
-          ownerEmail: googleUser?.email || existingEntry?.ownerEmail,
-          ownerName: accountDisplayName || existingEntry?.ownerName || googleUser?.name,
-          ownerPicture: googleUser?.picture || existingEntry?.ownerPicture,
-          publicOwnerId: existingEntry?.publicOwnerId || publicOwnerIdFor(googleUser, anonymousAccount),
-          ownerAnonId: existingEntry?.ownerAnonId || anonymousAccount.id,
-          ownerAnonFingerprint: existingEntry?.ownerAnonFingerprint || anonymousAccount.fingerprint,
-          showOwnerLibrary: existingEntry?.showOwnerLibrary ?? showProfileOnSharedPages,
-          portfolioMode: existingEntry?.portfolioMode ?? isPortfolioMode,
-          hiddenFromPublicLibrary: existingEntry?.hiddenFromPublicLibrary,
-          uploadedAt: existingEntry?.uploadedAt || uploadedAt,
-          webmGeneratedAt: uploadedAt,
-          skeleton: spine.skeletonName,
-          atlas: spine.atlasName,
-          textures: Array.from(new Set(setsForPublish.flatMap((nextSpine) => nextSpine.atlasPages.map(basename)))),
-          animations: animationNames,
-          defaultAnimation,
-          files: entryFiles,
-          previewPath: uploadPath,
-          repositoryUrl: existingEntry?.repositoryUrl || "",
-          ...(note ? { note } : {}),
-          ...(thumbnailPosterPath ? { thumbnail: assetUrlForRepoPath(thumbnailPosterPath, uploadedAt), thumbnailPath: thumbnailPosterPath } : {}),
-          ...(thumbnailPosterPath
-            ? {
-                thumbnailPoster: assetUrlForRepoPath(thumbnailPosterPath, uploadedAt),
-                thumbnailPosterPath,
-                cardSize: selectedCardSize === "auto" ? undefined : selectedCardSize,
-              }
-            : existingEntry?.thumbnailPoster && /^https:\/\//i.test(existingEntry.thumbnailPoster)
-              ? { thumbnailPoster: existingEntry.thumbnailPoster, ...(existingEntry.thumbnailPosterPath ? { thumbnailPosterPath: existingEntry.thumbnailPosterPath } : {}) }
-              : {}),
-          ...(thumbnailPosterPath ? { thumbnailType: "image" } : {}),
-          webmStatus: existingEntry?.webmStatus === "ready" ? "ready" : "pending",
-          sourceProof,
-          sourceProofPath: proofPath,
-          sourceProofUrl: assetUrlForRepoPath(proofPath, uploadedAt),
-          ...(blockchainAnchor ? { blockchainAnchor } : {}),
-        };
-        const indexRequestHeaders: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-        if (googleIdToken) indexRequestHeaders.Authorization = `Bearer ${googleIdToken}`;
-        const indexResponse = await fetch("/api/github-upload", {
-          method: "POST",
-          headers: indexRequestHeaders,
-          body: JSON.stringify({
-            action: "update-index",
-            googleIdToken,
-            anonymousAccount,
-            settings: nextSettings,
-            entry,
-            commitPrefix,
-          }),
-        });
-        const indexResult = await indexResponse.json().catch(() => ({}));
-        if (!indexResponse.ok) {
-          throw new Error(typeof indexResult?.error === "string" ? indexResult.error : `Library API ${indexResponse.status}`);
-        }
-
-        setPublishProgress({ isOpen: true, value: 100, label: "Permanent link ready" });
-        setLibraryEntries((currentEntries) => [entry, ...currentEntries.filter((currentEntry) => currentEntry.id !== entry.id)]);
-        setCurrentLibraryEntry(entry);
-        setIsLibraryOpen(false);
-        setPreviewNote(note);
-        setSelectedCardSize(entry.cardSize || "auto");
-        setGeneratedPreviewUrl(permanentPreviewUrl);
-        setIsLinkBannerOpen(true);
-        setCopyStatus("Permanent link ready");
-        setStatus(`Ready. Animations found: ${animationNames.length}. Uploaded.`);
-        window.setTimeout(() => {
-          setPublishProgress({ isOpen: false, value: 0, label: "" });
-        }, 650);
-        try {
-          localStorage.setItem("__spineUploadComplete", JSON.stringify({ url: permanentPreviewUrl, timestamp: Date.now() }));
-        } catch {}
-        window.dispatchEvent(new CustomEvent("spine-upload-complete", { detail: { url: permanentPreviewUrl } }));
-      } catch (nextError) {
-        setPublishProgress((current) => ({ ...current, isOpen: true, label: "Saving failed" }));
-        window.setTimeout(() => {
-          setPublishProgress({ isOpen: false, value: 0, label: "" });
-        }, 1200);
+      const finalProgress = getPublishProgress();
+      if (finalProgress.status !== "done" || finalProgress.jobId !== uploadId) {
+        // runPublishJob already wrote the visible error; this only stops the
+        // duplicate "published" key from blocking a retry.
         publishedKeysRef.current.delete(publishKey);
-        setStatus(
-          `Ready. Animations found: ${animationNames.length}. Upload failed: ${
-            nextError instanceof Error ? nextError.message : "publishing error"
-          }`,
-        );
-      } finally {
-        isPublishingRef.current = false;
-        setIsPublishingLink(false);
+        setStatus(`Ready. Animations found: ${animationNames.length}. Upload failed: ${finalProgress.error || "publishing error"}`);
       }
+    } catch (nextError) {
+      const message = nextError instanceof Error ? nextError.message : "publishing error";
+      setPublishProgress({ open: true, status: "failed", label: "Saving failed", error: message, jobId: uploadId });
+      publishedKeysRef.current.delete(publishKey);
+      setStatus(`Ready. Animations found: ${animationNames.length}. Upload failed: ${message}`);
+    } finally {
+      isPublishingRef.current = false;
+      setIsPublishingLink(false);
+    }
   }
-
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -5324,18 +5208,44 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         </p>
       </section>
       {isEditPage && <ParticleField mode="quiet" />}
-      {publishProgress.isOpen && (
-        <div className={`publish-progress-overlay ${isPublishProgressCompact ? "is-compact" : ""}`} role="status" aria-live="polite">
+      {publishProgress.open && (
+        <div
+          className={`publish-progress-overlay is-compact is-${publishProgress.status}`}
+          role="status"
+          aria-live="polite"
+        >
           <div className="publish-progress-dialog">
-            <div className="publish-progress-kicker">{currentLibraryEntry ? "Saving page" : "Creating page"}</div>
+            <div className="publish-progress-kicker">{publishProgress.kicker}</div>
             <strong>{publishProgress.label || "Saving Spine preview"}</strong>
-            <div className="publish-progress-bar" aria-label="Conversion and save progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={publishProgress.value}>
-              <span style={{ width: `${Math.min(100, Math.max(0, publishProgress.value))}%` }} />
-            </div>
+            {publishProgress.status === "failed" ? (
+              <p className="publish-progress-error">{publishProgress.error || "Saving failed"}</p>
+            ) : publishProgress.status === "done" && publishProgress.permalink ? (
+              <a className="publish-progress-link" href={publishProgress.permalink}>
+                Open permanent page
+              </a>
+            ) : (
+              <div
+                className="publish-progress-bar"
+                aria-label="Save progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={publishProgress.value}
+              >
+                <span style={{ width: `${Math.min(100, Math.max(0, publishProgress.value))}%` }} />
+              </div>
+            )}
             <div className="publish-progress-meta">
-              <span>Uploading files</span>
-              <b>{Math.min(100, Math.max(0, publishProgress.value))}%</b>
+              <span>{publishProgress.status === "done" ? "Permanent link ready" : "Saving to library"}</span>
+              <b>{publishProgress.status === "failed" ? "!" : `${Math.min(100, Math.max(0, publishProgress.value))}%`}</b>
             </div>
+            <button
+              type="button"
+              className="publish-progress-close"
+              onClick={() => hidePublishProgress()}
+              aria-label="Close save status"
+            >
+              <X size={14} />
+            </button>
           </div>
         </div>
       )}
