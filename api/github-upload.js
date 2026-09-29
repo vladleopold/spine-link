@@ -226,11 +226,6 @@ function generatedThumbnailUrl(origin, entry) {
     : '';
 }
 
-function generatedPreviewWebmUrl(origin, entry) {
-  const id = String(entry?.id || '').trim();
-  return id ? `${origin}/v_holder.webm` : '';
-}
-
 async function dispatchSpineExportWebm(settings, entry, origin) {
   const id = String(entry?.id || '').trim();
   if (!id) return null;
@@ -277,7 +272,10 @@ function publicLibraryEntry(origin, entry) {
   next.webmPreview = /\.webm(?:[?#].*)?$/i.test(String(next.webmPreview || ''))
     ? appendAssetVersion(safeHttpAsset(next.webmPreview), version)
     : '';
-  next.webmPreview = next.webmPreview || derivedMediaFromFiles(origin, entry, ['.webm']) || generatedPreviewWebmUrl(origin, entry);
+  // An entry with no preview of its own gets no video URL at all. Substituting
+  // a shared placeholder here is what made every freshly created page show the
+  // same unrelated clip instead of the entry's own poster.
+  next.webmPreview = next.webmPreview || derivedMediaFromFiles(origin, entry, ['.webm']);
   return next;
 }
 

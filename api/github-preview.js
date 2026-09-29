@@ -1352,7 +1352,7 @@ playerElement.addEventListener("touchstart", (event) => {
 function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo, robots, playerUrl, archiveUrl }) {
   const title = cleanPublicText(entry?.title || entryId || 'Spine preview');
   const poster = entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
-  const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm') || `${origin}/v_holder.webm`;
+  const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
   const ownerUrl = ownerProfile?.url || (entry?.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '/');
   const metricId = String(entryId || title);
   const metric = metricCountsForId(metrics, metricId);
@@ -1373,6 +1373,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
       .back { color: #b3ff40; font-weight: 800; text-decoration: none; }
       .video-card { overflow: hidden; border: 2px solid rgba(255,185,214,.72); border-radius: 8px; background: #111; box-shadow: 0 24px 80px rgba(0,0,0,.42); }
       video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #000; }
+      .video-placeholder { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000 center / cover no-repeat; }
       .body { display: grid; gap: 10px; padding: 18px; background: rgba(17,17,20,.86); }
       h1 { margin: 0; color: #fff; font-size: clamp(28px, 6vw, 48px); line-height: 1; }
       p { margin: 0; color: rgba(237,245,255,.72); font-size: 16px; line-height: 1.45; }
@@ -1388,10 +1389,12 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
     <main class="page">
       <div class="topbar"><div class="brand">Spine-Link</div><a class="back" href="${ownerUrl}">Open portfolio</a></div>
       <section class="video-card">
-        <video id="video-fallback-player" src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted playsinline preload="metadata" autoplay controls></video>
+        ${video
+          ? `<video id="video-fallback-player" src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted playsinline preload="metadata" autoplay controls></video>`
+          : `<div class="video-placeholder" role="img" aria-label="${escapeHtml(title)}"${poster ? ` style="background-image:url('${escapeHtml(poster)}')"` : ''}></div>`}
         <div class="body">
           <h1>${title}</h1>
-          ${note ? `<p>${cleanPublicText(note, 240)}</p>` : '<p>This older library item uses the portfolio video holder because its original Spine source files are no longer available.</p>'}
+          ${note ? `<p>${cleanPublicText(note, 240)}</p>` : '<p>No preview video is available for this item yet.</p>'}
           <button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(metricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button>
           <div class="preview-view-count" data-metric-id="${escapeHtml(metricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div>
         </div>
@@ -1526,7 +1529,7 @@ async function createDynamicPreview(settings, uploadPath, origin) {
         url: `${origin}/p/${encodeURIComponent(String(item?.id || '').trim())}`,
         thumbnail: item?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(item?.thumbnail || '')) ? '' : entryImageAsset(item?.thumbnail || '', item, 'thumbnail'),
         thumbnailPoster: entryImageAsset(item?.thumbnailPoster || '', item, 'poster') || generatedThumbnailUrl(origin, item),
-        webmPreview: entryVideoAsset(item?.webmPreview || '', item, 'webm') || `${origin}/v_holder.webm`,
+        webmPreview: entryVideoAsset(item?.webmPreview || '', item, 'webm'),
         thumbnailType: '',
         animations: Array.isArray(item?.animations) ? item.animations.length : 0,
       }));

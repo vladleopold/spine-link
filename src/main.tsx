@@ -295,7 +295,9 @@ async function loadHomeFeed() {
       card.appendChild(fallback);
     }
 
-    const webmSrc = entry.webmPreview || "";
+    const webmSrc = /(^|\/)v_holder\.webm(?:[?#][^\s"'<>]*)?$/i.test(String(entry.webmPreview || "").trim())
+      ? ""
+      : String(entry.webmPreview || "");
     if (webmSrc) {
       const video = document.createElement("video");
       video.className = "home-feed-video";

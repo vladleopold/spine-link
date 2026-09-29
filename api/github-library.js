@@ -118,11 +118,6 @@ function generatedThumbnailUrl(origin, entry) {
     : '';
 }
 
-function generatedPreviewWebmUrl(origin, entry) {
-  const id = String(entry?.id || '').trim();
-  return id ? `${origin}/v_holder.webm` : '';
-}
-
 function githubHeaders(token) {
   const headers = {
     Accept: 'application/vnd.github+json',
@@ -222,7 +217,9 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
       const rawThumbnail = entryImageAsset(entry.thumbnail || '', entry, 'thumbnail');
       const derivedTexture = derivedMediaFromFiles(origin, entry, ['.png', '.jpg', '.jpeg', '.webp']);
       const thumbnailPoster = entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || derivedTexture;
-      const webmPreview = entryVideoAsset(entry.webmPreview || '', entry, 'webm') || derivedMediaFromFiles(origin, entry, ['.webm']) || generatedPreviewWebmUrl(origin, entry);
+      // No shared placeholder video: a card without its own webm renders the
+      // poster only, so a fresh entry never borrows another entry's clip.
+      const webmPreview = entryVideoAsset(entry.webmPreview || '', entry, 'webm') || derivedMediaFromFiles(origin, entry, ['.webm']);
       const isGifPreview = entry.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(rawThumbnail);
       const thumbnail = isGifPreview ? '' : rawThumbnail;
       const date = entry.uploadedAt ? new Date(entry.uploadedAt) : null;

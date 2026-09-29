@@ -2308,6 +2308,17 @@ function isWebmPreview(value = "") {
   return /^https:\/\/[^\s"'<>]+\.webm(?:[?#][^\s"'<>]*)?$/i.test(value);
 }
 
+// The shared portfolio placeholder clip. It is never an entry's own media, so
+// an entry without a preview must fall back to an empty/black card instead of
+// borrowing a video that belongs to someone else.
+function isSharedPlaceholderMedia(value?: string) {
+  return /(^|\/)v_holder\.webm(?:[?#][^\s"'<>]*)?$/i.test(String(value || "").trim());
+}
+
+function ownEntryWebm(value?: string) {
+  return isSharedPlaceholderMedia(value) ? "" : String(value || "");
+}
+
 async function loadFiles(files: File[]) {
   const usefulFiles = files.filter((file) => isSkeletonFile(file) || isAtlasFile(file) || isImageFile(file));
 
@@ -5445,7 +5456,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                         }
                       : {}),
                   } as React.CSSProperties;
-                  const bestWebm = entry.webmPreview || "";
+                  const bestWebm = ownEntryWebm(entry.webmPreview);
                   const webmSrc = videosEnabled && bestWebm ? bestWebm : undefined;
                   return (
                     <div
@@ -5815,9 +5826,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     sources={
                       currentLibraryEntry
                         ? [
-                            currentLibraryEntry.webmPreviewLow ? withAssetVersion(currentLibraryEntry.webmPreviewLow, assetVersionForLibraryEntry(currentLibraryEntry, "webm")) : "",
-                            currentLibraryEntry.webmPreviewMedium ? withAssetVersion(currentLibraryEntry.webmPreviewMedium, assetVersionForLibraryEntry(currentLibraryEntry, "webm")) : "",
-                            currentLibraryEntry.webmPreview ? withAssetVersion(currentLibraryEntry.webmPreview, assetVersionForLibraryEntry(currentLibraryEntry, "webm")) : "",
+                            ownEntryWebm(currentLibraryEntry.webmPreviewLow) ? withAssetVersion(currentLibraryEntry.webmPreviewLow || "", assetVersionForLibraryEntry(currentLibraryEntry, "webm")) : "",
+                            ownEntryWebm(currentLibraryEntry.webmPreviewMedium) ? withAssetVersion(currentLibraryEntry.webmPreviewMedium || "", assetVersionForLibraryEntry(currentLibraryEntry, "webm")) : "",
+                            ownEntryWebm(currentLibraryEntry.webmPreview) ? withAssetVersion(currentLibraryEntry.webmPreview || "", assetVersionForLibraryEntry(currentLibraryEntry, "webm")) : "",
                           ]
                         : []
                     }
@@ -6242,7 +6253,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 const previewUrl = previewUrlForEntry(entry.id, entry.defaultAnimation);
                 const editUrl = new URL(`/?edit=${encodeURIComponent(entry.id)}`, window.location.origin).toString();
                 const uploadedDate = entry.uploadedAt ? new Date(entry.uploadedAt) : null;
-                const bestWebmPreview = entry.webmPreviewLow || entry.webmPreviewMedium || entry.webmPreview || "";
+                const bestWebmPreview = ownEntryWebm(entry.webmPreviewLow || entry.webmPreviewMedium || entry.webmPreview);
                 const webmPreviewUrl = isWebmPreview(bestWebmPreview)
                   ? withAssetVersion(bestWebmPreview, assetVersionForLibraryEntry(entry, "webm"))
                   : derivedLibraryAssetUrl(entry, [".webm"]);
