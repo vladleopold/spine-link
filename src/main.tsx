@@ -196,6 +196,33 @@ function wireHomeShell() {
     });
   });
 
+  // The file input is stretched over the whole drop zone so the label can act
+  // as a click target, which puts it directly under the pointer during a real
+  // drag. Chrome does not fire `drop` on a file input and swallows the event,
+  // so dropping a file onto the panel did nothing at all. Intercepting in the
+  // capture phase means the drop is handled before the input ever sees it,
+  // while clicks are left alone so click-to-pick keeps working.
+  const homeZone = root.querySelector<HTMLElement>("#home-drop-zone");
+  if (homeZone) {
+    const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
+    const zoneDragOver = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    };
+    const zoneDrop = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      renderHomeShell(false);
+      if (files.length) receiveFiles(files);
+    };
+    homeZone.addEventListener("dragover", zoneDragOver, true);
+    homeZone.addEventListener("drop", zoneDrop, true);
+  }
+
   const bootFileInput = root.querySelector<HTMLInputElement>("[data-file-input]");
   const handleBootFileInput = (event: Event) => {
     const input = event.currentTarget as HTMLInputElement;

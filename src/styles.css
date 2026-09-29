@@ -1977,6 +1977,13 @@ h1 {
   height: 100%;
   opacity: 0;
   cursor: pointer;
+  /* A file input stretched over the whole zone was the topmost element under
+     the dashed frame, and Chrome does not fire `drop` on a file input: it
+     swallows the drop, so dragging a file onto the panel did nothing. It has
+     to stay clickable though, because `pointer-events: none` stops the label
+     from activating it and silently breaks click-to-pick. Keep the input on
+     top for clicks but let real drags reach the page: the drop handlers on
+     the zone stop propagation before the input ever sees the event. */
   pointer-events: auto;
 }
 
