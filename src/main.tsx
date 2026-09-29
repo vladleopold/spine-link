@@ -630,6 +630,19 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
   // GitHub rate limits and transient 5xx responses are shared by every
   // anonymous upload, so replay a failed chunk instead of aborting the file.
   const CHUNK_ATTEMPTS = 3;
+  // Honour GitHub's own backoff when it tells us how long to wait, otherwise
+  // back off exponentially with jitter so concurrent uploads don't resynchronise
+  // and all retry in lockstep. Capped so a wedged upload still fails visibly
+  // instead of hanging forever.
+  const chunkRetryDelayMs = (response: Response, payload: any, attempt: number) => {
+    const header = Number(response.headers.get("Retry-After"));
+    const body = Number(payload?.retryAfter);
+    const asked = Number.isFinite(header) && header > 0 ? header * 1000
+      : Number.isFinite(body) && body > 0 ? body * 1000
+        : 0;
+    if (asked > 0) return Math.min(asked, 60_000);
+    return Math.min(400 * 2 ** attempt + Math.floor(Math.random() * 250), 10_000);
+  };
   const totalChunks = Math.ceil(base64.length / CHUNK_SIZE);
   const uploadId = String(data.uploadId || "");
   let chunkIndex = 0;
@@ -653,6 +666,12 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
     // A failed chunk is not fatal: the server derives the chunk path from
     // uploadPath + fileName + chunkIndex and writes it idempotently, so
     // replaying the identical body is safe.
+    //
+    // Every anonymous upload shares one GITHUB_TOKEN, so GitHub rate limits
+    // arrive as 429 + Retry-After. Replaying immediately just burns the window
+    // and loses the file, so wait out whatever GitHub asked for. The server's
+    // own message is logged because a bare "500" in the console is useless
+    // for diagnosing it.
     for (let attempt = 0; attempt < CHUNK_ATTEMPTS; attempt += 1) {
       try {
         const response = await fetch(url, {
@@ -662,17 +681,22 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
           keepalive: true,
         });
         if (response.ok) return sendChunk();
-        if (attempt < CHUNK_ATTEMPTS - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
-          continue;
+        const payload = await response.json().catch(() => ({}));
+        if (attempt === CHUNK_ATTEMPTS - 1) {
+          console.error(
+            `[spine] upload chunk ${chunkIndex}/${totalChunks} for ${file.name} failed: HTTP ${response.status}`,
+            payload?.error || payload,
+          );
+          return { ok: false, status: response.status, data: payload };
         }
-        return { ok: false, status: response.status, data: await response.json().catch(() => ({})) };
-      } catch {
-        if (attempt < CHUNK_ATTEMPTS - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
-          continue;
+        const waitMs = chunkRetryDelayMs(response, payload, attempt);
+        if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+      } catch (error) {
+        if (attempt === CHUNK_ATTEMPTS - 1) {
+          console.error(`[spine] upload chunk ${chunkIndex}/${totalChunks} for ${file.name} failed:`, error);
+          return { ok: false, status: 0 };
         }
-        return { ok: false, status: 0 };
+        await new Promise((resolve) => setTimeout(resolve, 400 * 2 ** attempt));
       }
     }
     return { ok: false, status: 0 };

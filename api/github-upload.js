@@ -603,6 +603,24 @@ function githubRetryDelay(attempt) {
   return 250 * 2 ** attempt + Math.floor(Math.random() * 200);
 }
 
+// A GitHub rate limit is not a server fault: it means "come back later", and
+// every anonymous upload shares one GITHUB_TOKEN, so the limit hits all users
+// at once. Surfacing that as a 500 made the browser look broken and gave the
+// client nothing to act on. Hand it back as 429 with the window GitHub gave us
+// so the client can wait it out instead of hammering and losing the upload.
+function githubFailure(verb, path, response) {
+  const status = response?.status ?? 0;
+  const message = `Storage ${verb} failed for ${path}: ${status}`;
+  if (status !== 403 && status !== 429) return new Error(message);
+  const rateLimited = new Error(message);
+  rateLimited.statusCode = 429;
+  const reset = Number(response?.headers?.get?.('x-ratelimit-reset'));
+  const retryAfter = Number(response?.headers?.get?.('retry-after'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) rateLimited.retryAfter = Math.ceil(retryAfter);
+  else if (Number.isFinite(reset) && reset > 0) rateLimited.retryAfter = Math.max(1, Math.ceil(reset - Date.now() / 1000));
+  return rateLimited;
+}
+
 async function getGitHubContent(settings, path) {
   const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
   let response = null;
@@ -626,7 +644,7 @@ async function getGitHubContent(settings, path) {
   }
 
   if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`Storage did not return ${path}: ${response.status}`);
+  if (!response.ok) throw githubFailure('read', path, response);
 
   const data = await response.json();
   // GitHub Contents API omits the body for files larger than 1MB
@@ -679,7 +697,7 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
         lastError = new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`);
         continue;
       }
-      throw new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`);
+      throw githubFailure('write', path, response);
     } catch (err) {
       lastError = err;
       if (attempt < GITHUB_RETRY_ATTEMPTS - 1) {
@@ -1481,10 +1499,15 @@ export default async function handler(request, response) {
        dispatch,
      });
   } catch (error) {
-    const statusCode = Number(error?.statusCode) || 500;
+    const rateLimited = Number(error?.statusCode) === 429;
+    const statusCode = rateLimited ? 429 : (Number(error?.statusCode) || 500);
     const message = error instanceof Error ? error.message : 'Upload failed';
-    console.error('[UPLOAD] error:', message);
+    console.error(`[UPLOAD] error (action=${action || 'unknown'}):`, message);
     if (error instanceof Error && error.stack) console.error('[UPLOAD] stack:', error.stack);
-    return response.status(statusCode).json({ error: message });
+    // Tell the browser how long GitHub wants us to wait, so it backs off
+    // instead of replaying the chunk and losing the whole upload.
+    const retryAfter = Number(error?.retryAfter);
+    if (rateLimited && Number.isFinite(retryAfter) && retryAfter > 0) response.setHeader('Retry-After', String(retryAfter));
+    return response.status(statusCode).json({ error: message, ...(rateLimited ? { retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null } : {}) });
   }
 }
