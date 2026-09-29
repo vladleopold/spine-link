@@ -77,7 +77,10 @@ body {
   will-change: auto;
 }
 
-body > :not(.particle-field--seo):not(.spine-low-power-particles) {
+body
+  > :not(.particle-field--seo):not(.spine-low-power-particles):not(
+    .publish-progress-overlay
+  ) {
   position: relative;
   z-index: 1;
 }
