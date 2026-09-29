@@ -1344,6 +1344,7 @@ playerElement.addEventListener("touchstart", (event) => {
     </script>
     <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(entryMetricId)} };</script>
     <script src="/spine-metrics.js" defer></script>
+    <script src="/drop-handoff.js" defer></script>
   </body>
 </html>`;
 }
@@ -1407,6 +1408,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
     </script>
     <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(metricId)} };</script>
     <script src="/spine-metrics.js" defer></script>
+    <script src="/drop-handoff.js" defer></script>
   </body>
 </html>`;
 }

@@ -482,6 +482,52 @@ const shouldOpenAdmin = bootSearchParams.get("admin") === "1";
 
 renderHomeShell();
 
+const DROP_CACHE = "spine-drop-handoff";
+
+/**
+ * Pick up files parked by public/drop-handoff.js. The server-rendered pages
+ * (world archive, /p/:id) ship no app bundle, so a drop there is stored in the
+ * Cache API and the browser is sent to /?upload=work&restored=1. This reads
+ * them back and hands them to the normal pipeline, then clears the cache so a
+ * reload never resurrects a stale drop.
+ */
+async function restoreDroppedFiles(): Promise<void> {
+  if (typeof caches === "undefined") return;
+  let names: { key: string; name: string; type: string; lastModified: number }[];
+  try {
+    const cache = await caches.open(DROP_CACHE);
+    const hit = await cache.match(new Request("/__spine_drop__/manifest", { cache: "no-store" }));
+    if (!hit) return;
+    names = JSON.parse(await hit.text());
+    await Promise.all(
+      names.map((entry) =>
+        cache.match(new Request(entry.key, { cache: "no-store" })).then((response) => response?.blob())
+      )
+    ).then((blobs) => {
+      const files = blobs
+        .map((blob, index) => {
+          if (!blob || !names[index]) return null;
+          return new File([blob], names[index].name, {
+            type: names[index].type,
+            lastModified: names[index].lastModified,
+          });
+        })
+        .filter((file): file is File => Boolean(file));
+      if (files.length) receiveFiles(files);
+    });
+  } catch {
+    return;
+  } finally {
+    try {
+      await caches.delete(DROP_CACHE);
+    } catch {}
+  }
+}
+
+if (bootSearchParams.get("restored") === "1") {
+  void restoreDroppedFiles();
+}
+
 // The heavy React app loads ONLY when the user actually needs it:
 // upload, portfolio, login, edit, or admin pages. The homepage stays
 // a static lightweight shell with a CSS-transform poster feed.

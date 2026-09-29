@@ -895,6 +895,7 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
     </main>
     <script>window.SpineLinkMetricsConfig = {};</script>
     <script src="/spine-metrics.js" defer></script>
+    <script src="/drop-handoff.js" defer></script>
     <script>
       const archiveRulesState = ${archiveRulesJson};
       const archiveGoogleClientId = "${googleClientId}";
@@ -1760,6 +1761,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
     </main>
     <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(entryId)} };</script>
     <script src="/spine-metrics.js" defer></script>
+    <script src="/drop-handoff.js" defer></script>
   </body>
 </html>`;
 }
@@ -1994,6 +1996,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
     </main>
     <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(entryId)} };</script>
     <script src="/spine-metrics.js" defer></script>
+    <script src="/drop-handoff.js" defer></script>
   </body>
 </html>`;
 }
