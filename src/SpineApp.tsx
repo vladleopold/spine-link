@@ -940,9 +940,11 @@ function sanitizeSkeletonData(json: unknown): unknown {
 
 function sanitizeSkeletonJson(json: unknown): unknown {
   if (!json || typeof json !== "object") return json;
-  const skins = (json as Record<string, unknown>).skins as Record<string, unknown>[] | undefined;
+  const skins = (json as Record<string, unknown>).skins as Record<string, unknown> | Record<string, unknown>[] | undefined;
   if (!skins) return json;
-  const attachments = skins.flatMap((skin) => Object.values(skin || {})) || [];
+  // Spine 4.x exports skins as an object keyed by skin name, older exports as an array.
+  const skinList = Array.isArray(skins) ? skins : Object.values(skins);
+  const attachments = skinList.flatMap((skin) => Object.values(skin || {})) || [];
   for (const slotAttachments of attachments) {
     if (!slotAttachments || typeof slotAttachments !== "object") continue;
     const attachmentValues = Object.values(slotAttachments as Record<string, unknown>);
