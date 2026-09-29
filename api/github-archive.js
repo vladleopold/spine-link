@@ -1496,6 +1496,7 @@ function archiveHtml({ origin, entries, metrics }) {
         if (!finished) new IntersectionObserver((records) => { if (records.some((record) => record.isIntersecting)) loadMore(); }, { rootMargin: '500px' }).observe(sentinel);
       })();
     </script>
+    <script src="/drop-handoff.js" defer></script>
   </body>
 </html>`;
 }
