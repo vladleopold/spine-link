@@ -490,13 +490,22 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     video.muted = true;
     video.loop = true;
     video.playsInline = true;
+    video.preload = "auto";
+
     const start = () => {
       try { video.currentTime = 0; } catch {}
       void video.play().catch(() => undefined);
     };
-    if (video.readyState >= 1) start();
-    else video.addEventListener("loadedmetadata", start, { once: true });
-    if (!video.currentSrc) video.load();
+
+    if (video.readyState >= 1) {
+      start();
+      return;
+    }
+    // Метаданные ещё не пришли: дожидаемся их и запускаем ролик.
+    video.addEventListener("loadedmetadata", start, { once: true });
+    video.load();
+    // Страховка: если событие уже прошло мимо слушателя.
+    setTimeout(start, 350);
   };
 
   function clearPhaseTimer() {
@@ -504,24 +513,14 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     phaseTimer = null;
   }
 
-  /**
-   * Показ сцены длится столько, сколько крутится с��мый длинный ролик:
-   * группа уезжает, только когда все анимации в ней отыграли свой цикл.
-   */
-  function holdDuration(): number {
-    const longest = scene.reduce((max, card) => {
-      const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
-      const duration = video?.duration;
-      return duration && Number.isFinite(duration) ? Math.max(max, duration) : max;
-    }, 0);
-    // Если длительность ещё неизвестна, держим кадр достаточно, чтобы
-    // первый ролик успел начаться, иначе сцена уедет пустой.
-    return (longest || 6) * 1000 + 900;
-  }
+  /** Каждая сцена показывается ровно SCENE_MS, затем уезжает. */
+  const SCENE_MS = 8000;
 
   function scheduleNext(token: number) {
     clearPhaseTimer();
-    phaseTimer = setTimeout(() => runScene(token), phase === "out" ? 220 : holdDuration());
+    // Въезд идёт в начале сцены, выезд занимает отдельные ~1с.
+    const delay = phase === "in" ? SCENE_MS - 900 : phase === "out" ? 1000 : 0;
+    phaseTimer = setTimeout(() => runScene(token), delay);
   }
 
   function runScene(token: number) {
