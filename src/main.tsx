@@ -341,8 +341,9 @@ async function loadHomeFeed() {
   }
   if (!entries.length) return;
 
-  const fragment = document.createDocumentFragment();
-  const pushCard = (entry: HomeFeedItem) => {
+  // Карточки переиспользуются по кругу: движок сцен берёт их из этого
+  // массива в случайном порядке, поэтому заново создавать их не нужно.
+  const pushCard = (entry: HomeFeedItem): HTMLElement | null => {
     const id = String(entry.id || "");
     const title = String(entry.title || id || "Spine preview");
     const ownerName = String(entry.ownerName || "Spine creator");
@@ -412,131 +413,187 @@ async function loadHomeFeed() {
     overlay.appendChild(em);
     card.appendChild(overlay);
 
-    fragment.appendChild(card);
+    return card;
   };
 
-  entries.slice(0, 12).forEach(pushCard);
-
-  track.appendChild(fragment);
-  const cards = track.querySelectorAll(".home-feed-card");
-  const cloneFragment = document.createDocumentFragment();
-  cards.forEach((card) => {
-    cloneFragment.appendChild(card.cloneNode(true));
+  const cards: HTMLElement[] = [];
+  entries.forEach((entry) => {
+    const card = pushCard(entry);
+    if (card) cards.push(card);
   });
-  track.appendChild(cloneFragment);
-  track.classList.add("is-scrolling");
+  if (!cards.length) return;
+
+  // Ряд сцен: движок сцен кладёт сюда очередную группу карточек.
+  const viewport = track.parentElement;
+  if (viewport) viewport.replaceChildren(track);
+  track.textContent = "";
+  track.classList.add("home-feed-lane");
   feedSection.style.display = "";
 
-  startHomeFeedAutoplay(track);
+  startHomeFeedScenes(track, cards, viewport);
 }
 
-function startHomeFeedAutoplay(track: HTMLElement) {
+/**
+ * Лента анимаций внизу главной.
+ *
+ * Работает сценами: за раз на экран выезжают 2–3 анимации справа налево и
+ * проигрываются по кругу. Когда отыграл самый длинный ролик в группе, группа
+ * уезжает влево, а справа приходит следующая — случайная выборка из всех
+ * работ. По кругу повторяется бесконечно.
+ */
+function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: HTMLElement | null) {
   const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   const saveData = Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
-  if (prefersReducedMotion || saveData) return;
+
+  // Без движения лента просто показывает работы и не грузит видео.
+  if (prefersReducedMotion || saveData) {
+    lane.classList.add("is-static");
+    cards.slice(0, 3).forEach((card) => lane.appendChild(card));
+    return;
+  }
+
+  // Ровно две анимации в сцене: на широком экране они стоят рядом,
+  // на узком — столбиком, и обе помещаются целиком.
+  const sceneSize = () => 2;
+
+  let pool = cards.slice();
+  let scene: HTMLElement[] = [];
+  let phase: "in" | "hold" | "out" = "in";
+  let phaseTimer: ReturnType<typeof setTimeout> | null = null;
+  let runToken = 0;
+
+  /** Тасует копию массива: выбор анимаций абсолютно случайный. */
+  function shuffle<T>(items: T[]): T[] {
+    const copy = items.slice();
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+
+  /** Добирает случайные карточки, каждый круг берём их заново. */
+  function drawScene(): HTMLElement[] {
+    const size = sceneSize();
+    if (pool.length < size) pool = shuffle(cards);
+    const picked: HTMLElement[] = [];
+    for (let i = 0; i < size; i++) picked.push(pool.pop() as HTMLElement);
+    return picked;
+  }
 
   const stopVideo = (video: HTMLVideoElement) => {
-    video.pause();
-    video.onended = null;
+    try { video.pause(); } catch {}
     try { video.currentTime = 0; } catch {}
   };
 
   const playVideo = (video: HTMLVideoElement) => {
-    if (!video.currentSrc && !video.src) return;
     video.muted = true;
-    video.loop = false;
+    video.loop = true;
     video.playsInline = true;
-    const doPlay = () => {
+    const start = () => {
       try { video.currentTime = 0; } catch {}
       void video.play().catch(() => undefined);
     };
-    if (video.readyState >= 1) {
-      doPlay();
-    } else {
-      video.onloadedmetadata = doPlay;
-      video.load();
-    }
+    if (video.readyState >= 1) start();
+    else video.addEventListener("loadedmetadata", start, { once: true });
+    if (!video.currentSrc) video.load();
   };
 
-  const visibleCards = new Set<Element>();
-  let currentPlayIdx = 0;
-  let rotationTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const stopAllVisible = () => {
-    visibleCards.forEach((card) => {
-      const v = (card as HTMLElement).querySelector<HTMLVideoElement>(".home-feed-video");
-      if (v && !v.paused) stopVideo(v);
-    });
-  };
-
-  const rotateVisible = () => {
-    const cardsArr = Array.from(visibleCards);
-    if (!cardsArr.length) { rotationTimer = null; return; }
-
-    stopAllVisible();
-
-    if (currentPlayIdx >= cardsArr.length) currentPlayIdx = 0;
-    const card = cardsArr[currentPlayIdx];
-    const video = (card as HTMLElement).querySelector<HTMLVideoElement>(".home-feed-video");
-    if (video) playVideo(video);
-
-    rotationTimer = setTimeout(() => {
-      currentPlayIdx = (currentPlayIdx + 1) % cardsArr.length;
-      rotateVisible();
-    }, 3500);
-  };
-
-  const scheduleRotate = () => {
-    if (rotationTimer) clearTimeout(rotationTimer);
-    rotationTimer = null;
-    if (visibleCards.size > 0) {
-      currentPlayIdx = 0;
-      rotateVisible();
-    }
-  };
-
-  if ("IntersectionObserver" in window) {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        let changed = false;
-        entries.forEach((entry) => {
-          const video = (entry.target as HTMLElement).querySelector<HTMLVideoElement>(".home-feed-video");
-          if (!video) return;
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
-            visibleCards.add(entry.target);
-            if (video.readyState < 2) { video.preload = "metadata"; video.load(); }
-            changed = true;
-          } else if (visibleCards.has(entry.target)) {
-            visibleCards.delete(entry.target);
-            stopVideo(video);
-            changed = true;
-          }
-        });
-        if (changed) scheduleRotate();
-      },
-      { threshold: [0, 0.15, 0.5, 1] },
-    );
-    track.querySelectorAll<HTMLElement>(".home-feed-card").forEach((card) => observer.observe(card));
+  function clearPhaseTimer() {
+    if (phaseTimer) clearTimeout(phaseTimer);
+    phaseTimer = null;
   }
 
-  const handleVisibilityChange = () => {
-    if (document.hidden) {
-      if (rotationTimer) clearTimeout(rotationTimer);
-      rotationTimer = null;
-      track.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
-    } else {
-      scheduleRotate();
+  /**
+   * Показ сцены длится столько, сколько крутится с��мый длинный ролик:
+   * группа уезжает, только когда все анимации в ней отыграли свой цикл.
+   */
+  function holdDuration(): number {
+    const longest = scene.reduce((max, card) => {
+      const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
+      const duration = video?.duration;
+      return duration && Number.isFinite(duration) ? Math.max(max, duration) : max;
+    }, 0);
+    // Если длительность ещё неизвестна, держим кадр достаточно, чтобы
+    // первый ролик успел начаться, иначе сцена уедет пустой.
+    return (longest || 6) * 1000 + 900;
+  }
+
+  function scheduleNext(token: number) {
+    clearPhaseTimer();
+    phaseTimer = setTimeout(() => runScene(token), phase === "out" ? 220 : holdDuration());
+  }
+
+  function runScene(token: number) {
+    if (token !== runToken) return;
+
+    if (phase === "out" || !scene.length) {
+      // Перед новой сценой возвращаем ленту за правый край, иначе смена
+      // случится мгновенно, без въезда.
+      lane.classList.add("is-scored");
+      scene.forEach((card) => {
+        const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
+        if (video) stopVideo(video);
+      });
+      lane.textContent = "";
+      scene = drawScene();
+      scene.forEach((card) => lane.appendChild(card));
+      lane.classList.remove("is-scored");
+      phase = "in";
+      // Въезд: карточки стартуют за правым краем и уезжают на свои места.
+      requestAnimationFrame(() => {
+        if (token !== runToken) return;
+        lane.classList.add("is-onstage");
+        scene.forEach((card) => {
+          const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
+          if (video) playVideo(video);
+        });
+      });
+      scheduleNext(token);
+      return;
     }
-  };
+
+    // Первая фаза сцены: ждём, пока въезд закончится, и запускаем видео.
+    if (phase === "in") {
+      phase = "hold";
+      scheduleNext(token);
+      return;
+    }
+
+    // Все ролики отыграли цикл — уводим группу влево.
+    phase = "out";
+    lane.classList.add("is-scored");
+    lane.classList.remove("is-onstage");
+    scheduleNext(token);
+  }
+
+  function handleVisibilityChange() {
+    if (document.hidden) {
+      runToken++;
+      clearPhaseTimer();
+      scene.forEach((card) => {
+        const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
+        if (video) stopVideo(video);
+      });
+    } else {
+      runToken++;
+      phase = "out";
+      runScene(runToken);
+    }
+  }
+
   document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("pagehide", () => {
-    if (rotationTimer) clearTimeout(rotationTimer);
-    track.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+    runToken++;
+    clearPhaseTimer();
+    scene.forEach((card) => {
+      const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
+      if (video) stopVideo(video);
+    });
   });
 
-  setTimeout(scheduleRotate, 500);
+  runScene(runToken);
 }
-
 function renderLoadingShell() {
   if (!root) return;
   bootDraggingState = null;

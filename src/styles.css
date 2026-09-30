@@ -953,31 +953,50 @@ h1 {
   overflow: hidden;
 }
 
-.home-feed-track {
-  display: grid;
-  grid-template-rows: repeat(3, 160px);
-  grid-auto-columns: 240px;
-  grid-auto-flow: column;
-  width: max-content;
+/* Лента анимаций: сцена из 2–3 карточек выезжает справа, проигрывается
+   и уезжает влево. Двигает JS-движок через .is-onstage. */
+.home-feed-track,
+.home-feed-lane {
+  display: flex;
+  align-items: stretch;
   gap: 10px;
+  width: 100%;
+  height: 100%;
   padding: 10px;
 }
 
-.home-feed-track.is-scrolling {
-  animation: home-feed-scroll 60s linear infinite;
+.home-feed-lane {
+  transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
-.home-feed-track.is-scrolling:hover {
-  animation-play-state: paused;
+/* Три состояния сцены: за правым краем (ждёт) → на сцене → за левым (уходит).
+   Без .is-scored сцена считается ещё не въехавшей. */
+.home-feed-lane:not(.is-scored):not(.is-onstage) {
+  transform: translateX(100%);
 }
 
-@keyframes home-feed-scroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+.home-feed-lane.is-scored:not(.is-onstage) {
+  transform: translateX(-100%);
+}
+
+.home-feed-lane.is-onstage {
+  transform: translateX(0);
+}
+
+/* Пауза при наведении, чтобы можно было рассмотреть кадр. */
+.home-feed-lane:hover {
+  transition-duration: 0ms;
+}
+
+.home-feed-lane.is-static {
+  justify-content: center;
 }
 
 .home-feed-card {
   position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   height: 100%;
   aspect-ratio: auto;
 }
@@ -5513,8 +5532,26 @@ h1 {
   }
 
   .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
-    flex-basis: clamp(220px, min(var(--home-feed-card-width, 340px), 72vw), 480px);
+    flex: 1 1 0;
     height: clamp(132px, 15svh, 190px);
+  }
+
+  /* На узких экранах две карточки идут столбиком: лента выше, но
+     обе анимации помещаются целиком и не обрезаются по краям. */
+  .app-shell.is-empty:not(.is-edit-page) .home-portfolio-feed {
+    height: clamp(330px, 44svh, 430px);
+  }
+
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-lane {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-lane .home-feed-card {
+    flex: 1 1 0;
+    min-height: 0;
+    width: 100%;
   }
 
   .app-shell.is-empty:not(.is-edit-page) .stage {
@@ -6811,8 +6848,26 @@ h1 {
   }
 
   .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
-    flex-basis: clamp(220px, min(var(--home-feed-card-width, 340px), 72vw), 480px);
+    flex: 1 1 0;
     height: clamp(132px, 15svh, 190px);
+  }
+
+  /* На узких экранах две карточки идут столбиком: лента выше, но
+     обе анимации помещаются целиком и не обрезаются по краям. */
+  .app-shell.is-empty:not(.is-edit-page) .home-portfolio-feed {
+    height: clamp(330px, 44svh, 430px);
+  }
+
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-lane {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-lane .home-feed-card {
+    flex: 1 1 0;
+    min-height: 0;
+    width: 100%;
   }
 
   .app-shell.is-empty:not(.is-edit-page) .stage {
