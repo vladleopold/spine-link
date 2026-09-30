@@ -7830,16 +7830,18 @@ h1 {
     display: flex !important;
     flex-wrap: wrap;
     align-content: flex-start;
-    align-items: stretch;
+    align-items: flex-start;
     gap: 8px 10px;
     width: max-content;
     height: 100%;
     padding: 8px 0 !important;
   }
 
+  /* Две карточки в ряд: ширину считает JS как половину окна минус зазор,
+     здесь лишь ограничиваем высоту половиной ленты. */
   .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
-    flex: 0 0 var(--home-feed-card-width, 180px) !important;
-    width: var(--home-feed-card-width, 180px);
+    flex: 0 0 var(--home-feed-card-width, 46vw) !important;
+    width: var(--home-feed-card-width, 46vw);
     height: calc(50% - 4px) !important;
     min-height: 0;
     aspect-ratio: auto;

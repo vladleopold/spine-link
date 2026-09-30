@@ -469,7 +469,10 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     const count = visibleCount();
     const gap = 10;
     const padding = 20;
-    return Math.max(120, (width - padding - gap * (count - 1)) / count);
+    // На мобильных карточки идут в две строки: в ряд помещаются две,
+    // поэтому их ширина — половина окна, а не доля от числа видимых.
+    const perRow = width < 760 ? 2 : count;
+    return Math.max(120, (width - padding - gap * (perRow - 1)) / perRow);
   };
 
   /** Лента всегда едет влево: горизонтальное движение на всех экранах. */
