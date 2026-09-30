@@ -469,22 +469,22 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
   }
 
   // Две ленты: текущая (на экране) и следующая (готовится справа).
-  // #home-feed-track остаётся контейнером, а ленты переезжают внутрь него.
-  const stage = document.createElement("div");
-  stage.className = "home-feed-stage";
-  const outgoing = document.createElement("div");
-  outgoing.className = "home-feed-lane";
-  const incoming = document.createElement("div");
-  incoming.className = "home-feed-lane is-waiting";
-  incoming.setAttribute("aria-hidden", "true");
+  // Обе лежат в контейнере #home-feed-track и после каждой сцены
+  // меняются ролями: текущая уходит влево, следующая выходит на её место.
+  const laneA = document.createElement("div");
+  laneA.className = "home-feed-lane";
+  const laneB = document.createElement("div");
+  laneB.className = "home-feed-lane is-waiting";
+  laneB.setAttribute("aria-hidden", "true");
 
-  stage.appendChild(outgoing);
-  stage.appendChild(incoming);
   lane.textContent = "";
-  lane.appendChild(stage);
+  lane.appendChild(laneA);
+  lane.appendChild(laneB);
 
-  let currentCards = nextCards(sceneSize());
-  let nextCardsSet: HTMLElement[] = [];
+  // Роли лент: current — та, что на экране, waiting — та, что готовится.
+  let current: HTMLElement = laneA;
+  let waiting: HTMLElement = laneB;
+
 
   const stopVideo = (video: HTMLVideoElement) => {
     try { video.pause(); } catch {}
@@ -533,46 +533,44 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
   function swap() {
     const myToken = token;
 
-    // Готовим следующую сцену за правым краем.
-    nextCardsSet = nextCards(sceneSize());
-    fill(incoming, nextCardsSet);
+    // Готовим следующую сцену в ленте, которая стоит за правым краем.
+    fill(waiting, nextCards(sceneSize()));
 
-    // Обе ленты одновременно едут: текущая — влево, следующая — на место.
+    // Обе ленты едут одновременно: текущая — влево, ожидающая — на место.
     requestAnimationFrame(() => {
       if (myToken !== token) return;
-      outgoing.classList.add("is-exiting");
-      incoming.classList.remove("is-waiting");
+      current.classList.add("is-exiting");
+      waiting.classList.remove("is-waiting");
     });
 
     schedule(() => {
       if (myToken !== token) return;
-      empty(outgoing);
-      outgoing.classList.remove("is-exiting");
 
-      // Ленты меняются местами: бывшая следующая становится текущей.
-      const temp = outgoing;
-      outgoing.replaceWith(incoming);
-      incoming.replaceWith(temp);
-      incoming.classList.remove("is-exiting");
-      incoming.classList.add("is-waiting");
+      // Ушедшая влево лента освобождается и становится правой.
+      empty(current);
+      current.classList.remove("is-exiting");
 
-      currentCards = nextCardsSet;
-      nextCardsSet = [];
+      const used = current;
+      current = waiting;
+      waiting = used;
+      waiting.classList.add("is-waiting");
+
       swap();
     }, SLIDE_MS + 120);
   }
 
-  fill(outgoing, currentCards);
+  fill(current, nextCards(sceneSize()));
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       token++;
       if (timer) clearTimeout(timer);
-      outgoing.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
-      incoming.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+      laneA.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+      laneB.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
     } else {
       token++;
-      outgoing.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
+      laneA.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
+      laneB.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
       swap();
     }
   });
@@ -580,8 +578,8 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
   window.addEventListener("pagehide", () => {
     token++;
     if (timer) clearTimeout(timer);
-    outgoing.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
-    incoming.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+    laneA.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+    laneB.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
   });
 
   swap();
