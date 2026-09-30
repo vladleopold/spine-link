@@ -7824,22 +7824,24 @@ h1 {
     min-height: 0;
   }
 
+  /* Мобильная лента: две строки карточек, движение горизонтальное.
+     Ширину карточки задаёт JS, поэтому жёстко её не фиксируем. */
   .app-shell.is-empty:not(.is-edit-page) .home-feed-track {
-    display: grid !important;
-    grid-auto-flow: column;
-    grid-template-rows: repeat(3, minmax(0, 1fr));
-    grid-auto-columns: clamp(150px, 44vw, 220px);
+    display: flex !important;
+    flex-wrap: wrap;
+    align-content: flex-start;
     align-items: stretch;
     gap: 8px 10px;
+    width: max-content;
     height: 100%;
     padding: 8px 0 !important;
   }
 
   .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
-    width: 100%;
-    height: 100% !important;
+    flex: 0 0 var(--home-feed-card-width, 180px) !important;
+    width: var(--home-feed-card-width, 180px);
+    height: calc(50% - 4px) !important;
     min-height: 0;
-    flex-basis: auto !important;
     aspect-ratio: auto;
   }
 
