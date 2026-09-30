@@ -1003,6 +1003,12 @@ h1 {
   transform: translateX(-100%);
 }
 
+/* На один кадр переход выключается: лента переставляется вправо без
+   проезда через весь экран. */
+.home-feed-lane.is-reset {
+  transition: none;
+}
+
 /* Пауза при наведении, чтобы можно было рассмотреть кадр. */
 .home-feed-lane:hover {
   transition-duration: 0ms;

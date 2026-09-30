@@ -548,12 +548,16 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
 
       // Ушедшая влево лента освобождается и становится правой.
       empty(current);
-      current.classList.remove("is-exiting");
-
       const used = current;
       current = waiting;
       waiting = used;
-      waiting.classList.add("is-waiting");
+
+      // Лента, ушедшая влево, должна мгновенно оказаться за правым краем.
+      // На кадр отключаем переход, иначе она проедет через весь экран.
+      waiting.classList.remove("is-exiting");
+      waiting.classList.add("is-waiting", "is-reset");
+      void waiting.offsetWidth;
+      waiting.classList.remove("is-reset");
 
       swap();
     }, SLIDE_MS + 120);
