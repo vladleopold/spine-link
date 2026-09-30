@@ -113,7 +113,6 @@ export function startParticleField(canvas: HTMLCanvasElement) {
 
   const count = reducedMotion || reducedData ? 24 : BASE_COUNT;
   const embers: Ember[] = [];
-  for (let i = 0; i < count; i++) embers.push(spawn());
 
   function resize() {
     width = window.innerWidth;
@@ -217,6 +216,15 @@ export function startParticleField(canvas: HTMLCanvasElement) {
   }
 
   resize();
+  // Первый набор искр раскладываем по всей площади экрана, а не у левого
+  // верхнего угла: при открытии страницы фон уже заполнен, частицы не
+  // собираются в одну кучу и сразу видны по всей высоте.
+  for (let i = 0; i < count; i++) {
+    const ember = spawn();
+    ember.x = Math.random() * width;
+    ember.y = Math.random() * height;
+    embers.push(ember);
+  }
 
   if (reducedMotion) {
     // Один неподвижный кадр: без ветра, без мерцания, без движения.

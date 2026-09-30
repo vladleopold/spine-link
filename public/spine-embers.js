@@ -83,7 +83,6 @@
     }
 
     var embers = [];
-    for (var i = 0; i < COUNT; i++) embers.push(spawn());
 
     function resize() {
       width = window.innerWidth;
@@ -92,6 +91,14 @@
       canvas.height = height;
     }
     resize();
+    // Первый набор искр раскладываем по всей площади экрана, чтобы при
+    // открытии страницы фон был заполнен сразу, а не собирался в углу.
+    for (var i = 0; i < COUNT; i++) {
+      var seeded = spawn();
+      seeded.x = Math.random() * width;
+      seeded.y = Math.random() * height;
+      embers.push(seeded);
+    }
 
     // Свайп по тач-экране толкает все искры и поднимает небольшой залп.
     var lastX = null;
