@@ -425,11 +425,10 @@ async function loadHomeFeed() {
   });
   if (!cards.length) return;
 
-  // Ряд сцен: движок сцен кладёт сюда очередную группу карточек.
+  // #home-feed-track остаётся контейнером сцены; движок создаёт внутри
+  // него две ленты и перекладывает в них карточки.
   const viewport = track.parentElement;
-  if (viewport) viewport.replaceChildren(track);
   track.textContent = "";
-  track.classList.add("home-feed-lane");
   feedSection.style.display = "";
 
   startHomeFeedScenes(track, cards, viewport);
@@ -452,7 +451,6 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
 
   // Без движения лента просто показывает работы и не грузит видео.
   if (prefersReducedMotion || saveData) {
-    lane.classList.add("is-static");
     cards.slice(0, 2).forEach((card) => lane.appendChild(card));
     return;
   }
