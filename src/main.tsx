@@ -450,11 +450,12 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
   const saveData = Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
 
   // Сколько карточек помещается в кадр: чем шире экран, тем больше.
+  // Считаем по ширине окна, а не контейнера: лента уже, чем окно,
+  // и по ней порог не достигался.
   const sceneSize = () => {
-    const width = viewport?.clientWidth || window.innerWidth;
-    if (width >= 1500) return 4;
-    if (width >= 1100) return 3;
-    if (width >= 760) return 3;
+    const width = Math.max(window.innerWidth, viewport?.clientWidth || 0);
+    if (width >= 1400) return 4;
+    if (width >= 900) return 3;
     return 2;
   };
 
@@ -524,7 +525,10 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
   }
 
   /** Ширина одного шага: столько лента уезжает за раз. */
-  const stepSize = () => Math.max(120, (viewport?.clientWidth || window.innerWidth) / sceneSize());
+  const stepSize = () => {
+    const width = viewport?.clientWidth || window.innerWidth;
+    return Math.max(120, width / sceneSize());
+  };
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   let token = 0;
