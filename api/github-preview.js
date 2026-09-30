@@ -1357,6 +1357,20 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
   const ownerUrl = ownerProfile?.url || (entry?.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '/');
   const metricId = String(entryId || title);
   const metric = metricCountsForId(metrics, metricId);
+  // Сетка работ автора под видео. Текущая работа из списка убираем,
+  // чтобы не показывать её дважды.
+  const currentEntryId = String(entry?.id || entryId || '');
+  const authorWorks = (Array.isArray(ownerProfile?.library) ? ownerProfile.library : [])
+    .filter((item) => String(item?.url || '') !== `${origin}/p/${encodeURIComponent(currentEntryId)}`)
+    .map((item) => ({
+      title: cleanPublicText(item?.title || 'Spine preview', 80),
+      url: String(item?.url || '/'),
+      poster: item?.thumbnailPoster || item?.thumbnail || '',
+      video: item?.webmPreview || '',
+      animations: Number(item?.animations) || 0,
+    }))
+    .filter((item) => item.video || item.poster);
+  const authorWorksJson = jsonScript({ works: authorWorks });
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -1385,14 +1399,30 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
       .preview-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.14); }
       .preview-view-count { display: inline-flex; align-items: center; gap: 8px; color: rgba(237,245,255,.72); font-size: 14px; font-weight: 850; }
       .preview-view-count strong { color: #fff; }
+      /* Логотип ведёт на главную: раньше это был простой текст и по нему нельзя было перейти. */
+      .brand { color: inherit; font-weight: 900; letter-spacing: .04em; text-decoration: none; }
+      .brand:hover { color: #b3ff40; }
+      .brand:focus-visible { outline: 2px solid #b3ff40; outline-offset: 3px; border-radius: 4px; }
+      /* Видео зациклено и перезапускается само, если браузер снял паузу. */
+      .video-card video { width: 100%; display: block; background: #050607; }
+      /* Сетка работ автора: каждая ячейка случайно показывает свою работу. */
+      .author-works { margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.1); }
+      .author-works-title { margin: 0 0 12px; color: rgba(237,245,255,.72); font-size: 13px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+      .author-works-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 22vw, 240px), 1fr)); gap: 10px; }
+      .author-works-empty { margin: 0; color: rgba(237,245,255,.5); font-size: 14px; }
+      .author-work { position: relative; display: block; overflow: hidden; aspect-ratio: var(--work-ratio, 16 / 9); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; background: #050607; text-decoration: none; }
+      .author-work:hover { border-color: rgba(179,255,64,.7); }
+      .author-work img, .author-work video { width: 100%; height: 100%; object-fit: cover; }
+      .author-work-label { position: absolute; right: 0; bottom: 0; left: 0; padding: 16px 10px 8px; color: #fff; background: linear-gradient(transparent, rgba(3,5,7,.86)); font-size: 12px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+      @media (prefers-reduced-motion: reduce) { .author-work { content-visibility: auto; } }
     </style>
   </head>
   <body>
     <main class="page">
-      <div class="topbar"><div class="brand">Spine-Link</div><a class="back" href="${ownerUrl}">Open portfolio</a></div>
+      <div class="topbar"><a class="brand" href="/" aria-label="Spine-Link home" title="На главную">Spine-Link</a><a class="back" href="${ownerUrl}">Open portfolio</a></div>
       <section class="video-card">
         ${video
-          ? `<video id="video-fallback-player" src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted playsinline preload="metadata" autoplay controls></video>`
+          ? `<video id="video-fallback-player" src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted loop playsinline preload="metadata" autoplay controls></video>`
           : `<div class="video-placeholder" role="img" aria-label="${escapeHtml(title)}"${poster ? ` style="background-image:url('${escapeHtml(poster)}')"` : ''}></div>`}
         <div class="body">
           <h1>${title}</h1>
@@ -1401,14 +1431,82 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
           <div class="preview-view-count" data-metric-id="${escapeHtml(metricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div>
         </div>
       </section>
+      ${authorWorks.length
+        ? `<section class="author-works" aria-label="More work by ${escapeHtml(ownerProfile?.name || 'this author')}">
+            <h2 class="author-works-title">More work by ${escapeHtml(ownerProfile?.name || 'this author')}</h2>
+            <div class="author-works-grid" id="author-works-grid" data-works='${authorWorksJson}'></div>
+          </section>`
+        : ''}
     </main>
     <script>
+      // Главное видео играет по кругу и само перезапускается,
+      // если браузер остановил его из-за экономии энергии.
       const v = document.getElementById('video-fallback-player');
       if (v) {
+        v.loop = true;
         v.muted = true;
         v.playsInline = true;
+        v.addEventListener('ended', () => { v.currentTime = 0; v.play().catch(() => {}); });
         v.load();
         v.play().catch(() => {});
+      }
+
+      // Сетка работ автора: каждая ячейка показывает свою работу, а при
+      // наведении переключается на следующую по случайному порядку.
+      const grid = document.getElementById('author-works-grid');
+      if (grid) {
+        const works = (() => {
+          try { return JSON.parse(grid.dataset.works || '{}').works || []; } catch { return []; }
+        })();
+        if (works.length) {
+          const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          // По одной работе на ячейку, порядок перемешан.
+          const shuffled = works
+            .map((w) => ({ w, sort: Math.random() }))
+            .sort((a, b) => a.sort - b.sort)
+            .map((item) => item.w);
+
+          grid.textContent = '';
+          shuffled.forEach((work) => {
+            const cell = document.createElement('a');
+            cell.className = 'author-work';
+            cell.href = work.url;
+            cell.setAttribute('aria-label', work.title);
+            if (work.video) {
+              const video = document.createElement('video');
+              video.src = work.video;
+              if (work.poster) video.poster = work.poster;
+              video.muted = true;
+              video.loop = true;
+              video.playsInline = true;
+              video.preload = 'none';
+              video.setAttribute('aria-hidden', 'true');
+              cell.appendChild(video);
+              if (!reduceMotion) {
+                // Запуск в случайный момент: сетка выглядит живой,
+                // но не грузит всё видео разом.
+                const delay = 400 + Math.random() * 2600;
+                const play = () => {
+                  if (video.readyState >= 2) { video.play().catch(() => {}); return; }
+                  video.addEventListener('loadeddata', () => video.play().catch(() => {}), { once: true });
+                  video.load();
+                };
+                setTimeout(play, delay);
+              }
+            } else if (work.poster) {
+              const img = document.createElement('img');
+              img.src = work.poster;
+              img.alt = '';
+              img.loading = 'lazy';
+              cell.appendChild(img);
+            }
+            const label = document.createElement('span');
+            label.className = 'author-work-label';
+            label.textContent = work.title;
+            cell.appendChild(label);
+            grid.appendChild(cell);
+          });
+        }
       }
     </script>
     <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(metricId)} };</script>

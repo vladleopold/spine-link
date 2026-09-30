@@ -154,7 +154,20 @@
         font-size: 13px;
         font-weight: 900;
         letter-spacing: 0.18em;
-        text-transform: uppercase;
+        text-decoration: none;
+        transition: color 160ms ease;
+      }
+
+      .brand:hover,
+      .brand:focus-visible {
+        color: #b3ff40;
+      }
+
+      .brand:focus-visible {
+        outline: 2px solid #b3ff40;
+        outline-offset: 3px;
+        border-radius: 4px;
+
       }
 
       .hero {
@@ -418,7 +431,7 @@
       <a class="static-logo" href="/" aria-label="Spine-Link home"><span>s</span><span>p</span><span class="static-logo-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="static-logo-link">link</span></a>
       <section class="hero">
         <div>
-          <div class="brand">Spine-Link</div>
+          <a class="brand" href="/" aria-label="Spine-Link home" title="На главную">Spine-Link</a>
           <h1>Spine preview online</h1>
           <p>
             Spine-Link opens exported Spine animation files directly in the browser. Use it to preview JSON or SKEL

@@ -107,7 +107,20 @@
         font-size: 13px;
         font-weight: 900;
         letter-spacing: 0.18em;
-        text-transform: uppercase;
+        text-decoration: none;
+        transition: color 160ms ease;
+      }
+
+      .brand:hover,
+      .brand:focus-visible {
+        color: #b3ff40;
+      }
+
+      .brand:focus-visible {
+        outline: 2px solid #b3ff40;
+        outline-offset: 3px;
+        border-radius: 4px;
+
       }
 
       h1 {
@@ -226,7 +239,7 @@
   <body>
     <main>
       <a class="static-logo" href="/" aria-label="Spine-Link home"><span>s</span><span>p</span><span class="static-logo-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="static-logo-link">link</span></a>
-      <div class="brand">Spine-Link</div>
+      <a class="brand" href="/" aria-label="Spine-Link home" title="На главную">Spine-Link</a>
       <h1>Spine preview online</h1>
       <p>
         Spine-Link lets artists, animators, and game developers preview Spine animations online. Drop Spine JSON or

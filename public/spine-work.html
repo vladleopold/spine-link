@@ -57,7 +57,20 @@
       body { margin: 0; min-width: 320px; background: #050607; }
       main { max-width: 980px; margin: 0 auto; padding: 54px 20px 72px; }
       a { color: #8cc7ff; }
-      .brand { color: #ff6a28; font-size: 13px; font-weight: 900; letter-spacing: 0.18em; text-transform: uppercase; }
+      .brand { color: #ff6a28; font-size: 13px; font-weight: 900; letter-spacing: 0.18em; text-decoration: none;
+        transition: color 160ms ease;
+      }
+
+      .brand:hover,
+      .brand:focus-visible {
+        color: #b3ff40;
+      }
+
+      .brand:focus-visible {
+        outline: 2px solid #b3ff40;
+        outline-offset: 3px;
+        border-radius: 4px;
+ }
       h1 { max-width: 840px; margin: 16px 0 18px; font-size: clamp(38px, 7vw, 80px); line-height: 0.95; }
       p, li { color: rgba(231, 237, 244, 0.82); font-size: 18px; line-height: 1.7; }
       .cta { display: inline-flex; margin: 12px 12px 0 0; padding: 13px 18px; border: 1px solid rgba(140, 199, 255, 0.7); border-radius: 8px; background: rgba(140, 199, 255, 0.12); color: #fff; font-weight: 800; text-decoration: none; }
@@ -142,7 +155,7 @@
   <body>
     <main>
       <a class="static-logo" href="/" aria-label="Spine-Link home"><span>s</span><span>p</span><span class="static-logo-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="static-logo-link">link</span></a>
-      <div class="brand">Work sharing</div>
+      <a class="brand" href="/" aria-label="Spine-Link home" title="На главную">Work sharing</a>
       <h1>Spine work</h1>
       <p>
         Spine-Link helps animators and game teams share Spine work without sending heavy archives for every review.

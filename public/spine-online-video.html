@@ -90,7 +90,20 @@
         font-size: 12px;
         font-weight: 900;
         letter-spacing: 0.28em;
-        text-transform: uppercase;
+        text-decoration: none;
+        transition: color 160ms ease;
+      }
+
+      .brand:hover,
+      .brand:focus-visible {
+        color: #b3ff40;
+      }
+
+      .brand:focus-visible {
+        outline: 2px solid #b3ff40;
+        outline-offset: 3px;
+        border-radius: 4px;
+
       }
 
       .logo {
@@ -271,7 +284,7 @@
           <span>s</span><span>p</span><span class="logo-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="logo-link">link</span>
         </a>
         <div class="title-block">
-          <div class="brand">Spine online video</div>
+          <a class="brand" href="/" aria-label="Spine-Link home" title="На главную">Spine online video</a>
           <h1>Spine online animation preview in the browser</h1>
         </div>
       </header>
