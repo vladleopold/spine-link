@@ -35,20 +35,16 @@ body {
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Full-viewport ember canvas shared by every page (public/spine-embers.js).
-   It sits behind the content and never swallows clicks. */
+/* Полноэкранная канва искр, общая для всех страниц (public/spine-embers.js).
+   Искры летят на переднем плане поверх контента, как на spinefolio, но
+   ничего не перехватывают: клики и ввод доходят до страницы как обычно. */
 .spine-embers-canvas {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: 2147483647;
   width: 100vw;
   height: 100vh;
   pointer-events: none;
-}
-
-body > :not(.spine-embers-canvas):not(.publish-progress-overlay) {
-  position: relative;
-  z-index: 1;
 }
 
 @keyframes spinePageOut {

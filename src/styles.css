@@ -398,10 +398,12 @@ input {
   font: inherit;
 }
 
+/* Искры фона. Как и на spinefolio, слой самый верхний, но клики проходят
+   насквозь, поэтому работать с интерфейсом можно как обычно. */
 .particle-field {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: 2147483647;
   pointer-events: none;
   width: 100vw;
   height: 100vh;
