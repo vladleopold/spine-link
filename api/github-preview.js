@@ -982,8 +982,10 @@ const pinchDistance = { value: null };
       const runtimeLoaders = new Map();
       function legacyRuntimeForSet(set) {
         const version = String(set?.skeletonVersion || "");
-        if (/^3\\.7(?:\\.|$)/.test(version)) return "3.7";
-        if (/^3\\.8(?:\\.|$)/.test(version)) return "3.8";
+        // В шаблонной строке точка экранируется одним обратным слэшем:
+        // было "\\." — регулярка искала буквальную "\." и никогда не срабатывала.
+        if (/^3\.7(?:\.|$)/.test(version)) return "3.7";
+        if (/^3\.8(?:\.|$)/.test(version)) return "3.8";
         return "";
       }
       function setPlayerStylesheet(href) {
