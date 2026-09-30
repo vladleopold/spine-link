@@ -1405,10 +1405,13 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
       .preview-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.14); }
       .preview-view-count { display: inline-flex; align-items: center; gap: 8px; color: rgba(237,245,255,.72); font-size: 14px; font-weight: 850; }
       .preview-view-count strong { color: #fff; }
-      /* Логотип ведёт на главную: раньше это был простой текст и по нему нельзя было перейти. */
-      .brand { color: inherit; font-weight: 900; letter-spacing: .04em; text-decoration: none; }
-      .brand:hover { color: #b3ff40; }
-      .brand:focus-visible { outline: 2px solid #b3ff40; outline-offset: 3px; border-radius: 4px; }
+      /* Логотип ведёт на главную: «Spine» белая, «link» оранжевая,
+         при наведении вся надпись белеет. */
+      .brand { display: inline-flex; align-items: baseline; gap: 6px; color: #f7fbff; font-weight: 900; letter-spacing: .04em; text-decoration: none; }
+      .brand-link-part { color: #ff6a28; }
+      .brand:hover, .brand:focus-visible { color: #fff; }
+      .brand:hover .brand-link-part, .brand:focus-visible .brand-link-part { color: #fff; }
+      .brand:focus-visible { outline: 2px solid #ff6a28; outline-offset: 3px; border-radius: 4px; }
       /* Видео зациклено и перезапускается само, если браузер снял паузу. */
       .video-card video { width: 100%; display: block; background: #050607; }
       /* Сетка работ автора: каждая ячейка случайно показывает свою работу. */
@@ -1425,7 +1428,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
   </head>
   <body>
     <main class="page">
-      <div class="topbar"><a class="brand" href="/" aria-label="Spine-Link home" title="На главную">Spine-Link</a><a class="back" href="${ownerUrl}">Open portfolio</a></div>
+      <div class="topbar"><a class="brand" href="/" aria-label="Spine-Link home" title="На главную"><span class="brand-spine">Spine</span><span class="brand-link-part">link</span></a><a class="back" href="${ownerUrl}">Open portfolio</a></div>
       <section class="video-card">
         ${video
           ? `<video id="video-fallback-player" src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted loop playsinline preload="metadata" autoplay controls></video>`

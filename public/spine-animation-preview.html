@@ -103,24 +103,37 @@
       }
 
       .brand {
-        color: #ff6a28;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 6px;
+        color: #f7fbff;
         font-size: 13px;
         font-weight: 900;
         letter-spacing: 0.18em;
+        text-transform: uppercase;
         text-decoration: none;
+        transition: color 160ms ease;
+      }
+
+      .brand-link-part {
+        color: #ff6a28;
         transition: color 160ms ease;
       }
 
       .brand:hover,
       .brand:focus-visible {
-        color: #b3ff40;
+        color: #fff;
+      }
+
+      .brand:hover .brand-link-part,
+      .brand:focus-visible .brand-link-part {
+        color: #fff;
       }
 
       .brand:focus-visible {
-        outline: 2px solid #b3ff40;
+        outline: 2px solid #ff6a28;
         outline-offset: 3px;
         border-radius: 4px;
-
       }
 
       h1 {
@@ -239,7 +252,7 @@
   <body>
     <main>
       <a class="static-logo" href="/" aria-label="Spine-Link home"><span>s</span><span>p</span><span class="static-logo-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="static-logo-link">link</span></a>
-      <a class="brand" href="/" aria-label="Spine-Link home" title="На главную">Spine-Link</a>
+      <a class="brand" href="/" aria-label="Spine-Link home" title="На главную"><span class="brand-spine">Spine</span><span class="brand-link-part">link</span></a>
       <h1>Spine animation preview</h1>
       <p>
         Use Spine-Link for quick Spine animation preview in a browser. Upload the skeleton, atlas, and texture files,

@@ -404,7 +404,9 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
       .creator-logo-spine i:nth-child(3) { width: 10px; transform: translateX(3px); }
       .creator-logo-spine i:nth-child(4) { width: 9px; transform: translateX(4px); }
       .creator-logo-spine i:nth-child(5) { width: 8px; transform: translateX(5px); }
-      .creator-logo-plus { margin-left: 4px; color: #ff6a28; font-size: .62em; font-weight: 800; letter-spacing: .18em; line-height: 1; text-transform: uppercase; transform: translate(-10px, .18em); }
+      .creator-logo-plus { margin-left: 4px; color: #ff6a28; font-size: .62em; font-weight: 800; letter-spacing: .18em; line-height: 1; text-transform: uppercase; transform: translate(-10px, .18em); transition: color 160ms ease; }
+      .creator-logo:hover, .creator-logo:focus-visible { color: #fff; }
+      .creator-logo:hover .creator-logo-plus, .creator-logo:focus-visible .creator-logo-plus { color: #fff; }
       .creator-row { display: flex; align-items: center; justify-self: end; min-width: 0; max-width: 100%; }
       .creator-avatar { flex: 0 0 auto; width: 72px; height: 72px; overflow: hidden; border: 0; border-radius: 999px; background: #181b20; box-shadow: 0 0 0 1px rgba(140,199,255,.08); }
       .creator-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
