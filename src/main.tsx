@@ -531,6 +531,7 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
   };
 
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let driftTimer: ReturnType<typeof setTimeout> | null = null;
   let token = 0;
 
   function schedule(fn: () => void, delay: number) {
@@ -539,6 +540,11 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     timer = setTimeout(() => {
       if (myToken === token) fn();
     }, delay);
+  }
+
+  function clearDrift() {
+    if (driftTimer) clearTimeout(driftTimer);
+    driftTimer = null;
   }
 
   function step() {
@@ -558,18 +564,20 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
       waiting.classList.add("is-shifted");
     });
 
-    schedule(() => {
+    // Небольшой замедленный обратный ход: лента отходит на 14 пикселей
+    // назад и медленно возвращается на место. Отдельный таймер, чтобы
+    // не затирать таймер сцены.
+    clearDrift();
+    driftTimer = setTimeout(() => {
       if (myToken !== token) return;
-
-      // Небольшой замедленный обратный ход: лента отходит назад.
-      const back = `calc(-${distance}px + ${DRIFT_BACK_PX}px)`;
-      current.style.setProperty("--feed-shift", back);
+      current.style.setProperty("--feed-shift", `calc(-${distance}px + ${DRIFT_BACK_PX}px)`);
       waiting.style.setProperty("--feed-shift", `${DRIFT_BACK_PX}px`);
     }, SLIDE_MS);
 
     schedule(() => {
       if (myToken !== token) return;
 
+      clearDrift();
       empty(current);
       const used = current;
       current = waiting;
@@ -596,6 +604,7 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     if (document.hidden) {
       token++;
       if (timer) clearTimeout(timer);
+      clearDrift();
       laneA.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
       laneB.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
     } else {
@@ -608,6 +617,7 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
   window.addEventListener("pagehide", () => {
     token++;
     if (timer) clearTimeout(timer);
+    clearDrift();
     laneA.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
     laneB.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
   });
