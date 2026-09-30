@@ -12,3 +12,7 @@ scripts/request-indexing.mjs
 
 # Локальные секреты Vercel, не коммитим
 .env.vercel
+
+# Одноразовые скрипты проверки
+*.mjs
+!scripts/**/*.mjs
