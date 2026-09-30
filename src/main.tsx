@@ -437,37 +437,38 @@ async function loadHomeFeed() {
 /**
  * Лента анимаций внизу главной.
  *
- * Лента едет непрерывно: смещение только накапливается и никогда не
- * возвращается в ноль, поэтому никаких рывков. Раз в MOVE_MS добавляется
- * новая карточка, а ушедшие за левый край удаляются — полоса всегда
- * длиннее окна, поэтому движение не прерывается.
+ * Движение цикличное и всегда в одну сторону: лента очень медленно ползёт
+ * (DRIFT_PX пикселей за DRIFT_MS), затем быстро перематывается на 2–4 карточки
+ * и снова ползёт. Отката назад нет, поэтому лента не прыгает.
  *
- * Карточки выбираются случайно и не повторяются, пока есть чем набирать.
+ * Смещение только накапливается: ушедшие за левый край карточки удаляются,
+ * справа добавляются новые, поэтому полоса всегда длиннее окна и движение
+ * не прерывается.
  */
 function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: HTMLElement | null) {
   const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   const saveData = Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
 
-  const MOVE_MS = 7000;
-  const DRIFT_BACK_PX = 14;
-  const SLIDE_MS = 2000;
+  // Медленный ход: почти на месте, с плавным разгоном и торможением.
+  const DRIFT_MS = 6800;
+  const DRIFT_PX = 14;
+  const DRIFT_EASE = "cubic-bezier(0.45, 0, 0.55, 1)";
+  // Быстрая перемотка на 2–4 карточки.
+  const JUMP_MS = 700;
+  const JUMP_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
   const GAP = 10;
 
-  // Ширина окна и сколько карточек в нём видно.
   const metrics = () => {
     const width = viewport?.clientWidth || window.innerWidth;
     const rows = width < 760 ? 2 : 1;
     const perRow = width >= 1400 ? 4 : width >= 900 ? 3 : 2;
-    const visible = rows * perRow;
     const padding = 20;
-    // Ширина карточки: (окно − поля) / карточек в ряду.
     const cardWidth = Math.max(120, (width - padding - GAP * (perRow - 1)) / perRow);
-    return { width, rows, perRow, visible, cardWidth };
+    return { width, rows, perRow, visible: rows * perRow, cardWidth };
   };
 
   let m = metrics();
 
-  // Колода работ: случайный порядок без повторов.
   let deck = shuffled(cards);
   function nextCard(): HTMLElement {
     if (!deck.length) deck = shuffled(cards);
@@ -496,12 +497,8 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     }
   };
 
-  // Накопленное смещение ленты. Никогда не обнуляется.
+  /** Накопленное смещение. Только растёт, никогда не уменьшается. */
   let offset = 0;
-
-  const applyOffset = () => {
-    lane.style.transform = `translateX(${-offset}px)`;
-  };
 
   const applyCardSize = () => {
     lane.style.setProperty("--home-feed-card-width", `${Math.round(m.cardWidth)}px`);
@@ -513,12 +510,17 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
   };
 
   /**
-   * Убираем карточки, уехавшие за левый край. Проверяем реальные
-   * координаты, поэтому работает и при переносе на несколько рядов.
+   * Убираем карточки за левым краем и подтягиваем смещение, чтобы полоса
+   * не уехала из-под окн��. Считаем по реальным координатам, поэтому
+   * работает и при переносе карточек в несколько рядов.
    */
   const trim = () => {
-    const laneLeft = lane.getBoundingClientRect().left;
-    while (lane.firstElementChild) {
+    // Левый край берём у контейнера: у самой ленты он уже сдвинут
+    // собственным transform, и карточки никогда не считались бы ушедшими.
+    const laneLeft = (viewport || lane.parentElement || lane).getBoundingClientRect().left;
+    // Никогда не съедаем больше карточек, чем нужно для заполнения окна.
+    const keep = m.rows * (m.perRow + 2);
+    while (lane.children.length > keep && lane.firstElementChild) {
       const first = lane.firstElementChild as HTMLElement;
       const r = first.getBoundingClientRect();
       if (r.right > laneLeft + 1) break;
@@ -526,70 +528,80 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
       first.remove();
       offset -= r.width + GAP;
     }
+    if (offset < 0) offset = 0;
   };
 
-  let timer: ReturnType<typeof setTimeout> | null = null;
   let driftTimer: ReturnType<typeof setTimeout> | null = null;
   let token = 0;
 
-  const clearDrift = () => {
+  const clearTimers = () => {
     if (driftTimer) clearTimeout(driftTimer);
     driftTimer = null;
   };
 
-  function step(myToken: number) {
+  /** Перемотка: сдвиг на 2–4 карточки быстрым движением. */
+  function jump(myToken: number) {
     if (myToken !== token) return;
 
-    // Смещение растёт на ширину карточки плюс зазор — это и есть шаг.
-    offset += m.cardWidth + GAP;
-    applyOffset();
+    // Сколько карточек прокручиваем: от двух до четырёх.
+    const span = 2 + Math.floor(Math.random() * 3);
+    offset += span * (m.cardWidth + GAP);
 
-    // Мягкий откат назад на несколько пикселей: лента будто отдыхает,
-    // но база смещения при этом не меняется.
-    clearDrift();
+    lane.style.transition = `transform ${JUMP_MS}ms ${JUMP_EASE}`;
+    lane.style.transform = `translateX(${-offset}px)`;
+
     driftTimer = setTimeout(() => {
       if (myToken !== token) return;
-      lane.style.transform = `translateX(${-(offset - DRIFT_BACK_PX)}px)`;
-    }, SLIDE_MS);
-
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (myToken !== token) return;
-      clearDrift();
-      // Добавляем карточку справа и убираем ушедшие слева — база
-      // смещения при этом не меняется, лента не дёргается.
-      append(1);
+      clearTimers();
+      append(span);
       trim();
-      applyOffset();
-      step(myToken);
-    }, MOVE_MS);
+      drift(myToken);
+    }, JUMP_MS + 40);
+  }
+
+  /** Медленный ход: 14 пикселей за DRIFT_MS, ease-in-out. */
+  function drift(myToken: number) {
+    if (myToken !== token) return;
+
+    const from = offset;
+    offset += DRIFT_PX;
+
+    lane.style.transition = `transform ${DRIFT_MS}ms ${DRIFT_EASE}`;
+    lane.style.transform = `translateX(${-offset}px)`;
+
+    driftTimer = setTimeout(() => {
+      if (myToken !== token) return;
+      clearTimers();
+      // Если карточка успела уйти за левый край во время ползучего хода,
+      // подтягиваем смещение, иначе лента оторвётся от окна.
+      trim();
+      lane.style.transition = "none";
+      lane.style.transform = `translateX(${-offset}px)`;
+      jump(myToken);
+    }, DRIFT_MS);
+    void from;
   }
 
   function resetLane() {
     lane.classList.add("is-instant");
+    lane.style.transition = "none";
     offset = 0;
-    applyOffset();
+    lane.style.transform = "translateX(0px)";
     void lane.offsetWidth;
     lane.classList.remove("is-instant");
   }
 
   // Без движения лента просто показывает работы и не грузит видео.
   if (prefersReducedMotion || saveData) {
-    m = metrics();
     applyCardSize();
     lane.classList.add("is-static");
     append(m.visible);
     return;
   }
 
-  m = metrics();
   applyCardSize();
-  // Наполняем ленту так, чтобы она была длиннее окна в полтора раза:
-  // этого хватает на несколько шагов без простоя.
-  const initial = m.rows * (m.perRow + 2);
-  append(initial);
-  offset = 0;
-  applyOffset();
+  append(m.rows * (m.perRow + 2));
+  lane.style.transform = "translateX(0px)";
 
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
   window.addEventListener("resize", () => {
@@ -597,42 +609,33 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     resizeTimer = setTimeout(() => {
       m = metrics();
       applyCardSize();
-      const laneRect = lane.getBoundingClientRect();
-      const laneLeft = laneRect.left;
-      // Пересобираем ленту под новую ширину окна.
       lane.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
       lane.textContent = "";
       append(m.rows * (m.perRow + 2));
-      offset = 0;
-      applyOffset();
-      void laneLeft;
+      resetLane();
     }, 200);
   });
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       token++;
-      if (timer) clearTimeout(timer);
+      clearTimers();
       if (resizeTimer) clearTimeout(resizeTimer);
-      clearDrift();
       lane.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
     } else {
       token++;
-      applyOffset();
-      lane.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
-      step(token);
+      drift(token);
     }
   });
 
   window.addEventListener("pagehide", () => {
     token++;
-    if (timer) clearTimeout(timer);
+    clearTimers();
     if (resizeTimer) clearTimeout(resizeTimer);
-    clearDrift();
     lane.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
   });
 
-  step(token);
+  drift(token);
 }
 
 /** Тасует копию массива: порядок каждый раз случайный. */
