@@ -514,19 +514,26 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
    * не уехала из-под окн��. Считаем по реальным координатам, поэтому
    * работает и при переносе карточек в несколько рядов.
    */
+  /**
+   * Удаляем карточки, полностью ушедшие за левый край окна. Смещение
+   * при этом не меняется: оно только растёт, поэтому лента никогда не
+   * едет в обратную сторону.
+   */
   const trim = () => {
-    // Левый край берём у контейнера: у самой ленты он уже сдвинут
-    // собственным transform, и карточки никогда не считались бы ушедшими.
     const laneLeft = (viewport || lane.parentElement || lane).getBoundingClientRect().left;
-    // Никогда не съедаем больше карточек, чем нужно для заполнения окна.
-    const keep = m.rows * (m.perRow + 2);
+    const keep = m.rows * (m.perRow + 1);
+    // Ушедшие карточки срезаем и на столько же уменьшаем смещение:
+    // так лента остаётся в окне, но непрерывно ползёт влево — суммарно
+    // сдвиг всегда только растёт, отката не происходит.
     while (lane.children.length > keep && lane.firstElementChild) {
       const first = lane.firstElementChild as HTMLElement;
-      const r = first.getBoundingClientRect();
-      if (r.right > laneLeft + 1) break;
+      const w = first.offsetWidth;
+      // Экранные координаты: getBoundingClientRect уже учитывает сдвиг.
+      const screenRight = first.getBoundingClientRect().right;
+      if (screenRight > laneLeft + 1) break;
       first.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
       first.remove();
-      offset -= r.width + GAP;
+      offset -= w + GAP;
     }
     if (offset < 0) offset = 0;
   };
@@ -553,8 +560,16 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     driftTimer = setTimeout(() => {
       if (myToken !== token) return;
       clearTimers();
-      append(span);
+      // Добавляем столько карточек, сколько нужно, чтобы полоса снова
+      // была длиннее окна: сдвиг идёт только влево, поэтому длина
+      // должна расти так же.
+      append(span + 1);
       trim();
+      // Смещение изменилось при обрезке — применяем без перехода,
+      // иначе лента дёрнется обратно.
+      lane.style.transition = "none";
+      lane.style.transform = `translateX(${-offset}px)`;
+      void lane.offsetWidth;
       drift(myToken);
     }, JUMP_MS + 40);
   }
@@ -572,11 +587,11 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     driftTimer = setTimeout(() => {
       if (myToken !== token) return;
       clearTimers();
-      // Если карточка успела уйти за левый край во время ползучего хода,
-      // подтягиваем смещение, иначе лента оторвётся от окна.
       trim();
+      // Смещение изменилось при обрезке — применяем без перехода.
       lane.style.transition = "none";
       lane.style.transform = `translateX(${-offset}px)`;
+      void lane.offsetWidth;
       jump(myToken);
     }, DRIFT_MS);
     void from;
