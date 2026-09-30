@@ -35,8 +35,9 @@ body {
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.spine-low-power-particles,
-.particle-field--seo {
+/* Full-viewport ember canvas shared by every page (public/spine-embers.js).
+   It sits behind the content and never swallows clicks. */
+.spine-embers-canvas {
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -45,42 +46,7 @@ body {
   pointer-events: none;
 }
 
-.spine-low-power-particles {
-  overflow: hidden;
-  opacity: 0.48;
-  contain: strict;
-}
-
-.spine-low-power-particles::before {
-  position: absolute;
-  inset: -12vh -12vw;
-  content: "";
-  background-image:
-    radial-gradient(circle at 12% 20%, rgba(140, 199, 255, 0.34) 0 1px, transparent 2px),
-    radial-gradient(circle at 78% 18%, rgba(255, 106, 40, 0.28) 0 1px, transparent 2px),
-    radial-gradient(circle at 48% 76%, rgba(179, 255, 64, 0.18) 0 1px, transparent 2px),
-    radial-gradient(circle at 24% 62%, rgba(255, 255, 255, 0.18) 0 1px, transparent 2px);
-  background-position:
-    0 0,
-    38px 72px,
-    96px 18px,
-    140px 112px;
-  background-size:
-    164px 164px,
-    220px 220px,
-    280px 280px,
-    340px 340px;
-}
-
-.spine-low-power-particles.is-static::before {
-  animation: none;
-  will-change: auto;
-}
-
-body
-  > :not(.particle-field--seo):not(.spine-low-power-particles):not(
-    .publish-progress-overlay
-  ) {
+body > :not(.spine-embers-canvas):not(.publish-progress-overlay) {
   position: relative;
   z-index: 1;
 }

@@ -706,6 +706,7 @@ function createHtml(config) {
     <link rel="stylesheet" href="/page-transitions.css" />
     <link rel="stylesheet" id="spine-player-stylesheet" href="https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/spine-player.css" />
     <script src="/page-transitions.js" defer></script>
+    <script src="/spine-embers.js?v=2026-09-30" defer></script>
     <style>
       * { box-sizing: border-box; }
       * { scrollbar-width: thin; scrollbar-color: rgba(74,78,84,.72) transparent; }
@@ -1364,6 +1365,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
     ${seoHead({ origin, entryId, video: videoSeo, fallbackTitle: `${title} - Spine-Link video preview`, robots, playerUrl, archiveUrl })}
     <link rel="stylesheet" href="/page-transitions.css" />
     <script src="/page-transitions.js" defer></script>
+    <script src="/spine-embers.js?v=2026-09-30" defer></script>
     <style>
       * { box-sizing: border-box; }
       body { min-height: 100vh; margin: 0; color: #edf5ff; background: #050607; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }

@@ -1,177 +1,251 @@
-type Particle = {
-  baseX: number;
+/**
+ * Искры Spine — летящие частицы фона.
+ *
+ * Перенесено с фона галереи spinefolio.vercel.app: светящиеся искры
+ * поднимаются вверх, покачиваются на медленном ветру, мерцают и
+ * отталкиваются при свайпах по тач-экрану.
+ *
+ * Экономия ресурсов: учитываются prefers-reduced-motion (рисуется один
+ * неподвижный кадр) и navigator.connection.saveData (меньше искр),
+ * в неактивной вкладке анимация останавливается.
+ */
+
+/** Цвета искр — те же четыре, что и на исходном сайте. */
+const EMBER_COLORS = ["#22c55e", "#fde047", "#ef4444", "#ffffff"];
+
+/** Базовая плотность частиц и потолок после свайпов. */
+const BASE_COUNT = 70;
+const MAX_COUNT = 140;
+
+type Ember = {
+  x: number;
   y: number;
+  vx: number;
+  vy: number;
   radius: number;
-  depth: number;
-  speedY: number;
-  speedX: number;
-  wave: number;
-  waveSpeed: number;
-  wavePhase: number;
-  alpha: number;
-  color: string;
-  star: boolean;
-  sparklePhase: number;
-  sparkleSpeed: number;
+  sprite: HTMLCanvasElement;
+  life: number;
+  decay: number;
+  twinkle: number;
+  twinkleSpeed: number;
+  gustX: number;
+  gustY: number;
 };
 
-type ParticleMode = "quiet" | "rich";
+/** Откуда появилась искра: снизу, слева или справа. */
+type SpawnSide = 0 | 1 | 2 | 3;
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
+function prefersReducedMotion() {
+  return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
 }
 
-function particleColorForIndex(index: number) {
-  const slot = index % 10;
-  if (slot === 0) return "255,255,255";
-  if (slot === 2 || slot === 5 || slot === 8) return "92,194,255";
-  return "255,106,40";
+function prefersReducedData() {
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  return Boolean(connection?.saveData);
 }
 
-export function startParticleField(canvas: HTMLCanvasElement, mode: ParticleMode = "rich") {
-  const rawContext = canvas.getContext("2d", { alpha: true });
+/** Готовим текстуры: белое ядро с цветным ореолом, края растворяются. */
+function createSprites(): HTMLCanvasElement[] {
+  return EMBER_COLORS.map((color) => {
+    const sprite = document.createElement("canvas");
+    sprite.width = sprite.height = 32;
+    const context = sprite.getContext("2d");
+    if (!context) return sprite;
+    const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gradient.addColorStop(0, "#ffffff");
+    gradient.addColorStop(0.25, color);
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 32, 32);
+    return sprite;
+  });
+}
+
+/**
+ * Запускает поле искр на канве и возвращает функцию остановки.
+ * Канва должна лежать в DOM: сам скрипт её не создаёт.
+ */
+export function startParticleField(canvas: HTMLCanvasElement) {
+  const rawContext = canvas.getContext("2d");
   if (!rawContext) return () => {};
   const context: CanvasRenderingContext2D = rawContext;
-  const isRich = mode === "rich";
 
-  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  const saveData = Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
-  const particles: Particle[] = [];
+  const reducedMotion = prefersReducedMotion();
+  const reducedData = prefersReducedData();
+  const sprites = createSprites();
+
   let width = 0;
   let height = 0;
-  let pixelRatio = 1;
   let animationFrame = 0;
   let running = !document.hidden;
-  let lastTime = performance.now();
+  let time = 0;
 
-  function resetParticle(particle: Particle, randomizeY = false) {
-    const depth = 0.35 + Math.random() * 1.25;
-    particle.baseX = Math.random() * width;
-    particle.y = randomizeY ? Math.random() * height : height + 18 + Math.random() * 90;
-    particle.radius = (0.65 + Math.random() * 1.9) * depth * (isRich ? 2 : 1);
-    particle.depth = depth;
-    particle.speedY = (0.09 + Math.random() * 0.28) * depth;
-    particle.speedX = (Math.random() - 0.5) * 0.055 * depth;
-    particle.wave = (10 + Math.random() * 36) * depth;
-    particle.waveSpeed = 0.00022 + Math.random() * 0.00042;
-    particle.wavePhase = Math.random() * Math.PI * 2;
-    particle.alpha = clamp(
-      (isRich ? 0.22 : 0.12) + Math.random() * (isRich ? 0.46 : 0.24) * depth,
-      isRich ? 0.18 : 0.08,
-      isRich ? 0.82 : 0.42,
-    );
-    particle.color ||= particleColorForIndex(particles.length);
-    particle.star ||= isRich && particles.length % 33 === 0;
-    particle.sparklePhase ||= Math.random() * Math.PI * 2;
-    particle.sparkleSpeed ||= 0.0007 + Math.random() * 0.0011;
+  function spawn(side?: SpawnSide): Ember {
+    const origin = side ?? ((Math.random() * 4) as SpawnSide);
+    const ember: Ember = {
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: 0.15 + Math.random() * 0.45,
+      radius: 1.5 + Math.random() * 3.5,
+      sprite: sprites[Math.floor(Math.random() * sprites.length)],
+      life: 0.6 + Math.random() * 0.4,
+      decay: 0.0006 + Math.random() * 0.0012,
+      twinkle: Math.random() * Math.PI * 2,
+      twinkleSpeed: 0.02 + Math.random() * 0.05,
+      gustX: 0,
+      gustY: 0,
+    };
+
+    if (origin === 0) {
+      ember.y = -10;
+      ember.x = Math.random() * width;
+    } else if (origin === 1) {
+      ember.x = -10;
+      ember.vx = Math.abs(ember.vx) + 0.2;
+    } else if (origin === 2) {
+      ember.x = width + 10;
+      ember.vx = -Math.abs(ember.vx) - 0.2;
+    }
+
+    return ember;
   }
 
-  function targetParticleCount() {
-    const viewportCount = Math.round((width * height) / 22000);
-    const baseCount = clamp(viewportCount, 22, 78);
-    const count = isRich ? Math.round((baseCount * 4) / 3) : Math.max(8, Math.round((baseCount * 0.48) / 3));
-    return saveData ? Math.min(isRich ? 32 : 10, count) : count;
-  }
+  const count = reducedMotion || reducedData ? 24 : BASE_COUNT;
+  const embers: Ember[] = [];
+  for (let i = 0; i < count; i++) embers.push(spawn());
 
   function resize() {
-    pixelRatio = Math.min(window.devicePixelRatio || 1, 1.6);
-    width = Math.ceil(window.visualViewport?.width || window.innerWidth || 1);
-    height = Math.ceil(window.visualViewport?.height || window.innerHeight || 1);
-    canvas.width = Math.floor(width * pixelRatio);
-    canvas.height = Math.floor(height * pixelRatio);
-    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-
-    const targetCount = targetParticleCount();
-    canvas.dataset.particleCount = String(targetCount);
-    while (particles.length < targetCount) {
-      const particle = {} as Particle;
-      particle.color = particleColorForIndex(particles.length);
-      resetParticle(particle, true);
-      particles.push(particle);
-    }
-    particles.length = targetCount;
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
   }
 
-  function drawParticle(particle: Particle, time: number) {
-    const x = particle.baseX + Math.sin(time * particle.waveSpeed + particle.wavePhase) * particle.wave;
-    const alpha = particle.alpha * (0.74 + Math.sin(time * 0.001 + particle.wavePhase) * 0.18);
-    const haloRadius = particle.radius * (particle.depth > 1.05 ? 3.2 : 2.15);
-    const sparkle = particle.star ? Math.max(0, Math.sin(time * particle.sparkleSpeed + particle.sparklePhase) - 0.94) / 0.06 : 0;
-
-    context.fillStyle = `rgba(${particle.color}, ${alpha * (isRich ? 0.25 : 0.14)})`;
-    context.beginPath();
-    context.arc(x, particle.y, haloRadius, 0, Math.PI * 2);
-    context.fill();
-
-    context.fillStyle = `rgba(${particle.color}, ${alpha})`;
-    context.beginPath();
-    context.arc(x, particle.y, particle.radius, 0, Math.PI * 2);
-    context.fill();
-
-    if (sparkle > 0) {
-      const spike = particle.radius * (3.2 + sparkle * 4.8);
-      context.save();
-      context.translate(x, particle.y);
-      context.rotate(time * 0.00035 + particle.wavePhase);
-      context.strokeStyle = `rgba(255,255,255, ${0.18 + sparkle * 0.72})`;
-      context.lineWidth = Math.max(1, particle.radius * 0.34);
-      context.beginPath();
-      context.moveTo(-spike, 0);
-      context.lineTo(spike, 0);
-      context.moveTo(0, -spike);
-      context.lineTo(0, spike);
-      context.stroke();
-      context.restore();
-    }
-  }
-
-  function draw(time: number) {
+  function draw() {
     if (!running) return;
-    const delta = Math.min(2.2, Math.max(0.35, (time - lastTime) / 16.67));
-    lastTime = time;
 
+    // Медленный порывистый ветер: две синусоиды разной частоты.
+    const wind = Math.sin(time * 0.4) * 0.25 + Math.sin(time * 1.1) * 0.08;
     context.clearRect(0, 0, width, height);
     context.globalCompositeOperation = "lighter";
 
-    for (const particle of particles) {
+    for (let i = embers.length - 1; i >= 0; i--) {
+      const ember = embers[i];
+
       if (!reducedMotion) {
-        particle.baseX += particle.speedX * delta;
-        particle.y -= particle.speedY * delta;
+        ember.gustX *= 0.985;
+        ember.gustY *= 0.985;
+        ember.x += ember.vx + wind + ember.gustX;
+        ember.y += ember.vy + ember.gustY * 0.6;
+        ember.twinkle += ember.twinkleSpeed;
+        ember.life -= ember.decay;
       }
-      if (particle.y < -28 || particle.baseX < -80 || particle.baseX > width + 80) resetParticle(particle);
-      drawParticle(particle, time);
+
+      const shimmer = 0.45 + 0.55 * Math.abs(Math.sin(ember.twinkle));
+      const alpha = Math.max(0, Math.min(1, ember.life)) * shimmer;
+
+      // Улетела за край или погасла — пересоздаём на противоположной стороне.
+      if (ember.life <= 0 || ember.x < -20 || ember.x > width + 20 || ember.y > height + 20) {
+        embers[i] = spawn();
+        continue;
+      }
+
+      const size = ember.radius * (0.6 + 0.4 * Math.abs(Math.sin(ember.twinkle * 0.7)));
+      context.globalAlpha = alpha * 0.9;
+      context.drawImage(ember.sprite, ember.x - size, ember.y - size, size * 2, size * 2);
     }
 
+    context.globalAlpha = 1;
     context.globalCompositeOperation = "source-over";
-    if (!reducedMotion) animationFrame = window.requestAnimationFrame(draw);
-  }
-
-  function start() {
-    if (running) return;
-    running = true;
-    lastTime = performance.now();
+    time += 0.016;
     animationFrame = window.requestAnimationFrame(draw);
   }
 
-  function stop() {
-    running = false;
-    window.cancelAnimationFrame(animationFrame);
+  // Свайп по тач-экране толкает все искры и поднимает небольшой залп.
+  let lastX: number | null = null;
+  let lastY: number | null = null;
+
+  function handleTouchStart(event: TouchEvent) {
+    const touch = event.touches[0];
+    if (!touch) return;
+    lastX = touch.clientX;
+    lastY = touch.clientY;
+  }
+
+  function handleTouchEnd(event: TouchEvent) {
+    if (lastX === null || lastY === null) return;
+    const touch = event.changedTouches[0];
+    if (!touch) {
+      lastX = lastY = null;
+      return;
+    }
+
+    const dx = touch.clientX - lastX;
+    const dy = touch.clientY - lastY;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance > 24) {
+      const pushX = dx / distance;
+      const pushY = dy / distance;
+      const force = Math.min(6, 2 + distance / 60);
+
+      for (const ember of embers) {
+        ember.gustX += pushX * force;
+        ember.gustY += pushY * force;
+      }
+      for (let i = 0; i < 8; i++) {
+        const burst = spawn(pushX > 0 ? 2 : 1);
+        burst.gustX = pushX * force * 0.7;
+        burst.gustY = pushY * force * 0.7;
+        embers.push(burst);
+      }
+      if (embers.length > MAX_COUNT) embers.splice(0, embers.length - MAX_COUNT);
+    }
+
+    lastX = lastY = null;
   }
 
   function handleVisibilityChange() {
-    if (document.hidden) stop();
-    else start();
+    if (document.hidden) {
+      running = false;
+      window.cancelAnimationFrame(animationFrame);
+    } else if (!running) {
+      running = true;
+      animationFrame = window.requestAnimationFrame(draw);
+    }
   }
 
   resize();
-  if (running) animationFrame = window.requestAnimationFrame(draw);
+
+  if (reducedMotion) {
+    // Один неподвижный кадр: без ветра, без мерцания, без движения.
+    // Прозрачность фиксированная, иначе почти погасшие искры не видно.
+    context.globalCompositeOperation = "lighter";
+    for (const ember of embers) {
+      const alpha = Math.max(0.25, Math.min(1, ember.life)) * 0.75;
+      const size = ember.radius * 0.85;
+      context.globalAlpha = alpha;
+      context.drawImage(ember.sprite, ember.x - size, ember.y - size, size * 2, size * 2);
+    }
+    context.globalAlpha = 1;
+    context.globalCompositeOperation = "source-over";
+  } else {
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+    animationFrame = window.requestAnimationFrame(draw);
+  }
+
   window.addEventListener("resize", resize);
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   return () => {
-    stop();
+    running = false;
+    window.cancelAnimationFrame(animationFrame);
     window.removeEventListener("resize", resize);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.removeEventListener("touchstart", handleTouchStart);
+    window.removeEventListener("touchend", handleTouchEnd);
     context.clearRect(0, 0, width, height);
   };
 }

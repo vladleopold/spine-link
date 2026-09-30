@@ -812,6 +812,7 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
     <meta name="twitter:image" content="${escapeHtml(archiveImage)}" />
     <script type="application/ld+json">${jsonScript(archiveStructuredData)}</script>
     <script src="/page-transitions.js" defer></script>
+    <script src="/spine-embers.js?v=2026-09-30" defer></script>
     <style>
       ${baseStyles()}
       .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(74px, 4.6vw, 96px), 1fr)); grid-auto-flow: dense; grid-auto-rows: clamp(62px, 3.7vw, 78px); gap: 10px; width: 100%; margin: 0; }
@@ -1706,6 +1707,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
     <meta name="twitter:image" content="${escapeHtml(mediaImage)}" />
     <script type="application/ld+json">${jsonScript(itemStructuredData)}</script>
     <script src="/page-transitions.js" defer></script>
+    <script src="/spine-embers.js?v=2026-09-30" defer></script>
     <style>
       ${baseStyles()}
       .viewer { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: stretch; }
@@ -1944,6 +1946,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
     ${mediaVideo ? `<meta name="twitter:player" content="${escapeHtml(pageUrl)}" />` : ''}
     <script type="application/ld+json">${jsonScript(videoPageStructuredData)}</script>
     <script src="/page-transitions.js" defer></script>
+    <script src="/spine-embers.js?v=2026-09-30" defer></script>
     <style>
       ${baseStyles()}
       .watch { display: grid; gap: 16px; max-width: 1180px; margin: 0 auto; }

@@ -34,6 +34,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import type { SpinePlayer as SpinePlayerInstance, SpinePlayerConfig } from "@esotericsoftware/spine-player";
+import { startParticleField } from "./particles";
 
 type AppProps = {
   initialFiles?: File[];
@@ -2636,8 +2637,16 @@ function togglePlayerPlayback(player: SpinePlayerInstance | null, onPlayButton: 
   onPlayButton();
 }
 
-function ParticleField({ mode = "rich" }: { mode?: "quiet" | "rich" }) {
-  return null;
+function ParticleField() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    return startParticleField(canvas);
+  }, []);
+
+  return <canvas ref={canvasRef} className="particle-field" aria-hidden="true" />;
 }
 
 async function loadLibraryEntryFiles(entry: LibraryEntry): Promise<File[]> {
@@ -5209,7 +5218,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           Google.
         </p>
       </section>
-      {isEditPage && <ParticleField mode="quiet" />}
+      <ParticleField />
       {publishProgress.open && (
         <div
           className={`publish-progress-overlay is-compact is-${publishProgress.status}`}

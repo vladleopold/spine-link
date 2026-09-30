@@ -385,6 +385,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
     <link rel="stylesheet" href="/page-transitions.css" />
     <script type="application/ld+json">${jsonScript(structuredData)}</script>
     <script src="/page-transitions.js" defer></script>
+    <script src="/spine-embers.js?v=2026-09-30" defer></script>
     <style>
       * { box-sizing: border-box; }
       * { scrollbar-width: thin; scrollbar-color: rgba(74,78,84,.72) transparent; }

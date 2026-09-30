@@ -44,18 +44,6 @@
     });
   }
 
-  function startQuietSeoParticles() {
-    if (document.querySelector(".spine-low-power-particles")) return;
-    const particles = document.createElement("div");
-    particles.className = "spine-low-power-particles";
-    particles.setAttribute("aria-hidden", "true");
-    if (reduceMotion || navigator.connection?.saveData) particles.classList.add("is-static");
-    document.body.prepend(particles);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", startQuietSeoParticles, { once: true });
-  } else {
-    startQuietSeoParticles();
-  }
+  // Летящие искры фона живут отдельным модулем (spine-embers.js) и подключаются
+  // самой страницей, поэтому работают и на страницах без этого файла.
 })();

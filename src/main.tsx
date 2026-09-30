@@ -1,5 +1,6 @@
 import "./styles.css";
 import { getPublishProgress, hidePublishProgress, resumePendingJobs, subscribePublishProgress } from "./publish-job";
+import { startParticleField } from "./particles";
 
 const root = document.getElementById("root");
 export {};
@@ -95,6 +96,7 @@ function renderHomeShell(isDragging = false) {
 
   root.innerHTML = `
     <main class="app-shell is-empty">
+      <canvas class="particle-field" data-home-embers aria-hidden="true"></canvas>
       <section class="seo-intro" aria-label="Spine-Link SEO description">
         <h1>Spine-Link is an animation portfolio platform with Google accounts and uploads</h1>
         <p>World SPINE ARCHIVE is the public archive of user Spine animation works. Anyone can create an anonymous preview with the Create preview button, or sign in with Google to create a profile, choose public portfolio mode with likes, views, showcase and archive publishing, or keep a private library profile that is not listed on the site or in Google.</p>
@@ -175,9 +177,25 @@ function renderHomeShell(isDragging = false) {
     </main>
   `;
 
+  startHomeEmbers();
   wireHomeShell();
   wireUploadToast();
   wirePublishProgressMirror();
+}
+
+/**
+ * Главная до загрузки React рисуется этой статической оболочкой, поэтому
+ * искры запускаем здесь же — иначе фон пустой до первого клика. При
+ * перерисовке оболочки предыдущее поле останавливается, чтобы не было
+ * двух анимаций поверх друг друга.
+ */
+let stopHomeEmbers: (() => void) | null = null;
+
+function startHomeEmbers() {
+  stopHomeEmbers?.();
+  const canvas = root?.querySelector<HTMLCanvasElement>("[data-home-embers]");
+  if (!canvas) return;
+  stopHomeEmbers = startParticleField(canvas);
 }
 
 /**
