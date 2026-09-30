@@ -984,23 +984,21 @@ h1 {
   width: 100%;
   height: 100%;
   padding: 10px;
-  transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 2000ms cubic-bezier(0.45, 0, 0.55, 1);
   will-change: transform;
+}
+
+/* Сдвиг задаётся из JS через --feed-shift: шаг влево и замедленный
+   обратный ход. ease-in-out даёт мягкий старт и остановку. */
+.home-feed-lane.is-shifted {
+  transform: translateX(var(--feed-shift, 0px));
+  transition: transform 2000ms cubic-bezier(0.45, 0, 0.55, 1);
 }
 
 /* Лента, которая ждёт своего выезда, стоит за правым краем. */
 .home-feed-lane.is-waiting {
   transform: translateX(100%);
-}
-
-/* Текущая сцена — на месте, пока не начнётся выход. */
-.home-feed-lane:not(.is-waiting):not(.is-exiting) {
-  transform: translateX(0);
-}
-
-/* Выезжающая сцена уходит влево. */
-.home-feed-lane.is-exiting {
-  transform: translateX(-100%);
+  transition: none;
 }
 
 /* На один кадр переход выключается: лента переставляется вправо без

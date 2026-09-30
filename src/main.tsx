@@ -437,54 +437,57 @@ async function loadHomeFeed() {
 /**
  * Лента анимаций внизу главной.
  *
- * Две параллельные ленты: одна уезжает влево, другая в это же время
- * выезжает справа. Так движение не прерывается на смене сцен — группа
- * уходит налево и одновременно справа приходит новая, без рывков.
+ * Две ленты: текущая стоит на экране, следующая уже загружена и ждёт за
+ * правым краем. Каждые MOVE_MS лента сдвигается на ширину одного шага
+ * плавно (ease-in-out), причём с небольшим замедлением, а затем
+ * возвращается на 14 пикселей назад — так кадры «дышат», а не стоят.
  *
- * Каждая сцена идёт SCENE_MS, затем обе ленты меняются местами.
- * Работы выбираются случайно и не повторяются, пока не закончится
- * весь набор — только тогда список перемешивается заново.
+ * Число карточек в кадре зависит от ширины окна, работы выбираются
+ * случайно и не повторяются, пока есть чем набирать кадры.
  */
 function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: HTMLElement | null) {
   const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   const saveData = Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
 
+  // Сколько карточек помещается в кадр: чем шире экран, тем больше.
+  const sceneSize = () => {
+    const width = viewport?.clientWidth || window.innerWidth;
+    if (width >= 1500) return 4;
+    if (width >= 1100) return 3;
+    if (width >= 760) return 3;
+    return 2;
+  };
+
   // Без движения лента просто показывает работы и не грузит видео.
   if (prefersReducedMotion || saveData) {
-    cards.slice(0, 2).forEach((card) => lane.appendChild(card));
+    cards.slice(0, sceneSize()).forEach((card) => lane.appendChild(card));
     return;
   }
 
-  // Ровно две анимации в сцене: на широком экране рядом, на узком столбиком.
-  const sceneSize = () => 2;
-  const SCENE_MS = 8000;
-  const SLIDE_MS = 900;
+  const MOVE_MS = 7000;
+  const DRIFT_BACK_PX = 14;
+  // Плавный ход с ease-in-out и мягким замедлением в конце.
+  const SLIDE_MS = 2000;
+  const SETTLE_MS = 500;
 
-  // Набор работ для показа: случайный порядок без повторов, пока есть
-  // чем набирать сцены. Исчерпали — перемешиваем заново.
+  // Колода работ: случайный порядок без повторов, пока есть чем набирать.
   let deck = shuffled(cards);
   function nextCards(count: number): HTMLElement[] {
     if (deck.length < count) deck = shuffled(cards);
     return deck.splice(0, count);
   }
 
-  // Две ленты: текущая (на экране) и следующая (готовится справа).
-  // Обе лежат в контейнере #home-feed-track и после каждой сцены
-  // меняются ролями: текущая уходит влево, следующая выходит на её место.
   const laneA = document.createElement("div");
   laneA.className = "home-feed-lane";
   const laneB = document.createElement("div");
   laneB.className = "home-feed-lane is-waiting";
   laneB.setAttribute("aria-hidden", "true");
-
   lane.textContent = "";
   lane.appendChild(laneA);
   lane.appendChild(laneB);
 
-  // Роли лент: current — та, что на экране, waiting — та, что готовится.
   let current: HTMLElement = laneA;
   let waiting: HTMLElement = laneB;
-
 
   const stopVideo = (video: HTMLVideoElement) => {
     try { video.pause(); } catch {}
@@ -508,6 +511,7 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     }
   };
 
+  /** Кладёт карточки в ленту и сразу за��ускает их ролики. */
   function fill(el: HTMLElement, list: HTMLElement[]) {
     el.textContent = "";
     list.forEach((card) => el.appendChild(card));
@@ -519,48 +523,67 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     el.textContent = "";
   }
 
+  /** Ширина одного шага: столько лента уезжает за раз. */
+  const stepSize = () => Math.max(120, (viewport?.clientWidth || window.innerWidth) / sceneSize());
+
   let timer: ReturnType<typeof setTimeout> | null = null;
   let token = 0;
 
   function schedule(fn: () => void, delay: number) {
     if (timer) clearTimeout(timer);
-    const current = token;
+    const myToken = token;
     timer = setTimeout(() => {
-      if (current === token) fn();
+      if (myToken === token) fn();
     }, delay);
   }
 
-  function swap() {
+  function step() {
     const myToken = token;
+    const distance = stepSize();
 
-    // Готовим следующую сцену в ленте, которая стоит за правым краем.
+    // Следующая сцена уже загружена и ждёт за правым краем.
     fill(waiting, nextCards(sceneSize()));
 
-    // Обе ленты едут одновременно: текущая — влево, ожидающая — на место.
+    // Едем влево на ширину шага, плавно и с замедлением.
     requestAnimationFrame(() => {
       if (myToken !== token) return;
-      current.classList.add("is-exiting");
+      current.style.setProperty("--feed-shift", `-${distance}px`);
+      current.classList.add("is-shifted");
       waiting.classList.remove("is-waiting");
+      waiting.style.setProperty("--feed-shift", "0px");
+      waiting.classList.add("is-shifted");
     });
 
     schedule(() => {
       if (myToken !== token) return;
 
-      // Ушедшая влево лента освобождается и становится правой.
+      // Небольшой замедленный обратный ход: лента отходит назад.
+      const back = `calc(-${distance}px + ${DRIFT_BACK_PX}px)`;
+      current.style.setProperty("--feed-shift", back);
+      waiting.style.setProperty("--feed-shift", `${DRIFT_BACK_PX}px`);
+    }, SLIDE_MS);
+
+    schedule(() => {
+      if (myToken !== token) return;
+
       empty(current);
       const used = current;
       current = waiting;
       waiting = used;
 
-      // Лента, ушедшая влево, должна мгновенно оказаться за правым краем.
-      // На кадр отключаем переход, иначе она проедет через весь экран.
-      waiting.classList.remove("is-exiting");
+      // Лента, ушедшая влево, мгновенно переезжает за правый край.
+      waiting.classList.remove("is-shifted");
+      waiting.style.setProperty("--feed-shift", "");
       waiting.classList.add("is-waiting", "is-reset");
       void waiting.offsetWidth;
       waiting.classList.remove("is-reset");
 
-      swap();
-    }, SLIDE_MS + 120);
+      // Следующий шаг начинается, когда сцена уже отыграла своё время.
+      schedule(() => {
+        if (myToken !== token) return;
+        step();
+      }, MOVE_MS - SLIDE_MS - SETTLE_MS);
+    }, SLIDE_MS + SETTLE_MS);
   }
 
   fill(current, nextCards(sceneSize()));
@@ -575,7 +598,6 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
       token++;
       laneA.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
       laneB.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
-      swap();
     }
   });
 
@@ -586,7 +608,7 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     laneB.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
   });
 
-  swap();
+  step();
 }
 
 /** Тасует копию массива: порядок каждый раз случайный. */
