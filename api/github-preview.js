@@ -1350,6 +1350,12 @@ playerElement.addEventListener("touchstart", (event) => {
 </html>`;
 }
 
+/** Безопасная вставка JSON в разметку: экранируем < и разделители строк,
+ *  чтобы данные не сломали HTML и корректно читались парсером. */
+function jsonScript(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
 function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo, robots, playerUrl, archiveUrl }) {
   const title = cleanPublicText(entry?.title || entryId || 'Spine preview');
   const poster = entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
