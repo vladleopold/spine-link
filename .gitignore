@@ -9,3 +9,6 @@ output
 .DS_Store
 .vercel
 scripts/request-indexing.mjs
+
+# Локальные секреты Vercel, не коммитим
+.env.vercel
