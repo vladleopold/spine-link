@@ -335,7 +335,9 @@ async function loadHomeFeed() {
   try {
     const response = await fetch("/api/github-archive?feed=home", { credentials: "same-origin" });
     const payload = (await response.json().catch(() => ({}))) as { entries?: HomeFeedItem[] };
-    entries = (Array.isArray(payload.entries) ? payload.entries : []).filter((entry) => entry?.id).slice(0, 10);
+    // Берём с запасом: 10 работ на сцену по 2 хватило бы на пять сцен,
+    // после чего карточки начали бы повторяться.
+    entries = (Array.isArray(payload.entries) ? payload.entries : []).filter((entry) => entry?.id).slice(0, 60);
   } catch {
     return;
   }
@@ -436,10 +438,13 @@ async function loadHomeFeed() {
 /**
  * Лента анимаций внизу главной.
  *
- * Работает сценами: за раз на экран выезжают 2–3 анимации справа налево и
- * проигрываются по кругу. Когда отыграл самый длинный ролик в группе, группа
- * уезжает влево, а справа приходит следующая — случайная выборка из всех
- * работ. По кругу повторяется бесконечно.
+ * Две параллельные ленты: одна уезжает влево, другая в это же время
+ * выезжает справа. Так движение не прерывается на смене сцен — группа
+ * уходит налево и одновременно справа приходит новая, без рывков.
+ *
+ * Каждая сцена идёт SCENE_MS, затем обе ленты меняются местами.
+ * Работы выбираются случайно и не повторяются, пока не закончится
+ * весь набор — только тогда список перемешивается заново.
  */
 function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: HTMLElement | null) {
   const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
@@ -448,38 +453,40 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
   // Без движения лента просто показывает работы и не грузит видео.
   if (prefersReducedMotion || saveData) {
     lane.classList.add("is-static");
-    cards.slice(0, 3).forEach((card) => lane.appendChild(card));
+    cards.slice(0, 2).forEach((card) => lane.appendChild(card));
     return;
   }
 
-  // Ровно две анимации в сцене: на широком экране они стоят рядом,
-  // на узком — столбиком, и обе помещаются целиком.
+  // Ровно две анимации в сцене: на широком экране рядом, на узком столбиком.
   const sceneSize = () => 2;
+  const SCENE_MS = 8000;
+  const SLIDE_MS = 900;
 
-  let pool = cards.slice();
-  let scene: HTMLElement[] = [];
-  let phase: "in" | "hold" | "out" = "in";
-  let phaseTimer: ReturnType<typeof setTimeout> | null = null;
-  let runToken = 0;
-
-  /** Тасует копию массива: выбор анимаций абсолютно случайный. */
-  function shuffle<T>(items: T[]): T[] {
-    const copy = items.slice();
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
+  // Набор работ для показа: случайный порядок без повторов, пока есть
+  // чем набирать сцены. Исчерпали — перемешиваем заново.
+  let deck = shuffled(cards);
+  function nextCards(count: number): HTMLElement[] {
+    if (deck.length < count) deck = shuffled(cards);
+    return deck.splice(0, count);
   }
 
-  /** Добирает случайные карточки, каждый круг берём их заново. */
-  function drawScene(): HTMLElement[] {
-    const size = sceneSize();
-    if (pool.length < size) pool = shuffle(cards);
-    const picked: HTMLElement[] = [];
-    for (let i = 0; i < size; i++) picked.push(pool.pop() as HTMLElement);
-    return picked;
-  }
+  // Две ленты: текущая (на экране) и следующая (готовится справа).
+  // #home-feed-track остаётся контейнером, а ленты переезжают внутрь него.
+  const stage = document.createElement("div");
+  stage.className = "home-feed-stage";
+  const outgoing = document.createElement("div");
+  outgoing.className = "home-feed-lane";
+  const incoming = document.createElement("div");
+  incoming.className = "home-feed-lane is-waiting";
+  incoming.setAttribute("aria-hidden", "true");
+
+  stage.appendChild(outgoing);
+  stage.appendChild(incoming);
+  lane.textContent = "";
+  lane.appendChild(stage);
+
+  let currentCards = nextCards(sceneSize());
+  let nextCardsSet: HTMLElement[] = [];
 
   const stopVideo = (video: HTMLVideoElement) => {
     try { video.pause(); } catch {}
@@ -491,107 +498,105 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     video.loop = true;
     video.playsInline = true;
     video.preload = "auto";
-
     const start = () => {
       try { video.currentTime = 0; } catch {}
       void video.play().catch(() => undefined);
     };
-
-    if (video.readyState >= 1) {
-      start();
-      return;
+    if (video.readyState >= 1) start();
+    else {
+      video.addEventListener("loadedmetadata", start, { once: true });
+      video.load();
+      setTimeout(start, 350);
     }
-    // Метаданные ещё не пришли: дожидаемся их и запускаем ролик.
-    video.addEventListener("loadedmetadata", start, { once: true });
-    video.load();
-    // Страховка: если событие уже прошло мимо слушателя.
-    setTimeout(start, 350);
   };
 
-  function clearPhaseTimer() {
-    if (phaseTimer) clearTimeout(phaseTimer);
-    phaseTimer = null;
+  function fill(el: HTMLElement, list: HTMLElement[]) {
+    el.textContent = "";
+    list.forEach((card) => el.appendChild(card));
+    el.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
   }
 
-  /** Каждая сцена показывается ровно SCENE_MS, затем уезжает. */
-  const SCENE_MS = 8000;
-
-  function scheduleNext(token: number) {
-    clearPhaseTimer();
-    // Въезд идёт в начале сцены, выезд занимает отдельные ~1с.
-    const delay = phase === "in" ? SCENE_MS - 900 : phase === "out" ? 1000 : 0;
-    phaseTimer = setTimeout(() => runScene(token), delay);
+  function empty(el: HTMLElement) {
+    el.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+    el.textContent = "";
   }
 
-  function runScene(token: number) {
-    if (token !== runToken) return;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let token = 0;
 
-    if (phase === "out" || !scene.length) {
-      // Перед новой сценой возвращаем ленту за правый край, иначе смена
-      // случится мгновенно, без въезда.
-      lane.classList.add("is-scored");
-      scene.forEach((card) => {
-        const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
-        if (video) stopVideo(video);
-      });
-      lane.textContent = "";
-      scene = drawScene();
-      scene.forEach((card) => lane.appendChild(card));
-      lane.classList.remove("is-scored");
-      phase = "in";
-      // Въезд: карточки стартуют за правым краем и уезжают на свои места.
-      requestAnimationFrame(() => {
-        if (token !== runToken) return;
-        lane.classList.add("is-onstage");
-        scene.forEach((card) => {
-          const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
-          if (video) playVideo(video);
-        });
-      });
-      scheduleNext(token);
-      return;
-    }
-
-    // Первая фаза сцены: ждём, пока въезд закончится, и запускаем видео.
-    if (phase === "in") {
-      phase = "hold";
-      scheduleNext(token);
-      return;
-    }
-
-    // Все ролики отыграли цикл — уводим группу влево.
-    phase = "out";
-    lane.classList.add("is-scored");
-    lane.classList.remove("is-onstage");
-    scheduleNext(token);
+  function schedule(fn: () => void, delay: number) {
+    if (timer) clearTimeout(timer);
+    const current = token;
+    timer = setTimeout(() => {
+      if (current === token) fn();
+    }, delay);
   }
 
-  function handleVisibilityChange() {
-    if (document.hidden) {
-      runToken++;
-      clearPhaseTimer();
-      scene.forEach((card) => {
-        const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
-        if (video) stopVideo(video);
-      });
-    } else {
-      runToken++;
-      phase = "out";
-      runScene(runToken);
-    }
-  }
+  function swap() {
+    const myToken = token;
 
-  document.addEventListener("visibilitychange", handleVisibilityChange);
-  window.addEventListener("pagehide", () => {
-    runToken++;
-    clearPhaseTimer();
-    scene.forEach((card) => {
-      const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
-      if (video) stopVideo(video);
+    // Готовим следующую сцену за правым краем.
+    nextCardsSet = nextCards(sceneSize());
+    fill(incoming, nextCardsSet);
+
+    // Обе ленты одновременно едут: текущая — влево, следующая — на место.
+    requestAnimationFrame(() => {
+      if (myToken !== token) return;
+      outgoing.classList.add("is-exiting");
+      incoming.classList.remove("is-waiting");
     });
+
+    schedule(() => {
+      if (myToken !== token) return;
+      empty(outgoing);
+      outgoing.classList.remove("is-exiting");
+
+      // Ленты меняются местами: бывшая следующая становится текущей.
+      const temp = outgoing;
+      outgoing.replaceWith(incoming);
+      incoming.replaceWith(temp);
+      incoming.classList.remove("is-exiting");
+      incoming.classList.add("is-waiting");
+
+      currentCards = nextCardsSet;
+      nextCardsSet = [];
+      swap();
+    }, SLIDE_MS + 120);
+  }
+
+  fill(outgoing, currentCards);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      token++;
+      if (timer) clearTimeout(timer);
+      outgoing.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+      incoming.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+    } else {
+      token++;
+      outgoing.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
+      swap();
+    }
   });
 
-  runScene(runToken);
+  window.addEventListener("pagehide", () => {
+    token++;
+    if (timer) clearTimeout(timer);
+    outgoing.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+    incoming.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+  });
+
+  swap();
+}
+
+/** Тасует копию массива: порядок каждый раз случайный. */
+function shuffled<T>(items: T[]): T[] {
+  const copy = items.slice();
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
 }
 function renderLoadingShell() {
   if (!root) return;

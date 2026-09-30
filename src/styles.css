@@ -955,33 +955,52 @@ h1 {
 
 /* Лента анимаций: сцена из 2–3 карточек выезжает справа, проигрывается
    и уезжает влево. Двигает JS-движок через .is-onstage. */
-.home-feed-track,
+/* .home-feed-track — контейнер для двух лент, ленты лежат внутри него
+   абсолютно, чтобы двигаться поверх друг друга. */
+.home-feed-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+}
+
+/* Две ленты двигаются одновременно: текущая уезжает влево, следующая
+   выезжает справа. Обе едут одинаковое время, поэтому смена сцены
+   проходит без рывка. Ленты абсолютны внутри .home-feed-track. */
+/* Контейнер сцены: обе ленты лежат внутри него и двигаются поверх друг друга. */
+.home-feed-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 .home-feed-lane {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
   align-items: stretch;
   gap: 10px;
   width: 100%;
   height: 100%;
   padding: 10px;
-}
-
-.home-feed-lane {
   transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
 
-/* Три состояния сцены: за правым краем (ждёт) → на сцене → за левым (уходит).
-   Без .is-scored сцена считается ещё не въехавшей. */
-.home-feed-lane:not(.is-scored):not(.is-onstage) {
+/* Лента, которая ждёт своего выезда, стоит за правым краем. */
+.home-feed-lane.is-waiting {
   transform: translateX(100%);
 }
 
-.home-feed-lane.is-scored:not(.is-onstage) {
-  transform: translateX(-100%);
+/* Текущая сцена — на месте, пока не начнётся выход. */
+.home-feed-lane:not(.is-waiting):not(.is-exiting) {
+  transform: translateX(0);
 }
 
-.home-feed-lane.is-onstage {
-  transform: translateX(0);
+/* Выезжающая сцена уходит влево. */
+.home-feed-lane.is-exiting {
+  transform: translateX(-100%);
 }
 
 /* Пауза при наведении, чтобы можно было рассмотреть кадр. */
@@ -989,7 +1008,10 @@ h1 {
   transition-duration: 0ms;
 }
 
+/* Без движения (prefers-reduced-motion или экономия трафика) показываем
+   работы обычной сеткой внутри контейнера, без абсолютного позиционирования. */
 .home-feed-lane.is-static {
+  position: relative;
   justify-content: center;
 }
 
