@@ -437,58 +437,74 @@ async function loadHomeFeed() {
 /**
  * Лента анимаций внизу главной.
  *
- * Две ленты: текущая стоит на экране, следующая уже загружена и ждёт за
- * правым краем. Каждые MOVE_MS лента сдвигается на ширину одного шага
- * плавно (ease-in-out), причём с небольшим замедлением, а затем
- * возвращается на 14 пикселей назад — так кадры «дышат», а не стоят.
+ * Одна сплошная лента, которая каждые MOVE_MS сдвигается ровно на
+ * ширину одной карточки. Дальше на место ушедшей карточки мгновенно
+ * добавляется новая — она появляется за правым краем и выезжает уже
+ * загруженной, поэтому лента непрерывна и ничего не накладывается.
  *
- * Число карточек в кадре зависит от ширины окна, работы выбираются
- * случайно и не повторяются, пока есть чем набирать кадры.
+ * Число видимых карточек зависит от ширины окна, работы выбираются
+ * случайно и не повторяются, пока есть чем набирать.
  */
 function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: HTMLElement | null) {
   const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   const saveData = Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
 
-  // Сколько карточек помещается в кадр: чем шире экран, тем больше.
-  // Считаем по ширине окна, а не контейнера: лента уже, чем окно,
-  // и по ней порог не достигался.
-  const sceneSize = () => {
+  const MOVE_MS = 7000;
+  const DRIFT_BACK_PX = 14;
+  const SLIDE_MS = 2000;
+  const SETTLE_MS = 500;
+
+  // Сколько карточек влезает в окно: считаем по ширине окна, а не
+  // контейнера — лента шире окна, порог по ней не считается.
+  const visibleCount = () => {
     const width = Math.max(window.innerWidth, viewport?.clientWidth || 0);
     if (width >= 1400) return 4;
     if (width >= 900) return 3;
     return 2;
   };
 
+  // На узком экране карточки идут столбиком, и лента едет по вертикали.
+  const isColumn = () => (viewport?.clientWidth || window.innerWidth) < 760;
+
+  /** Размер карточки вдоль оси движения. */
+  const cardSize = () => {
+    const gap = 10;
+    const padding = 20;
+    if (isColumn()) {
+      const height = viewport?.clientHeight || window.innerHeight;
+      const count = visibleCount();
+      return Math.max(80, (height - padding - gap * (count - 1)) / count);
+    }
+    const width = viewport?.clientWidth || window.innerWidth;
+    const count = visibleCount();
+    return Math.max(120, (width - padding - gap * (count - 1)) / count);
+  };
+
+  /** Сдвиг ленты на величину шага по нужной оси. */
+  const shiftBy = (distance: number) =>
+    isColumn() ? `translateY(${-distance}px)` : `translateX(${-distance}px)`;
+
+  const applyCardSize = () => {
+    lane.classList.toggle("is-column", isColumn());
+    const size = Math.round(cardSize());
+    lane.style.setProperty("--home-feed-card-width", `${size}px`);
+    lane.style.setProperty("--home-feed-card-height", `${size}px`);
+  };
+
   // Без движения лента просто показывает работы и не грузит видео.
   if (prefersReducedMotion || saveData) {
-    cards.slice(0, sceneSize()).forEach((card) => lane.appendChild(card));
+    applyCardSize();
+    lane.classList.add("is-static");
+    cards.slice(0, visibleCount()).forEach((card) => lane.appendChild(card));
     return;
   }
 
-  const MOVE_MS = 7000;
-  const DRIFT_BACK_PX = 14;
-  // Плавный ход с ease-in-out и мягким замедлением в конце.
-  const SLIDE_MS = 2000;
-  const SETTLE_MS = 500;
-
   // Колода работ: случайный порядок без повторов, пока есть чем набирать.
   let deck = shuffled(cards);
-  function nextCards(count: number): HTMLElement[] {
-    if (deck.length < count) deck = shuffled(cards);
-    return deck.splice(0, count);
+  function nextCard(): HTMLElement {
+    if (!deck.length) deck = shuffled(cards);
+    return deck.pop() as HTMLElement;
   }
-
-  const laneA = document.createElement("div");
-  laneA.className = "home-feed-lane";
-  const laneB = document.createElement("div");
-  laneB.className = "home-feed-lane is-waiting";
-  laneB.setAttribute("aria-hidden", "true");
-  lane.textContent = "";
-  lane.appendChild(laneA);
-  lane.appendChild(laneB);
-
-  let current: HTMLElement = laneA;
-  let waiting: HTMLElement = laneB;
 
   const stopVideo = (video: HTMLVideoElement) => {
     try { video.pause(); } catch {}
@@ -512,35 +528,32 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     }
   };
 
-  /** Кладёт карточки в ленту и сразу за��ускает их ролики. */
-  function fill(el: HTMLElement, list: HTMLElement[]) {
-    el.textContent = "";
-    list.forEach((card) => el.appendChild(card));
-    el.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
+  /** Добавляет карточки в конец ленты и запускает их ролики. */
+  function append(count: number) {
+    const added: HTMLElement[] = [];
+    for (let i = 0; i < count; i++) {
+      const card = nextCard();
+      lane.appendChild(card);
+      added.push(card);
+    }
+    added.forEach((card) => {
+      card.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
+    });
   }
 
-  function empty(el: HTMLElement) {
-    el.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
-    el.textContent = "";
+  /** Убирает ушедшие слева карточки, чтобы лента не росла бесконечно. */
+  function trim() {
+    while (lane.children.length > visibleCount() + 2) {
+      const first = lane.firstElementChild as HTMLElement | null;
+      if (!first) break;
+      first.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+      first.remove();
+    }
   }
-
-  /** Ширина одного шага: столько лента уезжает за раз. */
-  const stepSize = () => {
-    const width = viewport?.clientWidth || window.innerWidth;
-    return Math.max(120, width / sceneSize());
-  };
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   let driftTimer: ReturnType<typeof setTimeout> | null = null;
   let token = 0;
-
-  function schedule(fn: () => void, delay: number) {
-    if (timer) clearTimeout(timer);
-    const myToken = token;
-    timer = setTimeout(() => {
-      if (myToken === token) fn();
-    }, delay);
-  }
 
   function clearDrift() {
     if (driftTimer) clearTimeout(driftTimer);
@@ -549,68 +562,61 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
 
   function step() {
     const myToken = token;
-    const distance = stepSize();
+    const distance = cardSize() + 10;
 
-    // Следующая сцена уже загружена и ждёт за правым краем.
-    fill(waiting, nextCards(sceneSize()));
+    // Держим ленту длиннее окна: пока карточки видимы, с краю есть запас.
+    append(1);
 
-    // Едем влево на ширину шага, плавно и с замедлением.
-    requestAnimationFrame(() => {
-      if (myToken !== token) return;
-      current.style.setProperty("--feed-shift", `-${distance}px`);
-      current.classList.add("is-shifted");
-      waiting.classList.remove("is-waiting");
-      waiting.style.setProperty("--feed-shift", "0px");
-      waiting.classList.add("is-shifted");
-    });
+    // Плавный ход ровно на одну карточку.
+    lane.style.transform = shiftBy(distance);
 
-    // Небольшой замедленный обратный ход: лента отходит на 14 пикселей
-    // назад и медленно возвращается на место. Отдельный таймер, чтобы
-    // не затирать таймер сцены.
+    // Замедленный обратный ход на DRIFT_BACK_PX — лента будто отдыхает.
     clearDrift();
     driftTimer = setTimeout(() => {
       if (myToken !== token) return;
-      current.style.setProperty("--feed-shift", `calc(-${distance}px + ${DRIFT_BACK_PX}px)`);
-      waiting.style.setProperty("--feed-shift", `${DRIFT_BACK_PX}px`);
+      lane.style.transform = shiftBy(distance - DRIFT_BACK_PX);
     }, SLIDE_MS);
 
-    schedule(() => {
-      if (myToken !== token) return;
-
-      clearDrift();
-      empty(current);
-      const used = current;
-      current = waiting;
-      waiting = used;
-
-      // Лента, ушедшая влево, мгновенно переезжает за правый край.
-      waiting.classList.remove("is-shifted");
-      waiting.style.setProperty("--feed-shift", "");
-      waiting.classList.add("is-waiting", "is-reset");
-      void waiting.offsetWidth;
-      waiting.classList.remove("is-reset");
-
-      // Следующий шаг начинается, когда сцена уже отыграла своё время.
-      schedule(() => {
-        if (myToken !== token) return;
-        step();
-      }, MOVE_MS - SLIDE_MS - SETTLE_MS);
-    }, SLIDE_MS + SETTLE_MS);
+    scheduleStep(myToken);
   }
 
-  fill(current, nextCards(sceneSize()));
+  function scheduleStep(myToken: number) {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (myToken !== token) return;
+      clearDrift();
+      trim();
+      lane.style.transform = "translateX(0)";
+      step();
+    }, MOVE_MS - SLIDE_MS);
+  }
+
+  function resetLane() {
+    lane.classList.add("is-instant");
+    lane.style.transform = "translateX(0)";
+    void lane.offsetWidth;
+    lane.classList.remove("is-instant");
+  }
+
+  applyCardSize();
+  // Первое наполнение: заполняем окно и ещё немного про запас.
+  append(visibleCount() + 2);
+  window.addEventListener("resize", () => {
+    applyCardSize();
+    trim();
+  });
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       token++;
       if (timer) clearTimeout(timer);
       clearDrift();
-      laneA.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
-      laneB.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+      lane.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
     } else {
       token++;
-      laneA.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
-      laneB.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
+      resetLane();
+      lane.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(playVideo);
+      scheduleStep(token);
     }
   });
 
@@ -618,11 +624,10 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     token++;
     if (timer) clearTimeout(timer);
     clearDrift();
-    laneA.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
-    laneB.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
+    lane.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stopVideo);
   });
 
-  step();
+  scheduleStep(token);
 }
 
 /** Тасует копию массива: порядок каждый раз случайный. */

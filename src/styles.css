@@ -953,70 +953,48 @@ h1 {
   overflow: hidden;
 }
 
-/* Лента анимаций: сцена из 2–3 карточек выезжает справа, проигрывается
-   и уезжает влево. Двигает JS-движок через .is-onstage. */
-/* .home-feed-track — контейнер для двух лент, ленты лежат внутри него
-   абсолютно, чтобы двигаться поверх друг друга. */
+/* Лента анимаций — одна сплошная полоса карточек, которая сдвигается
+   ровно на один шаг. Никаких вторых лент и перестановок: полоса не
+   разрывается, не накладывается сама на себя и не дёргается.
+   Всё, что выходит за правый край, обрезается .home-feed-viewport. */
 .home-feed-track {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  padding: 10px;
-}
-
-/* Две ленты двигаются одновременно: текущая уезжает влево, следующая
-   выезжает справа. Обе едут одинаковое время, поэтому смена сцены
-   проходит без рывка. Ленты абсолютны внутри .home-feed-track. */
-/* Контейнер сцены: обе ленты лежат внутри него и двигаются поверх друг друга. */
-.home-feed-stage {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.home-feed-lane {
-  position: absolute;
-  top: 0;
-  left: 0;
   display: flex;
   align-items: stretch;
   gap: 10px;
-  width: 100%;
+  width: max-content;
   height: 100%;
   padding: 10px;
-  transition: transform 2000ms cubic-bezier(0.45, 0, 0.55, 1);
   will-change: transform;
-}
-
-/* Сдвиг задаётся из JS через --feed-shift: шаг влево и замедленный
-   обратный ход. ease-in-out даёт мягкий старт и остановку. */
-.home-feed-lane.is-shifted {
-  transform: translateX(var(--feed-shift, 0px));
   transition: transform 2000ms cubic-bezier(0.45, 0, 0.55, 1);
 }
 
-/* Лента, которая ждёт своего выезда, стоит за правым краем. */
-.home-feed-lane.is-waiting {
-  transform: translateX(100%);
+.home-feed-track.is-instant {
   transition: none;
 }
 
-/* На один кадр переход выключается: лента переставляется вправо без
-   проезда через весь экран. */
-.home-feed-lane.is-reset {
-  transition: none;
+/* Каждая карточка занимает ровно одну долю окна — на столько и сдвигается
+   лента за шаг. Так шаг всегда совпадает с размером карточки и лента
+   уезжает ровно на одну карточку, без недобора. */
+.home-feed-track .home-feed-card {
+  flex: 0 0 var(--home-feed-card-width, 240px);
+  height: 100%;
 }
 
-/* Пауза при наведении, чтобы можно было рассмотреть кадр. */
-.home-feed-lane:hover {
-  transition-duration: 0ms;
+/* На мобильных карточки идут столбиком, и лента едет вверх. */
+.home-feed-track.is-column {
+  flex-direction: column;
+}
+
+.home-feed-track.is-column .home-feed-card {
+  flex: 0 0 var(--home-feed-card-height, 120px);
+  width: 100%;
 }
 
 /* Без движения (prefers-reduced-motion или экономия трафика) показываем
-   работы обычной сеткой внутри контейнера, без абсолютного позиционирования. */
-.home-feed-lane.is-static {
-  position: relative;
-  justify-content: center;
+   работы обычной сеткой без сдвига. */
+.home-feed-track.is-static {
+  width: 100%;
+  transform: none !important;
 }
 
 .home-feed-card {
@@ -5568,16 +5546,9 @@ h1 {
     height: clamp(330px, 44svh, 430px);
   }
 
-  .app-shell.is-empty:not(.is-edit-page) .home-feed-lane {
-    flex-direction: column;
-    gap: 8px;
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-track {
     padding: 8px 12px;
-  }
-
-  .app-shell.is-empty:not(.is-edit-page) .home-feed-lane .home-feed-card {
-    flex: 1 1 0;
-    min-height: 0;
-    width: 100%;
+    gap: 8px;
   }
 
   .app-shell.is-empty:not(.is-edit-page) .stage {
@@ -6884,16 +6855,9 @@ h1 {
     height: clamp(330px, 44svh, 430px);
   }
 
-  .app-shell.is-empty:not(.is-edit-page) .home-feed-lane {
-    flex-direction: column;
-    gap: 8px;
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-track {
     padding: 8px 12px;
-  }
-
-  .app-shell.is-empty:not(.is-edit-page) .home-feed-lane .home-feed-card {
-    flex: 1 1 0;
-    min-height: 0;
-    width: 100%;
+    gap: 8px;
   }
 
   .app-shell.is-empty:not(.is-edit-page) .stage {
