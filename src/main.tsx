@@ -388,9 +388,12 @@ async function loadHomeFeed() {
     if (webmSrc) {
       const video = document.createElement("video");
       video.className = "home-feed-video";
-      video.src = webmSrc;
+      // Источник назначит движок, когда карточка подойдёт к экрану.
+      // Так в памяти держится только несколько роликов, а не все сразу.
+      video.dataset.src = webmSrc;
       if (poster) video.poster = poster;
       video.muted = true;
+      video.loop = true;
       video.playsInline = true;
       video.preload = "none";
       video.setAttribute("aria-hidden", "true");
@@ -431,39 +434,53 @@ async function loadHomeFeed() {
   track.textContent = "";
   feedSection.style.display = "";
 
-  startHomeFeed(track, cards);
+  startHomeFeed(track, cards, viewport);
 }
 
 
 /**
  * Лента анимаций.
  *
- * Лента — это один ряд карточек, который бесконечно едет влево. Движение
- * задаётся единственной переменной `moved`: она только растёт, поэтому
- * полоса никогда не едет назад.
+ * Ряд карточек бесконечно едет влево: смещение задаётся одной переменной,
+ * которая только растёт, поэтому полоса никогда не едет назад.
  *
- * Видео играет, пока карточка видна на экране, и останавливается, когда
- * уезжает за край или уходит в фон вкладки.
+ * Видео грузится не сразу: источник ставится только когда карточка
+ * подошла к экрану, и снимается когда она ушла далеко. Одновременно
+ * загружено несколько роликов — те, что сейчас видны или вот-вот
+ * появятся. Видео играет, пока карточка в кадре, и останавливается,
+ * когда уезжает за край или вкладка уходит в фон.
  */
-function startHomeFeed(track: HTMLElement, cards: HTMLElement[]) {
+function startHomeFeed(track: HTMLElement, cards: HTMLElement[], viewport: HTMLElement | null) {
   const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   const saveData = Boolean((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData);
   const animate = !reduceMotion && !saveData;
 
-  // Карточки идут по кругу: когда лента уехала на длину набора, сдвиг
-  // обнуляется и набор встаёт в начало — визуально разрыва не видно.
   const lane = document.createElement("div");
   lane.className = "home-feed-lane";
   cards.forEach((card) => lane.appendChild(card));
   track.textContent = "";
   track.appendChild(lane);
 
-  // Видео запускаем только у видимых карточек.
-  const videos = new WeakMap<HTMLElement, HTMLVideoElement>();
-  lane.querySelectorAll<HTMLElement>(".home-feed-card").forEach((card) => {
-    const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
-    if (video) videos.set(card, video);
-  });
+  const videoOf = (card: Element) => card.querySelector<HTMLVideoElement>(".home-feed-video");
+  const viewportWidth = () => viewport?.clientWidth || window.innerWidth;
+
+  /** Назначает источник, если он ещё не загружен. */
+  const loadVideo = (video: HTMLVideoElement) => {
+    const src = video.dataset.src;
+    if (!src || video.src) return;
+    video.src = src;
+    video.preload = "auto";
+    video.load();
+  };
+
+  /** Снимает источник, чтобы освободить память и сеть. */
+  const freeVideo = (video: HTMLVideoElement) => {
+    if (!video.src) return;
+    video.pause();
+    video.removeAttribute("src");
+    video.preload = "none";
+    try { video.load(); } catch {}
+  };
 
   const play = (video: HTMLVideoElement) => {
     video.muted = true;
@@ -474,86 +491,92 @@ function startHomeFeed(track: HTMLElement, cards: HTMLElement[]) {
 
   const stop = (video: HTMLVideoElement) => {
     video.pause();
-    try { video.currentTime = 0; } catch {}
   };
 
-  if (animate) {
-    const speed = 34; // пикселей в секунду
-
-    let moved = 0;
-    let cycle = 0;
-    let last = performance.now();
-    let raf = 0;
-
-    const cycleWidth = () => lane.scrollWidth;
-
-    const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      moved += speed * dt;
-
-      const width = cycleWidth();
-      // Полосу шириной в два набора: сдвиг доходит ровно до конца
-      // первого набора и повторяется — картинки едут бесконечно.
-      if (width > 0 && moved >= width) {
-        moved -= width;
-        cycle++;
+  // Порциями грузим ролики у края экрана и играем только у видимых.
+  const watch = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const card = entry.target as HTMLElement;
+        const video = videoOf(card);
+        if (!video) continue;
+        if (entry.isIntersecting) {
+          loadVideo(video);
+          if (entry.intersectionRatio > 0.2) play(video);
+        } else {
+          // Карточка ушла из поля зрения: видео останавливаем, а если
+          // она уехала за экран целиком — источник снимаем.
+          stop(video);
+          const card = entry.target as HTMLElement;
+          const rect = card.getBoundingClientRect();
+          const width = viewportWidth();
+          if (rect.right <= 0 || rect.left >= width) freeVideo(video);
+        }
       }
-      lane.style.transform = `translateX(${-moved}px)`;
-      raf = window.requestAnimationFrame(tick);
-    };
+    },
+    // Загружаем заранее, за пол-экрана до появления.
+    { rootMargin: "50% 0px", threshold: [0, 0.2, 0.5] },
+  );
+  lane.querySelectorAll<HTMLElement>(".home-feed-card").forEach((card) => watch.observe(card));
 
-    // Второй набор карточек — копии первых, чтобы полоса была вдвое
-    // длиннее окна и переход был незаметен.
-    cards.forEach((card) => {
-      const clone = card.cloneNode(true) as HTMLElement;
-      const video = clone.querySelector<HTMLVideoElement>(".home-feed-video");
-      if (video) {
-        video.pause();
-        video.removeAttribute("autoplay");
-      }
-      lane.appendChild(clone);
-    });
-
-    lane.style.transform = "translateX(0px)";
-    raf = window.requestAnimationFrame(tick);
-
-    const onVisibility = () => {
-      if (document.hidden) {
-        window.cancelAnimationFrame(raf);
-        raf = 0;
-      } else if (!raf) {
-        last = performance.now();
-        raf = window.requestAnimationFrame(tick);
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-
-    window.addEventListener("pagehide", () => {
-      window.cancelAnimationFrame(raf);
-      document.removeEventListener("visibilitychange", onVisibility);
-    });
-
-    // Видео включается, когда карточка попадает в кадр.
-    if ("IntersectionObserver" in window) {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            const video = videos.get(entry.target as HTMLElement);
-            if (!video) continue;
-            if (entry.isIntersecting) play(video);
-            else stop(video);
-          }
-        },
-        { threshold: 0.25 },
-      );
-      lane.querySelectorAll<HTMLElement>(".home-feed-card").forEach((card) => observer.observe(card));
-    }
-    void cycle;
-  } else {
-    // Без движения просто показываем работы.
+  if (!animate) {
     track.classList.add("is-static");
+    return;
   }
+
+  const speed = 34; // пикселей в секунду
+  let moved = 0;
+  let raf = 0;
+  let last = performance.now();
+
+  const tick = (now: number) => {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    moved += speed * dt;
+
+    // Ряд состоит из двух одинаковых наборов: когда лента проехала длину
+    // набора, сдвиг возвращается к началу — второй набор встаёт на место
+    // и разрыва не видно.
+    const width = lane.scrollWidth / 2;
+    if (width > 0 && moved >= width) {
+      moved -= width;
+      cards.forEach((card) => {
+        if (!card.parentElement) lane.appendChild(card);
+      });
+    }
+    lane.style.transform = `translateX(${-moved}px)`;
+    raf = window.requestAnimationFrame(tick);
+  };
+
+  // Второй набор — копии первых, чтобы полоса была вдвое длиннее окна.
+  cards.forEach((card) => {
+    const clone = card.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach((v) => {
+      v.removeAttribute("src");
+      v.preload = "none";
+    });
+    lane.appendChild(clone);
+  });
+
+  lane.style.transform = "translateX(0px)";
+  raf = window.requestAnimationFrame(tick);
+
+  const onVisibility = () => {
+    if (document.hidden) {
+      window.cancelAnimationFrame(raf);
+      raf = 0;
+      lane.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach(stop);
+    } else if (!raf) {
+      last = performance.now();
+      raf = window.requestAnimationFrame(tick);
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+
+  window.addEventListener("pagehide", () => {
+    window.cancelAnimationFrame(raf);
+    document.removeEventListener("visibilitychange", onVisibility);
+  });
 }
 
 /** Тасует копию массива: порядок каждый раз случайный. */
