@@ -958,6 +958,12 @@ h1 {
    разрывается, не накладывается сама на себя и не дёргается.
    Всё, что выходит за правый край, обрезается .home-feed-viewport. */
 .home-feed-track {
+  overflow: hidden;
+}
+
+/* Лента с карточками: едет влево через transform, который задаёт JS.
+   Ширина max-content, чтобы полоса была ровно в два набора карточек. */
+.home-feed-lane {
   display: flex;
   align-items: stretch;
   gap: 10px;
@@ -965,17 +971,21 @@ h1 {
   height: 100%;
   padding: 10px;
   will-change: transform;
-  transition: transform 2000ms cubic-bezier(0.45, 0, 0.55, 1);
 }
 
-.home-feed-track.is-instant {
-  transition: none;
+.home-feed-lane .home-feed-card {
+  flex: 0 0 var(--home-feed-card-width, 240px);
+  height: 100%;
 }
 
-/* Каждая карточка занимает ровно одну долю окна — на столько и сдвигается
-   лента за шаг. Так шаг всегда совпадает с размером карточки и лента
-   уезжает ровно на одну карточку, без недобора. */
-.home-feed-track .home-feed-card {
+/* Без движения лента просто показывает работы. */
+.home-feed-track.is-static .home-feed-lane {
+  width: 100%;
+  flex-wrap: wrap;
+  transform: none !important;
+}
+
+.home-feed-card {
   flex: 0 0 var(--home-feed-card-width, 240px);
   height: 100%;
 }
