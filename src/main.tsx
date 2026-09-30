@@ -463,32 +463,20 @@ function startHomeFeedScenes(lane: HTMLElement, cards: HTMLElement[], viewport: 
     return 2;
   };
 
-  // На узком экране карточки идут столбиком, и лента едет по вертикали.
-  const isColumn = () => (viewport?.clientWidth || window.innerWidth) < 760;
-
-  /** Размер карточки вдоль оси движения. */
+  /** Ширина карточки: ровно одна доля окна, на неё же и сдвиг. */
   const cardSize = () => {
-    const gap = 10;
-    const padding = 20;
-    if (isColumn()) {
-      const height = viewport?.clientHeight || window.innerHeight;
-      const count = visibleCount();
-      return Math.max(80, (height - padding - gap * (count - 1)) / count);
-    }
     const width = viewport?.clientWidth || window.innerWidth;
     const count = visibleCount();
+    const gap = 10;
+    const padding = 20;
     return Math.max(120, (width - padding - gap * (count - 1)) / count);
   };
 
-  /** Сдвиг ленты на величину шага по нужной оси. */
-  const shiftBy = (distance: number) =>
-    isColumn() ? `translateY(${-distance}px)` : `translateX(${-distance}px)`;
+  /** Лента всегда едет влево: горизонтальное движение на всех экранах. */
+  const shiftBy = (distance: number) => `translateX(${-distance}px)`;
 
   const applyCardSize = () => {
-    lane.classList.toggle("is-column", isColumn());
-    const size = Math.round(cardSize());
-    lane.style.setProperty("--home-feed-card-width", `${size}px`);
-    lane.style.setProperty("--home-feed-card-height", `${size}px`);
+    lane.style.setProperty("--home-feed-card-width", `${Math.round(cardSize())}px`);
   };
 
   // Без движения лента просто показывает работы и не грузит видео.

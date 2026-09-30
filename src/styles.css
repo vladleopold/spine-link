@@ -980,16 +980,6 @@ h1 {
   height: 100%;
 }
 
-/* На мобильных карточки идут столбиком, и лента едет вверх. */
-.home-feed-track.is-column {
-  flex-direction: column;
-}
-
-.home-feed-track.is-column .home-feed-card {
-  flex: 0 0 var(--home-feed-card-height, 120px);
-  width: 100%;
-}
-
 /* Без движения (prefers-reduced-motion или экономия трафика) показываем
    работы обычной сеткой без сдвига. */
 .home-feed-track.is-static {
@@ -5536,16 +5526,11 @@ h1 {
   }
 
   .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
-    flex: 1 1 0;
     height: clamp(132px, 15svh, 190px);
   }
 
   /* На узких экранах две карточки идут столбиком: лента выше, но
      обе анимации помещаются целиком и не обрезаются по краям. */
-  .app-shell.is-empty:not(.is-edit-page) .home-portfolio-feed {
-    height: clamp(330px, 44svh, 430px);
-  }
-
   .app-shell.is-empty:not(.is-edit-page) .home-feed-track {
     padding: 8px 12px;
     gap: 8px;
@@ -6845,16 +6830,11 @@ h1 {
   }
 
   .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
-    flex: 1 1 0;
     height: clamp(132px, 15svh, 190px);
   }
 
   /* На узких экранах две карточки идут столбиком: лента выше, но
      обе анимации помещаются целиком и не обрезаются по краям. */
-  .app-shell.is-empty:not(.is-edit-page) .home-portfolio-feed {
-    height: clamp(330px, 44svh, 430px);
-  }
-
   .app-shell.is-empty:not(.is-edit-page) .home-feed-track {
     padding: 8px 12px;
     gap: 8px;
