@@ -750,7 +750,7 @@ function createHtml(config) {
       .library-nav-button--next { right: 14px; }
       #sidebar { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
       .preview-card { padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
-      .preview-top-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, .9fr); gap: 12px; align-items: stretch; margin-bottom: 12px; }
+      .preview-top-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; margin-bottom: 12px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
       .section-title { margin: 0 0 10px; color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
       .seo-video-card { display: none; }
       .seo-video-card.is-visible { display: block; }
@@ -768,20 +768,30 @@ function createHtml(config) {
       select { min-height: 48px; padding: 0 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; color: #e7edf4; background: #1a2027; }
       button { min-height: 38px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; color: rgba(231,237,244,.86); background: rgba(255,255,255,.045); cursor: pointer; }
       button.active, button:hover { border-color: rgba(140,199,255,.82); color: #fff; background: rgba(71,156,255,.22); }
-      #animation-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; }
+      .animation-card { position: relative; }
+      .animation-menu-button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 0 14px; }
+      .animation-menu-button .animation-dots { flex: 0 0 auto; color: #8cc7ff; font-size: 20px; font-weight: 900; line-height: 1; letter-spacing: .18em; }
+      .animation-menu-button .animation-current { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: 14px; font-weight: 850; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+      .animation-menu-button[aria-expanded="true"] { border-color: rgba(140,199,255,.82); color: #fff; background: rgba(71,156,255,.22); }
+      .animation-menu { display: grid; gap: 6px; max-height: 280px; overflow: auto; margin-top: 8px; padding: 8px; border: 1px solid rgba(140,199,255,.34); border-radius: 10px; background: rgba(9,13,17,.94); box-shadow: 0 22px 50px rgba(0,0,0,.52); backdrop-filter: blur(12px); }
+      .animation-menu[hidden] { display: none; }
       .note-text { margin: 0; color: rgba(231,237,244,.88); font-size: 16px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
       .note-card:empty { display: none; }
       .owner-card { display: none; gap: 12px; }
       .owner-card.is-visible { display: grid; }
-      .preview-top-row .preview-card { min-height: 0; }
-      .preview-top-row .section-title { margin-bottom: 8px; }
-      .preview-top-row .owner-profile { gap: 10px; }
-      .preview-top-row .owner-avatar { width: 40px; height: 40px; }
-      .preview-top-row .owner-profile strong { font-size: 15px; }
-      .preview-top-row .owner-profile span { font-size: 11px; }
-      .preview-top-row .like-card { display: grid; align-content: start; gap: 10px; }
-      .preview-top-row .like-card .preview-like-button { min-height: 42px; }
-      .preview-top-row .preview-view-count { margin-top: 0; }
+      .preview-top-row .preview-card { min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+      .preview-top-row .section-title, .preview-top-row .like-card .section-title { display: none; }
+      .preview-top-row .owner-card { display: none; }
+      .preview-top-row .owner-card.is-visible { display: flex; flex: 1 1 auto; min-width: 0; }
+      .preview-top-row .like-card { display: contents; }
+      .preview-top-row .owner-profile { flex: 1 1 auto; gap: 10px; min-width: 0; overflow: hidden; }
+      .preview-top-row .owner-avatar { flex: 0 0 40px; width: 40px; height: 40px; }
+      .preview-top-row .owner-profile-text { flex: 1 1 auto; flex-wrap: nowrap; gap: 12px; overflow: hidden; }
+      .preview-top-row .owner-profile strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; }
+      .preview-top-row .owner-profile span { overflow: hidden; min-width: 0; font-size: 11px; text-overflow: ellipsis; }
+      .preview-top-row .preview-view-count { order: 2; flex: 0 0 auto; width: auto; min-height: 0; margin: 0; gap: 7px; font-size: 13px; white-space: nowrap; }
+      .preview-top-row .preview-view-count span:last-child { display: none; }
+      .preview-top-row .like-card .preview-like-button { order: 3; flex: 0 0 auto; width: auto; min-height: 38px; padding: 0 14px; gap: 8px; }
       .owner-profile { display: flex; align-items: center; gap: 12px; min-width: 0; }
       .owner-avatar { width: 46px; height: 46px; border: 1px solid rgba(255,255,255,.14); border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.08); }
       .owner-avatar-fallback { display: grid; place-items: center; color: #111; font-weight: 900; background: #b3ff40; }
@@ -820,7 +830,7 @@ function createHtml(config) {
         .stage { display: contents; }
         #sidebar { display: contents; }
         .player-frame { order: 2; height: auto; min-height: 0; }
-        .preview-top-row { order: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: clamp(8px, 2vw, 16px); min-width: 0; margin: 4px clamp(0px, 3.6vw, 32px) 10px; overflow: hidden; }
+        .preview-top-row { order: 1; display: flex; flex-wrap: nowrap; align-items: center; gap: clamp(8px, 2vw, 16px); min-width: 0; margin: 4px clamp(0px, 3.6vw, 32px) 10px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: hidden; }
         .preview-card { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
         .preview-top-row .section-title, .like-card .section-title { display: none; }
         .owner-card.is-visible { display: block; min-width: 0; }
@@ -842,9 +852,10 @@ function createHtml(config) {
         .spine-player-controls { min-height: 84px; }
         .library-nav-button { display: none; }
         .animation-card { order: 3; margin: 12px 32px 0; }
-        .animation-card .section-title { margin: 0 0 10px; font-size: 16px; letter-spacing: .14em; }
-        #animation-list { grid-template-columns: 1fr; gap: 6px; }
-        #animation-list button { min-height: 38px; border-color: rgba(140,199,255,.78); border-radius: 8px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 14px; font-weight: 850; }
+        .animation-menu-button { min-height: 44px; border-color: rgba(140,199,255,.78); border-radius: 8px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 15px; font-weight: 850; }
+        .animation-menu-button[aria-expanded="true"] { background: rgba(71,156,255,.3); }
+        .animation-menu { position: fixed; top: auto; right: 16px; bottom: 16px; left: 16px; max-height: 46vh; margin-top: 0; }
+        .animation-menu button { min-height: 40px; border-color: rgba(140,199,255,.78); border-radius: 8px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 14px; font-weight: 850; }
         #set-card, .note-card, .proof-card, .owner-library { order: 4; margin-inline: 32px; }
         .video-watch-panel { display: none; }
         .seo-video-frame { max-height: min(62vh, 520px); }
@@ -855,7 +866,7 @@ function createHtml(config) {
         .brand-logo { font-size: clamp(21px, 6.2vw, 28px); letter-spacing: .14em; }
         .player-top-actions { justify-self: end; margin-left: 0; }
         .player-top-button { max-width: min(34vw, 116px); min-height: 34px; padding-inline: 9px; }
-        .preview-top-row { grid-template-columns: minmax(0, 1fr) auto auto; margin: 2px 0 10px; }
+        .preview-top-row { margin: 2px 0 10px; }
         .preview-like-button { width: 60px; height: 60px; }
       }
       .spine-link-loop-button { position: relative; margin-right: 12px !important; }
@@ -884,11 +895,11 @@ function createHtml(config) {
         <aside id="sidebar">
           <div class="preview-card" id="set-card"><div class="section-title">Set</div><select id="set-select"></select></div>
           <div class="preview-top-row">
-            <div class="preview-card owner-card" id="owner-card"><div class="section-title">Creator</div><div id="owner-profile"></div></div>
-            <div class="preview-card like-card" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><div class="section-title">Metrics</div><button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button><div class="preview-view-count" data-metric-id="${escapeHtml(entryMetricId)}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div></div>
+            <div class="preview-card owner-card" id="owner-card"><div id="owner-profile"></div></div>
+            <div class="preview-card like-card" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button><div class="preview-view-count" data-metric-id="${escapeHtml(entryMetricId)}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div></div>
           </div>
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
-          <div class="preview-card animation-card"><div class="section-title">Animations</div><div id="animation-list"></div></div>
+          <div class="preview-card animation-card" id="animation-card"><button class="animation-menu-button" id="animation-menu-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="animation-menu" aria-label="Animations"><span class="animation-dots" aria-hidden="true">&#8942;</span><span class="animation-current" id="animation-current">Animations</span></button><div class="animation-menu" id="animation-menu" role="menu" hidden></div></div>
           ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<div class="preview-card proof-card"><div class="section-title">Origin proof</div>${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div>` : ''}
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
@@ -923,10 +934,14 @@ function createHtml(config) {
       const activeSet = { value: initialSet() };
       const activeAnimation = { name: initialAnimation(activeSet.value) };
       const loopEnabled = { value: true };
+      // Сценарий in -> idle -> out для проектов с такими анимациями.
+      const scenarioState = { names: [], index: 0, active: false };
       const currentZoom = { value: config.zoom || 1 };
       const baseViewport = { value: null };
       const animationNames = { value: activeSet.value?.animations || [] };
-      const animationList = document.getElementById("animation-list");
+      const animationMenuButton = document.getElementById("animation-menu-button");
+      const animationCurrent = document.getElementById("animation-current");
+      const animationMenu = document.getElementById("animation-menu");
       const setCard = document.getElementById("set-card");
       const setSelect = document.getElementById("set-select");
       const noteCard = document.getElementById("note-card");
@@ -1049,6 +1064,7 @@ const pinchDistance = { value: null };
         activeSet.value = nextSet;
         activeAnimation.name = initialAnimation(nextSet);
         syncSetInfo();
+        syncScenario(animationNames.value);
         renderAnimationList();
         createPlayer();
       }
@@ -1261,12 +1277,100 @@ const pinchDistance = { value: null };
       function updateLoopButtonState(button) { button.classList.toggle("is-on", loopEnabled.value); button.classList.toggle("is-off", !loopEnabled.value); button.title = loopEnabled.value ? "Loop on" : "Loop off"; button.setAttribute("aria-label", button.title); button.setAttribute("aria-pressed", String(loopEnabled.value)); }
       function setTrackLoop() { const entry = player?.animationState?.getCurrent?.(0); if (entry) entry.loop = loopEnabled.value; }
       function disableMix() { if (player?.animationState?.data) player.animationState.data.defaultMix = 0; }
-      function playActiveAnimationFromStart() { if (!player || !activeAnimation.name) return; disableMix(); const entry = player.setAnimation(activeAnimation.name, loopEnabled.value); if (entry) { entry.mixDuration = 0; entry.mixTime = 0; entry.listener = { ...(entry.listener || {}), complete: () => { if (!loopEnabled.value) player.pause(); } }; } player.play(); }
+      function normalizeAnimationToken(name) {
+        const token = String(name || "").trim().toLowerCase();
+        const slash = token.lastIndexOf("/");
+        return slash >= 0 ? token.slice(slash + 1) : token;
+      }
+      // Любой проект с анимациями in / idle / out играет их по очереди.
+      function syncScenario(names) {
+        const lookup = new Map();
+        (Array.isArray(names) ? names : []).forEach((name) => {
+          const token = normalizeAnimationToken(name);
+          if (token && !lookup.has(token)) lookup.set(token, name);
+        });
+        const hasIn = lookup.has("in");
+        const hasOut = lookup.has("out");
+        // Средняя фаза: idle, иначе loop. Без неё сценарий просто in -> out.
+        const middle = lookup.has("idle") ? "idle" : (lookup.has("loop") ? "loop" : "");
+        const cycle = hasIn && hasOut ? ["in", middle, "out", middle] : [];
+        scenarioState.names = cycle.map((token) => lookup.get(token)).filter(Boolean);
+        scenarioState.active = scenarioState.names.length > 1;
+        scenarioState.index = Math.max(0, scenarioState.names.indexOf(activeAnimation.name));
+      }
+      function isScenarioStep(name) { return scenarioState.active && scenarioState.names.indexOf(name) >= 0; }
+      function playAnimationEntry(name) {
+        if (!player || !name) return;
+        disableMix();
+        const scenarioStep = isScenarioStep(name);
+        const entry = player.setAnimation(name, scenarioStep ? false : loopEnabled.value);
+        if (entry) {
+          entry.mixDuration = 0;
+          entry.mixTime = 0;
+          entry.listener = { ...(entry.listener || {}), complete: () => {
+            if (scenarioStep) { playNextScenarioStep(); return; }
+            if (!loopEnabled.value) player.pause();
+          } };
+        }
+        player.play();
+      }
+      function playNextScenarioStep() {
+        if (!scenarioState.active || !player || !scenarioState.names.length) return;
+        scenarioState.index = (scenarioState.index + 1) % scenarioState.names.length;
+        const nextName = scenarioState.names[scenarioState.index];
+        activeAnimation.name = nextName;
+        syncUrl(true);
+        renderAnimationList();
+        playAnimationEntry(nextName);
+      }
+      function playActiveAnimationFromStart() {
+        if (!player || !activeAnimation.name) return;
+        if (isScenarioStep(activeAnimation.name)) scenarioState.index = scenarioState.names.indexOf(activeAnimation.name);
+        playAnimationEntry(activeAnimation.name);
+      }
       function togglePlayback() { if (!player) return; if (player.paused === false) { player.pause(); return; } playActiveAnimationFromStart(); }
       function installLoopButton() { const buttons = player?.dom?.querySelector(".spine-player-buttons"); const playButton = buttons?.querySelector(".spine-player-button"); if (!buttons || !playButton) return; playButton.onclick = (event) => { event.preventDefault(); event.stopPropagation(); togglePlayback(); }; if (buttons.querySelector(".spine-link-loop-button")) return; const button = document.createElement("button"); button.type = "button"; button.className = "spine-player-button spine-link-loop-button"; updateLoopButtonState(button); button.onclick = (event) => { event.preventDefault(); event.stopPropagation(); loopEnabled.value = !loopEnabled.value; setTrackLoop(); updateLoopButtonState(button); }; playButton.insertAdjacentElement("afterend", button); }
       function panByPixels(deltaX, deltaY) { const v = player?.currentViewport, b = baseViewport.value, canvas = player?.canvas; if (!v || !b || !canvas) return; const totalWidth = v.width + v.padLeft + v.padRight, totalHeight = v.height + v.padTop + v.padBottom; const worldDeltaX = deltaX / Math.max(1, canvas.clientWidth) * totalWidth, worldDeltaY = deltaY / Math.max(1, canvas.clientHeight) * totalHeight; v.x -= worldDeltaX; v.y += worldDeltaY; b.x -= worldDeltaX * currentZoom.value; b.y += worldDeltaY * currentZoom.value; player.previousViewport = { ...v }; player.viewportTransitionStart = performance.now(); }
-      async function createPlayer() { if (!activeSet.value) return; player?.dispose(); document.getElementById("player").innerHTML = ""; baseViewport.value = null; const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); applyZoom(currentZoom.value); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (box) box.innerHTML = '<div style="display:grid;place-items:center;height:100%;padding:24px;color:#ffb088;font-weight:900;text-align:center;">Spine player error: ' + String(message || "could not load animation").replace(/[<>&]/g, "") + '</div>'; } }); }
-      function renderAnimationList() { animationList.innerHTML = ""; animationNames.value.forEach((animationName) => { const button = document.createElement("button"); button.type = "button"; button.textContent = animationName; button.className = animationName === activeAnimation.name ? "active" : ""; button.onclick = () => { activeAnimation.name = animationName; syncUrl(); playActiveAnimationFromStart(); applyZoom(currentZoom.value); renderAnimationList(); }; animationList.appendChild(button); }); }
+      async function createPlayer() { if (!activeSet.value) return; player?.dispose(); document.getElementById("player").innerHTML = ""; baseViewport.value = null; const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); applyZoom(currentZoom.value); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (box) box.innerHTML = '<div style="display:grid;place-items:center;height:100%;padding:24px;color:#ffb088;font-weight:900;text-align:center;">Spine player error: ' + String(message || "could not load animation").replace(/[<>&]/g, "") + '</div>'; } }); }
+      function renderAnimationList() {
+        animationCurrent.textContent = activeAnimation.name || "Animations";
+        animationMenu.innerHTML = "";
+        animationNames.value.forEach((animationName) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.role = "menuitem";
+          button.textContent = animationName;
+          button.className = animationName === activeAnimation.name ? "active" : "";
+          button.onclick = () => {
+            activeAnimation.name = animationName;
+            closeAnimationMenu();
+            syncUrl();
+            playActiveAnimationFromStart();
+            applyZoom(currentZoom.value);
+            renderAnimationList();
+          };
+          animationMenu.appendChild(button);
+        });
+      }
+      function openAnimationMenu() {
+        animationMenu.hidden = false;
+        animationMenuButton.setAttribute("aria-expanded", "true");
+      }
+      function closeAnimationMenu() {
+        animationMenu.hidden = true;
+        animationMenuButton.setAttribute("aria-expanded", "false");
+      }
+      function toggleAnimationMenu() {
+        if (animationMenu.hidden) openAnimationMenu();
+        else closeAnimationMenu();
+      }
+      animationMenuButton.addEventListener("click", (event) => { event.stopPropagation(); toggleAnimationMenu(); });
+      document.addEventListener("click", (event) => {
+        if (animationMenu.hidden) return;
+        if (event.target.closest("#animation-card")) return;
+        closeAnimationMenu();
+      }, true);
+      document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeAnimationMenu(); });
       function syncPreviewLike() {
         return;
       }
@@ -1334,9 +1438,9 @@ playerElement.addEventListener("touchstart", (event) => {
        }, true);
        window.addEventListener("mousemove", (event) => { if (!panPosition.value) return; event.preventDefault(); event.stopImmediatePropagation(); const deltaX = event.clientX - panPosition.value.x, deltaY = event.clientY - panPosition.value.y; panPosition.value = { x: event.clientX, y: event.clientY }; panByPixels(deltaX, deltaY); }, { passive: false, capture: true });
        window.addEventListener("mouseup", (event) => { if (event.button !== 0) return; event.preventDefault(); event.stopImmediatePropagation(); panPosition.value = null; }, true);
-      setSelect.onchange = () => { activeSet.value = sets.find((set) => set.label === setSelect.value) || sets[0]; activeAnimation.name = activeSet.value?.animation || ""; syncSetInfo(); renderAnimationList(); syncUrl(); createPlayer(); };
+      setSelect.onchange = () => { activeSet.value = sets.find((set) => set.label === setSelect.value) || sets[0]; activeAnimation.name = activeSet.value?.animation || ""; syncSetInfo(); syncScenario(animationNames.value); renderAnimationList(); syncUrl(); createPlayer(); };
       window.addEventListener("popstate", applySelectionFromUrl);
-      renderSetList(); syncSetInfo(); renderOwnerCard(); installOwnerLibraryChaos(); syncPreviewLike(); syncLibraryNavigationButtons(); syncUrl(true); createPlayer(); renderAnimationList();
+      syncScenario(animationNames.value); renderSetList(); syncSetInfo(); renderOwnerCard(); installOwnerLibraryChaos(); syncPreviewLike(); syncLibraryNavigationButtons(); syncUrl(true); createPlayer(); renderAnimationList();
       const seoVideo = document.querySelector('.video-watch-player');
       if (seoVideo && seoVideo.getAttribute('autoplay') !== null) {
         seoVideo.muted = true;
