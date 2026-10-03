@@ -1,10 +1,11 @@
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
-// Active collection that receives new uploads. It rotates automatically:
-// rotate-library.mjs fills it to MAX_FOLDERS and moves the works into the next
-// permanent library_NN collection, so this only has to point at the current one.
-const defaultBasePath = process.env.LIBRARY_BASE_PATH || 'library_02';
+// New uploads always land in the highest-numbered library_NN folder, so the set of
+// folders grows as needed instead of being capped at two. rotate-library.mjs keeps
+// the newest folder under the 999-item GitHub limit by moving it into a permanent
+// collection and opening the next one.
+const DEFAULT_BASE_PATH_PREFIX = 'library_';
 import { createHash } from 'node:crypto';
 import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-science.js';
 import { metricCountsForIds, parseMetricsJson, sanitizeMetricId, sanitizeMetricIds } from '../lib/spine-metrics.js';
@@ -56,6 +57,27 @@ async function writeCensorshipLists(settings, { blocked, allowed }) {
     origin,
   );
   return payload;
+}
+
+// Newest library_NN folder: uploads go there until it fills up. Numbering starts at
+// 02 because `library` is the first permanent collection.
+async function newestLibraryBasePath(settings) {
+  if (process.env.LIBRARY_BASE_PATH) return cleanRepoPath(process.env.LIBRARY_BASE_PATH);
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
+      { headers: githubHeaders(settings.token) },
+    );
+    if (!response.ok) return `${DEFAULT_BASE_PATH_PREFIX}02`;
+    const items = await response.json();
+    const highest = (Array.isArray(items) ? items : [])
+      .map((item) => (item && item.type === "dir" ? String(item.name || "").match(new RegExp(`^${DEFAULT_BASE_PATH_PREFIX}(\\d+)$`)) : null))
+      .filter(Boolean)
+      .reduce((max, match) => Math.max(max, Number(match[1])), 1);
+    return `${DEFAULT_BASE_PATH_PREFIX}${String(highest + 1).padStart(2, "0")}`;
+  } catch (e) {
+    return `${DEFAULT_BASE_PATH_PREFIX}02`;
+  }
 }
 
 function cleanRepoPath(value = '') {
@@ -975,9 +997,12 @@ export default async function handler(request, response) {
       owner: process.env.GITHUB_OWNER || body?.settings?.owner || defaultOwner,
       repo: process.env.GITHUB_REPO || body?.settings?.repo || defaultRepo,
       branch: process.env.GITHUB_BRANCH || body?.settings?.branch || defaultBranch,
-      basePath: cleanRepoPath(process.env.GITHUB_BASE_PATH || body?.settings?.basePath || defaultBasePath),
       token,
     };
+    // An explicit setting still wins; otherwise uploads follow the newest folder.
+    settings.basePath = cleanRepoPath(
+      process.env.GITHUB_BASE_PATH || body?.settings?.basePath || (await newestLibraryBasePath(settings)),
+    );
 
     const files = Array.isArray(body?.files) ? body.files : [];
     const file = body?.file;

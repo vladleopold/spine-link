@@ -630,6 +630,30 @@ async function githubJson(settings, path) {
   return response.json();
 }
 
+// Every library_NN folder is a collection; they are listed at runtime so a folder
+// added by a rotation is found without a deploy.
+async function libraryCollectionPaths(settings) {
+  const staging = cleanRepoPath(settings.basePath || defaultBasePath);
+  const paths = [staging];
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
+      { headers: githubHeaders(settings.token) },
+    );
+    if (!response.ok) return paths;
+    const items = await response.json();
+    if (!Array.isArray(items)) return paths;
+    const collections = items
+      .filter((item) => item && item.type === "dir" && /^library_\d+$/.test(String(item.name || "")))
+      .map((item) => item.name)
+      .sort();
+    for (const name of collections) if (!paths.includes(name)) paths.push(name);
+  } catch (e) {
+    // Listing failed: the configured folder on its own beats an empty site.
+  }
+  return paths;
+}
+
 async function githubText(settings, path) {
   return cachedGithubText(settings, path);
 }
@@ -2072,6 +2096,26 @@ async function createDynamicPreview(settings, uploadPath, origin) {
   };
 }
 
+// Finds the folder of a work by id across every library collection.
+async function resolveEntryPath(settings, entryId) {
+  const id = cleanRepoPath(entryId).split('/').pop() || '';
+  if (!id) return '';
+  const basePaths = await libraryCollectionPaths(settings);
+  for (const basePath of basePaths) {
+    const indexText = await githubText(settings, `${basePath}/index.json`);
+    if (!indexText) continue;
+    let entries = [];
+    try {
+      const parsed = JSON.parse(indexText);
+      if (Array.isArray(parsed)) entries = parsed;
+    } catch (e) {}
+    const match = entries.find((entry) => String(entry?.id || '') === id);
+    const previewPath = cleanRepoPath(match?.previewPath || '');
+    if (previewPath) return previewPath;
+  }
+  return '';
+}
+
 export default async function handler(request, response) {
   if (!['GET', 'HEAD'].includes(request.method)) {
     response.setHeader('Allow', 'GET, HEAD');
@@ -2081,8 +2125,16 @@ export default async function handler(request, response) {
   const token = process.env.GITHUB_TOKEN;
   if (!token) return response.status(500).send('GITHUB_TOKEN is not configured');
 
-  const path = cleanRepoPath(request.query?.path || '');
-  if (!path) return response.status(400).send('Invalid preview path');
+  let path = cleanRepoPath(request.query?.path || '');
+  // /p/<id> carries only the work id, because the work may live in any library_NN
+  // folder. Looking the id up in the indexes keeps /p/<id> working after a
+  // rotation moves the folder.
+  if (!path) {
+    const entryId = cleanRepoPath(request.query?.entry || '');
+    if (!entryId) return response.status(400).send('Invalid preview path');
+    path = await resolveEntryPath(settings, entryId);
+    if (!path) return response.status(404).send('Preview not found');
+  }
 
   const settings = {
     owner: process.env.GITHUB_OWNER || defaultOwner,

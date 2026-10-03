@@ -411,7 +411,7 @@
     },
     {
       "source": "/p/:id",
-      "destination": "/api/github-preview?path=library/:id"
+      "destination": "/api/github-preview?entry=:id"
     },
     {
       "source": "/u/:id",
