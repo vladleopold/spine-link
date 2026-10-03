@@ -760,7 +760,16 @@ function createHtml(config) {
       .preview-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.14); }
       .preview-view-count { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 34px; margin-top: 8px; color: rgba(231,237,244,.78); font-size: 13px; font-weight: 850; }
       .preview-view-count strong { color: #fff; }
-      .proof-card { display: ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? 'grid' : 'none'}; gap: 10px; }
+      .proof-card { display: ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? 'block' : 'none'}; }
+      .proof-card > summary { display: flex; align-items: center; gap: 9px; margin: 0; color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; list-style: none; }
+      .proof-card > summary::-webkit-details-marker { display: none; }
+      .proof-card > summary::before { flex: 0 0 auto; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid #8cc7ff; content: ''; transition: transform .16s ease; }
+      .proof-card[open] > summary::before { transform: rotate(90deg); }
+      .proof-card > summary:hover { color: #fff; }
+      .proof-links { display: grid; gap: 10px; margin-top: 10px; }
+      /* A nested display (grid/flex) beats the native <details> hiding, so the
+         collapsed state has to be stated explicitly or the links stay visible. */
+      .proof-card:not([open]) > .proof-links { display: none; }
       .proof-card a { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; padding: 0 10px; border: 1px solid rgba(140,199,255,.2); border-radius: 8px; color: #dff1ff; background: rgba(140,199,255,.08); font-size: 12px; font-weight: 850; text-decoration: none; }
       .proof-card a:hover { border-color: rgba(179,255,64,.58); color: #fff; }
       .proof-card code { overflow: hidden; max-width: 132px; color: rgba(237,245,255,.68); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
@@ -900,7 +909,7 @@ function createHtml(config) {
           </div>
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
           <div class="preview-card animation-card" id="animation-card"><button class="animation-menu-button" id="animation-menu-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="animation-menu" aria-label="Animations"><span class="animation-dots" aria-hidden="true">&#8942;</span><span class="animation-current" id="animation-current">Animations</span></button><div class="animation-menu" id="animation-menu" role="menu" hidden></div></div>
-          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<div class="preview-card proof-card"><div class="section-title">Origin proof</div>${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div>` : ''}
+          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<details class="preview-card proof-card"><summary class="section-title">Origin proof</summary><div class="proof-links">${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div></details>` : ''}
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
       </div>
