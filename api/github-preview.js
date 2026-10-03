@@ -751,7 +751,11 @@ function createHtml(config) {
       .video-watch-copy { display: grid; gap: 5px; pointer-events: none; }
       .video-watch-copy h1 { margin: 0; color: #fff; font-size: clamp(24px, 3.4vw, 44px); line-height: 1; letter-spacing: 0; text-shadow: 0 4px 18px rgba(0,0,0,.76); }
       .video-watch-copy p { max-width: 780px; margin: 0; color: rgba(237,245,255,.78); font-size: 14px; line-height: 1.35; }
-      #player { width: 100%; height: 100%; min-height: 0; touch-action: none; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; overflow: hidden; background: conic-gradient(#565656 25%, #505052 0 50%, #565656 0 75%, #505052 0); background-size: var(--preview-pattern-size, 140px) var(--preview-pattern-size, 140px); }
+      /* Сцена под анимацию тёмная: мягкое свечение и полупрозрачные частицы на
+         средне-серой шахматке почти не читались — больше половины видимых пикселей
+         не набирали контраста с фоном. Узор оставлен тёмным, чтобы прозрачные
+         области всё так же читались, но не съедали контраст анимации. */
+      #player { width: 100%; height: 100%; min-height: 0; touch-action: none; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; overflow: hidden; background: conic-gradient(#1c1f24 25%, #141619 0 50%, #1c1f24 0 75%, #141619 0); background-size: var(--preview-pattern-size, 140px) var(--preview-pattern-size, 140px); }
       .library-nav-button { position: absolute; top: 50%; z-index: 8; display: grid; place-items: center; width: 52px; min-height: 78px; padding: 0; border: 1px solid rgba(140,199,255,.55); border-radius: 8px; color: #f7fbff; background: rgba(9,13,17,.68); box-shadow: 0 16px 34px rgba(0,0,0,.38), inset 0 0 22px rgba(140,199,255,.08); font-size: 42px; font-weight: 800; line-height: 1; transform: translateY(-50%); backdrop-filter: blur(10px); }
       .library-nav-button:hover { border-color: rgba(179,255,64,.78); background: rgba(23,31,18,.78); }
       .library-nav-button:disabled { display: none; }
