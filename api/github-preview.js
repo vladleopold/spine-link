@@ -1124,7 +1124,14 @@ const pinchDistance = { value: null };
         if (!video.getAttribute("src")) video.setAttribute("src", source);
         video.muted = true;
         video.playsInline = true;
-        video.play().catch(() => {});
+        // Клипы по 2-3 секунды: без повтора карточка замирала на последнем кадре и
+        // выглядела пустой, хотя анимация в ней есть.
+        video.loop = true;
+        if (video.ended || (video.currentTime > 0 && video.currentTime >= video.duration - 0.05)) {
+          try { video.currentTime = 0; } catch (e) {}
+        }
+        const attempt = video.play();
+        if (attempt && typeof attempt.catch === "function") attempt.catch(() => {});
       }
       function stopOwnerThumb(video) {
         if (!video) return;
@@ -1173,7 +1180,7 @@ const pinchDistance = { value: null };
             thumb.dataset.videoSrc = videoSrc;
             if (item.thumbnailPoster) thumb.poster = item.thumbnailPoster;
             thumb.muted = true;
-            thumb.loop = false;
+            thumb.loop = true;
             thumb.playsInline = true;
             thumb.preload = "none";
             thumb.setAttribute("aria-hidden", "true");
