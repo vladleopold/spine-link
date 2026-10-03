@@ -893,8 +893,59 @@ function createHtml(config) {
         .preview-like-button { width: 60px; height: 60px; }
       }
       .spine-link-loop-button { position: relative; margin-right: 12px !important; }
+      /* Панель управления свёрнута и выезжает по нажатию на ручку. */
       .spine-player-controls { z-index: 4; }
       .spine-player-controls.spine-player-controls-hidden { pointer-events: auto; opacity: 1; }
+      #player .spine-player { --spine-controls-collapsed: 1; }
+      #player .spine-player-controls {
+        overflow: hidden;
+        max-height: 0;
+        min-height: 0 !important;
+        opacity: 0;
+        transform: translateY(100%);
+        transition: max-height 260ms ease, opacity 200ms ease, transform 260ms ease, padding 260ms ease;
+        padding-top: 0;
+        padding-bottom: 0;
+      }
+      #player .spine-player-controls.spine-link-controls-open {
+        max-height: 190px;
+        opacity: 1;
+        transform: translateY(0);
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .spine-link-controls-toggle {
+        position: absolute;
+        right: 14px;
+        bottom: 12px;
+        z-index: 6;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-width: 42px;
+        min-height: 42px;
+        padding: 0 12px;
+        border: 1px solid rgba(255,255,255,.16);
+        border-radius: 999px;
+        color: #e9f2ff;
+        background: rgba(8,11,16,.72);
+        box-shadow: 0 10px 26px rgba(0,0,0,.34);
+        backdrop-filter: blur(8px);
+        cursor: pointer;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 850;
+      }
+      .spine-link-controls-toggle:hover { border-color: rgba(140,199,255,.6); color: #fff; }
+      .spine-link-controls-toggle .spine-link-controls-chevron {
+        display: inline-block;
+        font-size: 11px;
+        line-height: 1;
+        transform: translateY(1px);
+        transition: transform 260ms ease;
+      }
+      .spine-link-controls-toggle[aria-expanded="true"] .spine-link-controls-chevron { transform: rotate(180deg) translateY(1px); }
       .spine-link-loop-button::before, .spine-link-loop-button::after { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; font-weight: 900; line-height: 1; }
       .spine-link-loop-button.is-on::before { content: "↻"; color: #54cfff; text-shadow: 0 0 14px rgba(84, 207, 255, 0.72); transform: translateY(-1px); }
       .spine-link-loop-button.is-off::before { content: "↻"; color: rgba(210, 216, 222, 0.42); transform: translateY(-1px); }
@@ -1379,6 +1430,41 @@ const pinchDistance = { value: null };
         playAnimationEntry(activeAnimation.name);
       }
       function togglePlayback() { if (!player) return; if (player.paused === false) { player.pause(); return; } playActiveAnimationFromStart(); }
+      // Панель управления по умолчанию свёрнута: на сцене остаётся только ручка,
+      // а по нажатию полоса выезжает. Повторное нажатие снова её прячет.
+      function setControlsOpen(open) {
+        const controls = player?.dom?.querySelector(".spine-player-controls");
+        const toggle = player?.dom?.querySelector(".spine-link-controls-toggle");
+        if (!controls) return;
+        controls.classList.toggle("spine-link-controls-open", Boolean(open));
+        if (toggle) {
+          toggle.setAttribute("aria-expanded", open ? "true" : "false");
+          toggle.setAttribute("aria-label", open ? "Hide player controls" : "Show player controls");
+        }
+      }
+      function toggleControls() {
+        const controls = player?.dom?.querySelector(".spine-player-controls");
+        if (!controls) return;
+        setControlsOpen(!controls.classList.contains("spine-link-controls-open"));
+      }
+      function installControlsToggle() {
+        const host = player?.dom;
+        if (!host || host.querySelector(".spine-link-controls-toggle")) return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "spine-link-controls-toggle";
+        button.setAttribute("aria-expanded", "false");
+        button.setAttribute("aria-label", "Show player controls");
+        button.innerHTML = '<span class="spine-link-controls-chevron">\u25B2</span>';
+        button.onclick = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleControls();
+        };
+        host.appendChild(button);
+        setControlsOpen(false);
+      }
+
       function installLoopButton() { const buttons = player?.dom?.querySelector(".spine-player-buttons"); const playButton = buttons?.querySelector(".spine-player-button"); if (!buttons || !playButton) return; playButton.onclick = (event) => { event.preventDefault(); event.stopPropagation(); togglePlayback(); }; if (buttons.querySelector(".spine-link-loop-button")) return; const button = document.createElement("button"); button.type = "button"; button.className = "spine-player-button spine-link-loop-button"; updateLoopButtonState(button); button.onclick = (event) => { event.preventDefault(); event.stopPropagation(); loopEnabled.value = !loopEnabled.value; setTrackLoop(); updateLoopButtonState(button); }; playButton.insertAdjacentElement("afterend", button); }
       function panByPixels(deltaX, deltaY) { const v = player?.currentViewport, b = baseViewport.value, canvas = player?.canvas; if (!v || !b || !canvas) return; const totalWidth = v.width + v.padLeft + v.padRight, totalHeight = v.height + v.padTop + v.padBottom; const worldDeltaX = deltaX / Math.max(1, canvas.clientWidth) * totalWidth, worldDeltaY = deltaY / Math.max(1, canvas.clientHeight) * totalHeight; v.x -= worldDeltaX; v.y += worldDeltaY; b.x -= worldDeltaX * currentZoom.value; b.y += worldDeltaY * currentZoom.value; player.previousViewport = { ...v }; player.viewportTransitionStart = performance.now(); }
 
@@ -1515,7 +1601,7 @@ const pinchDistance = { value: null };
         if (video.parentNode) video.parentNode.removeChild(video);
       }
 
-      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); baseViewport.value = null; showPreviewVideoFallback(); const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); releaseRuntimeWheelCapture(); requestAnimationFrame(clearPreviewVideoFallback); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); applyZoom(currentZoom.value); window.setTimeout(ensureVisibleContent, 120); window.setTimeout(ensureVisibleContent, 420); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
+      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); baseViewport.value = null; showPreviewVideoFallback(); const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); releaseRuntimeWheelCapture(); requestAnimationFrame(clearPreviewVideoFallback); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); installControlsToggle(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); applyZoom(currentZoom.value); window.setTimeout(ensureVisibleContent, 120); window.setTimeout(ensureVisibleContent, 420); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
         // WebGL недоступен или рантайм не смог поднять скелет: оставляем выгрузку
         // того же клипа, чтобы работа осталась видна.
         if (showPreviewVideoFallback()) { const v = box.querySelector("video"); if (v) v.controls = true; return; }
@@ -1610,13 +1696,13 @@ playerElement.addEventListener("touchstart", (event) => {
        });
        playerElement.addEventListener("touchcancel", () => { pinchDistance.value = null; swipeStart.value = null; touchPanPosition.value = null; });
        playerElement.addEventListener("click", (event) => {
-         if (event.target.closest(".spine-player-controls")) return;
+         if (event.target.closest(".spine-player-controls, .spine-link-controls-toggle")) return;
          event.preventDefault();
          event.stopImmediatePropagation();
          if (event.button === 2) togglePlayback();
        }, true);
        playerElement.addEventListener("dblclick", (event) => {
-         if (event.target.closest(".spine-player-controls")) return;
+         if (event.target.closest(".spine-player-controls, .spine-link-controls-toggle")) return;
          event.preventDefault();
          event.stopImmediatePropagation();
        }, true);
