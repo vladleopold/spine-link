@@ -167,10 +167,10 @@ async function withCensorshipLists(settings, exclusions) {
     const allowed = Array.isArray(parsed?.allowed) ? parsed.allowed : [];
     // `blocked` holds account ids, so the rule targets the owner fields; an id is
     // matched there too so a raw work id can be listed directly.
-    const ownerRules = (ids) => ids.map((id) => ({ enabled: true, type: 'exact', field: 'owner', pattern: `^${String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` }));
+    const ownerRules = (ids) => ids.map((id) => ({ enabled: true, type: 'exact', field: 'owner', pattern: String(id) }));
     // An exception names a work, not an account: closed authors can keep one piece
     // visible while the rest of their catalogue stays hidden.
-    const workRules = (ids) => ids.map((id) => ({ enabled: true, type: 'exact', field: 'id', pattern: `^${String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` }));
+    const workRules = (ids) => ids.map((id) => ({ enabled: true, type: 'exact', field: 'id', pattern: String(id) }));
     return {
       rules: [...(exclusions?.rules || []), ...ownerRules(blocked)],
       allow: [...(exclusions?.allow || []), ...workRules(allowed)],
