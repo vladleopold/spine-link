@@ -1,6 +1,7 @@
 import "./styles.css";
 import { getPublishProgress, hidePublishProgress, resumePendingJobs, subscribePublishProgress } from "./publish-job";
 import { startParticleField } from "./particles";
+import { mountHomeBanner } from "./home-banner";
 
 const root = document.getElementById("root");
 export {};
@@ -323,6 +324,16 @@ function wireHomeShell() {
   bootFileInput?.addEventListener("change", handleBootFileInput);
 
   void loadHomeFeed();
+
+  // Banner behind the drop zone: a random library work, refreshed every 5 minutes.
+  const dropPanel = document.querySelector<HTMLElement>(".home-drop-panel");
+  if (dropPanel) {
+    mountHomeBanner({
+      panel: dropPanel,
+      feedUrl: "/api/github-archive?feed=home",
+      indexUrl: "/assets/library/index.json",
+    });
+  }
 }
 
 async function loadHomeFeed() {

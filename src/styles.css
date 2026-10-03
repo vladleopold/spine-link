@@ -8411,3 +8411,57 @@ h1 {
   cursor: pointer;
 }
 .admin-setting-status { margin-left: 10px; color: #b3f542; font-size: 13px; font-weight: 800; }
+
+/* Banner behind the drop zone: a random library work, refreshed every 5 minutes.
+   The artwork is stretched past the panel on purpose so no frame edge shows,
+   tilted slightly and kept transparent so the copy above stays readable. */
+.home-banner-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--banner-opacity, 0.3);
+  transform: scale(var(--banner-scale, 1.22)) rotate(var(--banner-tilt, -9deg));
+  transform-origin: 50% 50%;
+  filter: saturate(1.15) drop-shadow(0 24px 60px rgba(0, 0, 0, 0.45));
+  transition: opacity 700ms ease, transform 900ms ease;
+  -webkit-mask-image: radial-gradient(120% 120% at 50% 45%, #000 40%, rgba(0, 0, 0, 0.55) 78%, transparent 100%);
+  mask-image: radial-gradient(120% 120% at 50% 45%, #000 40%, rgba(0, 0, 0, 0.55) 78%, transparent 100%);
+}
+
+.home-banner-layer .home-banner-player,
+.home-banner-layer .spine-player,
+.home-banner-layer canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.home-drop-panel { position: relative; isolation: isolate; }
+.home-drop-panel > .drop-zone,
+.home-drop-panel > .home-banner-caption { position: relative; z-index: 1; }
+
+.home-banner-caption {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.76);
+  background: rgba(6, 9, 13, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 10px;
+  font-weight: 700;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+}
+
+.home-banner-caption .home-banner-name { overflow: hidden; text-overflow: ellipsis; }
+.home-banner-caption .home-banner-cycle { flex: 0 0 auto; opacity: 0.62; font-weight: 600; }
