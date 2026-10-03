@@ -24,6 +24,7 @@ type BannerEntry = {
   defaultAnimation?: string;
   title?: string;
   previewPath?: string;
+  files?: string[];
 };
 
 type BannerHost = {
@@ -115,13 +116,18 @@ export function mountHomeBanner(options: {
         if (!Array.isArray(entries)) continue;
         for (const entry of entries) {
           if (!entry || !entry.id) continue;
+          // Files may sit in a sub-folder next to the work, so the stored file name
+          // is resolved against that folder when it has one.
           const base = entry.previewPath || `${folder}/${entry.id}`;
+          const subFolder = folderForFile(entry.files, entry.skeleton);
+          const skeleton = toAssetUrl(base, subFolder, entry.skeleton);
+          const atlas = toAssetUrl(base, subFolder, entry.atlas);
           found.push({
             ...entry,
-            skeleton: toAssetUrl(base, entry.skeleton),
-            jsonUrl: toAssetUrl(base, entry.jsonUrl || entry.skeleton),
-            atlas: toAssetUrl(base, entry.atlas),
-            atlasUrl: toAssetUrl(base, entry.atlasUrl || entry.atlas),
+            skeleton,
+            jsonUrl: skeleton,
+            atlas,
+            atlasUrl: atlas,
           });
         }
       } catch {
@@ -142,12 +148,23 @@ export function mountHomeBanner(options: {
     return folders;
   }
 
-  function toAssetUrl(base: string, file: unknown): string {
+  // Work files are often stored in a folder of their own; the index lists the
+  // relative paths, so the folder can be recovered from them.
+  function folderForFile(files: unknown, name: unknown): string {
+    const target = String(name || "").trim();
+    if (!target || !Array.isArray(files)) return "";
+    const match = files.find((file) => String(file || "").endsWith(`/${target}`) || String(file || "") === target);
+    const path = String(match || "").replace(/\/[^/]+$/, "");
+    return path && path !== target ? path : "";
+  }
+
+  function toAssetUrl(base: string, subFolder: string, file: unknown): string {
     const name = String(file || "").trim();
     if (!name) return "";
     if (/^https?:\/\//i.test(name)) return name;
     const cleanBase = String(base || "").replace(/^\/+/, "");
-    return `/assets/${cleanBase}/${name.replace(/^\/+/, "")}`;
+    const folder = subFolder ? `${cleanBase}/${String(subFolder).replace(/^\/+|\/+$/g, "")}` : cleanBase;
+    return `/assets/${folder}/${name.replace(/^\/+/, "")}`;
   }
 
   async function pickEntry(): Promise<BannerEntry | null> {
