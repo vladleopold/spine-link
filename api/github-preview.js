@@ -1138,6 +1138,43 @@ const pinchDistance = { value: null };
         video.pause();
         try { video.currentTime = 0; } catch {}
       }
+      // Сохранённый при публикации постер может быть полностью чёрным: снимок
+      // снимался до того, как кадр отрисовался. Такая заставка только убирает
+      // анимацию из карточки. Проверяем её пиксели и, если она пустая, не
+      // показываем — видео в карточке и так показывает работу при наведении.
+      function isBlankPoster(url) {
+        return new Promise((resolve) => {
+          if (!url) { resolve(true); return; }
+          const image = new Image();
+          image.crossOrigin = "anonymous";
+          let settled = false;
+          const finish = (value) => { if (settled) return; settled = true; resolve(value); };
+          image.onload = () => {
+            try {
+              const probe = document.createElement("canvas");
+              probe.width = 32;
+              probe.height = 20;
+              const context = probe.getContext("2d", { willReadFrequently: true });
+              if (!context) { finish(false); return; }
+              context.drawImage(image, 0, 0, probe.width, probe.height);
+              const data = context.getImageData(0, 0, probe.width, probe.height).data;
+              let lit = 0;
+              for (let i = 0; i < data.length; i += 4) {
+                if (data[i] > 24 || data[i + 1] > 24 || data[i + 2] > 24) lit++;
+              }
+              // Меньше 0.5% светлых пикселей — это фактически пустая заливка.
+              finish(lit < probe.width * probe.height * 0.005);
+            } catch (e) {
+              // Кросс-доменное чтение запрещено: оставляем заставку как есть.
+              finish(false);
+            }
+          };
+          image.onerror = () => finish(false);
+          setTimeout(() => finish(false), 1500);
+          image.src = url;
+        });
+      }
+
       function renderOwnerCard() {
         const owner = config.ownerProfile || {};
         const items = Array.isArray(owner.library) ? owner.library : [];
@@ -1178,7 +1215,24 @@ const pinchDistance = { value: null };
           thumb.className = "owner-thumb";
           if (videoSrc) {
             thumb.dataset.videoSrc = videoSrc;
-            if (item.thumbnailPoster) thumb.poster = item.thumbnailPoster;
+            const poster = item.thumbnailPoster || "";
+            if (poster) {
+              isBlankPoster(poster).then((blank) => {
+                if (blank) {
+                  // Пустая заставка: показываем кадр сразу, без чёрного пятна.
+                  thumb.removeAttribute("poster");
+                  thumb.autoplay = true;
+                  thumb.loop = true;
+                  thumb.muted = true;
+                  thumb.playsInline = true;
+                  thumb.src = videoSrc;
+                  const attempt = thumb.play();
+                  if (attempt && typeof attempt.catch === "function") attempt.catch(() => {});
+                } else {
+                  thumb.poster = poster;
+                }
+              });
+            }
             thumb.muted = true;
             thumb.loop = true;
             thumb.playsInline = true;
