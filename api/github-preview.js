@@ -764,7 +764,7 @@ function createHtml(config) {
       .library-nav-button--next { right: 14px; }
       #sidebar { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
       .preview-card { padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
-      .preview-top-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; margin-bottom: 12px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
+      .preview-top-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 7px; margin-bottom: 8px; padding: 5px 7px; border: 1px solid rgba(255,255,255,.08); border-radius: 9px; background: rgba(255,255,255,.05); box-shadow: 0 12px 28px rgba(0,0,0,.18); }
       .section-title { margin: 0 0 10px; color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
       .seo-video-card { display: none; }
       .seo-video-card.is-visible { display: block; }
@@ -807,12 +807,12 @@ function createHtml(config) {
       .preview-top-row .owner-card { display: none; }
       .preview-top-row .owner-card.is-visible { display: flex; flex: 1 1 auto; min-width: 0; }
       .preview-top-row .like-card { display: contents; }
-      .preview-top-row .owner-profile { flex: 1 1 auto; gap: 10px; min-width: 0; overflow: hidden; }
-      .preview-top-row .owner-avatar { flex: 0 0 40px; width: 40px; height: 40px; }
-      .preview-top-row .owner-profile-text { flex: 1 1 auto; flex-wrap: nowrap; gap: 12px; overflow: hidden; }
-      .preview-top-row .owner-profile strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; }
-      .preview-top-row .owner-profile span { overflow: hidden; min-width: 0; font-size: 11px; text-overflow: ellipsis; }
-      .preview-top-row .preview-view-count { order: 2; flex: 0 0 auto; width: auto; min-height: 0; margin: 0; gap: 7px; font-size: 13px; white-space: nowrap; }
+      .preview-top-row .owner-profile { flex: 1 1 auto; gap: 8px; min-width: 0; overflow: hidden; }
+      .preview-top-row .owner-avatar { flex: 0 0 30px; width: 30px; height: 30px; }
+      .preview-top-row .owner-profile-text { flex: 1 1 auto; flex-wrap: nowrap; gap: 8px; overflow: hidden; }
+      .preview-top-row .owner-profile strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; }
+      .preview-top-row .owner-profile span { overflow: hidden; min-width: 0; font-size: 10px; text-overflow: ellipsis; }
+      .preview-top-row .preview-view-count { order: 2; flex: 0 0 auto; width: auto; min-height: 0; margin: 0; gap: 6px; font-size: 12px; white-space: nowrap; }
       .preview-top-row .preview-view-count span:last-child { display: none; }
       .preview-top-row .like-card .preview-like-button { order: 3; flex: 0 0 auto; width: auto; min-height: 38px; padding: 0 14px; gap: 8px; }
       .owner-profile { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -867,12 +867,12 @@ function createHtml(config) {
         .preview-view-count span:last-child { display: none; }
         .preview-view-count span:first-child { position: relative; flex: 0 0 clamp(18px, 3.2vw, 24px); width: clamp(18px, 3.2vw, 24px); height: clamp(12px, 2.2vw, 16px); overflow: hidden; border: 2px solid currentColor; border-radius: 50% / 62%; color: rgba(231,237,244,.76); font-size: 0; }
         .preview-view-count span:first-child::after { content: ""; position: absolute; top: 50%; left: 50%; width: 34%; aspect-ratio: 1 / 1; border-radius: 50%; background: currentColor; transform: translate(-50%, -50%); }
-        .preview-view-count strong { font-size: clamp(22px, 4.8vw, 30px); }
-        .preview-like-button { order: 3; width: clamp(68px, 10vw, 86px); height: clamp(68px, 10vw, 86px); min-height: 0; padding: 0; gap: clamp(4px, 1vw, 7px); border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 24px; }
-        .preview-like-button span { font-size: clamp(24px, 4.6vw, 32px); }
-        .preview-like-button strong { font-size: clamp(20px, 4.2vw, 28px); }
-        #player { width: 100%; height: min(86vw, 600px); min-height: 360px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
-        .spine-player-controls { min-height: 84px; }
+        .preview-view-count strong { font-size: clamp(16px, 3.4vw, 22px); }
+        .preview-like-button { order: 3; width: clamp(52px, 7.4vw, 64px); height: clamp(52px, 7.4vw, 64px); min-height: 0; padding: 0; gap: clamp(3px, .7vw, 5px); border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 18px; }
+        .preview-like-button span { font-size: clamp(18px, 3.4vw, 24px); }
+        .preview-like-button strong { font-size: clamp(15px, 3vw, 20px); }
+        #player { width: 100%; height: min(112vw, 780px); min-height: 470px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
+        .spine-player-controls { min-height: 74px; }
         .library-nav-button { display: none; }
         .animation-card { order: 3; margin: 12px 32px 0; }
         .animation-menu-button { min-height: 44px; border-color: rgba(140,199,255,.78); border-radius: 8px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 15px; font-weight: 850; }
