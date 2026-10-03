@@ -858,7 +858,7 @@ function createHtml(config) {
         .preview-top-row .section-title, .like-card .section-title { display: none; }
         .owner-card.is-visible { display: block; min-width: 0; }
         .preview-top-row .owner-profile { gap: clamp(8px, 1.7vw, 12px); min-width: 0; }
-        .preview-top-row .owner-avatar { flex: 0 0 clamp(54px, 8.9vw, 80px); width: clamp(54px, 8.9vw, 80px); height: clamp(54px, 8.9vw, 80px); aspect-ratio: 1 / 1; border: 0; border-radius: 50%; }
+        .preview-top-row .owner-avatar { flex: 0 0 clamp(34px, 5.6vw, 46px); width: clamp(34px, 5.6vw, 46px); height: clamp(34px, 5.6vw, 46px); aspect-ratio: 1 / 1; border: 0; border-radius: 50%; }
         .owner-profile-text { display: grid; gap: 3px; min-width: 0; }
         .preview-top-row .owner-profile strong { overflow: hidden; min-width: 0; color: #fff; font-size: clamp(19px, 4.4vw, 28px); font-weight: 950; line-height: 1.05; text-overflow: ellipsis; }
         .preview-top-row .owner-profile span { overflow: hidden; min-width: 0; color: rgba(231,237,244,.48); font-size: clamp(12px, 2.8vw, 17px); font-weight: 850; letter-spacing: .14em; line-height: 1; text-transform: uppercase; text-overflow: ellipsis; }
