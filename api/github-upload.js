@@ -1,8 +1,9 @@
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
-// library is frozen: it keeps serving the works already published and stays on the
-// site. New uploads go to library_02 so the old folder stops growing.
+// Active collection that receives new uploads. It rotates automatically:
+// rotate-library.mjs fills it to MAX_FOLDERS and moves the works into the next
+// permanent library_NN collection, so this only has to point at the current one.
 const defaultBasePath = process.env.LIBRARY_BASE_PATH || 'library_02';
 import { createHash } from 'node:crypto';
 import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-science.js';

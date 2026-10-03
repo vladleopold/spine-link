@@ -8,7 +8,6 @@ const defaultRepo = 'spine';
 const defaultBranch = 'main';
 const defaultBasePath = 'library';
 // Second library folder that receives new uploads; read alongside the first.
-const EXTRA_LIBRARY_PATH = 'library_02';
 const recoveredArchiveRef = 'f4e51c6c420d4ff1f4d2028c12492b04153cc862';
 const archivePageSize = 12;
 
@@ -183,6 +182,31 @@ function githubHeaders(token) {
     headers.Authorization = `Bearer ${token}`;
   }
   return headers;
+}
+
+// Постоянные сборки лежат в папках library_NN. Перечисляем их вместо того,
+// чтобы держать список в коде: ротация создаёт новую папку, и сайт начинает
+// видеть её сразу, без правки кода и деплоя.
+async function libraryCollectionPaths(settings) {
+  const staging = settings.basePath || "library";
+  const paths = [staging];
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch || "")}`,
+      { headers: githubHeaders(settings.token) },
+    );
+    if (!response.ok) return paths;
+    const items = await response.json();
+    if (!Array.isArray(items)) return paths;
+    const collections = items
+      .filter((item) => item && item.type === "dir" && /^library_\d+$/.test(String(item.name || "")))
+      .map((item) => item.name)
+      .sort();
+    for (const name of collections) if (!paths.includes(name)) paths.push(name);
+  } catch (e) {
+    // Не смогли перечислить папки: покажем то, что точно есть.
+  }
+  return paths;
 }
 
 async function githubText(settings, path) {
@@ -2040,9 +2064,9 @@ export default async function handler(request, response) {
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 
   try {
-    // library is frozen but keeps serving its works; library_02 receives new
-    // uploads. Both indexes feed the archive.
-    const basePaths = [settings.basePath, EXTRA_LIBRARY_PATH].filter(Boolean);
+    // Постоянные сборки library_NN перечисляются автоматически, чтобы новые
+    // папки после ротации были видны без правки кода.
+    const basePaths = await libraryCollectionPaths(settings);
     const collectedEntries = [];
     for (const basePath of basePaths) {
       const text = await githubText(settings, `${basePath}/index.json`);
