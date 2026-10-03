@@ -7847,11 +7847,11 @@ h1 {
     padding: 8px 0 !important;
   }
 
-  /* Две карточки в ряд: ширину считает JS как половину окна минус зазор,
-     здесь лишь ограничиваем высоту половиной ленты. */
+  /* Карточки крупные: почти во весь экран, одна в кадре. Ширину задаёт JS
+     (--home-feed-card-width), значение ниже — запасной вариант. */
   .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
-    flex: 0 0 var(--home-feed-card-width, 46vw) !important;
-    width: var(--home-feed-card-width, 46vw);
+    flex: 0 0 var(--home-feed-card-width, 115vw) !important;
+    width: var(--home-feed-card-width, 115vw);
     height: calc(50% - 4px) !important;
     min-height: 0;
     aspect-ratio: auto;
