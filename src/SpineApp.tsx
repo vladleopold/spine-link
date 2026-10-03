@@ -533,7 +533,8 @@ const githubPublishSettings: GitHubSettings = {
   owner: import.meta.env.VITE_GITHUB_OWNER ?? "vladleopold",
   repo: import.meta.env.VITE_GITHUB_REPO ?? "spine",
   branch: import.meta.env.VITE_GITHUB_BRANCH ?? "main",
-  basePath: import.meta.env.VITE_GITHUB_BASE_PATH ?? "library",
+  // library is frozen and still serves the published works; uploads go to library_02.
+  basePath: import.meta.env.VITE_GITHUB_BASE_PATH ?? "library_02",
   title: "",
 };
 
@@ -4940,7 +4941,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       owner: githubPublishSettings.owner.trim(),
       repo: githubPublishSettings.repo.trim(),
       branch: githubPublishSettings.branch.trim() || "main",
-      basePath: cleanRepoPath(githubPublishSettings.basePath || "library"),
+      basePath: cleanRepoPath(githubPublishSettings.basePath || "library_02"),
       title: existingEntry?.title || githubPublishSettings.title.trim() || spine.label,
     };
 

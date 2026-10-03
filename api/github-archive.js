@@ -7,6 +7,8 @@ const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
 const defaultBasePath = 'library';
+// Second library folder that receives new uploads; read alongside the first.
+const EXTRA_LIBRARY_PATH = 'library_02';
 const recoveredArchiveRef = 'f4e51c6c420d4ff1f4d2028c12492b04153cc862';
 const archivePageSize = 12;
 
@@ -2038,7 +2040,19 @@ export default async function handler(request, response) {
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 
   try {
-    const indexText = await githubText(settings, `${settings.basePath}/index.json`);
+    // library is frozen but keeps serving its works; library_02 receives new
+    // uploads. Both indexes feed the archive.
+    const basePaths = [settings.basePath, EXTRA_LIBRARY_PATH].filter(Boolean);
+    const collectedEntries = [];
+    for (const basePath of basePaths) {
+      const text = await githubText(settings, `${basePath}/index.json`);
+      if (!text) continue;
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) collectedEntries.push(...parsed);
+      } catch (err) {}
+    }
+    const indexText = collectedEntries.length ? JSON.stringify(collectedEntries) : '';
     const exclusionsText = await githubText(settings, `${settings.basePath}/archive-exclusions.json`);
     const metricsText = await githubText(settings, `${settings.basePath}/metrics.json`);
     const exclusions = exclusionsText ? JSON.parse(exclusionsText) : { rules: [] };

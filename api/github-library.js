@@ -7,6 +7,8 @@ const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
 const defaultBasePath = 'library';
+// Second library folder that receives new uploads; read alongside the first.
+const EXTRA_LIBRARY_PATH = 'library_02';
 const legacyPublicOwnerAliases = {
   u_rdrnig: 'u_yois91',
 };
@@ -709,10 +711,21 @@ export default async function handler(request, response) {
   const isArchivePage = request.url?.includes('/world-spine-archive') === true;
 
   try {
-    const indexText = await githubText(settings, `${settings.basePath}/index.json`);
+    // library is frozen but still serves its works; library_02 receives new uploads.
+    // Both indexes are merged so the site keeps showing everything.
+    const basePaths = [settings.basePath, EXTRA_LIBRARY_PATH].filter(Boolean);
+    const collected = [];
+    for (const basePath of basePaths) {
+      const text = await githubText(settings, `${basePath}/index.json`);
+      if (!text) continue;
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) collected.push(...parsed);
+      } catch (err) {}
+    }
     const metricsText = await githubText(settings, `${settings.basePath}/metrics.json`);
     const metrics = parseMetricsJson(metricsText);
-    const allEntries = indexText ? JSON.parse(indexText) : [];
+    const allEntries = collected;
     const entries = isArchivePage
       ? allEntries
       : (Array.isArray(allEntries)

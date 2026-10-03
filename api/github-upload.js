@@ -1,7 +1,9 @@
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
-const defaultBasePath = 'library';
+// library is frozen: it keeps serving the works already published and stays on the
+// site. New uploads go to library_02 so the old folder stops growing.
+const defaultBasePath = process.env.LIBRARY_BASE_PATH || 'library_02';
 import { createHash } from 'node:crypto';
 import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-science.js';
 import { metricCountsForIds, parseMetricsJson, sanitizeMetricId, sanitizeMetricIds } from '../lib/spine-metrics.js';
