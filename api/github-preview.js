@@ -1563,6 +1563,7 @@ const pinchDistance = { value: null };
       // itself instead of leaving the user staring at a cropped animation.
       let healAttempts = 0;
       function ensureVisibleContent() {
+        if (lockedViewport.value) return;
         if (healAttempts >= 3) return;
         const p = player;
         const viewport = p?.currentViewport;
@@ -1609,7 +1610,7 @@ const pinchDistance = { value: null };
         if (video.parentNode) video.parentNode.removeChild(video);
       }
 
-      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); baseViewport.value = null; showPreviewVideoFallback(); const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); releaseRuntimeWheelCapture(); requestAnimationFrame(clearPreviewVideoFallback); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); installControlsToggle(); playActiveAnimationFromStart(); requestAnimationFrame(() => { lockViewportOnce(); rememberBaseViewport(); applyZoom(currentZoom.value); window.setTimeout(ensureVisibleContent, 120); window.setTimeout(ensureVisibleContent, 420); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
+      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); baseViewport.value = null; showPreviewVideoFallback(); const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); releaseRuntimeWheelCapture(); requestAnimationFrame(clearPreviewVideoFallback); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); installControlsToggle(); playActiveAnimationFromStart(); requestAnimationFrame(() => { lockViewportOnce(); rememberBaseViewport(); applyZoom(currentZoom.value); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
         // WebGL недоступен или рантайм не смог поднять скелет: оставляем выгрузку
         // того же клипа, чтобы работа осталась видна.
         if (showPreviewVideoFallback()) { const v = box.querySelector("video"); if (v) v.controls = true; return; }
@@ -1629,7 +1630,7 @@ const pinchDistance = { value: null };
             applyZoom(currentZoom.value);
             renderAnimationList();
             resetHealAttempts();
-            window.setTimeout(ensureVisibleContent, 150);
+            
             window.setTimeout(ensureVisibleContent, 500);
           };
           animationMenu.appendChild(button);
