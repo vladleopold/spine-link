@@ -2781,6 +2781,18 @@ function ProgressiveVideo({
   );
 }
 
+function splitIdLines(value: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of String(value || "").split(/[\s,\n]+/)) {
+    const id = part.trim().replace(/^\/+|\/+$/g, "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 export function App({ initialFiles, initialOpenLibrary = false, initialLogin = false, initialUpload = false }: AppProps) {
   const isEditPage = Boolean(editEntryIdFromLocation());
   const isAdminPage = new URLSearchParams(window.location.search).get("admin") === "1";
@@ -2907,6 +2919,13 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [blockchainEnabled, setBlockchainEnabled] = useState(true);
   const [addMoreWorkEnabled, setAddMoreWorkEnabled] = useState(true);
+  // Censored accounts and the works that stay visible for them. Both lists live in
+  // library/censorship.json, so they survive redeploys.
+  const [censoredOwners, setCensoredOwners] = useState<string[]>([]);
+  const [allowedOwners, setAllowedOwners] = useState<string[]>([]);
+  const [censorshipOwnerDraft, setCensorshipOwnerDraft] = useState("");
+  const [censorshipAllowDraft, setCensorshipAllowDraft] = useState("");
+  const [isCensorshipSaved, setIsCensorshipSaved] = useState(false);
 
   useEffect(() => {
     if (!isAdminPage) return;
@@ -2917,6 +2936,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     }).then((r) => r.json().catch(() => ({}))).then((data) => {
       if (typeof data.blockchainEnabled === "boolean") setBlockchainEnabled(data.blockchainEnabled);
       if (typeof data.addMoreWorkEnabled === "boolean") setAddMoreWorkEnabled(data.addMoreWorkEnabled);
+      if (Array.isArray(data.blocked)) setCensoredOwners(data.blocked.map(String));
+      if (Array.isArray(data.allowed)) setAllowedOwners(data.allowed.map(String));
     });
   }, [isAdminPage]);
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() => readStoredGoogleSession()?.user ?? null);
@@ -5847,6 +5868,55 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                       }}
                     />
                   </label>
+
+                  <div className="admin-setting-block">
+                    <div className="section-title">Censored accounts</div>
+                    <p className="admin-setting-hint">
+                      Accounts hidden from the home feed and the archive. Add one owner id per line.
+                      An exception names one work id, so a closed account can keep a single piece visible.
+                    </p>
+                    <div className="admin-censorship-grid">
+                      <label className="admin-setting-column">
+                        <span>Hidden accounts</span>
+                        <textarea
+                          className="admin-censorship-textarea"
+                          rows={6}
+                          spellCheck={false}
+                          value={censoredOwners.join("\n")}
+                          onChange={(event) => setCensoredOwners(splitIdLines(event.target.value))}
+                          placeholder={"u_aljr55\nanon_1eh1wur_v2y62s"}
+                        />
+                      </label>
+                      <label className="admin-setting-column">
+                        <span>Exception: keep these works visible</span>
+                        <textarea
+                          className="admin-censorship-textarea"
+                          rows={6}
+                          spellCheck={false}
+                          value={allowedOwners.join("\n")}
+                          onChange={(event) => setAllowedOwners(splitIdLines(event.target.value))}
+                          placeholder={"113301_b-2026-08-05T04-17-16-481Z"}
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-setting-button"
+                      onClick={async () => {
+                        try {
+                          const response = await fetch("/api/github-upload", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ action: "set-censorship", blocked: censoredOwners, allowed: allowedOwners }),
+                          });
+                          if (response.ok) setIsCensorshipSaved(true);
+                        } catch { /* ignore */ }
+                      }}
+                    >
+                      Save censorship lists
+                    </button>
+                    {isCensorshipSaved ? <span className="admin-setting-status">Saved</span> : null}
+                  </div>
                </div>
               ) : isUploadPage && isUploadModalOpen && !preparedSpine && spineOptions.length === 0 && extraSpineSets.length === 0 && !generatedPreviewUrl ? (
                 <div className="upload-modal-overlay" onClick={(event) => { if (event.target === event.currentTarget) closeUploadModal(); }}>

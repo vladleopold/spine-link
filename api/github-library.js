@@ -155,6 +155,89 @@ async function libraryCollectionPaths(settings) {
   return paths;
 }
 
+// Правило цензуры. `allow`-правила возвращают конкретную работу в ленту,
+// поэтому у закрытого автора можно оставить исключение.
+// The admin page edits library/censorship.json directly. Its id lists are folded
+// into the exclusion rules here so the existing filter picks them up.
+async function withCensorshipLists(settings, exclusions) {
+  try {
+    const text = await githubText(settings, 'library/censorship.json');
+    const parsed = text ? JSON.parse(text) : null;
+    const blocked = Array.isArray(parsed?.blocked) ? parsed.blocked : [];
+    const allowed = Array.isArray(parsed?.allowed) ? parsed.allowed : [];
+    const idRules = (ids) => ids.map((id) => ({ enabled: true, type: 'exact', field: 'id', pattern: `^${String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` }));
+    // An exception names a work, not an account: closed authors can keep one piece
+    // visible while the rest of their catalogue stays hidden.
+    const workRules = (ids) => ids.map((id) => ({ enabled: true, type: 'exact', field: 'id', pattern: `^${String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` }));
+    return {
+      rules: [...(exclusions?.rules || []), ...idRules(blocked)],
+      allow: [...(exclusions?.allow || []), ...workRules(allowed)],
+    };
+  } catch (e) {
+    return exclusions;
+  }
+}
+
+function censorshipRuleMatches(entry, rule) {
+  if (!rule || rule.enabled === false) return false;
+  const pattern = String(rule.pattern || '').trim();
+  if (!pattern) return false;
+  const haystack = censorshipFieldText(entry, String(rule.field || 'all'));
+  if (!haystack) return false;
+  if (rule.type === 'exact') {
+    const wanted = String(rule.pattern || '').trim().toLowerCase();
+    if (!wanted) return false;
+    return haystack.split(/\s+/).some((value) => value.toLowerCase() === wanted);
+  }
+  if (rule.type === 'regex') {
+    try {
+      const flags = String(rule.flags || 'i').replace(/[^dgimsuvy]/g, '') || 'i';
+      return new RegExp(pattern, flags).test(haystack);
+    } catch {
+      return false;
+    }
+  }
+  return haystack.toLowerCase().includes(pattern.toLowerCase());
+}
+
+function censorshipFieldText(entry, field) {
+  if (!entry || typeof entry !== 'object') return '';
+  const files = Array.isArray(entry.files) ? entry.files.join(' ') : '';
+  const animations = Array.isArray(entry.animations) ? entry.animations.join(' ') : '';
+  const values = {
+    all: [
+      entry.id,
+      entry.title,
+      entry.ownerEmail,
+      entry.ownerName,
+      entry.publicOwnerId,
+      entry.ownerAnonId,
+      entry.ownerAnonFingerprint,
+      files,
+      animations,
+      entry.previewPath,
+    ],
+    id: [entry.id],
+    title: [entry.title],
+    ownerEmail: [entry.ownerEmail],
+    ownerName: [entry.ownerName],
+    publicOwnerId: [entry.publicOwnerId],
+    ownerAnonId: [entry.ownerAnonId],
+    ownerAnonFingerprint: [entry.ownerAnonFingerprint],
+    files: [files],
+    animations: [animations],
+    path: [entry.previewPath],
+  };
+  return (values[field] || values.all).filter(Boolean).join(' ');
+}
+
+function entryHiddenByCensorship(entry, exclusions) {
+  const rules = Array.isArray(exclusions?.rules) ? exclusions.rules : [];
+  if (!rules.some((rule) => censorshipRuleMatches(entry, rule))) return false;
+  const allow = Array.isArray(exclusions?.allow) ? exclusions.allow : [];
+  return !allow.some((rule) => censorshipRuleMatches(entry, rule));
+}
+
 async function githubText(settings, path) {
   return cachedGithubText(settings, path);
 }
@@ -749,7 +832,21 @@ export default async function handler(request, response) {
     }
     const metricsText = await githubText(settings, `${settings.basePath}/metrics.json`);
     const metrics = parseMetricsJson(metricsText);
-    const allEntries = collected;
+    // Цензура применяется и к ленте: закрытые авторы и работы не должны попадать
+    // в выдачу. Список правил общий с архивом, включая список исключений.
+    const exclusionsText = await githubText(settings, `${settings.basePath}/archive-exclusions.json`);
+    let exclusions = { rules: [], allow: [] };
+    try {
+      const parsed = exclusionsText ? JSON.parse(exclusionsText) : null;
+      if (parsed && typeof parsed === 'object') {
+        exclusions = {
+          rules: Array.isArray(parsed.rules) ? parsed.rules : [],
+          allow: Array.isArray(parsed.allow) ? parsed.allow : [],
+        };
+      }
+    } catch (err) {}
+    exclusions = await withCensorshipLists(settings, exclusions);
+    const allEntries = collected.filter((entry) => !entryHiddenByCensorship(entry, exclusions));
     const entries = isArchivePage
       ? allEntries
       : (Array.isArray(allEntries)

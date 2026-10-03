@@ -8379,3 +8379,35 @@ h1 {
   font-size: 14px;
   color: rgba(231, 237, 244, 0.72);
 }
+
+/* Censorship lists in the admin page */
+.admin-setting-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.1); }
+.admin-setting-hint { margin: 6px 0 12px; color: rgba(231,237,244,.72); font-size: 13px; line-height: 1.45; }
+.admin-censorship-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.admin-setting-column { display: grid; gap: 6px; }
+.admin-setting-column > span { color: #f7fbff; font-size: 13px; font-weight: 800; }
+.admin-censorship-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(140,199,255,.32);
+  border-radius: 8px;
+  color: #f1f7ff;
+  background: rgba(8,11,16,.72);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.admin-setting-button {
+  margin-top: 12px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(179,255,64,.6);
+  border-radius: 8px;
+  color: #eaffc2;
+  background: rgba(179,255,64,.12);
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.admin-setting-status { margin-left: 10px; color: #b3f542; font-size: 13px; font-weight: 800; }

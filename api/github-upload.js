@@ -10,6 +10,54 @@ import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-s
 import { metricCountsForIds, parseMetricsJson, sanitizeMetricId, sanitizeMetricIds } from '../lib/spine-metrics.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 
+const CENSORSHIP_FILE = 'library/censorship.json';
+
+function normalizeIdList(value) {
+  const items = Array.isArray(value) ? value : String(value || '').split(/[\s,\n]+/);
+  const seen = new Set();
+  const out = [];
+  for (const raw of items) {
+    const id = String(raw || '').trim().replace(/^\/+|\/+$/g, '');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+// Lists of closed accounts live in the repository so they can be edited from the
+// admin page without touching environment variables.
+async function readCensorshipLists(settings) {
+  try {
+    const existing = await getGitHubContent(settings, CENSORSHIP_FILE);
+    const parsed = existing?.content ? JSON.parse(Buffer.from(existing.content, 'base64').toString('utf8')) : null;
+    return {
+      blocked: normalizeIdList(parsed?.blocked),
+      allowed: normalizeIdList(parsed?.allowed),
+    };
+  } catch {
+    return { blocked: [], allowed: [] };
+  }
+}
+
+async function writeCensorshipLists(settings, { blocked, allowed }) {
+  const payload = {
+    updatedAt: new Date().toISOString(),
+    blocked: normalizeIdList(blocked),
+    allowed: normalizeIdList(allowed),
+  };
+  const existing = await getGitHubContent(settings, CENSORSHIP_FILE);
+  await putGitHubContent(
+    settings,
+    CENSORSHIP_FILE,
+    textToBase64(JSON.stringify(payload, null, 2)),
+    'admin: обновить списки цензуры',
+    existing?.sha,
+    origin,
+  );
+  return payload;
+}
+
 function cleanRepoPath(value = '') {
   return String(value).trim().replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
 }
@@ -1811,13 +1859,30 @@ export default async function handler(request, response) {
     if (action === 'get-admin-settings') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const blockchainEnabled = String(process.env.BLOCKCHAIN_ENABLED || 'false').toLowerCase() === 'true';
-      return response.status(200).json({ ok: true, blockchainEnabled });
+      const censorship = await readCensorshipLists(settings);
+      return response.status(200).json({ ok: true, blockchainEnabled, addMoreWorkEnabled: true, ...censorship });
     }
 
     if (action === 'set-admin-settings') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const blockchainEnabled = Boolean(body?.blockchainEnabled);
       return response.status(200).json({ ok: true, blockchainEnabled, message: blockchainEnabled ? 'Blockchain anchoring enabled' : 'Blockchain anchoring disabled' });
+    }
+
+    // Списки цензуры: закрытые авторы и исключения к ним.
+    if (action === 'get-censorship') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const lists = await readCensorshipLists(settings);
+      return response.status(200).json({ ok: true, ...lists });
+    }
+
+    if (action === 'set-censorship') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const saved = await writeCensorshipLists(settings, {
+        blocked: normalizeIdList(body?.blocked),
+        allowed: normalizeIdList(body?.allowed),
+      });
+      return response.status(200).json({ ok: true, ...saved });
     }
 
     if (!settings.owner || !settings.repo || !uploadPath || !entry || !previewHtml || files.length < 3) {
