@@ -364,6 +364,26 @@ function proofDocumentsForEntry(origin, entry, pageUrl) {
   return documents;
 }
 
+// Shared sprite for anonymous owners: 24 frames laid out 6 across by 4 down.
+const OWNER_AVATAR_COLUMNS = 6;
+const OWNER_AVATAR_ROWS = 4;
+const OWNER_AVATAR_FRAMES = OWNER_AVATAR_COLUMNS * OWNER_AVATAR_ROWS;
+
+function ownerAvatarSpriteUrl() {
+  return "/avatars/anonim-sprite.png";
+}
+
+// The frame follows the owner id, so an owner always gets the same face, and two
+// different owners rarely land on the same one.
+function ownerAvatarFrame(seed) {
+  const text = String(seed || "");
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return hash % OWNER_AVATAR_FRAMES;
+}
+
 function textFromEntry(entry, field = 'all') {
   if (!entry || typeof entry !== 'object') return '';
   const files = Array.isArray(entry.files) ? entry.files.join(' ') : '';
@@ -760,7 +780,37 @@ function createHtml(config) {
       .library-nav-button--next { right: 14px; }
       #sidebar { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
       .preview-card { padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
-      .preview-top-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 7px; margin-bottom: 8px; padding: 5px 7px; border: 1px solid rgba(255,255,255,.08); border-radius: 9px; background: rgba(255,255,255,.05); box-shadow: 0 12px 28px rgba(0,0,0,.18); }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .topbar .preview-top-row {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+      .topbar .preview-top-row .preview-card { min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+      .topbar .preview-top-row .owner-card { display: none; }
+      .topbar .preview-top-row .owner-card.is-visible { display: flex; flex: 1 1 auto; min-width: 0; }
+      .topbar .preview-top-row .like-card { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+      .topbar .preview-top-row .section-title { display: none; }
+      /* The like is the rightmost control and reads as a round badge. */
+      .topbar .preview-like-button {
+        flex: 0 0 auto;
+        width: 40px;
+        height: 40px;
+        min-height: 40px;
+        padding: 0;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
       .section-title { margin: 0 0 10px; color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
       .seo-video-card { display: none; }
       .seo-video-card.is-visible { display: block; }
@@ -797,7 +847,7 @@ function createHtml(config) {
       .preview-top-row .section-title, .preview-top-row .like-card .section-title { display: none; }
       .preview-top-row .owner-card { display: none; }
       .preview-top-row .owner-card.is-visible { display: flex; flex: 1 1 auto; min-width: 0; }
-      .preview-top-row .like-card { display: contents; }
+
       .preview-top-row .owner-profile { flex: 1 1 auto; gap: 8px; min-width: 0; overflow: hidden; }
       .preview-top-row .owner-avatar { flex: 0 0 30px; width: 30px; height: 30px; }
       .preview-top-row .owner-profile-text { flex: 1 1 auto; flex-wrap: nowrap; gap: 8px; overflow: hidden; }
@@ -807,7 +857,21 @@ function createHtml(config) {
       .preview-top-row .preview-view-count span:last-child { display: none; }
       .preview-top-row .like-card .preview-like-button { order: 1; flex: 0 0 auto; width: auto; min-height: 38px; padding: 0 14px; gap: 8px; }
       .owner-profile { display: flex; align-items: center; gap: 12px; min-width: 0; }
-      .owner-avatar { width: 46px; height: 46px; border: 1px solid rgba(255,255,255,.14); border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.08); }
+      .owner-avatar {
+        width: 46px;
+        height: 46px;
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 50%;
+        object-fit: cover;
+        background: rgba(255,255,255,.08);
+        /* Anonymous owners share one sprite; the frame index picks the face. */
+        background-image: url("/avatars/anonim-sprite.png");
+        background-repeat: no-repeat;
+        background-size: calc(600% * 1px) calc(400% * 1px);
+        background-position:
+          calc((var(--owner-avatar-frame, 0) % 6) / 6 * 100%)
+          calc(floor(var(--owner-avatar-frame, 0) / 6) / 3 * 100%);
+      }
       .owner-avatar-fallback { display: grid; place-items: center; color: #111; font-weight: 900; background: #b3ff40; }
       .owner-profile-text { display: flex; flex: 1 1 auto; align-items: baseline; gap: 40px; min-width: 0; max-width: 100%; flex-wrap: wrap; }
       .owner-profile strong, .owner-profile span { white-space: nowrap; }
@@ -842,7 +906,8 @@ function createHtml(config) {
         .stage { display: contents; }
         #sidebar { display: contents; }
         .player-frame { order: 2; height: auto; min-height: 0; }
-        .preview-top-row { order: 1; display: flex; flex-wrap: nowrap; align-items: center; gap: clamp(8px, 2vw, 16px); min-width: 0; margin: 2px clamp(0px, 3.6vw, 32px) 6px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: hidden; }
+        .topbar { gap: 10px; }
+        .topbar .preview-top-row { gap: 8px; margin: 0; overflow: hidden; }
         .preview-card { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
         .preview-top-row .section-title, .like-card .section-title { display: none; }
         .owner-card.is-visible { display: block; min-width: 0; }
@@ -857,7 +922,7 @@ function createHtml(config) {
         .preview-view-count span:first-child { position: relative; flex: 0 0 clamp(18px, 3.2vw, 24px); width: clamp(18px, 3.2vw, 24px); height: clamp(12px, 2.2vw, 16px); overflow: hidden; border: 2px solid currentColor; border-radius: 50% / 62%; color: rgba(231,237,244,.76); font-size: 0; }
         .preview-view-count span:first-child::after { content: ""; position: absolute; top: 50%; left: 50%; width: 34%; aspect-ratio: 1 / 1; border-radius: 50%; background: currentColor; transform: translate(-50%, -50%); }
         .preview-view-count strong { font-size: clamp(16px, 3.4vw, 22px); }
-        .preview-like-button { order: 1; width: clamp(52px, 7.4vw, 64px); height: clamp(52px, 7.4vw, 64px); min-height: 0; padding: 0; gap: clamp(3px, .7vw, 5px); border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 18px; }
+        .topbar .preview-like-button { order: 1; width: clamp(38px, 10vw, 44px); height: clamp(38px, 10vw, 44px); min-height: 0; padding: 0; gap: 0; flex-direction: column; border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 15px; }
         .preview-like-button span { font-size: clamp(18px, 3.4vw, 24px); }
         .preview-like-button strong { font-size: clamp(15px, 3vw, 20px); }
         #player { width: 100%; height: calc(100dvh - 236px); min-height: 300px; max-height: 760px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
@@ -937,6 +1002,10 @@ function createHtml(config) {
     <div id="app">
       <header class="topbar">
         <a class="brand-link" href="/" aria-label="Spine-Link home"><span class="brand-logo" aria-hidden="true"><span>s</span><span>p</span><span class="brand-spine-mark"><i></i><i></i><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="brand-plus">link</span></span></a>
+        <div class="preview-top-row">
+          <div class="preview-card owner-card" id="owner-card"><div id="owner-profile"></div></div>
+          <div class="preview-card like-card" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><div class="preview-view-count" data-metric-id="${escapeHtml(entryMetricId)}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div><button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false" aria-label="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button></div>
+        </div>
       </header>
       <div class="stage">
         <div class="player-frame">
@@ -946,10 +1015,6 @@ function createHtml(config) {
         </div>
         <aside id="sidebar">
           <div class="preview-card" id="set-card"><div class="section-title">Set</div><select id="set-select"></select></div>
-          <div class="preview-top-row">
-            <div class="preview-card owner-card" id="owner-card"><div id="owner-profile"></div></div>
-            <div class="preview-card like-card" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button><div class="preview-view-count" data-metric-id="${escapeHtml(entryMetricId)}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div></div>
-          </div>
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
           <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
           ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<details class="preview-card proof-card"><summary class="section-title">Origin proof</summary><div class="proof-links">${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div></details>` : ''}
@@ -1174,15 +1239,14 @@ const pinchDistance = { value: null };
         ownerLibrary.innerHTML = "";
         if (!owner.visible) return;
         ownerProfile.className = "owner-profile";
-        const avatar = owner.picture ? document.createElement("img") : document.createElement("div");
-        avatar.className = owner.picture ? "owner-avatar" : "owner-avatar owner-avatar-fallback";
-        if (owner.picture) {
-          avatar.src = owner.picture;
-          avatar.alt = "";
-        } else {
-          avatar.setAttribute("aria-hidden", "true");
-          avatar.textContent = String(owner.name || "S").slice(0, 1).toUpperCase();
-        }
+        const avatar = document.createElement("img");
+        avatar.className = "owner-avatar";
+        avatar.alt = "";
+        // Anonymous owners have no portrait, so they get a frame from the shared
+        // sprite. The frame is picked from the owner id, so the same person keeps
+        // the same face everywhere and two owners rarely collide.
+        avatar.src = owner.picture || ownerAvatarSpriteUrl(owner.id || owner.name || "");
+        avatar.style.setProperty("--owner-avatar-frame", String(ownerAvatarFrame(owner.id || owner.name || "")));
         const ownerText = document.createElement("div");
         ownerText.className = "owner-profile-text";
         const ownerName = document.createElement("strong");
