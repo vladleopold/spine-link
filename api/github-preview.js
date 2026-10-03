@@ -863,7 +863,10 @@ function createHtml(config) {
         .spine-player-controls { min-height: 74px; }
         .library-nav-button { display: none; }
         .animation-card { order: 3; margin: 8px 16px 0; }
-        .animation-menu { position: static; max-height: 46vh; margin-top: 0; }
+        .animation-card .section-title { margin-bottom: 4px; font-size: 11px; }
+        .animation-card .preview-card-body, .animation-card { padding-top: 6px; }
+        .animation-menu { position: static; max-height: 46vh; margin-top: 0; padding: 5px; gap: 4px; }
+        #animation-menu button { min-height: 40px; }
         .animation-menu button { min-height: 40px; border-color: rgba(140,199,255,.78); border-radius: 8px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 14px; font-weight: 850; }
         #set-card, .note-card, .proof-card, .owner-library { order: 4; margin-inline: 32px; }
         .video-watch-panel { display: none; }
