@@ -177,6 +177,7 @@ async function withCensorshipLists(settings, exclusions) {
       allow: [...(exclusions?.allow || []), ...workRules(allowed)],
     };
   } catch (e) {
+    console.error('censorship list load failed', e);
     return exclusions;
   }
 }
