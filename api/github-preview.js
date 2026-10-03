@@ -788,12 +788,7 @@ function createHtml(config) {
       button { min-height: 38px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; color: rgba(231,237,244,.86); background: rgba(255,255,255,.045); cursor: pointer; }
       button.active, button:hover { border-color: rgba(140,199,255,.82); color: #fff; background: rgba(71,156,255,.22); }
       .animation-card { position: relative; }
-      .animation-menu-button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 0 14px; }
-      .animation-menu-button .animation-dots { flex: 0 0 auto; color: #8cc7ff; font-size: 20px; font-weight: 900; line-height: 1; letter-spacing: .18em; }
-      .animation-menu-button .animation-current { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: 14px; font-weight: 850; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-      .animation-menu-button[aria-expanded="true"] { border-color: rgba(140,199,255,.82); color: #fff; background: rgba(71,156,255,.22); }
-      .animation-menu { display: grid; gap: 6px; max-height: 280px; overflow: auto; margin-top: 8px; padding: 8px; border: 1px solid rgba(140,199,255,.34); border-radius: 10px; background: rgba(9,13,17,.94); box-shadow: 0 22px 50px rgba(0,0,0,.52); backdrop-filter: blur(12px); }
-      .animation-menu[hidden] { display: none; }
+      .animation-card.is-open .animation-menu { display: grid; gap: 6px; max-height: 320px; overflow: auto; margin-top: 0; padding: 8px; border: 1px solid rgba(140,199,255,.34); border-radius: 10px; background: rgba(9,13,17,.94); box-shadow: 0 22px 50px rgba(0,0,0,.52); backdrop-filter: blur(12px); }
       .note-text { margin: 0; color: rgba(231,237,244,.88); font-size: 16px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
       .note-card:empty { display: none; }
       .owner-card { display: none; gap: 12px; }
@@ -869,8 +864,6 @@ function createHtml(config) {
         .spine-player-controls { min-height: 74px; }
         .library-nav-button { display: none; }
         .animation-card { order: 3; margin: 12px 32px 0; }
-        .animation-menu-button { min-height: 44px; border-color: rgba(140,199,255,.78); border-radius: 8px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 15px; font-weight: 850; }
-        .animation-menu-button[aria-expanded="true"] { background: rgba(71,156,255,.3); }
         .animation-menu { position: fixed; top: auto; right: 16px; bottom: 16px; left: 16px; max-height: 46vh; margin-top: 0; }
         .animation-menu button { min-height: 40px; border-color: rgba(140,199,255,.78); border-radius: 8px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 14px; font-weight: 850; }
         #set-card, .note-card, .proof-card, .owner-library { order: 4; margin-inline: 32px; }
@@ -962,7 +955,7 @@ function createHtml(config) {
             <div class="preview-card like-card" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(entryMetricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button><div class="preview-view-count" data-metric-id="${escapeHtml(entryMetricId)}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div></div>
           </div>
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
-          <div class="preview-card animation-card" id="animation-card"><button class="animation-menu-button" id="animation-menu-button" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="animation-menu" aria-label="Animations"><span class="animation-dots" aria-hidden="true">&#8942;</span><span class="animation-current" id="animation-current">Animations</span></button><div class="animation-menu" id="animation-menu" role="menu" hidden></div></div>
+          <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
           ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<details class="preview-card proof-card"><summary class="section-title">Origin proof</summary><div class="proof-links">${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div></details>` : ''}
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
@@ -1005,8 +998,6 @@ function createHtml(config) {
       const currentZoom = { value: config.zoom || 1 };
       const baseViewport = { value: null };
       const animationNames = { value: activeSet.value?.animations || [] };
-      const animationMenuButton = document.getElementById("animation-menu-button");
-      const animationCurrent = document.getElementById("animation-current");
       const animationMenu = document.getElementById("animation-menu");
       const setCard = document.getElementById("set-card");
       const setSelect = document.getElementById("set-select");
@@ -1596,7 +1587,6 @@ const pinchDistance = { value: null };
         if (showPreviewVideoFallback()) { const v = box.querySelector("video"); if (v) v.controls = true; return; }
         box.innerHTML = '<div style="display:grid;place-items:center;height:100%;padding:24px;color:#ffb088;font-weight:900;text-align:center;">Spine player error: ' + String(message || "could not load animation").replace(/[<>&]/g, "") + '</div>'; } }); }
       function renderAnimationList() {
-        animationCurrent.textContent = activeAnimation.name || "Animations";
         animationMenu.innerHTML = "";
         animationNames.value.forEach((animationName) => {
           const button = document.createElement("button");
@@ -1606,7 +1596,6 @@ const pinchDistance = { value: null };
           button.className = animationName === activeAnimation.name ? "active" : "";
           button.onclick = () => {
             activeAnimation.name = animationName;
-            closeAnimationMenu();
             syncUrl();
             playActiveAnimationFromStart();
             applyZoom(currentZoom.value);
@@ -1618,25 +1607,6 @@ const pinchDistance = { value: null };
           animationMenu.appendChild(button);
         });
       }
-      function openAnimationMenu() {
-        animationMenu.hidden = false;
-        animationMenuButton.setAttribute("aria-expanded", "true");
-      }
-      function closeAnimationMenu() {
-        animationMenu.hidden = true;
-        animationMenuButton.setAttribute("aria-expanded", "false");
-      }
-      function toggleAnimationMenu() {
-        if (animationMenu.hidden) openAnimationMenu();
-        else closeAnimationMenu();
-      }
-      animationMenuButton.addEventListener("click", (event) => { event.stopPropagation(); toggleAnimationMenu(); });
-      document.addEventListener("click", (event) => {
-        if (animationMenu.hidden) return;
-        if (event.target.closest("#animation-card")) return;
-        closeAnimationMenu();
-      }, true);
-      document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeAnimationMenu(); });
       function syncPreviewLike() {
         return;
       }
