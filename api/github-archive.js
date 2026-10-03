@@ -120,6 +120,7 @@ function textFromEntry(entry, field = 'all') {
     ownerEmail: [entry.ownerEmail],
     ownerName: [entry.ownerName],
     publicOwnerId: [entry.publicOwnerId],
+    owner: [entry.publicOwnerId, entry.ownerAnonId, entry.ownerAnonFingerprint, entry.id],
     ownerAnonId: [entry.ownerAnonId],
     ownerAnonFingerprint: [entry.ownerAnonFingerprint],
     note: [entry.note],
@@ -161,12 +162,14 @@ async function withCensorshipLists(settings, exclusions) {
     const parsed = text ? JSON.parse(text) : null;
     const blocked = Array.isArray(parsed?.blocked) ? parsed.blocked : [];
     const allowed = Array.isArray(parsed?.allowed) ? parsed.allowed : [];
-    const idRules = (ids) => ids.map((id) => ({ enabled: true, type: 'exact', field: 'id', pattern: `^${String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` }));
+    // `blocked` holds account ids, so the rule targets the owner fields; an id is
+    // matched there too so a raw work id can be listed directly.
+    const ownerRules = (ids) => ids.map((id) => ({ enabled: true, type: 'exact', field: 'owner', pattern: `^${String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` }));
     // An exception names a work, not an account: closed authors can keep one piece
     // visible while the rest of their catalogue stays hidden.
     const workRules = (ids) => ids.map((id) => ({ enabled: true, type: 'exact', field: 'id', pattern: `^${String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` }));
     return {
-      rules: [...(exclusions?.rules || []), ...idRules(blocked)],
+      rules: [...(exclusions?.rules || []), ...ownerRules(blocked)],
       allow: [...(exclusions?.allow || []), ...workRules(allowed)],
     };
   } catch (e) {
