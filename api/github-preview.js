@@ -828,7 +828,7 @@ function createHtml(config) {
         *::-webkit-scrollbar { width: 0; height: 0; display: none; }
         html, body, #app { min-height: 100%; }
         body { background: #030404; }
-        #app { display: flex; flex-direction: column; gap: 10px; min-height: 100%; padding: 12px 16px 56px; background: #030404; }
+        #app { display: flex; flex-direction: column; gap: 10px; min-height: 100%; padding: 12px 16px 8px; background: #030404; }
         .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; overflow: hidden; }
         .brand-link { min-width: 0; overflow: hidden; }
         .brand-logo { max-width: 100%; gap: 3px; font-size: clamp(24px, 5.6vw, 30px); letter-spacing: .1em; }
@@ -874,7 +874,7 @@ function createHtml(config) {
         .seo-video-frame { max-height: min(62vh, 520px); }
       }
       @media (max-width: 560px) {
-        #app { padding: 10px 12px 56px; }
+        #app { padding: 10px 12px 8px; }
         .topbar { grid-template-columns: minmax(0, 1fr) auto; justify-items: stretch; }
         .brand-logo { gap: 2px; font-size: clamp(21px, 6.2vw, 28px); letter-spacing: .06em; }
         .preview-top-row { margin: 2px 0 10px; }
