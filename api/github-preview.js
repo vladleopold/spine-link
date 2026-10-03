@@ -728,7 +728,7 @@ function createHtml(config) {
       #app { position: relative; z-index: 1; display: grid; grid-template-rows: auto auto auto; gap: 18px; min-height: 100vh; padding: 24px; background: rgba(0,0,0,.78); }
       .topbar { display: flex; justify-content: space-between; gap: 18px; align-items: center; }
       .brand-link { display: inline-block; color: inherit; text-decoration: none; }
-      .brand-logo { display: inline-flex; align-items: center; gap: 8px; color: #fff; font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif; font-size: clamp(34px, 4.4vw, 58px); font-weight: 500; line-height: .78; letter-spacing: .18em; text-shadow: 0 0 1px rgba(255,255,255,.86), 0 6px 18px rgba(0,0,0,.42); }
+      .brand-logo { display: inline-flex; align-items: center; gap: 5px; color: #fff; font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif; font-size: clamp(34px, 4.4vw, 58px); font-weight: 500; line-height: .78; letter-spacing: .1em; text-shadow: 0 0 1px rgba(255,255,255,.86), 0 6px 18px rgba(0,0,0,.42); }
       .brand-spine-mark { display: inline-grid; gap: 4px; width: 16px; margin: 0 -3px 0 -5px; transform: translateY(1px); }
       .brand-spine-mark i { display: block; width: 16px; height: 7px; border-radius: 999px; background: #ff5a1f; box-shadow: 0 0 8px rgba(255,90,31,.22); }
       .brand-spine-mark i:nth-child(1) { transform: translateX(-1px); }
@@ -738,10 +738,6 @@ function createHtml(config) {
       .brand-spine-mark i:nth-child(5) { width: 8px; transform: translateX(8px); }
       .brand-plus { margin-left: 8px; color: #ff6a28; font-size: .72em; font-weight: 800; letter-spacing: .22em; line-height: 1; text-transform: uppercase; transform: translate(-15px, .18em); }
       .brand-link:hover .brand-plus { color: #8cc7ff; }
-      .player-top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; }
-      .player-top-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 14px; border: 1px solid rgba(140,199,255,.32); border-radius: 8px; color: #dff1ff; background: rgba(140,199,255,.08); box-shadow: 0 12px 28px rgba(0,0,0,.24), inset 0 0 18px rgba(140,199,255,.06); font-size: 13px; font-weight: 950; text-decoration: none; white-space: nowrap; }
-      .player-top-button.is-primary { border-color: rgba(179,255,64,.62); color: #eaffc2; background: rgba(179,255,64,.1); }
-      .player-top-button:hover { border-color: rgba(255,106,40,.7); color: #fff; background: rgba(255,106,40,.12); }
       .stage { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 18px; min-height: 560px; height: calc(100vh - 104px); }
       .player-frame { position: relative; min-width: 0; min-height: 0; }
       .video-watch-panel { position: relative; display: grid; gap: 10px; overflow: hidden; padding: 16px; border: 1px solid rgba(255,185,214,.46); border-radius: 8px; background: #020304; box-shadow: 0 20px 64px rgba(0,0,0,.34); }
@@ -814,7 +810,7 @@ function createHtml(config) {
       .preview-top-row .owner-profile span { overflow: hidden; min-width: 0; font-size: 10px; text-overflow: ellipsis; }
       .preview-top-row .preview-view-count { order: 2; flex: 0 0 auto; width: auto; min-height: 0; margin: 0; gap: 6px; font-size: 12px; white-space: nowrap; }
       .preview-top-row .preview-view-count span:last-child { display: none; }
-      .preview-top-row .like-card .preview-like-button { order: 3; flex: 0 0 auto; width: auto; min-height: 38px; padding: 0 14px; gap: 8px; }
+      .preview-top-row .like-card .preview-like-button { order: 1; flex: 0 0 auto; width: auto; min-height: 38px; padding: 0 14px; gap: 8px; }
       .owner-profile { display: flex; align-items: center; gap: 12px; min-width: 0; }
       .owner-avatar { width: 46px; height: 46px; border: 1px solid rgba(255,255,255,.14); border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.08); }
       .owner-avatar-fallback { display: grid; place-items: center; color: #111; font-weight: 900; background: #b3ff40; }
@@ -840,7 +836,7 @@ function createHtml(config) {
         #app { display: flex; flex-direction: column; gap: 10px; min-height: 100%; padding: 12px 16px 56px; background: #030404; }
         .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; overflow: hidden; }
         .brand-link { min-width: 0; overflow: hidden; }
-        .brand-logo { max-width: 100%; gap: 5px; font-size: clamp(24px, 5.6vw, 30px); letter-spacing: .16em; }
+        .brand-logo { max-width: 100%; gap: 3px; font-size: clamp(24px, 5.6vw, 30px); letter-spacing: .1em; }
         .brand-spine-mark { gap: 3px; width: 11px; margin: 0 -3px 0 -5px; transform: translateY(0); }
         .brand-spine-mark i { width: 11px; height: 5px; }
         .brand-spine-mark i:nth-child(2) { width: 10px; }
@@ -848,8 +844,6 @@ function createHtml(config) {
         .brand-spine-mark i:nth-child(4) { width: 8px; }
         .brand-spine-mark i:nth-child(5) { width: 7px; }
         .brand-plus { margin-left: 5px; font-size: .64em; letter-spacing: .17em; transform: translate(-15px, .16em); }
-        .player-top-actions { flex: 0 0 auto; justify-content: flex-end; width: auto; margin-left: auto; }
-        .player-top-button { max-width: min(36vw, 120px); min-height: 34px; padding: 0 12px; overflow: hidden; border-color: rgba(179,255,64,.58); border-radius: 8px; color: #efffd8; background: rgba(179,255,64,.08); font-size: clamp(12px, 2.8vw, 15px); text-overflow: ellipsis; box-shadow: none; }
         .stage { display: contents; }
         #sidebar { display: contents; }
         .player-frame { order: 2; height: auto; min-height: 0; }
@@ -868,7 +862,7 @@ function createHtml(config) {
         .preview-view-count span:first-child { position: relative; flex: 0 0 clamp(18px, 3.2vw, 24px); width: clamp(18px, 3.2vw, 24px); height: clamp(12px, 2.2vw, 16px); overflow: hidden; border: 2px solid currentColor; border-radius: 50% / 62%; color: rgba(231,237,244,.76); font-size: 0; }
         .preview-view-count span:first-child::after { content: ""; position: absolute; top: 50%; left: 50%; width: 34%; aspect-ratio: 1 / 1; border-radius: 50%; background: currentColor; transform: translate(-50%, -50%); }
         .preview-view-count strong { font-size: clamp(16px, 3.4vw, 22px); }
-        .preview-like-button { order: 3; width: clamp(52px, 7.4vw, 64px); height: clamp(52px, 7.4vw, 64px); min-height: 0; padding: 0; gap: clamp(3px, .7vw, 5px); border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 18px; }
+        .preview-like-button { order: 1; width: clamp(52px, 7.4vw, 64px); height: clamp(52px, 7.4vw, 64px); min-height: 0; padding: 0; gap: clamp(3px, .7vw, 5px); border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 18px; }
         .preview-like-button span { font-size: clamp(18px, 3.4vw, 24px); }
         .preview-like-button strong { font-size: clamp(15px, 3vw, 20px); }
         #player { width: 100%; height: min(112vw, 780px); min-height: 470px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
@@ -886,9 +880,7 @@ function createHtml(config) {
       @media (max-width: 560px) {
         #app { padding: 10px 12px 56px; }
         .topbar { grid-template-columns: minmax(0, 1fr) auto; justify-items: stretch; }
-        .brand-logo { font-size: clamp(21px, 6.2vw, 28px); letter-spacing: .14em; }
-        .player-top-actions { justify-self: end; margin-left: 0; }
-        .player-top-button { max-width: min(34vw, 116px); min-height: 34px; padding-inline: 9px; }
+        .brand-logo { gap: 2px; font-size: clamp(21px, 6.2vw, 28px); letter-spacing: .06em; }
         .preview-top-row { margin: 2px 0 10px; }
         .preview-like-button { width: 60px; height: 60px; }
       }
@@ -956,9 +948,6 @@ function createHtml(config) {
     <div id="app">
       <header class="topbar">
         <a class="brand-link" href="/" aria-label="Spine-Link home"><span class="brand-logo" aria-hidden="true"><span>s</span><span>p</span><span class="brand-spine-mark"><i></i><i></i><i></i><i></i><i></i></span><span>n</span><span>e</span><span class="brand-plus">link</span></span></a>
-        <nav class="player-top-actions" aria-label="Spine-Link player navigation">
-          <a class="player-top-button is-primary" href="/">Create preview</a>
-        </nav>
       </header>
       <div class="stage">
         <div class="player-frame">
