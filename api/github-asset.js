@@ -389,14 +389,19 @@ export default async function handler(request, response) {
 
   const path = normalizeRepoPath(request.query?.path || '');
   if (!path) return response.status(400).send('Invalid asset path');
-  if (/\bpreview-low\.webp$/i.test(path)) return response.status(404).send('Not found');
+  // preview-low.webp is answered with 404, but plenty of stored poster URLs still
+  // point at it, so those cards render black. Serve the canonical poster of the
+  // same work instead of failing the request.
+  const assetPath = /\bpreview-low\.webp$/i.test(path)
+    ? path.replace(/\bpreview-low\.webp$/i, 'preview.webp')
+    : path;
   const assetVersion = typeof request.query?.v === 'string' ? request.query.v : '';
 
   const owner = process.env.GITHUB_OWNER || defaultOwner;
   const repo = process.env.GITHUB_REPO || defaultRepo;
   const branch = process.env.GITHUB_BRANCH || defaultBranch;
-  const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
-  const cacheKey = memoryCacheKey({ owner, repo, branch, path, assetVersion });
+  const encodedPath = encodeURIComponent(assetPath).replace(/%2F/g, '/');
+  const cacheKey = memoryCacheKey({ owner, repo, branch, path: assetPath, assetVersion });
   const cachedAsset = getMemoryCacheEntry(cacheKey);
   if (cachedAsset) {
     response.setHeader('X-Spine-Link-Asset-Memory', 'hit');
@@ -414,8 +419,8 @@ export default async function handler(request, response) {
     });
 
     if (!githubResponse.ok) {
-      const fallbackPath = await findFallbackGitHubPath({ owner, repo, branch, token, path });
-      if (!fallbackPath || fallbackPath === path) return response.status(githubResponse.status).send('Asset not found');
+      const fallbackPath = await findFallbackGitHubPath({ owner, repo, branch, token, path: assetPath });
+      if (!fallbackPath || fallbackPath === assetPath) return response.status(githubResponse.status).send('Asset not found');
       const fallbackEncodedPath = encodeURIComponent(fallbackPath).replace(/%2F/g, '/');
       githubResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${fallbackEncodedPath}?ref=${encodeURIComponent(branch)}`, {
         headers: githubHeaders(token),
@@ -426,24 +431,24 @@ export default async function handler(request, response) {
     const data = await githubResponse.json();
     const etag = data?.sha ? `"github-${data.sha}${assetVersion ? `-${assetVersion}` : ''}"` : '';
     if (requestMatchesEtag(request, etag)) {
-      const earlyResponse = setAssetResponseHeaders(request, response, { path, assetVersion, etag });
+      const earlyResponse = setAssetResponseHeaders(request, response, { path: assetPath, assetVersion, etag });
       if (earlyResponse) return earlyResponse;
     }
-    const headResponse = sendAssetHeadFromMetadata(request, response, { path, assetVersion, data, etag });
+    const headResponse = sendAssetHeadFromMetadata(request, response, { path: assetPath, assetVersion, data, etag });
     if (headResponse) return headResponse;
-    const rangeResponse = await sendGitHubRangeAsset(request, response, { path, assetVersion, data, token, etag });
+    const rangeResponse = await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag });
     if (rangeResponse) return rangeResponse;
     let buffer = await contentBufferFromGitHubContent(data, token);
     if (!buffer.length) return response.status(404).send('Asset is empty');
-    if (isAtlasPath(path)) {
+    if (isAtlasPath(assetPath)) {
       buffer = withAtlasPageCacheBuster(buffer, assetVersion);
     }
-    if (path === 'library/index.json') {
+    if (assetPath === 'library/index.json') {
       buffer = sanitizeLibraryIndex(buffer);
     }
     putMemoryCacheEntry(cacheKey, { buffer, etag });
     response.setHeader('X-Spine-Link-Asset-Memory', 'miss');
-    return sendAssetBuffer(request, response, { path, assetVersion, buffer, etag });
+    return sendAssetBuffer(request, response, { path: assetPath, assetVersion, buffer, etag });
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Asset failed');
   }
