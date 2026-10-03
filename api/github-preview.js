@@ -755,6 +755,7 @@ function createHtml(config) {
          средне-серой шахматке почти не читались — больше половины видимых пикселей
          не набирали контраста с фоном. Узор оставлен тёмным, чтобы прозрачные
          области всё так же читались, но не съедали контраст анимации. */
+      #player .spine-player { position: relative; z-index: 1; }
       #player { width: 100%; height: 100%; min-height: 0; touch-action: none; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; overflow: hidden; background: conic-gradient(#1c1f24 25%, #141619 0 50%, #1c1f24 0 75%, #141619 0); background-size: var(--preview-pattern-size, 140px) var(--preview-pattern-size, 140px); }
       .library-nav-button { position: absolute; top: 50%; z-index: 8; display: grid; place-items: center; width: 52px; min-height: 78px; padding: 0; border: 1px solid rgba(140,199,255,.55); border-radius: 8px; color: #f7fbff; background: rgba(9,13,17,.68); box-shadow: 0 16px 34px rgba(0,0,0,.38), inset 0 0 22px rgba(140,199,255,.08); font-size: 42px; font-weight: 800; line-height: 1; transform: translateY(-50%); backdrop-filter: blur(10px); }
       .library-nav-button:hover { border-color: rgba(179,255,64,.78); background: rgba(23,31,18,.78); }
@@ -1470,16 +1471,33 @@ const pinchDistance = { value: null };
       }
       function resetHealAttempts() { healAttempts = 0; }
 
-      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); document.getElementById("player").innerHTML = ""; baseViewport.value = null; const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); applyZoom(currentZoom.value); window.setTimeout(ensureVisibleContent, 120); window.setTimeout(ensureVisibleContent, 420); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
-        // WebGL недоступен или рантайм не смог поднять скелет. Показываем выгрузку
-        // того же клипа: анимация остаётся видна даже без интерактивного плеера.
-        const fallbackVideo = config.video?.contentUrl || "";
-        if (fallbackVideo) {
-          box.innerHTML = '<video class="preview-fallback-video" src="' + fallbackVideo.replace(/[<>&"]/g, "") + '" autoplay muted loop playsinline controls style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000"></video>';
-          const video = box.querySelector("video");
-          if (video) { video.muted = true; const attempt = video.play(); if (attempt?.catch) attempt.catch(() => {}); }
-          return;
+      // На медленной сети текстура едет секундами: канвас существует, но пуст, и
+      // пользователь видит тёмный бокс вместо работы. Показываем выгрузку того же
+      // клипа сразу как подложку и убираем её, когда интерактивный плеер готов.
+      function showPreviewVideoFallback() {
+        const box = document.getElementById("player");
+        const src = config.video?.contentUrl || "";
+        if (!box || !src) return null;
+        box.innerHTML = '<video class="preview-fallback-video" src="' + src.replace(/[<>&"]/g, "") + '" autoplay muted loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;z-index:0"></video>';
+        const video = box.querySelector("video");
+        if (video) {
+          video.muted = true;
+          const attempt = video.play();
+          if (attempt && typeof attempt.catch === "function") attempt.catch(() => {});
         }
+        return video;
+      }
+      function clearPreviewVideoFallback() {
+        const video = document.querySelector("#player .preview-fallback-video");
+        if (!video) return;
+        try { video.pause(); } catch (e) {}
+        if (video.parentNode) video.parentNode.removeChild(video);
+      }
+
+      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); baseViewport.value = null; showPreviewVideoFallback(); const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); requestAnimationFrame(clearPreviewVideoFallback); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); applyZoom(currentZoom.value); window.setTimeout(ensureVisibleContent, 120); window.setTimeout(ensureVisibleContent, 420); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
+        // WebGL недоступен или рантайм не смог поднять скелет: оставляем выгрузку
+        // того же клипа, чтобы работа осталась видна.
+        if (showPreviewVideoFallback()) { const v = box.querySelector("video"); if (v) v.controls = true; return; }
         box.innerHTML = '<div style="display:grid;place-items:center;height:100%;padding:24px;color:#ffb088;font-weight:900;text-align:center;">Spine player error: ' + String(message || "could not load animation").replace(/[<>&]/g, "") + '</div>'; } }); }
       function renderAnimationList() {
         animationCurrent.textContent = activeAnimation.name || "Animations";
