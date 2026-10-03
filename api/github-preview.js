@@ -364,26 +364,6 @@ function proofDocumentsForEntry(origin, entry, pageUrl) {
   return documents;
 }
 
-// Shared sprite for anonymous owners: 24 frames laid out 6 across by 4 down.
-const OWNER_AVATAR_COLUMNS = 6;
-const OWNER_AVATAR_ROWS = 4;
-const OWNER_AVATAR_FRAMES = OWNER_AVATAR_COLUMNS * OWNER_AVATAR_ROWS;
-
-function ownerAvatarSpriteUrl() {
-  return "/avatars/anonim-sprite.png";
-}
-
-// The frame follows the owner id, so an owner always gets the same face, and two
-// different owners rarely land on the same one.
-function ownerAvatarFrame(seed) {
-  const text = String(seed || "");
-  let hash = 0;
-  for (let i = 0; i < text.length; i += 1) {
-    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-  }
-  return hash % OWNER_AVATAR_FRAMES;
-}
-
 function textFromEntry(entry, field = 'all') {
   if (!entry || typeof entry !== 'object') return '';
   const files = Array.isArray(entry.files) ? entry.files.join(' ') : '';
@@ -801,13 +781,16 @@ function createHtml(config) {
       .topbar .preview-top-row .section-title { display: none; }
       /* The like is the rightmost control and reads as a round badge. */
       .topbar .preview-like-button {
-        flex: 0 0 auto;
+        flex: 0 0 40px;
         width: 40px;
         height: 40px;
         min-height: 40px;
+        min-width: 40px;
         padding: 0;
+        gap: 0;
         border-radius: 50%;
         display: inline-flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
       }
@@ -1229,6 +1212,25 @@ const pinchDistance = { value: null };
         if (!video) return;
         video.pause();
         try { video.currentTime = 0; } catch {}
+      }
+      // Shared sprite for anonymous owners: 24 frames laid out 6 across by 4 down.
+      const OWNER_AVATAR_COLUMNS = 6;
+      const OWNER_AVATAR_ROWS = 4;
+      const OWNER_AVATAR_FRAMES = OWNER_AVATAR_COLUMNS * OWNER_AVATAR_ROWS;
+
+      function ownerAvatarSpriteUrl() {
+        return "/avatars/anonim-sprite.png";
+      }
+
+      // The frame follows the owner id, so an owner always gets the same face, and two
+      // different owners rarely land on the same one.
+      function ownerAvatarFrame(seed) {
+        const text = String(seed || "");
+        let hash = 0;
+        for (let i = 0; i < text.length; i += 1) {
+          hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+        }
+        return hash % OWNER_AVATAR_FRAMES;
       }
       function renderOwnerCard() {
         const owner = config.ownerProfile || {};
