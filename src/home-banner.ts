@@ -167,9 +167,19 @@ export function mountHomeBanner(options: {
     return `/assets/${folder}/${name.replace(/^\/+/, "")}`;
   }
 
+  // Only works the runtime can actually play. A skeleton needs its own runtime
+  // major, and some exports use timelines their bundle does not implement, so
+  // those are skipped instead of shown as a broken frame.
+  function canPlayEntry(entry: BannerEntry): boolean {
+    const version = String(entry?.skeletonVersion || "").trim();
+    const major = version.split(".")[0];
+    if (!major) return true;
+    return major === "4";
+  }
+
   async function pickEntry(): Promise<BannerEntry | null> {
     const entries = await loadEntries();
-    const candidates = entries.filter((entry) => entry.id && entry.skeleton && entry.atlas);
+    const candidates = entries.filter((entry) => entry.id && entry.skeleton && entry.atlas && canPlayEntry(entry));
     if (!candidates.length) return null;
     // A random pick each round, so the banner does not follow a fixed order.
     const pool = candidates.filter((entry) => String(entry.id) !== currentId);
