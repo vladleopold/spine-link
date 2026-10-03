@@ -863,8 +863,8 @@ function createHtml(config) {
         #player { width: 100%; height: min(112vw, 780px); min-height: 470px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
         .spine-player-controls { min-height: 74px; }
         .library-nav-button { display: none; }
-        .animation-card { order: 3; margin: 12px 32px 0; }
-        .animation-menu { position: fixed; top: auto; right: 16px; bottom: 16px; left: 16px; max-height: 46vh; margin-top: 0; }
+        .animation-card { order: 3; margin: 16px 16px 0; }
+        .animation-menu { position: static; max-height: 46vh; margin-top: 0; }
         .animation-menu button { min-height: 40px; border-color: rgba(140,199,255,.78); border-radius: 8px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 14px; font-weight: 850; }
         #set-card, .note-card, .proof-card, .owner-library { order: 4; margin-inline: 32px; }
         .video-watch-panel { display: none; }
@@ -1377,8 +1377,36 @@ const pinchDistance = { value: null };
         scenarioState.index = Math.max(0, scenarioState.names.indexOf(activeAnimation.name));
       }
       function isScenarioStep(name) { return scenarioState.active && scenarioState.names.indexOf(name) >= 0; }
+      // Кадр зафиксирован на весь показ: переключение анимации не должно
+      // пересчитывать вьюпорт и сбивать центровку. Снимок берём до setAnimation
+      // (рантайм успевает перемерить кадр) и возвращаем сразу после.
+      const lockedViewport = { value: null };
+      function captureLockedViewport() {
+        const v = player?.currentViewport;
+        if (!v) return;
+        lockedViewport.value = {
+          x: v.x, y: v.y, width: v.width, height: v.height,
+          padLeft: v.padLeft, padRight: v.padRight, padTop: v.padTop, padBottom: v.padBottom,
+          clip: v.clip,
+        };
+      }
+      function restoreLockedViewport() {
+        const v = player?.currentViewport;
+        const saved = lockedViewport.value;
+        if (!v || !saved) return;
+        v.x = saved.x; v.y = saved.y; v.width = saved.width; v.height = saved.height;
+        v.padLeft = saved.padLeft; v.padRight = saved.padRight;
+        v.padTop = saved.padTop; v.padBottom = saved.padBottom;
+        if (saved.clip !== undefined) v.clip = saved.clip;
+        player.previousViewport = { ...v };
+        player.viewportTransitionStart = performance.now();
+      }
+      function lockViewportOnce() {
+        if (!lockedViewport.value) captureLockedViewport();
+      }
       function playAnimationEntry(name) {
         if (!player || !name) return;
+        if (lockedViewport.value) restoreLockedViewport();
         disableMix();
         const scenarioStep = isScenarioStep(name);
         const entry = player.setAnimation(name, scenarioStep ? false : loopEnabled.value);
@@ -1391,9 +1419,9 @@ const pinchDistance = { value: null };
           } };
         }
         player.play();
-        // The viewport is measured per animation, so the cached zoom/pan base
-        // has to follow the clip that is now playing.
-        rememberBaseViewport();
+        // Кадр зафиксирован, поэтому базу зума/панорамы не трогаем.
+        if (lockedViewport.value) restoreLockedViewport();
+        else rememberBaseViewport();
       }
       function playNextScenarioStep() {
         if (!scenarioState.active || !player || !scenarioState.names.length) return;
@@ -1581,7 +1609,7 @@ const pinchDistance = { value: null };
         if (video.parentNode) video.parentNode.removeChild(video);
       }
 
-      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); baseViewport.value = null; showPreviewVideoFallback(); const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); releaseRuntimeWheelCapture(); requestAnimationFrame(clearPreviewVideoFallback); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); installControlsToggle(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); applyZoom(currentZoom.value); window.setTimeout(ensureVisibleContent, 120); window.setTimeout(ensureVisibleContent, 420); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
+      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); baseViewport.value = null; showPreviewVideoFallback(); const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); releaseRuntimeWheelCapture(); requestAnimationFrame(clearPreviewVideoFallback); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); installControlsToggle(); playActiveAnimationFromStart(); requestAnimationFrame(() => { lockViewportOnce(); rememberBaseViewport(); applyZoom(currentZoom.value); window.setTimeout(ensureVisibleContent, 120); window.setTimeout(ensureVisibleContent, 420); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
         // WebGL недоступен или рантайм не смог поднять скелет: оставляем выгрузку
         // того же клипа, чтобы работа осталась видна.
         if (showPreviewVideoFallback()) { const v = box.querySelector("video"); if (v) v.controls = true; return; }
