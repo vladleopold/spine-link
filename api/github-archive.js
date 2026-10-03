@@ -137,6 +137,10 @@ function exclusionRuleMatches(entry, rule) {
   if (!pattern) return false;
   const haystack = textFromEntry(entry, String(rule.field || 'all'));
   if (!haystack) return false;
+  if (rule.type === 'exact') {
+    const wanted = pattern.toLowerCase();
+    return haystack.toLowerCase().split(/\s+/).some((value) => value === wanted);
+  }
   if (rule.type === 'regex') {
     try {
       const flags = String(rule.flags || 'i').replace(/[^dgimsuvy]/g, '') || 'i';
