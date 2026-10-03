@@ -1313,6 +1313,9 @@ const pinchDistance = { value: null };
           } };
         }
         player.play();
+        // The viewport is measured per animation, so the cached zoom/pan base
+        // has to follow the clip that is now playing.
+        rememberBaseViewport();
       }
       function playNextScenarioStep() {
         if (!scenarioState.active || !player || !scenarioState.names.length) return;
@@ -1331,7 +1334,118 @@ const pinchDistance = { value: null };
       function togglePlayback() { if (!player) return; if (player.paused === false) { player.pause(); return; } playActiveAnimationFromStart(); }
       function installLoopButton() { const buttons = player?.dom?.querySelector(".spine-player-buttons"); const playButton = buttons?.querySelector(".spine-player-button"); if (!buttons || !playButton) return; playButton.onclick = (event) => { event.preventDefault(); event.stopPropagation(); togglePlayback(); }; if (buttons.querySelector(".spine-link-loop-button")) return; const button = document.createElement("button"); button.type = "button"; button.className = "spine-player-button spine-link-loop-button"; updateLoopButtonState(button); button.onclick = (event) => { event.preventDefault(); event.stopPropagation(); loopEnabled.value = !loopEnabled.value; setTrackLoop(); updateLoopButtonState(button); }; playButton.insertAdjacentElement("afterend", button); }
       function panByPixels(deltaX, deltaY) { const v = player?.currentViewport, b = baseViewport.value, canvas = player?.canvas; if (!v || !b || !canvas) return; const totalWidth = v.width + v.padLeft + v.padRight, totalHeight = v.height + v.padTop + v.padBottom; const worldDeltaX = deltaX / Math.max(1, canvas.clientWidth) * totalWidth, worldDeltaY = deltaY / Math.max(1, canvas.clientHeight) * totalHeight; v.x -= worldDeltaX; v.y += worldDeltaY; b.x -= worldDeltaX * currentZoom.value; b.y += worldDeltaY * currentZoom.value; player.previousViewport = { ...v }; player.viewportTransitionStart = performance.now(); }
-      async function createPlayer() { if (!activeSet.value) return; player?.dispose(); document.getElementById("player").innerHTML = ""; baseViewport.value = null; const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); applyZoom(currentZoom.value); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (box) box.innerHTML = '<div style="display:grid;place-items:center;height:100%;padding:24px;color:#ffb088;font-weight:900;text-align:center;">Spine player error: ' + String(message || "could not load animation").replace(/[<>&]/g, "") + '</div>'; } }); }
+
+      // The exported skeleton header (skeleton.x/y/width/height) describes the
+      // REST pose only. When an animation moves a bone/slot outside that box --
+      // which is normal for particle/VFX tracks that scale or fly far from the
+      // origin -- the shipped viewport is far too small and the effect gets
+      // cropped to a sliver (often invisible). So we drop the static
+      // x/y/width/height and let the runtime's calculateAnimationViewport()
+      // measure the true bounds of the animation that is actually playing.
+      function measuredViewport(set) {
+        const src = set?.viewport || {};
+        const viewport = {
+          padLeft: src.padLeft !== undefined ? src.padLeft : "14%",
+          padRight: src.padRight !== undefined ? src.padRight : "14%",
+          padTop: src.padTop !== undefined ? src.padTop : "14%",
+          padBottom: src.padBottom !== undefined ? src.padBottom : "14%",
+        };
+        // Keep a saved per-entry layout clip if the entry explicitly defined one
+        // (the author framed it by hand), otherwise let the runtime measure.
+        if (src.__locked) {
+          viewport.x = src.x; viewport.y = src.y; viewport.width = src.width; viewport.height = src.height;
+        }
+        return viewport;
+      }
+      // Ask the runtime to re-fit the current animation, then cache it as the
+      // base used by zoom/pan. This is the "fix it on the fly" path.
+      function refitToContent(targetPlayer) {
+        const p = targetPlayer || player;
+        if (!p?.skeleton?.data) return false;
+        const names = p.skeleton.data.animations.map((a) => a.name);
+        const active = activeAnimation.name && names.includes(activeAnimation.name) ? activeAnimation.name : names[0];
+        if (!active) return false;
+        try {
+          p.setViewport(active);
+        } catch (e) {
+          return false;
+        }
+        rememberBaseViewport();
+        applyZoom(currentZoom.value);
+        return true;
+      }
+      // Measure the real bounding box of the animation that is playing. The
+      // runtime does this internally (calculateAnimationViewport); we redo it
+      // here purely to compare "what the animation needs" against "what the
+      // current viewport shows", so we can self-heal when the two disagree.
+      // Pure maths on the skeleton -- no GPU readback, so it is reliable even
+      // though this page runs with preserveDrawingBuffer off.
+      function measuredAnimationBounds(targetPlayer, steps = 60) {
+        const p = targetPlayer || player;
+        const skeleton = p?.skeleton;
+        if (!skeleton?.data) return null;
+        const animation = skeleton.data.findAnimation(activeAnimation.name) || skeleton.data.animations[0];
+        if (!animation) return null;
+        const ns = window.spine || {};
+        const MixFrom = ns.MixFrom || p.constructor?.MixFrom;
+        const Physics = ns.Physics || { update: 0 };
+        const duration = Number(animation.duration) || 0;
+        const stepTime = duration > 0 ? duration / steps : 0;
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        const scratch = [0, 0];
+        for (let i = 0; i <= steps; i++) {
+          const time = i * stepTime;
+          try {
+            animation.apply(skeleton, time, time, false, [], 1, MixFrom?.setup, false, false, false);
+            skeleton.updateWorldTransform(Physics.update);
+            const offset = new (ns.Vector2 || function () { this.x = 0; this.y = 0; })();
+            const size = new (ns.Vector2 || function () { this.x = 0; this.y = 0; })();
+            const clipping = p.sceneRenderer?.skeletonRenderer?.getSkeletonClipping?.();
+            skeleton.getBounds(offset, size, scratch, clipping);
+            if (Number.isFinite(offset.x) && Number.isFinite(offset.y) && Number.isFinite(size.x) && Number.isFinite(size.y)) {
+              minX = Math.min(minX, offset.x);
+              maxX = Math.max(maxX, offset.x + size.x);
+              minY = Math.min(minY, offset.y);
+              maxY = Math.max(maxY, offset.y + size.y);
+            }
+          } catch (e) {
+            // One bad sample should not abort the whole measurement.
+          }
+        }
+        if (!Number.isFinite(minX) || !Number.isFinite(minY)) return null;
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }
+
+      // Self-heal: if the playing animation reaches outside the viewport we are
+      // currently showing, re-measure and re-fit. Runs a bounded number of
+      // times after load and after every clip switch, so a bad framing heals
+      // itself instead of leaving the user staring at a cropped animation.
+      let healAttempts = 0;
+      function ensureVisibleContent() {
+        if (healAttempts >= 3) return;
+        const p = player;
+        const viewport = p?.currentViewport;
+        if (!viewport || !Number.isFinite(viewport.width) || viewport.width <= 0) return;
+        const bounds = measuredAnimationBounds(p);
+        if (!bounds || !(bounds.width > 0) || !(bounds.height > 0)) return;
+        // A little slack: 1% so rounding on the very first frame is not read as
+        // "clipped" and we do not loop re-fitting forever.
+        const slackX = bounds.width * 0.01;
+        const slackY = bounds.height * 0.01;
+        const viewRight = viewport.x + viewport.width;
+        const viewBottom = viewport.y + viewport.height;
+        const clipped =
+          bounds.x < viewport.x - slackX ||
+          bounds.y < viewport.y - slackY ||
+          bounds.x + bounds.width > viewRight + slackX ||
+          bounds.y + bounds.height > viewBottom + slackY;
+        if (!clipped) return;
+        healAttempts++;
+        refitToContent(p);
+      }
+      function resetHealAttempts() { healAttempts = 0; }
+
+      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); document.getElementById("player").innerHTML = ""; baseViewport.value = null; const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); applyZoom(currentZoom.value); window.setTimeout(ensureVisibleContent, 120); window.setTimeout(ensureVisibleContent, 420); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (box) box.innerHTML = '<div style="display:grid;place-items:center;height:100%;padding:24px;color:#ffb088;font-weight:900;text-align:center;">Spine player error: ' + String(message || "could not load animation").replace(/[<>&]/g, "") + '</div>'; } }); }
       function renderAnimationList() {
         animationCurrent.textContent = activeAnimation.name || "Animations";
         animationMenu.innerHTML = "";
@@ -1348,6 +1462,9 @@ const pinchDistance = { value: null };
             playActiveAnimationFromStart();
             applyZoom(currentZoom.value);
             renderAnimationList();
+            resetHealAttempts();
+            window.setTimeout(ensureVisibleContent, 150);
+            window.setTimeout(ensureVisibleContent, 500);
           };
           animationMenu.appendChild(button);
         });
@@ -1701,6 +1818,7 @@ async function createDynamicPreview(settings, uploadPath, origin) {
       premultipliedAlpha: hasPremultipliedAlpha(atlasText),
       viewport: entry?.layout && Number.isFinite(Number(entry.layout.width)) && Number(entry.layout.width) > 0
         ? {
+            __locked: true,
             x: Number(entry.layout.x) || 0,
             y: Number(entry.layout.y) || 0,
             width: Number(entry.layout.width),
