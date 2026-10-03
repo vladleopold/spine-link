@@ -152,7 +152,7 @@ function sanitizeSkeletonData(json) {
 // the middle of the canvas. A narrow margin keeps the framing close to the exported
 // video, which is rendered with no padding at all, while still leaving room for
 // elements that reach the very edge of their quad.
-const PREVIEW_PAD = "4%";
+const PREVIEW_PAD = "0%";
 
 function escapeHtml(value = '') {
   return String(value)
@@ -951,7 +951,7 @@ function createHtml(config) {
       }
       // Kept in sync with the server-side PREVIEW_PAD: a narrow margin so a clip whose
       // attachment quads are far larger than its visible pixels still fills the canvas.
-      const PREVIEW_PAD = "4%";
+      const PREVIEW_PAD = "0%";
       const activeSet = { value: initialSet() };
       const activeAnimation = { name: initialAnimation(activeSet.value) };
       const loopEnabled = { value: true };
