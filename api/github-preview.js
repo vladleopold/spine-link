@@ -633,8 +633,9 @@ async function githubJson(settings, path) {
 // Every library_NN folder is a collection; they are listed at runtime so a folder
 // added by a rotation is found without a deploy.
 async function libraryCollectionPaths(settings) {
-  const staging = cleanRepoPath(settings.basePath || defaultBasePath);
-  const paths = [staging];
+  // The bare `library` folder kept a stale index after the rename, so the
+  // numbered collections are the only reliable source.
+  const paths = [];
   try {
     const response = await fetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,

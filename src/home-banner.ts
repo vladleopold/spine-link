@@ -131,10 +131,11 @@ export function mountHomeBanner(options: {
     return found;
   }
 
-  // Collections are library_01, library_02, ...; the old `library` folder may
-  // still hold works from before the rename, so it is probed too.
+  // Collections are library_01, library_02, ... The bare `library` folder is
+  // skipped: after the rename it kept a stale index pointing at files that now
+  // live in library_01, so every work read from it would 404.
   function listCollectionFolders(): string[] {
-    const folders = ["library"];
+    const folders: string[] = [];
     for (let index = 1; index <= 40; index += 1) {
       folders.push(`library_${String(index).padStart(2, "0")}`);
     }

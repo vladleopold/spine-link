@@ -134,8 +134,7 @@ function githubHeaders(token) {
 // чтобы держать список в коде: ротация создаёт новую папку, и сайт начинает
 // видеть её сразу, без правки кода и деплоя.
 async function libraryCollectionPaths(settings) {
-  const staging = settings.basePath || "library";
-  const paths = [staging];
+  const paths = [];
   try {
     const response = await fetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch || "")}`,
