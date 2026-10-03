@@ -726,7 +726,7 @@ function createHtml(config) {
       html, body, #app { width: 100%; min-height: 100%; margin: 0; }
       body { overflow: auto; background: #000; color: #e7edf4; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       #app { position: relative; z-index: 1; display: grid; grid-template-rows: auto auto auto; gap: 18px; min-height: 100vh; padding: 24px; background: rgba(0,0,0,.78); }
-      @media (max-width: 1024px) { #app { gap: 8px; padding: 14px 16px; } }
+      @media (max-width: 1024px) { #app { gap: 8px; padding: 10px 14px 6px; } }
       .topbar { display: flex; justify-content: space-between; gap: 18px; align-items: center; }
       .brand-link { display: inline-block; color: inherit; text-decoration: none; }
       .brand-logo { display: inline-flex; align-items: center; gap: 5px; color: #fff; font-family: "Trebuchet MS", Inter, ui-sans-serif, system-ui, sans-serif; font-size: clamp(34px, 4.4vw, 58px); font-weight: 500; line-height: .78; letter-spacing: .1em; text-shadow: 0 0 1px rgba(255,255,255,.86), 0 6px 18px rgba(0,0,0,.42); }
