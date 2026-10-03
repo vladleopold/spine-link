@@ -331,7 +331,7 @@ function wireHomeShell() {
     mountHomeBanner({
       panel: dropPanel,
       feedUrl: "/api/github-archive?feed=home",
-      indexUrl: "/assets/library/index.json",
+      indexRoot: "/assets",
     });
   }
 }

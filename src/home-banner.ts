@@ -23,6 +23,7 @@ type BannerEntry = {
   skin?: string;
   defaultAnimation?: string;
   title?: string;
+  previewPath?: string;
 };
 
 type BannerHost = {
@@ -80,9 +81,9 @@ function isEntryFolderName(name: string): boolean {
 export function mountHomeBanner(options: {
   panel: HTMLElement;
   feedUrl: string;
-  indexUrl: string;
+  indexRoot: string;
 }): BannerHost {
-  const { panel, feedUrl, indexUrl } = options;
+  const { panel, indexRoot } = options;
   let player: SpinePlayerInstance | null = null;
   let timer = 0;
   let stopped = false;
@@ -98,16 +99,64 @@ export function mountHomeBanner(options: {
   label.innerHTML = '<span class="home-banner-name"></span><span class="home-banner-cycle">Next work in 5 min</span>';
   panel.append(label);
 
+  // The feed endpoint only carries poster material, while the banner needs the
+  // skeleton itself, so entries come from the library index: it lists every
+  // collection and holds the files needed to start a player.
+  async function loadEntries(): Promise<BannerEntry[]> {
+    const folders = listCollectionFolders();
+    const found: BannerEntry[] = [];
+    for (const folder of folders) {
+      try {
+        const response = await fetch(`${indexRoot}/${folder}/index.json?t=${Date.now()}`, {
+          credentials: "same-origin",
+        });
+        if (!response.ok) continue;
+        const entries = (await response.json().catch(() => [])) as BannerEntry[];
+        if (!Array.isArray(entries)) continue;
+        for (const entry of entries) {
+          if (!entry || !entry.id) continue;
+          const base = entry.previewPath || `${folder}/${entry.id}`;
+          found.push({
+            ...entry,
+            skeleton: toAssetUrl(base, entry.skeleton),
+            jsonUrl: toAssetUrl(base, entry.jsonUrl || entry.skeleton),
+            atlas: toAssetUrl(base, entry.atlas),
+            atlasUrl: toAssetUrl(base, entry.atlasUrl || entry.atlas),
+          });
+        }
+      } catch {
+        // A collection that cannot be read is simply skipped.
+      }
+    }
+    return found;
+  }
+
+  // Collections are library_01, library_02, ...; the old `library` folder may
+  // still hold works from before the rename, so it is probed too.
+  function listCollectionFolders(): string[] {
+    const folders = ["library"];
+    for (let index = 1; index <= 40; index += 1) {
+      folders.push(`library_${String(index).padStart(2, "0")}`);
+    }
+    return folders;
+  }
+
+  function toAssetUrl(base: string, file: unknown): string {
+    const name = String(file || "").trim();
+    if (!name) return "";
+    if (/^https?:\/\//i.test(name)) return name;
+    const cleanBase = String(base || "").replace(/^\/+/, "");
+    return `/assets/${cleanBase}/${name.replace(/^\/+/, "")}`;
+  }
+
   async function pickEntry(): Promise<BannerEntry | null> {
-    // The feed endpoint already answers with a shuffled selection, so its first
-    // usable entry changes on every rotation.
-    const response = await fetch(feedUrl, { credentials: "same-origin" });
-    const payload = (await response.json().catch(() => ({}))) as { entries?: BannerEntry[] };
-    const entries = Array.isArray(payload.entries) ? payload.entries : [];
-    const candidates = entries.filter((entry) => entry && entry.id && (entry.skeleton || entry.jsonUrl));
+    const entries = await loadEntries();
+    const candidates = entries.filter((entry) => entry.id && entry.skeleton && entry.atlas);
     if (!candidates.length) return null;
-    const next = candidates.find((entry) => String(entry.id) !== currentId) || candidates[0];
-    return next;
+    // A random pick each round, so the banner does not follow a fixed order.
+    const pool = candidates.filter((entry) => String(entry.id) !== currentId);
+    const source = pool.length ? pool : candidates;
+    return source[Math.floor(Math.random() * source.length)];
   }
 
   async function ensureRuntime(entry: BannerEntry): Promise<any> {
