@@ -7852,9 +7852,9 @@ h1 {
   .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
     flex: 0 0 var(--home-feed-card-width, 115vw) !important;
     width: var(--home-feed-card-width, 115vw);
-    height: calc(50% - 4px) !important;
+    height: var(--home-feed-card-width, 115vw) !important;
     min-height: 0;
-    aspect-ratio: auto;
+    aspect-ratio: 1 / 1;
   }
 
   .app-shell.is-empty:not(.is-edit-page) .home-feed-like {
