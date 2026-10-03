@@ -141,11 +141,7 @@ export function mountHomeBanner(options: {
   // skipped: after the rename it kept a stale index pointing at files that now
   // live in library_01, so every work read from it would 404.
   function listCollectionFolders(): string[] {
-    const folders: string[] = [];
-    for (let index = 1; index <= 40; index += 1) {
-      folders.push(`library_${String(index).padStart(2, "0")}`);
-    }
-    return folders;
+    return ["library"];
   }
 
   // Work files are often stored in a folder of their own; the index lists the

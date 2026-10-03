@@ -633,9 +633,7 @@ async function githubJson(settings, path) {
 // Every library_NN folder is a collection; they are listed at runtime so a folder
 // added by a rotation is found without a deploy.
 async function libraryCollectionPaths(settings) {
-  // The bare `library` folder kept a stale index after the rename, so the
-  // numbered collections are the only reliable source.
-  const paths = [];
+  const paths = [cleanRepoPath(settings.basePath || defaultBasePath)];
   try {
     const response = await fetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
@@ -2097,26 +2095,6 @@ async function createDynamicPreview(settings, uploadPath, origin) {
   };
 }
 
-// Finds the folder of a work by id across every library collection.
-async function resolveEntryPath(settings, entryId) {
-  const id = cleanRepoPath(entryId).split('/').pop() || '';
-  if (!id) return '';
-  const basePaths = await libraryCollectionPaths(settings);
-  for (const basePath of basePaths) {
-    const indexText = await githubText(settings, `${basePath}/index.json`);
-    if (!indexText) continue;
-    let entries = [];
-    try {
-      const parsed = JSON.parse(indexText);
-      if (Array.isArray(parsed)) entries = parsed;
-    } catch (e) {}
-    const match = entries.find((entry) => String(entry?.id || '') === id);
-    const previewPath = cleanRepoPath(match?.previewPath || '');
-    if (previewPath) return previewPath;
-  }
-  return '';
-}
-
 export default async function handler(request, response) {
   if (!['GET', 'HEAD'].includes(request.method)) {
     response.setHeader('Allow', 'GET, HEAD');
@@ -2134,16 +2112,8 @@ export default async function handler(request, response) {
     token,
   };
 
-  let path = cleanRepoPath(request.query?.path || '');
-  // /p/<id> carries only the work id, because the work may live in any library_NN
-  // folder. Looking the id up in the indexes keeps /p/<id> working after a
-  // rotation moves the folder.
-  if (!path) {
-    const entryId = cleanRepoPath(request.query?.entry || '');
-    if (!entryId) return response.status(400).send('Invalid preview path');
-    path = await resolveEntryPath(settings, entryId);
-    if (!path) return response.status(404).send('Preview not found');
-  }
+  const path = cleanRepoPath(request.query?.path || '');
+  if (!path) return response.status(400).send('Invalid preview path');
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 
   try {

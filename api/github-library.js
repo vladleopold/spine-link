@@ -134,24 +134,9 @@ function githubHeaders(token) {
 // чтобы держать список в коде: ротация создаёт новую папку, и сайт начинает
 // видеть её сразу, без правки кода и деплоя.
 async function libraryCollectionPaths(settings) {
-  const paths = [];
-  try {
-    const response = await fetch(
-      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch || "")}`,
-      { headers: githubHeaders(settings.token) },
-    );
-    if (!response.ok) return paths;
-    const items = await response.json();
-    if (!Array.isArray(items)) return paths;
-    const collections = items
-      .filter((item) => item && item.type === "dir" && /^library_\d+$/.test(String(item.name || "")))
-      .map((item) => item.name)
-      .sort();
-    for (const name of collections) if (!paths.includes(name)) paths.push(name);
-  } catch (e) {
-    // Не смогли перечислить папки: покажем то, что точно есть.
-  }
-  return paths;
+  // Works live in a single library folder; the numbered collections were only
+  // created by the rename that has now been rolled back.
+  return [cleanRepoPath(settings.basePath || defaultBasePath)];
 }
 
 // Правило цензуры. `allow`-правила возвращают конкретную работу в ленту,
