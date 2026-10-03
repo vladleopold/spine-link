@@ -860,7 +860,7 @@ function createHtml(config) {
         .preview-like-button { order: 1; width: clamp(52px, 7.4vw, 64px); height: clamp(52px, 7.4vw, 64px); min-height: 0; padding: 0; gap: clamp(3px, .7vw, 5px); border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 18px; }
         .preview-like-button span { font-size: clamp(18px, 3.4vw, 24px); }
         .preview-like-button strong { font-size: clamp(15px, 3vw, 20px); }
-        #player { width: 100%; height: calc(100dvh - 198px); min-height: 300px; max-height: 760px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
+        #player { width: 100%; height: calc(100dvh - 212px); min-height: 300px; max-height: 760px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
         .spine-player-controls { min-height: 74px; }
         .library-nav-button { display: none; }
         .animation-card { order: 3; margin: 0 16px; }
