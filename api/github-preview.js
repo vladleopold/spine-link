@@ -2125,6 +2125,14 @@ export default async function handler(request, response) {
   const token = process.env.GITHUB_TOKEN;
   if (!token) return response.status(500).send('GITHUB_TOKEN is not configured');
 
+  const settings = {
+    owner: process.env.GITHUB_OWNER || defaultOwner,
+    repo: process.env.GITHUB_REPO || defaultRepo,
+    branch: process.env.GITHUB_BRANCH || defaultBranch,
+    basePath: cleanRepoPath(process.env.GITHUB_BASE_PATH || defaultBasePath),
+    token,
+  };
+
   let path = cleanRepoPath(request.query?.path || '');
   // /p/<id> carries only the work id, because the work may live in any library_NN
   // folder. Looking the id up in the indexes keeps /p/<id> working after a
@@ -2135,14 +2143,6 @@ export default async function handler(request, response) {
     path = await resolveEntryPath(settings, entryId);
     if (!path) return response.status(404).send('Preview not found');
   }
-
-  const settings = {
-    owner: process.env.GITHUB_OWNER || defaultOwner,
-    repo: process.env.GITHUB_REPO || defaultRepo,
-    branch: process.env.GITHUB_BRANCH || defaultBranch,
-    basePath: cleanRepoPath(process.env.GITHUB_BASE_PATH || defaultBasePath),
-    token,
-  };
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 
   try {
