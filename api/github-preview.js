@@ -863,7 +863,7 @@ function createHtml(config) {
         #player { width: 100%; height: calc(100dvh - 187px); min-height: 300px; max-height: 760px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
         .spine-player-controls { min-height: 74px; }
         .library-nav-button { display: none; }
-        .animation-card { order: 3; margin: 8px 16px 0; }
+        .animation-card { order: 3; margin: 0 16px; }
         .animation-card .section-title { margin-bottom: 4px; font-size: 11px; }
         .animation-card .preview-card-body, .animation-card { padding-top: 6px; }
         .animation-menu { position: static; max-height: 46vh; margin-top: 0; padding: 5px; gap: 4px; }
