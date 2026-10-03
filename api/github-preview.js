@@ -1323,9 +1323,26 @@ const pinchDistance = { value: null };
       }
       // Кадр зафиксирован на весь показ: переключение анимации не должно
       // пересчитывать вьюпорт и сбивать центровку.
-      const lockedViewport = { value: null };
       function rememberBaseViewport() { if (!player?.currentViewport) return;
-        if (lockedViewport.value) { restoreLockedViewport(); return; } const v = player.currentViewport; baseViewport.value = { x: v.x, y: v.y, width: v.width * currentZoom.value, height: v.height * currentZoom.value, padLeft: v.padLeft * currentZoom.value, padRight: v.padRight * currentZoom.value, padTop: v.padTop * currentZoom.value, padBottom: v.padBottom * currentZoom.value }; }
+        const v = player.currentViewport; baseViewport.value = { x: v.x, y: v.y, width: v.width * currentZoom.value, height: v.height * currentZoom.value, padLeft: v.padLeft * currentZoom.value, padRight: v.padRight * currentZoom.value, padTop: v.padTop * currentZoom.value, padBottom: v.padBottom * currentZoom.value }; }
+      // Один якорь на весь показ. В скелете бывают клипы разного масштаба, поэтому
+      // размер кадра подстраивается под анимацию, а точка, вокруг которой он
+      // центрируется, остаётся прежней: переключение ничего не двигает.
+      const stageAnchor = { value: null };
+      function captureStageAnchor() {
+        const v = player?.currentViewport;
+        if (!v) return;
+        stageAnchor.value = { x: v.x + v.width / 2, y: v.y + v.height / 2 };
+      }
+      function applyStageAnchor() {
+        const v = player?.currentViewport;
+        const anchor = stageAnchor.value;
+        if (!v || !anchor) return;
+        v.x = anchor.x - v.width / 2;
+        v.y = anchor.y - v.height / 2;
+        player.previousViewport = { ...v };
+        player.viewportTransitionStart = performance.now();
+      }
       function touchDistance(touches) { const a = touches.item(0), b = touches.item(1); if (!a || !b) return 0; return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); }
       function applyZoom(nextZoom) { currentZoom.value = Math.min(4, Math.max(0.6, Number(nextZoom))); playerElement.style.setProperty("--preview-pattern-size", (140 * currentZoom.value) + "px"); const b = baseViewport.value; if (!b || !player?.currentViewport) return; const cx = b.x + b.width / 2, cy = b.y + b.height / 2, width = b.width / currentZoom.value, height = b.height / currentZoom.value; const next = { x: cx - width / 2, y: cy - height / 2, width, height, padLeft: b.padLeft / currentZoom.value, padRight: b.padRight / currentZoom.value, padTop: b.padTop / currentZoom.value, padBottom: b.padBottom / currentZoom.value }; player.previousViewport = { ...next }; player.currentViewport = next; player.viewportTransitionStart = performance.now(); }
       function limitPlayerFps(loadedPlayer, maxFps) {
@@ -1376,32 +1393,8 @@ const pinchDistance = { value: null };
       // Кадр зафиксирован на весь показ: переключение анимации не должно
       // пересчитывать вьюпорт и сбивать центровку. Снимок берём до setAnimation
       // (рантайм успевает перемерить кадр) и возвращаем сразу после.
-      function captureLockedViewport() {
-        const v = player?.currentViewport;
-        if (!v) return;
-        lockedViewport.value = {
-          x: v.x, y: v.y, width: v.width, height: v.height,
-          padLeft: v.padLeft, padRight: v.padRight, padTop: v.padTop, padBottom: v.padBottom,
-          clip: v.clip,
-        };
-      }
-      function restoreLockedViewport() {
-        const v = player?.currentViewport;
-        const saved = lockedViewport.value;
-        if (!v || !saved) return;
-        v.x = saved.x; v.y = saved.y; v.width = saved.width; v.height = saved.height;
-        v.padLeft = saved.padLeft; v.padRight = saved.padRight;
-        v.padTop = saved.padTop; v.padBottom = saved.padBottom;
-        if (saved.clip !== undefined) v.clip = saved.clip;
-        player.previousViewport = { ...v };
-        player.viewportTransitionStart = performance.now();
-      }
-      function lockViewportOnce() {
-        if (!lockedViewport.value) captureLockedViewport();
-      }
       function playAnimationEntry(name) {
         if (!player || !name) return;
-        if (lockedViewport.value) restoreLockedViewport();
         disableMix();
         const scenarioStep = isScenarioStep(name);
         const entry = player.setAnimation(name, scenarioStep ? false : loopEnabled.value);
@@ -1414,9 +1407,8 @@ const pinchDistance = { value: null };
           } };
         }
         player.play();
-        // Кадр зафиксирован, поэтому базу зума/панорамы не трогаем.
-        if (lockedViewport.value) restoreLockedViewport();
-        else rememberBaseViewport();
+        rememberBaseViewport();
+        applyStageAnchor();
       }
       function playNextScenarioStep() {
         if (!scenarioState.active || !player || !scenarioState.names.length) return;
@@ -1462,7 +1454,6 @@ const pinchDistance = { value: null };
       // base used by zoom/pan. This is the "fix it on the fly" path.
       function refitToContent(targetPlayer) {
         const p = targetPlayer || player;
-        if (lockedViewport.value) return false;
         if (!p?.skeleton?.data) return false;
         const names = p.skeleton.data.animations.map((a) => a.name);
         const active = activeAnimation.name && names.includes(activeAnimation.name) ? activeAnimation.name : names[0];
@@ -1524,7 +1515,6 @@ const pinchDistance = { value: null };
       // itself instead of leaving the user staring at a cropped animation.
       let healAttempts = 0;
       function ensureVisibleContent() {
-        if (lockedViewport.value) return;
         if (healAttempts >= 3) return;
         const p = player;
         const viewport = p?.currentViewport;
@@ -1571,7 +1561,7 @@ const pinchDistance = { value: null };
         if (video.parentNode) video.parentNode.removeChild(video);
       }
 
-      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); baseViewport.value = null; showPreviewVideoFallback(); const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); releaseRuntimeWheelCapture(); requestAnimationFrame(clearPreviewVideoFallback); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { lockViewportOnce(); rememberBaseViewport(); applyZoom(currentZoom.value); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
+      async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); baseViewport.value = null; showPreviewVideoFallback(); const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); releaseRuntimeWheelCapture(); requestAnimationFrame(clearPreviewVideoFallback); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); captureStageAnchor(); applyZoom(currentZoom.value); window.setTimeout(ensureVisibleContent, 120); window.setTimeout(ensureVisibleContent, 420); window.setTimeout(applyStageAnchor, 560); window.setTimeout(applyStageAnchor, 900); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
         // WebGL недоступен или рантайм не смог поднять скелет: оставляем выгрузку
         // того же клипа, чтобы работа осталась видна.
         if (showPreviewVideoFallback()) { const v = box.querySelector("video"); if (v) v.controls = true; return; }
@@ -1588,11 +1578,12 @@ const pinchDistance = { value: null };
             activeAnimation.name = animationName;
             syncUrl();
             playActiveAnimationFromStart();
-            applyZoom(currentZoom.value);
             renderAnimationList();
             resetHealAttempts();
-            
+            applyStageAnchor();
+            window.setTimeout(ensureVisibleContent, 150);
             window.setTimeout(ensureVisibleContent, 500);
+            window.setTimeout(applyStageAnchor, 700);
           };
           animationMenu.appendChild(button);
         });
