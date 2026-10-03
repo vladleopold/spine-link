@@ -2024,7 +2024,44 @@ async function createCanvasImageThumbnail(sourceCanvas?: HTMLCanvasElement | nul
   context.fillStyle = "#050607";
   context.fillRect(0, 0, width, height);
   context.drawImage(sourceCanvas, offsetX, offsetY, nextWidth, nextHeight);
+
+  // Снимок снимается в момент публикации, когда кадр мог ещё не быть отрисован.
+  // Тогда drawImage копирует только заливку и постер получается полностью чёрным.
+  const painted = context.getImageData(0, 0, width, height).data;
+  let drawn = 0;
+  for (let i = 0; i < painted.length; i += 4) {
+    // Пиксель считается содержимым, если он заметно светлее фоновой заливки.
+    if (painted[i] > 24 || painted[i + 1] > 24 || painted[i + 2] > 24) drawn++;
+  }
+  if (drawn < width * height * 0.002) return "";
+
   return canvas.toDataURL("image/webp", 0.86);
+}
+
+// Ждём, пока плеер реально что-то нарисует: без этого постер сохраняется чёрным.
+async function waitForRenderedFrame(playerCanvas?: HTMLCanvasElement | null, timeoutMs = 1500): Promise<HTMLCanvasElement | null> {
+  if (!playerCanvas || playerCanvas.width === 0 || playerCanvas.height === 0) return null;
+  const probe = document.createElement("canvas");
+  const context = probe.getContext("2d", { willReadFrequently: true });
+  if (!context) return playerCanvas;
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    probe.width = 60;
+    probe.height = 40;
+    try {
+      context.drawImage(playerCanvas, 0, 0, 60, 40);
+      const data = context.getImageData(0, 0, 60, 40).data;
+      let lit = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 24 || data[i + 1] > 24 || data[i + 2] > 24) lit++;
+      }
+      if (lit > 12) return playerCanvas;
+    } catch (e) {
+      return playerCanvas;
+    }
+  }
+  return playerCanvas;
 }
 
 type CanvasPreviewMedia = {
@@ -4937,6 +4974,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       const note = limitWords(previewNote);
       const playerCanvas = (playerRef.current as unknown as { canvas?: HTMLCanvasElement | null } | null)?.canvas;
       setPublishProgress({ jobId: uploadId, label: "Capturing thumbnail", value: 8 });
+      await waitForRenderedFrame(playerCanvas);
       const thumbnailPoster = await createCanvasImageThumbnail(playerCanvas);
       const fileMap = new Map<string, string>();
       for (const nextSpine of setsForPublish) {
