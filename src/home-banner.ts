@@ -170,11 +170,13 @@ export function mountHomeBanner(options: {
   // Only works the runtime can actually play. A skeleton needs its own runtime
   // major, and some exports use timelines their bundle does not implement, so
   // those are skipped instead of shown as a broken frame.
+  // The index has no version field, so the skeleton header is the source of truth.
+  // Entries without a readable version are tried: a wrong guess costs one failed
+  // load, whereas skipping everything would leave the banner empty.
   function canPlayEntry(entry: BannerEntry): boolean {
     const version = String(entry?.skeletonVersion || "").trim();
-    const major = version.split(".")[0];
-    if (!major) return true;
-    return major === "4";
+    if (!version) return true;
+    return version.split(".")[0] === "4";
   }
 
   async function pickEntry(): Promise<BannerEntry | null> {
