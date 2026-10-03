@@ -145,6 +145,15 @@ function sanitizeSkeletonData(json) {
   return sanitizeSkeletonJson(json);
 }
 
+// Margin kept around an animation inside the preview canvas. The runtime frames a
+// clip from the union of every frame's attachment quads, and for VFX-only skeletons
+// (soft glows, staggered particles) that box is far larger than the pixels a viewer
+// actually sees. A wide margin then shrinks the visible burst to a small dim blob in
+// the middle of the canvas. A narrow margin keeps the framing close to the exported
+// video, which is rendered with no padding at all, while still leaving room for
+// elements that reach the very edge of their quad.
+const PREVIEW_PAD = "4%";
+
 function escapeHtml(value = '') {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -940,6 +949,9 @@ function createHtml(config) {
         const queryAnimation = queryValue("animation");
         return setHasAnimation(set, queryAnimation) ? queryAnimation : set?.animation || "";
       }
+      // Kept in sync with the server-side PREVIEW_PAD: a narrow margin so a clip whose
+      // attachment quads are far larger than its visible pixels still fills the canvas.
+      const PREVIEW_PAD = "4%";
       const activeSet = { value: initialSet() };
       const activeAnimation = { name: initialAnimation(activeSet.value) };
       const loopEnabled = { value: true };
@@ -1354,10 +1366,10 @@ const pinchDistance = { value: null };
       function measuredViewport(set) {
         const src = set?.viewport || {};
         const viewport = {
-          padLeft: src.padLeft !== undefined ? src.padLeft : "14%",
-          padRight: src.padRight !== undefined ? src.padRight : "14%",
-          padTop: src.padTop !== undefined ? src.padTop : "14%",
-          padBottom: src.padBottom !== undefined ? src.padBottom : "14%",
+          padLeft: src.padLeft !== undefined ? src.padLeft : PREVIEW_PAD,
+          padRight: src.padRight !== undefined ? src.padRight : PREVIEW_PAD,
+          padTop: src.padTop !== undefined ? src.padTop : PREVIEW_PAD,
+          padBottom: src.padBottom !== undefined ? src.padBottom : PREVIEW_PAD,
         };
         // Keep a saved per-entry layout clip if the entry explicitly defined one
         // (the author framed it by hand), otherwise let the runtime measure.
@@ -1838,8 +1850,8 @@ async function createDynamicPreview(settings, uploadPath, origin) {
             padBottom: Number.isFinite(Number(entry.layout.padBottom)) ? Number(entry.layout.padBottom) : 0,
           }
         : viewportFromJson(skeletonJson)
-          ? { ...viewportFromJson(skeletonJson), padLeft: '14%', padRight: '14%', padTop: '14%', padBottom: '14%' }
-          : { padLeft: '14%', padRight: '14%', padTop: '14%', padBottom: '14%' },
+          ? { ...viewportFromJson(skeletonJson), padLeft: PREVIEW_PAD, padRight: PREVIEW_PAD, padTop: PREVIEW_PAD, padBottom: PREVIEW_PAD }
+          : { padLeft: PREVIEW_PAD, padRight: PREVIEW_PAD, padTop: PREVIEW_PAD, padBottom: PREVIEW_PAD },
     });
   }
 
