@@ -484,6 +484,17 @@ function startHomeFeed(track: HTMLElement, cards: HTMLElement[], viewport: HTMLE
   track.textContent = "";
   track.appendChild(lane);
 
+  // Ширина карточек зависит от ленты, а лента получает реальный размер только
+  // после вставки в поток. Пересчитываем на следующем кадре и при ресайзе.
+  const applyCardWidths = () => {
+    const width = `${homeFeedCardWidth()}px`;
+    lane.querySelectorAll<HTMLElement>(".home-feed-card").forEach((card) => {
+      card.style.setProperty("--home-feed-card-width", width);
+    });
+  };
+  applyCardWidths();
+  window.requestAnimationFrame(applyCardWidths);
+
   const videoOf = (card: Element) => card.querySelector<HTMLVideoElement>(".home-feed-video");
   const viewportWidth = () => viewport?.clientWidth || window.innerWidth;
 
