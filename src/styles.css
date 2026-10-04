@@ -8489,7 +8489,7 @@ h1 {
 }
 
 .home-feed-track.is-scrolling .home-feed-lane {
-  animation: homeFeedScroll 48s linear infinite;
+  animation: homeFeedScroll 144s linear infinite;
   will-change: transform;
 }
 
