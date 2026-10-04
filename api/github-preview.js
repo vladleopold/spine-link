@@ -1480,11 +1480,13 @@ const pinchDistance = { value: null };
           const token = normalizeAnimationToken(name);
           if (token && !lookup.has(token)) lookup.set(token, name);
         });
-        const hasIn = lookup.has("in");
-        const hasOut = lookup.has("out");
-        // Средняя фаза: idle, иначе loop. Без неё сценарий просто in -> out.
+        // Наборы бывают двух видов: in/out и begin/end — по смыслу одно и то же.
+        const entry = lookup.has("in") ? "in" : (lookup.has("begin") ? "begin" : "");
+        const exit = lookup.has("out") ? "out" : (lookup.has("end") ? "end" : "");
+        // Средняя фаза: idle, иначе loop. Без неё сценарий просто вход -> выход.
         const middle = lookup.has("idle") ? "idle" : (lookup.has("loop") ? "loop" : "");
-        const cycle = hasIn && hasOut ? ["in", middle, "out", middle] : [];
+        // idle удваивается, чтобы работа не выглядела «замершей» в середине цикла.
+        const cycle = entry && exit ? [entry, middle, middle, exit] : [];
         scenarioState.names = cycle.map((token) => lookup.get(token)).filter(Boolean);
         scenarioState.active = scenarioState.names.length > 1;
         scenarioState.index = Math.max(0, scenarioState.names.indexOf(activeAnimation.name));
