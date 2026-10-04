@@ -8447,8 +8447,12 @@ h1 {
 }
 
 .home-drop-panel { position: relative; isolation: isolate; }
-.home-drop-panel > .drop-zone,
-.home-drop-panel > .home-banner-caption { position: relative; z-index: 1; }
+/* Зона загрузки — контейнер баннера: на мобильном она фиксирована, и только
+   внутри неё анимация занимает настоящий прямоугольник. */
+.main-drop-zone { position: relative; isolation: isolate; }
+.main-drop-zone > * { position: relative; z-index: 1; }
+.main-drop-zone > .home-banner-layer { z-index: 0; }
+.main-drop-zone > .home-banner-caption { z-index: 2; }
 
 .home-banner-caption {
   position: absolute;

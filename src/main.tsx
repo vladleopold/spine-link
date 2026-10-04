@@ -326,7 +326,9 @@ function wireHomeShell() {
   void loadHomeFeed();
 
   // Banner behind the drop zone: a random library work, refreshed every 5 minutes.
-  const dropPanel = document.querySelector<HTMLElement>(".home-drop-panel");
+  // Баннер живёт внутри самой зоны загрузки: на мобильном она position: fixed,
+  // а её родитель-панель от этого схлопывается почти в ноль.
+  const dropPanel = document.querySelector<HTMLElement>(".main-drop-zone");
   if (dropPanel) {
     mountHomeBanner({
       panel: dropPanel,
