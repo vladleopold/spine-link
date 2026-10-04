@@ -5137,7 +5137,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     ? (() => {
         const lane = document.querySelector<HTMLElement>(".home-feed-viewport");
         const width = lane?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1120);
-        return Math.max(160, Math.round((width - 12 * 4) / 3));
+        return Math.max(160, Math.round((width - 40) / 3));
       })()
     : 0;
   const homeFeedLoop = showHomeFeed ? homeFeedEntries.slice(0, 12) : [];

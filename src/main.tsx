@@ -341,7 +341,9 @@ function wireHomeShell() {
 function homeFeedCardWidth(): number {
   const lane = document.querySelector<HTMLElement>(".home-feed-viewport");
   const width = lane?.clientWidth || window.innerWidth;
-  return Math.max(160, Math.round((width - 12 * 4) / 3));
+  // lane padding 10px с каждой стороны + два зазора между тремя карточками
+  const inset = 10 * 2 + 10 * 2;
+  return Math.max(160, Math.round((width - inset) / 3));
 }
 
 async function loadHomeFeed() {
