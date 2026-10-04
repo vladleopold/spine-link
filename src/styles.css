@@ -999,7 +999,8 @@ h1 {
 
 .home-feed-card {
   position: relative;
-  flex: 1 1 0;
+  flex: 0 0 var(--home-feed-card-width, 240px);
+  width: var(--home-feed-card-width, 240px);
   min-width: 0;
   height: 100%;
   aspect-ratio: auto;
