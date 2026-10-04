@@ -5610,8 +5610,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             )}
             {shouldShowSkeletonUploadTip && (
               <div className="skeleton-upload-tip" role="status" aria-live="polite">
-                <span>ты можешь перетащить одновременно 10 скелетов файлов</span>
-                <button type="button" onClick={dismissSkeletonUploadTip} aria-label="Закрыть подсказку">
+                <span>Drop up to 10 skeleton files at once</span>
+                <button type="button" onClick={dismissSkeletonUploadTip} aria-label="Dismiss hint">
                   <X size={14} />
                 </button>
               </div>
