@@ -7853,11 +7853,11 @@ h1 {
 
   /* Карточки крупные: почти во весь экран, одна в кадре. Ширину задаёт JS
      (--home-feed-card-width), значение ниже — запасной вариант. */
-  /* Карточка на 40% меньше прежней и прижата нижним краем к низу экрана, чтобы
-     анимация целиком помещалась, а не уезжала под сгиб. */
+  /* Карточка прижата нижним краем к низу экрана: анимация помещается целиком и
+     не уезжает под сгиб. Ширину считает JS так, чтобы в ряд влезали три. */
   .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
-    flex: 0 0 var(--home-feed-card-width, 69vw) !important;
-    width: var(--home-feed-card-width, 69vw);
+    flex: 0 0 var(--home-feed-card-width, 30vw) !important;
+    width: var(--home-feed-card-width, 30vw);
     height: auto !important;
     min-height: 0;
     aspect-ratio: 1 / 1;
@@ -8472,3 +8472,23 @@ h1 {
 
 .home-banner-caption .home-banner-name { overflow: hidden; text-overflow: ellipsis; }
 .home-banner-caption .home-banner-cycle { flex: 0 0 auto; opacity: 0.62; font-weight: 600; }
+
+/* Лента анимаций плавно ползёт и возвращается: сдвиг задаётся в процентах от
+   ширины полосы, поэтому три карточки всегда видны целиком. */
+@keyframes homeFeedScroll {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-33.3333%, 0, 0); }
+}
+
+.home-feed-track.is-scrolling .home-feed-lane {
+  animation: homeFeedScroll 48s linear infinite;
+  will-change: transform;
+}
+
+.home-feed-track.is-scrolling:hover .home-feed-lane {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-feed-track.is-scrolling .home-feed-lane { animation: none; }
+}
