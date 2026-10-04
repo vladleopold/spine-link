@@ -632,6 +632,9 @@ async function githubJson(settings, path) {
 
 // Every library_NN folder is a collection; they are listed at runtime so a folder
 // added by a rotation is found without a deploy.
+// Works are spread across library_01, library_02, ... folders, each capped at the
+// GitHub limit. They are listed at runtime so a folder added by a rotation shows up
+// without a code change or a deploy.
 async function libraryCollectionPaths(settings) {
   const paths = [cleanRepoPath(settings.basePath || defaultBasePath)];
   try {
@@ -642,16 +645,17 @@ async function libraryCollectionPaths(settings) {
     if (!response.ok) return paths;
     const items = await response.json();
     if (!Array.isArray(items)) return paths;
-    const collections = items
-      .filter((item) => item && item.type === "dir" && /^library_\d+$/.test(String(item.name || "")))
+    const folders = items
+      .filter((item) => item && item.type === "dir" && /^library(_\d+)?$/.test(String(item.name || "")))
       .map((item) => item.name)
-      .sort();
-    for (const name of collections) if (!paths.includes(name)) paths.push(name);
+      .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+    for (const name of folders) if (!paths.includes(name)) paths.push(name);
   } catch (e) {
-    // Listing failed: the configured folder on its own beats an empty site.
+    // Listing failed: the configured folder alone still beats an empty site.
   }
   return paths;
 }
+
 
 async function githubText(settings, path) {
   return cachedGithubText(settings, path);
@@ -2095,6 +2099,27 @@ async function createDynamicPreview(settings, uploadPath, origin) {
   };
 }
 
+// Finds the folder of a work by id across every library collection, so /p/<id>
+// keeps working while rotations move works between folders.
+async function resolveEntryPath(settings, entryId) {
+  const id = cleanRepoPath(entryId).split('/').pop() || '';
+  if (!id) return '';
+  const basePaths = await libraryCollectionPaths(settings);
+  for (const basePath of basePaths) {
+    const indexText = await githubText(settings, `${basePath}/index.json`);
+    if (!indexText) continue;
+    let entries = [];
+    try {
+      const parsed = JSON.parse(indexText);
+      if (Array.isArray(parsed)) entries = parsed;
+    } catch (e) {}
+    const match = entries.find((entry) => String(entry?.id || '') === id);
+    const previewPath = cleanRepoPath(match?.previewPath || '');
+    if (previewPath) return previewPath;
+  }
+  return '';
+}
+
 export default async function handler(request, response) {
   if (!['GET', 'HEAD'].includes(request.method)) {
     response.setHeader('Allow', 'GET, HEAD');
@@ -2112,8 +2137,13 @@ export default async function handler(request, response) {
     token,
   };
 
-  const path = cleanRepoPath(request.query?.path || '');
-  if (!path) return response.status(400).send('Invalid preview path');
+  let path = cleanRepoPath(request.query?.path || '');
+  if (!path) {
+    const entryId = cleanRepoPath(request.query?.entry || '');
+    if (!entryId) return response.status(400).send('Invalid preview path');
+    path = await resolveEntryPath(settings, entryId);
+    if (!path) return response.status(404).send('Preview not found');
+  }
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 
   try {

@@ -133,11 +133,30 @@ function githubHeaders(token) {
 // Постоянные сборки лежат в папках library_NN. Перечисляем их вместо того,
 // чтобы держать список в коде: ротация создаёт новую папку, и сайт начинает
 // видеть её сразу, без правки кода и деплоя.
+// Works are spread across library_01, library_02, ... folders, each capped at the
+// GitHub limit. They are listed at runtime so a folder added by a rotation shows up
+// without a code change or a deploy.
 async function libraryCollectionPaths(settings) {
-  // Works live in a single library folder; the numbered collections were only
-  // created by the rename that has now been rolled back.
-  return [cleanRepoPath(settings.basePath || defaultBasePath)];
+  const paths = [cleanRepoPath(settings.basePath || defaultBasePath)];
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
+      { headers: githubHeaders(settings.token) },
+    );
+    if (!response.ok) return paths;
+    const items = await response.json();
+    if (!Array.isArray(items)) return paths;
+    const folders = items
+      .filter((item) => item && item.type === "dir" && /^library(_\d+)?$/.test(String(item.name || "")))
+      .map((item) => item.name)
+      .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+    for (const name of folders) if (!paths.includes(name)) paths.push(name);
+  } catch (e) {
+    // Listing failed: the configured folder alone still beats an empty site.
+  }
+  return paths;
 }
+
 
 // Правило цензуры. `allow`-правила возвращают конкретную работу в ленту,
 // поэтому у закрытого автора можно оставить исключение.
