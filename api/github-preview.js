@@ -874,13 +874,18 @@ function createHtml(config) {
         border-radius: 50%;
         object-fit: cover;
         background: rgba(255,255,255,.08);
-        /* Anonymous owners share one sprite; the frame index picks the face. */
+        /* Anonymous owners share one sprite laid out 6 across by 4 down. The frame
+           index picks a single cell: the sheet is scaled to 600% x 400% of the
+           avatar box, so 100% of the box shows exactly one frame, and
+           background-position shifts it to the chosen row and column. */
         background-image: url("/avatars/anonim-sprite.png");
         background-repeat: no-repeat;
-        background-size: calc(600% * 1px) calc(400% * 1px);
+        background-size: 600% 400%;
         background-position:
-          calc((var(--owner-avatar-frame, 0) % 6) / 6 * 100%)
-          calc(floor(var(--owner-avatar-frame, 0) / 6) / 3 * 100%);
+          calc(var(--owner-avatar-frame, 0) % 6) / 5 * 100%
+          calc(floor(var(--owner-avatar-frame, 0) / 6) / 3 * 100%;
+        /* Кадр не должен вылезать за круг. */
+        overflow: hidden;
       }
       .owner-avatar-fallback { display: grid; place-items: center; color: #111; font-weight: 900; background: #b3ff40; }
       .owner-profile-text { display: flex; flex: 1 1 auto; align-items: baseline; gap: 40px; min-width: 0; max-width: 100%; flex-wrap: wrap; }
