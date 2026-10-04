@@ -5531,13 +5531,17 @@ h1 {
     grid-column: 1 / -1;
   }
 
+  /* Лента прижата к низу окна: карточка уменьшена на 40% и видна целиком. */
   .app-shell.is-empty:not(.is-edit-page) .home-feed-track {
-    padding: 8px 0 12px;
+    padding: 0 0 8px;
+    align-items: flex-end;
+  }
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-lane {
+    align-items: flex-end;
+    padding: 0 10px 8px;
   }
 
-  .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
-    height: clamp(132px, 15svh, 190px);
-  }
+
 
   /* На узких экранах две карточки идут столбиком: лента выше, но
      обе анимации помещаются целиком и не обрезаются по краям. */
@@ -7849,12 +7853,15 @@ h1 {
 
   /* Карточки крупные: почти во весь экран, одна в кадре. Ширину задаёт JS
      (--home-feed-card-width), значение ниже — запасной вариант. */
+  /* Карточка на 40% меньше прежней и прижата нижним краем к низу экрана, чтобы
+     анимация целиком помещалась, а не уезжала под сгиб. */
   .app-shell.is-empty:not(.is-edit-page) .home-feed-card {
-    flex: 0 0 var(--home-feed-card-width, 115vw) !important;
-    width: var(--home-feed-card-width, 115vw);
-    height: var(--home-feed-card-width, 115vw) !important;
+    flex: 0 0 var(--home-feed-card-width, 69vw) !important;
+    width: var(--home-feed-card-width, 69vw);
+    height: auto !important;
     min-height: 0;
     aspect-ratio: 1 / 1;
+    align-self: flex-end;
   }
 
   .app-shell.is-empty:not(.is-edit-page) .home-feed-like {
