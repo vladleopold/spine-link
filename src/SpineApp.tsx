@@ -2795,14 +2795,6 @@ function splitIdLines(value: string): string[] {
 
 // В ленте главной помещаются ровно три карточки: ширина считается от экрана,
 // а не от пропорций видео, иначе одна широкая работа занимала весь экран.
-function homeFeedCardWidth(): string {
-  if (typeof window === "undefined") return "30vw";
-  const gap = 12;
-  const usable = window.innerWidth - gap * 4;
-  const perCard = Math.max(180, Math.round(usable / 3));
-  return `${perCard}px`;
-}
-
 export function App({ initialFiles, initialOpenLibrary = false, initialLogin = false, initialUpload = false }: AppProps) {
   const isEditPage = Boolean(editEntryIdFromLocation());
   const isAdminPage = new URLSearchParams(window.location.search).get("admin") === "1";
@@ -5139,6 +5131,15 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   };
 
   const showHomeFeed = !preparedSpine && !isEditPage && homeFeedEntries.length > 0;
+  // The lane width is only known after layout, so card width is measured here
+  // rather than while the feed is being built.
+  const homeFeedCardWidthPx = showHomeFeed
+    ? (() => {
+        const lane = document.querySelector<HTMLElement>(".home-feed-viewport");
+        const width = lane?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1120);
+        return Math.max(160, Math.round((width - 12 * 4) / 3));
+      })()
+    : 0;
   const homeFeedLoop = showHomeFeed ? homeFeedEntries.slice(0, 12) : [];
   const isHomeDropOnly = !preparedSpine && !isEditPage && extraSpineSets.length === 0 && !isUploadModalOpen;
   const siteReadingPages = [
@@ -5446,7 +5447,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                           // Ширина от экрана, а не от пропорций видео: иначе одна
                           // широкая работа растягивалась на весь экран и в ленте
                           // помещалось меньше трёх карточек.
-                          "--home-feed-card-width": homeFeedCardWidth(),
+                          "--home-feed-card-width": `${homeFeedCardWidthPx}px`,
                         }
                       : {}),
                   } as React.CSSProperties;

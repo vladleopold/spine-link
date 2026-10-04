@@ -144,7 +144,7 @@ function renderHomeShell(isDragging = false) {
             <small>Anyone can add a Spine animation with Create preview or publish through a Google account profile.</small>
           </div>
           <div class="home-feed-viewport">
-            <div class="home-feed-track" id="home-feed-track"></div>
+            <div class="home-feed-track is-scrolling" id="home-feed-track"></div>
           </div>
         </section>
          <div class="stage">
@@ -336,6 +336,14 @@ function wireHomeShell() {
   }
 }
 
+// В ленте главной помещаются ровно три карточки: ширина считается от самой ленты,
+// а не от окна, потому что лента может быть уже экрана.
+function homeFeedCardWidth(): number {
+  const lane = document.querySelector<HTMLElement>(".home-feed-viewport");
+  const width = lane?.clientWidth || window.innerWidth;
+  return Math.max(160, Math.round((width - 12 * 4) / 3));
+}
+
 async function loadHomeFeed() {
   if (!root) return;
   const feedSection = root.querySelector<HTMLElement>("#home-feed");
@@ -374,6 +382,8 @@ async function loadHomeFeed() {
     card.className = "home-feed-card";
     card.href = String(entry.previewUrl || "/world-spine-archive");
     card.setAttribute("aria-label", `Open ${title}`);
+    // Ширина от ленты, чтобы в кадр влезали ровно три карточки.
+    card.style.setProperty("--home-feed-card-width", `${homeFeedCardWidth()}px`);
     if (Number.isFinite(mediaRatio) && mediaRatio > 0) {
       card.style.setProperty("--home-feed-ratio", `${Math.max(1, Math.round(mediaRatio * 1000))} / 1000`);
     }
