@@ -106,7 +106,10 @@ export function mountHomeBanner(options: {
   async function loadEntries(): Promise<BannerEntry[]> {
     const folders = listCollectionFolders();
     const found: BannerEntry[] = [];
+    // Папки опрашиваются по очереди, а не все сразу: баннер не должен блокировать
+    // страницу десятком запросов при каждом запуске.
     for (const folder of folders) {
+      if (found.length >= 24) break;
       try {
         const response = await fetch(`${indexRoot}/${folder}/index.json?t=${Date.now()}`, {
           credentials: "same-origin",
@@ -141,11 +144,12 @@ export function mountHomeBanner(options: {
   // skipped: after the rename it kept a stale index pointing at files that now
   // live in library_01, so every work read from it would 404.
   function listCollectionFolders(): string[] {
-    // Works live in library_01, library_02, ... so the banner probes a range
-    // rather than one folder that may be empty.
+    // Works live in library_01, library_02, ... The bare `library` folder is left
+    // out on purpose: after the rename it kept a stale index whose paths point at
+    // files that no longer exist there, so every entry read from it failed.
     const folders: string[] = [];
-    for (let index = 0; index <= 60; index += 1) {
-      folders.push(index === 0 ? "library" : `library_${String(index).padStart(2, "0")}`);
+    for (let index = 1; index <= 60; index += 1) {
+      folders.push(`library_${String(index).padStart(2, "0")}`);
     }
     return folders;
   }
