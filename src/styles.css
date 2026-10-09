@@ -8496,3 +8496,37 @@ h1 {
 .home-feed-track.is-scrolling .home-feed-lane {
   animation-play-state: running;
 }
+
+/* Make upload/page containers take max height and only show scroll when needed */
+.app-shell.is-empty:not(.is-edit-page) .workspace {
+  min-height: 100vh;
+  overflow-y: auto;
+}
+
+.app-shell.is-empty:not(.is-edit-page) .stage {
+  min-height: 100vh;
+}
+
+.app-shell.is-empty:not(.is-edit-page) .home-drop-panel {
+  min-height: 200px;
+}
+
+.dark-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  background: transparent;
+}
+
+.dark-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(74, 78, 84, 0.72);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 106, 115, 0.78);
+}
