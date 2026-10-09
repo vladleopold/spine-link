@@ -8,7 +8,8 @@
  */
 import type { SpinePlayer as SpinePlayerInstance } from "@esotericsoftware/spine-player";
 
-const ROTATION_MS = 5 * 60 * 1000;
+// Banner rotation removed: single work displayed continuously
+
 const PLAYER_JS = "https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/iife/spine-player.js";
 const PLAYER_CSS = "https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/spine-player.css";
 const LEGACY_PLAYER_JS = "/vendor-spine-player-3.8.js";
@@ -272,28 +273,20 @@ export function mountHomeBanner(options: {
     if (entry) await show(entry);
   }
 
-  function schedule() {
-    window.clearTimeout(timer);
-    timer = window.setTimeout(async () => {
-      void rotate();
-      schedule();
-    }, ROTATION_MS);
+  // Rotation removed: banner now shows a single work continuously
   }
 
   void rotate();
-  schedule();
-
+  
   return {
     mount(banner: HTMLElement) {
       banner.append(layer);
     },
     start() {
-      schedule();
-    },
+          },
     dispose() {
       stopped = true;
-      window.clearTimeout(timer);
-      player?.dispose?.();
+            player?.dispose?.();
       layer.remove();
       label.remove();
     },
