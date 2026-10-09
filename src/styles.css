@@ -2637,6 +2637,53 @@ h1 {
   background: rgba(140, 199, 255, 0.1);
 }
 
+.animation-download-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.animation-download-title {
+  color: #9fb4d4;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.animation-download-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.animation-download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: #dfe7f5;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    transform 140ms ease;
+}
+
+.animation-download-button:hover {
+  border-color: rgba(140, 199, 255, 0.7);
+  background: rgba(71, 156, 255, 0.22);
+  transform: translateY(-1px);
+}
+
 .animation-grid button.active {
   border-color: rgba(140, 199, 255, 0.82);
   color: #ffffff;
@@ -3932,7 +3979,7 @@ h1 {
   .home-feed-track {
     gap: 12px;
     padding: 0 0 14px;
-    animation-duration: 196s;
+    animation-duration: 392s;
   }
 
   .home-feed-card {

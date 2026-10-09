@@ -1854,6 +1854,21 @@ function firstUsablePoster(...candidates: (string | undefined)[]) {
   return hit ? hit.trim() : "";
 }
 
+function buildAnimationDownloadUrl(
+  entry: LibraryEntry | null,
+  animationName: string | null,
+  format: "webm" | "mp4",
+  quality: "high" | "medium" | "low",
+): string {
+  if (!entry || !animationName) return "";
+  const previews = entry.allAnimationPreviews?.[animationName];
+  if (!previews) return "";
+  const suffix = quality === "high" ? "" : `-${quality}`;
+  const key = format === "mp4" ? `mp4Preview${suffix.replace("-", "")}` : `webmPreview${suffix.replace("-", "")}`;
+  const url = (previews as Record<string, string | undefined>)[key];
+  return typeof url === "string" ? url : "";
+}
+
 function derivedLibraryAssetUrl(entry: LibraryEntry, extensions: string[]) {
   const previewPath = cleanRepoPath(entry.previewPath || "");
   const files = Array.isArray(entry.files) ? entry.files : [];
@@ -6146,6 +6161,60 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                   ))}
                 </div>
               )}
+            </div>
+            <div className="animation-download-block">
+              <div className="animation-download-title">Download animations</div>
+              <div className="animation-download-row">
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "webm", "high")}
+                  download
+                >
+                  <Download size={13} /> WebM · 1080p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "webm", "medium")}
+                  download
+                >
+                  <Download size={13} /> WebM · 720p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "webm", "low")}
+                  download
+                >
+                  <Download size={13} /> WebM · 360p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "mp4", "high")}
+                  download
+                >
+                  <Download size={13} /> MP4 · 1080p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "mp4", "medium")}
+                  download
+                >
+                  <Download size={13} /> MP4 · 720p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "mp4", "low")}
+                  download
+                >
+                  <Download size={13} /> MP4 · 360p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "webm", "high")}
+                  download
+                >
+                  <Download size={13} /> All WebM · 1080p
+                </a>
+              </div>
             </div>
           </aside>
         </div>

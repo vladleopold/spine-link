@@ -273,20 +273,18 @@ export function mountHomeBanner(options: {
     if (entry) await show(entry);
   }
 
-  // Rotation removed: banner now shows a single work continuously
-  }
-
   void rotate();
-  
+
   return {
     mount(banner: HTMLElement) {
       banner.append(layer);
     },
     start() {
-          },
+      // Banner shows a single work continuously; no rotation timer.
+    },
     dispose() {
       stopped = true;
-            player?.dispose?.();
+      player?.dispose?.();
       layer.remove();
       label.remove();
     },
