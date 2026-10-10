@@ -319,6 +319,15 @@ type LibraryEntry = {
     webmAlpha?: string;
     webmAlphaMedium?: string;
     webmAlphaLow?: string;
+    movAlpha?: string;
+    movAlphaMedium?: string;
+    movAlphaLow?: string;
+    gifAlpha?: string;
+    gifAlphaMedium?: string;
+    gifAlphaLow?: string;
+    pngAlpha?: string;
+    pngAlphaMedium?: string;
+    pngAlphaLow?: string;
   }>;
   downloadShareEnabled?: boolean;
   downloadShareToken?: string;
@@ -346,6 +355,9 @@ type HomeFeedEntry = {
   animations?: number;
   pageMode?: "Portfolio" | "Library";
   metrics?: EntryMetric;
+  // Filtered out by the feed when shorter than 2 seconds, but the client
+  // applies the same filter as a second line of defense.
+  previewDuration?: number;
 };
 
 type UploadResponse = {
@@ -1856,19 +1868,48 @@ function firstUsablePoster(...candidates: (string | undefined)[]) {
   return hit ? hit.trim() : "";
 }
 
+type AnimationFormat =
+  | "webm"
+  | "mp4"
+  | "mov"
+  | "gif"
+  | "png";
+
 function buildAnimationDownloadUrl(
   entry: LibraryEntry | null,
   animationName: string | null,
-  format: "webm" | "mp4",
+  format: AnimationFormat,
   quality: "high" | "medium" | "low",
+  allAnimations = false,
 ): string {
   if (!entry || !animationName) return "";
-  const previews = entry.allAnimationPreviews?.[animationName];
+  const previews = entry.allAnimationPreviews;
   if (!previews) return "";
+
   const suffix = quality === "high" ? "" : `-${quality}`;
-  const key = format === "mp4" ? `mp4Preview${suffix.replace("-", "")}` : `webmPreview${suffix.replace("-", "")}`;
-  const url = (previews as Record<string, string | undefined>)[key];
-  return typeof url === "string" ? url : "";
+  const cap = (s: string) => s.replace("-", "");
+
+  // "All animations" means every animation in the upload, so the caller
+  // resolves the URL from whichever animation actually has the file.
+  const candidates = allAnimations
+    ? Object.keys(previews)
+    : [animationName];
+
+  for (const name of candidates) {
+    const p = previews[name] as Record<string, string | undefined> | undefined;
+    if (!p) continue;
+    let key: string;
+    switch (format) {
+      case "mp4": key = `mp4Preview${cap(suffix)}`; break;
+      case "mov": key = `movAlpha${cap(suffix)}`; break;
+      case "gif": key = `gifAlpha${cap(suffix)}`; break;
+      case "png": key = `pngAlpha${cap(suffix)}`; break;
+      default:    key = `webmPreview${cap(suffix)}`;
+    }
+    const url = p[key];
+    if (typeof url === "string" && url.trim()) return url;
+  }
+  return "";
 }
 
 function derivedLibraryAssetUrl(entry: LibraryEntry, extensions: string[]) {
@@ -3124,6 +3165,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     const applyHomeFeedEntries = (entries: HomeFeedEntry[]) => {
       const nextEntries = entries
         .filter((entry: HomeFeedEntry) => entry?.id && entry?.previewUrl)
+        // Клиентский дубль фильтра: лента показывает только анимации
+        // с реальным превью длиной от 2 секунд.
+        .filter((entry: HomeFeedEntry) => Number(entry?.previewDuration || 0) >= 2)
         .slice(0, 32);
       setHomeFeedEntries(nextEntries);
       setEntryMetrics((currentMetrics) => {
@@ -3216,10 +3260,12 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       const video = card.querySelector<HTMLVideoElement>(".home-feed-video");
       if (video) playVideo(video);
 
+      // Лента намеренно в 2 раза медленнее, чем раньше: каждая карточка
+      // показывает своё превью 7 с вместо 3.5 с, чтобы не гонять глаза.
       rotationTimer = setTimeout(() => {
         currentPlayIdx = (currentPlayIdx + 1) % cards.length;
         rotateVisible();
-      }, 3500);
+      }, 7000);
     };
 
     const scheduleRotate = () => {
@@ -6211,10 +6257,87 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 </a>
                 <a
                   className="animation-download-button"
-                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "webm", "high")}
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "mov", "high")}
                   download
                 >
-                  <Download size={13} /> All WebM · 1080p
+                  <Download size={13} /> MOV α · 1080p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "mov", "medium")}
+                  download
+                >
+                  <Download size={13} /> MOV α · 720p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "mov", "low")}
+                  download
+                >
+                  <Download size={13} /> MOV α · 360p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "gif", "high")}
+                  download
+                >
+                  <Download size={13} /> GIF α · 1080p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "gif", "medium")}
+                  download
+                >
+                  <Download size={13} /> GIF α · 720p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "gif", "low")}
+                  download
+                >
+                  <Download size={13} /> GIF α · 360p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "png", "high")}
+                  download
+                >
+                  <Download size={13} /> PNG seq α · 1080p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "png", "medium")}
+                  download
+                >
+                  <Download size={13} /> PNG seq α · 720p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "png", "low")}
+                  download
+                >
+                  <Download size={13} /> PNG seq α · 360p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "mov", "high", true)}
+                  download
+                >
+                  <Download size={13} /> All MOV α · 1080p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "gif", "high", true)}
+                  download
+                >
+                  <Download size={13} /> All GIF α · 1080p
+                </a>
+                <a
+                  className="animation-download-button"
+                  href={buildAnimationDownloadUrl(currentLibraryEntry, activeAnimation, "png", "high", true)}
+                  download
+                >
+                  <Download size={13} /> All PNG seq α · 1080p
                 </a>
               </div>
             </div>

@@ -8345,6 +8345,43 @@ h1 {
   color: #7dd3fc;
 }
 
+/* Upload page: no page scroll — the panel fills the viewport and the
+   animation list scrolls inside it, so nothing is cut off on small screens. */
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) {
+  overflow: hidden;
+  height: 100%;
+}
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .inspector {
+  max-height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140,199,255,0.25) transparent;
+}
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .inspector::-webkit-scrollbar {
+  width: 8px;
+}
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .inspector::-webkit-scrollbar-thumb {
+  background: rgba(140,199,255,0.25);
+  border-radius: 4px;
+}
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .asset-list {
+  flex: 0 0 auto;
+}
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .animation-grid {
+  max-height: 50vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140,199,255,0.25) transparent;
+}
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .animation-grid::-webkit-scrollbar {
+  width: 8px;
+}
+.app-shell.is-empty.is-upload-page:not(.is-edit-page) .animation-grid::-webkit-scrollbar-thumb {
+  background: rgba(140,199,255,0.25);
+  border-radius: 4px;
+}
+
+
 .upload-toast {
   position: fixed;
   top: 16px;

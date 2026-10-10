@@ -328,13 +328,11 @@ function wireHomeShell() {
   // Banner behind the drop zone: a random library work, refreshed every 5 minutes.
   // Баннер живёт внутри самой зоны загрузки: на мобильном она position: fixed,
   // а её родитель-панель от этого схлопывается почти в ноль.
+  // The drag-drop panel renders as a plain static affordance: no animation
+  // preview plays behind it anymore, only the panel and its pulse remain.
   const dropPanel = document.querySelector<HTMLElement>(".main-drop-zone");
   if (dropPanel) {
-    mountHomeBanner({
-      panel: dropPanel,
-      feedUrl: "/api/github-archive?feed=home",
-      indexRoot: "/assets",
-    });
+    mountHomeBanner();
   }
 }
 
