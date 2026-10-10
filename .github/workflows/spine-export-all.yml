@@ -3,8 +3,8 @@ name: Spine Export All (Matrix)
 on:
   workflow_dispatch:
     inputs:
-      filter_id:
-        description: 'Optional ID to filter (leave blank for all)'
+      filter_ids:
+        description: 'Comma-separated IDs to filter (leave blank for all)'
         required: false
         default: ''
 
@@ -19,8 +19,14 @@ jobs:
       - name: Generate matrix
         id: set-matrix
         run: |
-          if [ -n "${{ github.event.inputs.filter_id }}" ]; then
-            echo "matrix=[\"${{ github.event.inputs.filter_id }}\"]" >> $GITHUB_OUTPUT
+          if [ -n "${{ github.event.inputs.filter_ids }}" ]; then
+            # Parse comma-separated IDs into JSON array
+            IDS="${{ github.event.inputs.filter_ids }}"
+            MATRIX_JSON=$(IDS="$IDS" node -e "
+              const ids = process.env.IDS.split(',').map(s => s.trim()).filter(Boolean);
+              console.log(JSON.stringify(ids));
+            ")
+            echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
           else
             MATRIX_JSON=$(node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync('library/index.json', 'utf8')); console.log(JSON.stringify(data.map(d => d.id).filter(Boolean)));")
             echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
@@ -33,8 +39,6 @@ jobs:
       fail-fast: false
       matrix:
         uploadId: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-    permissions:
-      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,28 +52,18 @@ jobs:
         run: |
           npm init -y
           npm install playwright@1.59.1
-          npx playwright install chromium
+          npx playwright install chromium --with-deps
 
-      - name: Install system dependencies
+      - name: Install system dependencies (GPU + media)
         run: |
-          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
-          for attempt in 1 2 3; do
-            if sudo apt-get update; then
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep 5
-          done
-          sudo apt-get install -y ffmpeg \
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
             libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
             libcups2 libdrm2 libdbus-1-3 libxkbcommon0 \
             libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-            libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
+            libgbm1 libpango-1.0-0 libcairo2 libasound2t64 webp \
             libatspi2.0-0 libwayland-client0 libwayland-cursor0 \
-            libwayland-egl1 \
-            libwebp-tools imagemagick
+            libwayland-egl1 ffmpeg
 
       - name: Run Export Script
         run: |
@@ -77,99 +71,131 @@ jobs:
             --upload-id="${{ matrix.uploadId }}" \
             --repo-path="${{ github.workspace }}" \
             --output="${{ github.workspace }}/${{ matrix.uploadId }}-preview.webm"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload media to GitHub
-        id: upload
+      - name: Prepare Artifacts
+        run: |
+          mkdir -p "artifact_${{ matrix.uploadId }}"
+          
+          # Move generated files to artifact dir if they exist
+          for ext in "webm" "webp"; do
+            for suffix in "" "-medium" "-low"; do
+              f="${{ matrix.uploadId }}-preview${suffix}.${ext}"
+              if [ -f "$f" ]; then
+                mv "$f" "artifact_${{ matrix.uploadId }}/"
+              fi
+            done
+          done
+          
+          # Move videoMeta json if it exists
+          if [ -f "${{ matrix.uploadId }}-preview.webm.json" ]; then
+            mv "${{ matrix.uploadId }}-preview.webm.json" "artifact_${{ matrix.uploadId }}/meta.json"
+          else
+            echo "{}" > "artifact_${{ matrix.uploadId }}/meta.json"
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-${{ matrix.uploadId }}
+          path: artifact_${{ matrix.uploadId }}/*
+          retention-days: 1
+          overwrite: true
+
+  commit-all:
+    needs: [export]
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+          pattern: export-*
+          merge-multiple: false
+          
+      - name: Process artifacts and update index
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const uploadId = '${{ matrix.uploadId }}';
-            const basePath = 'library';
-            const branch = 'main';
-            const origin = 'https://world.spine.chat';
-            const workspace = '${{ github.workspace }}';
+            const path = require('path');
             
-            const filesToUpload = [
-              { source: `${workspace}/${uploadId}-preview.webm`, target: `${basePath}/${uploadId}/preview.webm`, key: 'webmPreview' },
-              { source: `${workspace}/${uploadId}-preview-medium.webm`, target: `${basePath}/${uploadId}/preview-medium.webm`, key: 'webmPreviewMedium' },
-              { source: `${workspace}/${uploadId}-preview-low.webm`, target: `${basePath}/${uploadId}/preview-low.webm`, key: 'webmPreviewLow' },
-              { source: `${workspace}/${uploadId}-preview.webp`, target: `${basePath}/${uploadId}/preview.webp`, key: 'webpPoster' },
-              { source: `${workspace}/${uploadId}-preview-medium.webp`, target: `${basePath}/${uploadId}/preview-medium.webp`, key: 'webpPosterMedium' },
-              { source: `${workspace}/${uploadId}-preview-low.webp`, target: `${basePath}/${uploadId}/preview-low.webp`, key: 'webpPosterLow' }
-            ];
-
-            async function getSha(path) {
-              try {
-                const { data } = await github.rest.repos.getContent({ owner: context.repo.owner, repo: context.repo.repo, path, ref: branch });
-                return data.sha;
-              } catch { return null; }
-            }
-
-            const uploadedUrls = {};
-            for (const file of filesToUpload) {
-              if (!fs.existsSync(file.source)) continue;
-              const content = fs.readFileSync(file.source, 'base64');
-              const existingSha = await getSha(file.target);
-              
-              await github.rest.repos.createOrUpdateFileContents({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: file.target,
-                message: `Add ${file.key} media for ${uploadId}`,
-                content,
-                branch,
-                ...(existingSha ? { sha: existingSha } : {}),
-              });
-              uploadedUrls[file.key] = `${origin}/assets/${file.target}`;
-            }
-            core.setOutput('uploaded_urls', JSON.stringify(uploadedUrls));
-
-      - name: Update index entry with Retry Logic
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const uploadId = '${{ matrix.uploadId }}';
-            const uploadedUrls = JSON.parse('${{ steps.upload.outputs.uploaded_urls }}' || '{}');
+            const origin = 'https://spine-link.vercel.app';
             const basePath = 'library';
             const indexPath = `${basePath}/index.json`;
-            const branch = 'main';
-
-            const fs = require('fs');
-            const metaPath = `${{ github.workspace }}/${uploadId}-preview.webm.json`;
-            let videoMeta = {};
-            if (fs.existsSync(metaPath)) {
-              try { videoMeta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch (err) {}
+            const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+            
+            const artifactsDir = 'downloaded-artifacts';
+            if (!fs.existsSync(artifactsDir)) {
+              console.log("No artifacts found.");
+              return;
             }
-
-            // Retry logic to handle Git race conditions
-            const MAX_RETRIES = 15;
-            for (let i = 1; i <= MAX_RETRIES; i++) {
-              try {
-                const { data: indexData } = await github.rest.repos.getContent({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  path: indexPath,
-                  ref: branch,
-                });
-
-                const content = Buffer.from(indexData.content, 'base64').toString('utf8');
-                const entries = JSON.parse(content);
-                const entryIndex = entries.findIndex(e => e.id === uploadId);
-
-                if (entryIndex === -1) {
-                  console.log(`Entry ${uploadId} not found in index, skipping update`);
-                  return;
+            
+            const dirs = fs.readdirSync(artifactsDir);
+            for (const dir of dirs) {
+              const match = dir.match(/^export-(.+)$/);
+              if (!match) continue;
+              const uploadId = match[1];
+              const sourceDir = path.join(artifactsDir, dir);
+              const targetDir = path.join(basePath, uploadId);
+              
+              if (!fs.existsSync(targetDir)) {
+                fs.mkdirSync(targetDir, { recursive: true });
+              }
+              
+              // Move files
+              const files = fs.readdirSync(sourceDir);
+              const uploadedUrls = {};
+              let videoMeta = {};
+              let isError = false;
+              
+              for (const file of files) {
+                if (file === 'meta.json') {
+                  try {
+                    videoMeta = JSON.parse(fs.readFileSync(path.join(sourceDir, file), 'utf8'));
+                    if (videoMeta.error) isError = true;
+                  } catch(e) {}
+                  continue;
                 }
-
-                const hasUploads = Object.keys(uploadedUrls).length > 0;
-                entries[entryIndex] = {
-                  ...entries[entryIndex],
+                
+                const cleanFileName = file.replace(uploadId + '-', '');
+                const targetPath = path.join(targetDir, cleanFileName);
+                fs.copyFileSync(path.join(sourceDir, file), targetPath);
+                
+                const relativeTarget = `${basePath}/${uploadId}/${cleanFileName}`;
+                
+                if (file.endsWith('-preview.webm')) uploadedUrls['webmPreview'] = `${origin}/assets/${relativeTarget}`;
+                if (file.endsWith('-preview-medium.webm')) uploadedUrls['webmPreviewMedium'] = `${origin}/assets/${relativeTarget}`;
+                if (file.endsWith('-preview-low.webm')) uploadedUrls['webmPreviewLow'] = `${origin}/assets/${relativeTarget}`;
+                if (file.endsWith('-preview.webp')) uploadedUrls['webpPoster'] = `${origin}/assets/${relativeTarget}`;
+                if (file.endsWith('-preview-medium.webp')) uploadedUrls['webpPosterMedium'] = `${origin}/assets/${relativeTarget}`;
+                if (file.endsWith('-preview-low.webp')) uploadedUrls['webpPosterLow'] = `${origin}/assets/${relativeTarget}`;
+              }
+              
+              // Update index
+              const entryIndex = indexData.findIndex(e => e.id === uploadId);
+              if (entryIndex !== -1) {
+                delete indexData[entryIndex].webmChunksJson;
+                delete indexData[entryIndex].webmChunks;
+                delete indexData[entryIndex].webmChunkCount;
+                delete indexData[entryIndex].webmIsChunked;
+                
+                indexData[entryIndex] = {
+                  ...indexData[entryIndex],
                   ...uploadedUrls,
-                  webmPreviewPath: `${basePath}/${uploadId}/preview.webm`,
-                  webmStatus: hasUploads ? 'ready' : 'error',
+                  webmPreviewPath: isError ? undefined : `${basePath}/${uploadId}/preview.webm`,
+                  webmStatus: isError ? 'error' : 'ready',
+                  webmError: isError ? videoMeta.error : undefined,
                   webmGeneratedAt: new Date().toISOString(),
                   ...(videoMeta.width > 0 ? { previewWidth: videoMeta.width } : {}),
                   ...(videoMeta.height > 0 ? { previewHeight: videoMeta.height } : {}),
@@ -177,30 +203,115 @@ jobs:
                   ...(videoMeta.skeletonWidth > 0 ? { skeletonWidth: videoMeta.skeletonWidth } : {}),
                   ...(videoMeta.skeletonHeight > 0 ? { skeletonHeight: videoMeta.skeletonHeight } : {}),
                 };
-
-                const newContent = Buffer.from(JSON.stringify(entries, null, 2)).toString('base64');
-
-                await github.rest.repos.createOrUpdateFileContents({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  path: indexPath,
-                  message: `Update media preview URLs for ${uploadId}`,
-                  content: newContent,
-                  sha: indexData.sha,
-                  branch,
-                });
-                
-                console.log(`Successfully updated index for ${uploadId} on try ${i}`);
-                break; // Success!
-              } catch (error) {
-                if (error.status === 409 || error.status === 422) {
-                  console.log(`Conflict updating index (try ${i}/${MAX_RETRIES}). Retrying in a moment...`);
-                  if (i === MAX_RETRIES) throw error;
-                  // Wait random time between 2 and 6 seconds to prevent thundering herd
-                  const waitTime = Math.floor(Math.random() * 4000) + 2000;
-                  await new Promise(resolve => setTimeout(resolve, waitTime));
-                } else {
-                  throw error;
-                }
               }
             }
+            
+            fs.writeFileSync(indexPath, JSON.stringify(indexData, null, 2));
+            console.log("Updated index.json successfully");
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          MAX_RETRIES=20
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i/$MAX_RETRIES..."
+            
+            # 1. Pull latest state from remote first
+            git fetch origin main
+            git reset --hard origin/main
+            
+            # 2. Re-run the artifact processing script on top of fresh state
+            node -e "
+              const fs = require('fs');
+              const path = require('path');
+              
+              const origin = 'https://spine-link.vercel.app';
+              const basePath = 'library';
+              const indexPath = path.join(basePath, 'index.json');
+              const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+              
+              const artifactsDir = 'downloaded-artifacts';
+              if (!fs.existsSync(artifactsDir)) { console.log('No artifacts dir'); process.exit(0); }
+              
+              const dirs = fs.readdirSync(artifactsDir);
+              for (const dir of dirs) {
+                const match = dir.match(/^export-(.+)$/);
+                if (!match) continue;
+                const uploadId = match[1];
+                const sourceDir = path.join(artifactsDir, dir);
+                const targetDir = path.join(basePath, uploadId);
+                
+                if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+                
+                const files = fs.readdirSync(sourceDir);
+                const uploadedUrls = {};
+                let videoMeta = {};
+                let isError = false;
+                
+                for (const file of files) {
+                  if (file === 'meta.json') {
+                    try { videoMeta = JSON.parse(fs.readFileSync(path.join(sourceDir, file), 'utf8')); if (videoMeta.error) isError = true; } catch(e) {}
+                    continue;
+                  }
+                  const cleanFileName = file.replace(uploadId + '-', '');
+                  const targetPath = path.join(targetDir, cleanFileName);
+                  fs.copyFileSync(path.join(sourceDir, file), targetPath);
+                  const relativeTarget = \`\${basePath}/\${uploadId}/\${cleanFileName}\`;
+                  if (file.endsWith('-preview.webm')) uploadedUrls['webmPreview'] = \`\${origin}/assets/\${relativeTarget}\`;
+                  if (file.endsWith('-preview-medium.webm')) uploadedUrls['webmPreviewMedium'] = \`\${origin}/assets/\${relativeTarget}\`;
+                  if (file.endsWith('-preview-low.webm')) uploadedUrls['webmPreviewLow'] = \`\${origin}/assets/\${relativeTarget}\`;
+                  if (file.endsWith('-preview.webp')) uploadedUrls['webpPoster'] = \`\${origin}/assets/\${relativeTarget}\`;
+                  if (file.endsWith('-preview-medium.webp')) uploadedUrls['webpPosterMedium'] = \`\${origin}/assets/\${relativeTarget}\`;
+                  if (file.endsWith('-preview-low.webp')) uploadedUrls['webpPosterLow'] = \`\${origin}/assets/\${relativeTarget}\`;
+                }
+                
+                const entryIndex = indexData.findIndex(e => e.id === uploadId);
+                if (entryIndex !== -1) {
+                  delete indexData[entryIndex].webmChunksJson;
+                  delete indexData[entryIndex].webmChunks;
+                  delete indexData[entryIndex].webmChunkCount;
+                  delete indexData[entryIndex].webmIsChunked;
+                  indexData[entryIndex] = {
+                    ...indexData[entryIndex],
+                    ...uploadedUrls,
+                    webmPreviewPath: isError ? undefined : \`\${basePath}/\${uploadId}/preview.webm\`,
+                    webmStatus: isError ? 'error' : 'ready',
+                    webmError: isError ? videoMeta.error : undefined,
+                    webmGeneratedAt: new Date().toISOString(),
+                    ...(videoMeta.width > 0 ? { previewWidth: videoMeta.width } : {}),
+                    ...(videoMeta.height > 0 ? { previewHeight: videoMeta.height } : {}),
+                    ...(videoMeta.animationDuration > 0 ? { previewDuration: videoMeta.animationDuration } : {}),
+                    ...(videoMeta.skeletonWidth > 0 ? { skeletonWidth: videoMeta.skeletonWidth } : {}),
+                    ...(videoMeta.skeletonHeight > 0 ? { skeletonHeight: videoMeta.skeletonHeight } : {}),
+                  };
+                }
+              }
+              fs.writeFileSync(indexPath, JSON.stringify(indexData, null, 2));
+              console.log('index.json updated.');
+            "
+            
+            # 3. Stage changes
+            git add library/
+            
+            if git diff-index --quiet HEAD --; then
+              echo "No changes to commit."
+              exit 0
+            fi
+            
+            # 4. Commit
+            git commit -m "Auto-export: generate previews and update index"
+            
+            # 5. Push — if rejected, loop back and retry with fresh HEAD
+            if git push origin main; then
+              echo "Successfully pushed on attempt $i!"
+              exit 0
+            else
+              echo "Push rejected. Will retry with fresh HEAD..."
+              sleep $((RANDOM % 5 + 2))
+            fi
+          done
+          
+          echo "Failed to push after $MAX_RETRIES attempts."
+          exit 1

@@ -18,88 +18,85 @@ jobs:
         with:
           node-version: 22
 
-      - name: Debug - Check files exist before processing
-        id: debug-check
-        run: |
-          echo "=== DEBUG: CHECKING FILES ==="
-          uploadId="${{ github.event.client_payload.uploadId }}"
-          animation="${{ github.event.client_payload.animation }}"
-          uploadPath="library/${uploadId}"
-          setName="$(ls -1 ${uploadPath} 2>/dev/null | head -1 || echo 'NO_SETS')"
-          echo "Upload ID: $uploadId"
-          echo "Animation: $animation"
-          echo "Upload Path: $uploadPath"
-          echo "Set Name: $setName"
-          echo "Library directory exists: $(test -d library && echo 'YES' || echo 'NO')"
-          echo "Upload directory exists: $(test -d $uploadPath && echo 'YES' || echo 'NO')"
-          echo "=== LIBRARY CONTENTS ==="
-          ls -la library/ 2>/dev/null || echo "Failed to list library/"
-          echo "=== UPLOAD PATH CONTENTS ==="
-          ls -la $uploadPath/ 2>/dev/null || echo "Failed to list upload path"
-          echo "=== INDEX.JSON ==="
-          if [ -f "library/index.json" ]; then
-            echo "index.json exists"
-            echo "Size: $(stat -f%z library/index.json) bytes"
-            echo "First 500 chars: $(head -c 500 library/index.json)"
-          else
-            echo "ERROR: index.json not found"
-          fi
-          echo "=== DEBUG CHECK COMPLETE ==="
-
       - name: Install Playwright with Chromium
         run: |
-          echo "=== DEBUG: INSTALLING PLAYWRIGHT ==="
+          echo "=== INSTALLING PLAYWRIGHT ==="
           npm init -y
-          echo "Created package.json with: $(cat package.json)"
           npm install playwright@1.59.1
-          echo "Playwright installed"
-          npx playwright install chromium
-          echo "=== DEBUG: PLAYWRIGHT INSTALLED ==="
-          echo "=== DEBUG: END OF PLAYWRIGHT INSTALLATION ==="
-          echo "=== DEBUG: PLAYWRIGHT VERSION ==="
-          npx playwright --version
+          npx playwright install chromium --with-deps
+          echo "=== PLAYWRIGHT INSTALLED ==="
 
       - name: Install system dependencies
         run: |
-          echo "=== DEBUG: INSTALLING SYSTEM DEPENDENCIES ==="
-          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
-          for attempt in 1 2 3; do
-            if sudo apt-get update; then
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-            sleep 5
-          done
-          echo "=== DEBUG: APT UPDATE COMPLETE ==="
-          sudo apt-get install -y ffmpeg \
+          echo "=== INSTALLING SYSTEM DEPS ==="
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
             libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
             libcups2 libdrm2 libdbus-1-3 libxkbcommon0 \
             libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
             libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
             libatspi2.0-0 libwayland-client0 libwayland-cursor0 \
-            libwayland-egl1 \
-            libwebp-tools imagemagick
-          echo "=== DEBUG: SYSTEM DEPENDENCIES INSTALLED ==="
+            libwayland-egl1 ffmpeg
+          echo "=== SYSTEM DEPS INSTALLED ==="
+
+      - name: Compute animation duration from skeleton JSON
+        id: duration
+        run: |
+          echo "=== COMPUTING ANIMATION DURATION ==="
+          uploadId="${{ github.event.client_payload.uploadId }}"
+          animation="${{ github.event.client_payload.animation }}"
+          uploadPath="library/${uploadId}"
+          # Find the first directory inside uploadPath
+          setName=$(find "$uploadPath" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | head -1)
+          skeletonPath=""
+          if [ -n "$setName" ]; then
+            for f in "${uploadPath}/${setName}"/*.json; do
+              if [ -f "$f" ]; then
+                skeletonPath="$f"
+                break
+              fi
+            done
+          fi
+          echo "Skeleton path: $skeletonPath"
+          echo "Animation: $animation"
+
+          if [ -z "$skeletonPath" ] || [ ! -f "$skeletonPath" ]; then
+            echo "Skeleton JSON not found, using fallback duration 0 to let browser calculate"
+            echo "anim_duration=0" >> $GITHUB_OUTPUT
+          else
+            duration=$(node -e "
+              const fs = require('fs');
+              const animName = '$animation';
+              const data = JSON.parse(fs.readFileSync('$skeletonPath', 'utf8'));
+              const anim = data.animations && data.animations[animName];
+              if (!anim) { console.log(0); process.exit(0); }
+              let max = 0;
+              const traverse = (obj) => {
+                if (Array.isArray(obj)) {
+                  obj.forEach(item => { if (item && typeof item.time === 'number' && item.time > max) max = item.time; });
+                } else if (obj && typeof obj === 'object') {
+                  Object.values(obj).forEach(traverse);
+                }
+              };
+              traverse(anim);
+              console.log(max > 0 ? max.toFixed(4) : 0);
+            " 2>/dev/null || echo "0")
+            echo "Computed duration: ${duration}s"
+            echo "anim_duration=${duration}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Export WebM preview
         id: export
         run: |
-          echo "=== DEBUG: STARTING EXPORT ==="
+          echo "=== STARTING EXPORT ==="
           uploadId="${{ github.event.client_payload.uploadId }}"
           animation="${{ github.event.client_payload.animation }}"
-          origin="${{ github.event.client_payload.origin }}"
-          owner="${{ github.event.client_payload.owner }}"
-          repo="${{ github.event.client_payload.repo }}"
-          branch="${{ github.event.client_payload.branch }}"
+          animDuration="${{ steps.duration.outputs.anim_duration }}"
           
           echo "Upload ID: $uploadId"
           echo "Animation: $animation"
-          echo "Origin: $origin"
-          echo "Owner: $owner"
-          echo "Repo: $repo"
-          
+          echo "Animation duration: ${animDuration}s"
+
           node scripts/spine-export-webm.mjs \
             --upload-id="${{ github.event.client_payload.uploadId }}" \
             --animation="${{ github.event.client_payload.animation }}" \
@@ -108,263 +105,139 @@ jobs:
             --repo="${{ github.event.client_payload.repo }}" \
             --branch="${{ github.event.client_payload.branch }}" \
             --repo-path="${{ github.workspace }}" \
+            --anim-duration="${animDuration}" \
             --output="${{ github.workspace }}/${{ github.event.client_payload.uploadId }}-preview.webm"
           echo "=== EXPORT COMPLETED ==="
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Debug - Check output file
-        if: always()
+      - name: Commit and Push Atomically
         run: |
-          echo "=== DEBUG: CHECKING OUTPUT ==="
           uploadId="${{ github.event.client_payload.uploadId }}"
-          if [ -f "${{ github.workspace }}/${{ github.event.client_payload.uploadId }}-preview.webm" ]; then
-            echo "WebM file exists"
-            ls -lh "${{ github.workspace }}/${{ github.event.client_payload.uploadId }}-preview.webm"
-          else
-            echo "ERROR: WebM file not found"
-            ls -la "${{ github.workspace }}/"
-          fi
-
-      - name: Upload webm to GitHub
-        id: upload
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const uploadId = '${{ github.event.client_payload.uploadId }}';
-            const basePath = 'library';
-            const previewPath = `${basePath}/${uploadId}/preview.webm`;
-            const webmPath = `${{ github.workspace }}/${uploadId}-preview.webm`;
+          origin="${{ github.event.client_payload.origin }}"
+          basePath="library"
+          indexPath="${basePath}/index.json"
+          metaPath="${{ github.workspace }}/${uploadId}-preview.webm.json"
+          
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          MAX_RETRIES=20
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i/$MAX_RETRIES..."
             
-            console.log("=== DEBUG: UPLOADING FILE ===");
-            console.log("WebM path:", webmPath);
-            console.log("File exists:", fs.existsSync(webmPath));
+            # 1. Always fetch fresh state first — no rebase conflicts possible
+            git fetch origin main
+            git reset --hard origin/main
             
-            if (!fs.existsSync(webmPath)) {
-              core.setFailed(`File not found: ${webmPath}`);
-              return;
-            }
+          # 2. Copy media files on top of fresh state
+          mkdir -p "${basePath}/${uploadId}"
+          for ext in "webm" "webp"; do
+            for suffix in "" "-medium" "-low"; do
+              # Script outputs: {uploadId}-preview{suffix}.webm
+              f="${uploadId}-preview${suffix}.${ext}"
+              if [ -f "$f" ]; then
+                # Rename to: preview{suffix}.webm (inside uploadId dir)
+                cp "$f" "${basePath}/${uploadId}/preview${suffix}.${ext}"
+                echo "Copied: $f -> ${basePath}/${uploadId}/preview${suffix}.${ext}"
+              fi
+            done
+          done
             
-            const content = fs.readFileSync(webmPath, 'base64');
-            const stats = fs.statSync(webmPath);
-            console.log("File size:", stats.size, "bytes");
-
-            const branch = '${{ github.event.client_payload.branch }}' || 'main';
-
-            async function getSha(path) {
-              try {
-                const { data } = await github.rest.repos.getContent({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  path,
-                  ref: branch,
-                });
-                return data.sha;
-              } catch {
-                return null;
+            # 3. Update index.json on top of fresh state
+            node -e "
+              const fs = require('fs');
+              const uploadId = '$uploadId';
+              const origin = '$origin';
+              const basePath = '$basePath';
+              const indexPath = '$indexPath';
+              const metaPath = '$metaPath';
+              
+              const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+              let videoMeta = {};
+              let isError = false;
+              if (fs.existsSync(metaPath)) {
+                try { videoMeta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); if (videoMeta.error) isError = true; } catch(e) {}
               }
-            }
-
-            const existingSha = await getSha(previewPath);
-            console.log("Existing SHA:", existingSha);
-
-            const result = await github.rest.repos.createOrUpdateFileContents({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path: previewPath,
-              message: `Add WebM preview for ${uploadId}`,
-              content,
-              branch,
-              ...(existingSha ? { sha: existingSha } : {}),
-            });
-
-            const webmUrl = `${{ github.event.client_payload.origin }}/assets/${previewPath}`;
-            console.log("=== DEBUG: FILE UPLOADED ===");
-            console.log("Uploaded:", webmUrl);
-            console.log("Result:", JSON.stringify(result, null, 2));
-            
-            // Verify file availability
-            console.log("=== DEBUG: VERIFYING FILE AVAILABILITY ===");
-            try {
-              const verify = await github.rest.repos.getContent({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: previewPath,
-                ref: branch,
+              
+              const uploadedUrls = {};
+              const targetDir = basePath + '/' + uploadId;
+              
+              ['', '-medium', '-low'].forEach(suffix => {
+                const webmF = 'preview' + suffix + '.webm';
+                const webpF = 'preview' + suffix + '.webp';
+                if (fs.existsSync(targetDir + '/' + webmF)) {
+                  let k = 'webmPreview'; if (suffix === '-medium') k = 'webmPreviewMedium'; if (suffix === '-low') k = 'webmPreviewLow';
+                  uploadedUrls[k] = origin + '/assets/' + basePath + '/' + uploadId + '/' + webmF;
+                }
+                if (fs.existsSync(targetDir + '/' + webpF)) {
+                  let k = 'webpPoster'; if (suffix === '-medium') k = 'webpPosterMedium'; if (suffix === '-low') k = 'webpPosterLow';
+                  uploadedUrls[k] = origin + '/assets/' + basePath + '/' + uploadId + '/' + webpF;
+                }
               });
-              console.log("File verification successful:", !!verify.data?.download_url);
-              console.log("Download URL:", verify.data?.download_url);
-            } catch (err) {
-              console.log("File verification failed:", err.message);
-            }
-            
-            core.setOutput('webm_url', webmUrl);
-
-      - name: Upload webp posters and update index
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const uploadId = '${{ github.event.client_payload.uploadId }}';
-            const basePath = 'library';
-            const origin = '${{ github.event.client_payload.origin }}';
-            const branch = '${{ github.event.client_payload.branch }}' || 'main';
-            const workspace = '${{ github.workspace }}';
-
-            const webpFiles = [
-              { local: `${workspace}/${uploadId}-preview.webp`, repoPath: `${basePath}/${uploadId}/preview.webp`, key: 'webpPoster' },
-              { local: `${workspace}/${uploadId}-preview-medium.webp`, repoPath: `${basePath}/${uploadId}/preview-medium.webp`, key: 'webpPosterMedium' },
-              { local: `${workspace}/${uploadId}-preview-low.webp`, repoPath: `${basePath}/${uploadId}/preview-low.webp`, key: 'webpPosterLow' },
-            ];
-
-            const webpResults = {};
-
-            for (const f of webpFiles) {
-              if (!fs.existsSync(f.local)) {
-                console.log(`WebP not found: ${f.local}, skipping`);
-                continue;
+              
+              const entryIndex = indexData.findIndex(e => e.id === uploadId);
+              if (entryIndex !== -1) {
+                delete indexData[entryIndex].webmChunksJson;
+                delete indexData[entryIndex].webmChunks;
+                delete indexData[entryIndex].webmChunkCount;
+                delete indexData[entryIndex].webmIsChunked;
+                
+                indexData[entryIndex] = {
+                  ...indexData[entryIndex],
+                  ...uploadedUrls,
+                  webmPreviewPath: isError ? undefined : \`\${basePath}/\${uploadId}/preview.webm\`,
+                  webmStatus: isError ? 'error' : 'ready',
+                  webmError: isError ? videoMeta.error : undefined,
+                  webmGeneratedAt: new Date().toISOString(),
+                  ...(videoMeta.width > 0 ? { previewWidth: videoMeta.width } : {}),
+                  ...(videoMeta.height > 0 ? { previewHeight: videoMeta.height } : {}),
+                  ...(videoMeta.animationDuration > 0 ? { previewDuration: videoMeta.animationDuration } : {}),
+                  ...(videoMeta.skeletonWidth > 0 ? { skeletonWidth: videoMeta.skeletonWidth } : {}),
+                  ...(videoMeta.skeletonHeight > 0 ? { skeletonHeight: videoMeta.skeletonHeight } : {}),
+                };
               }
-              const content = fs.readFileSync(f.local, 'base64');
-              const stats = fs.statSync(f.local);
-              console.log(`Uploading WebP: ${f.local} (${stats.size} bytes)`);
-
-              let existingSha = null;
-              try {
-                const existing = await github.rest.repos.getContent({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  path: f.repoPath,
-                  ref: branch,
-                });
-                existingSha = existing.data.sha;
-              } catch {}
-
-              const result = await github.rest.repos.createOrUpdateFileContents({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: f.repoPath,
-                message: `Add WebP poster for ${uploadId}`,
-                content,
-                branch,
-                ...(existingSha ? { sha: existingSha } : {}),
-              });
-
-              const url = `${origin}/assets/${f.repoPath}`;
-              webpResults[f.key] = url;
-              console.log(`Uploaded WebP: ${url}`);
-            }
-
-            // Update index entry with webp poster URLs
-            const indexPath = `${basePath}/index.json`;
-            const { data: indexData } = await github.rest.repos.getContent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path: indexPath,
-              ref: branch,
-            });
-
-            const content = Buffer.from(indexData.content, 'base64').toString('utf8');
-            const entries = JSON.parse(content);
-            const entryIndex = entries.findIndex(e => e.id === uploadId);
-
-            if (entryIndex !== -1) {
-              entries[entryIndex] = {
-                ...entries[entryIndex],
-                ...webpResults,
-                posterGeneratedAt: new Date().toISOString(),
-              };
-
-              const newContent = Buffer.from(JSON.stringify(entries, null, 2)).toString('base64');
-              await github.rest.repos.createOrUpdateFileContents({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: indexPath,
-                message: `Update WebP posters for ${uploadId}`,
-                content: newContent,
-                sha: indexData.sha,
-                branch,
-              });
-              console.log(`Updated index with WebP posters for ${uploadId}`);
-            }
-
-            core.setOutput('webp_urls', JSON.stringify(webpResults));
-
-      - name: Update index entry with webmPreview
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const uploadId = '${{ github.event.client_payload.uploadId }}';
-            const webmUrl = '${{ steps.upload.outputs.webm_url }}';
-            const basePath = 'library';
-            const indexPath = `${basePath}/index.json`;
-
-            console.log("=== DEBUG: UPDATING INDEX ===");
-            console.log("Upload ID:", uploadId);
-            console.log("WebM URL:", webmUrl);
-            console.log("Index path:", indexPath);
-
-            const branch = '${{ github.event.client_payload.branch }}' || 'main';
-
-            const { data: indexData } = await github.rest.repos.getContent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path: indexPath,
-              ref: branch,
-            });
-
-            console.log("Index fetched, SHA:", indexData.sha);
-
-            const content = Buffer.from(indexData.content, 'base64').toString('utf8');
-            const entries = JSON.parse(content);
-            console.log("Total entries:", entries.length);
+              fs.writeFileSync(indexPath, JSON.stringify(indexData, null, 2));
+            "
             
-            const entryIndex = entries.findIndex(e => e.id === uploadId);
-            const webmExists = fs.existsSync(webmPath);
-            console.log("Entry index:", entryIndex);
-
-            if (entryIndex === -1) {
-              console.log(`Entry ${uploadId} not found in index, skipping update`);
-              return;
-            }
-
-            entries[entryIndex] = {
-              ...entries[entryIndex],
-              webmPreview: webmExists ? webmUrl : undefined,
-              webmPreviewPath: webmExists ? `${basePath}/${uploadId}/preview.webm` : undefined,
-              webmStatus: webmExists ? 'ready' : 'error',
-              webmGeneratedAt: new Date().toISOString(),
-            };
-
-            const newContent = Buffer.from(JSON.stringify(entries, null, 2)).toString('base64');
-            console.log("New content size:", Buffer.byteLength(newContent), "bytes");
-
-            await github.rest.repos.createOrUpdateFileContents({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path: indexPath,
-              message: `Update WebM preview for ${uploadId}`,
-              content: newContent,
-              sha: indexData.sha,
-              branch,
-            });
-
-            console.log("=== DEBUG: INDEX UPDATED ===");
+            # 4. Stage and commit
+            git add library/
+            if git diff-index --quiet HEAD --; then
+              echo "No changes to commit (perhaps already processed?)"
+              exit 0
+            fi
             
-            // Verify index update
-            const verifyIndex = await github.rest.repos.getContent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path: indexPath,
-              ref: branch,
-            });
+            git commit -m "Auto-export media for ${uploadId}"
             
-            const verifyContent = Buffer.from(verifyIndex.data.content, 'base64').toString('utf8');
-            const verifyEntries = JSON.parse(verifyContent);
-            const verifyEntry = verifyEntries.find(e => e.id === uploadId);
-            
-            console.log("=== DEBUG: VERIFYING INDEX UPDATE ===");
-            console.log("Entry webmStatus:", verifyEntry?.webmStatus);
-            console.log("Entry webmPreview:", verifyEntry?.webmPreview);
-            
-            console.log(`Updated index entry ${uploadId} with webmPreview`);
+            # 5. Push — if rejected, loop back with fresh HEAD
+            if git push origin main; then
+              echo "Successfully committed and pushed on attempt $i!"
+              exit 0
+            else
+              echo "Push rejected. Retrying with fresh HEAD..."
+              sleep $((RANDOM % 5 + 2))
+            fi
+          done
+          
+          echo "Failed to push after $MAX_RETRIES attempts."
+          exit 1
+
+      - name: Trigger full animation export (background)
+        if: success()
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d "{
+              \"event_type\": \"spine-export-full\",
+              \"client_payload\": {
+                \"uploadId\": \"${{ github.event.client_payload.uploadId }}\",
+                \"origin\": \"${{ github.event.client_payload.origin }}\",
+                \"owner\": \"${{ github.event.client_payload.owner }}\",
+                \"repo\": \"${{ github.event.client_payload.repo }}\",
+                \"branch\": \"${{ github.event.client_payload.branch }}\"
+              }
+            }"
+          echo "Dispatched spine-export-full for ${{ github.event.client_payload.uploadId }}"

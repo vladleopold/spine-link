@@ -425,9 +425,16 @@ function feedScore(entry, metrics) {
   return metric.likes * 12 + metric.views * 3 + recency;
 }
 
+function previewDurationSeconds(entry) {
+  const value = Number(entry?.previewDuration);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 function homepageFeedEntries(origin, entries, metrics) {
   const scoredEntries = entries
     .filter((entry) => entry?.hiddenFromPublicLibrary !== true && (entry?.webmPreview || entry?.thumbnailPoster || entry?.thumbnail))
+    // Лента показывает только анимации с реальным превью длинной не меньше 2 секунд.
+    .filter((entry) => previewDurationSeconds(entry) >= 2)
     .map((entry) => ({ entry, score: feedScore(entry, metrics) }))
     .sort((a, b) => b.score - a.score || compareArchiveEntries(a.entry, b.entry));
   const topPool = scoredEntries.slice(0, Math.min(96, Math.max(24, scoredEntries.length))).map(({ entry }) => entry);
