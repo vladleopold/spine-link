@@ -356,10 +356,14 @@ let censorshipListsPromise: Promise<{ blocked: string[]; allowed: string[] }> | 
 
 async function loadCensorshipLists(): Promise<{ blocked: string[]; allowed: string[] }> {
   if (!censorshipListsPromise) {
+    // The admin page reads these through get-admin-settings, which is the
+    // same endpoint that returns blockchain anchoring and add-more-work
+    // flags, so the home page uses it too and stays in sync with the
+    // censorship.json the admin edits.
     censorshipListsPromise = fetch("/api/github-upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "get-censorship" }),
+      body: JSON.stringify({ action: "get-admin-settings" }),
     })
       .then((r) => r.json().catch(() => ({})))
       .then((d) => ({

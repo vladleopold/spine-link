@@ -8360,6 +8360,43 @@ h1 {
 
 /* Upload page: no page scroll — the panel fills the viewport and the
    animation list scrolls inside it, so nothing is cut off on small screens. */
+/* Upload/create page: the whole shell fills the viewport with no page
+   scrollbar — the inspector column scrolls internally instead. The form is
+   adaptive: it shrinks on narrow screens and never pushes content off-screen. */
+.app-shell.is-upload-page {
+  height: 100vh;
+  overflow: hidden;
+}
+.app-shell.is-upload-page .app-shell-inner {
+  height: 100%;
+  overflow: hidden;
+}
+.app-shell.is-upload-page .portfolio-upload-form {
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140,199,255,0.25) transparent;
+}
+.app-shell.is-upload-page .portfolio-upload-form::-webkit-scrollbar { width: 8px; }
+.app-shell.is-upload-page .portfolio-upload-form::-webkit-scrollbar-thumb {
+  background: rgba(140,199,255,0.25); border-radius: 4px;
+}
+.app-shell.is-upload-page .animation-grid {
+  max-height: 42vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140,199,255,0.25) transparent;
+}
+.app-shell.is-upload-page .animation-grid::-webkit-scrollbar { width: 8px; }
+.app-shell.is-upload-page .animation-grid::-webkit-scrollbar-thumb {
+  background: rgba(140,199,255,0.25); border-radius: 4px;
+}
+@media (max-width: 640px) {
+  .app-shell.is-upload-page .portfolio-upload-form { padding: 10px; gap: 10px; }
+  .app-shell.is-upload-page .portfolio-upload-form .drop-zone { min-height: 120px; padding: 14px; }
+  .app-shell.is-upload-page .animation-grid { max-height: 34vh; }
+}
+
 .app-shell.is-empty.is-upload-page:not(.is-edit-page) {
   overflow: hidden;
   height: 100%;
