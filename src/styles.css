@@ -2678,6 +2678,19 @@ h1 {
     transform 140ms ease;
 }
 
+.animation-download-group {
+  margin-bottom: 10px;
+}
+.animation-download-group:last-child { margin-bottom: 0; }
+.animation-download-group-title {
+  color: #6f86a8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
 .animation-download-button:hover {
   border-color: rgba(140, 199, 255, 0.7);
   background: rgba(71, 156, 255, 0.22);

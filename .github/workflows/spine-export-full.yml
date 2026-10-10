@@ -30,10 +30,15 @@ jobs:
           UPLOAD_ID="${{ github.event.client_payload.uploadId }}"
           echo "=== Reading animations for: $UPLOAD_ID ==="
 
-          RESULT=$(node -e "
-            const fs = require('fs');
-            const index = JSON.parse(fs.readFileSync('library/index.json', 'utf8'));
-            const entry = index.find(e => e.id === '$UPLOAD_ID');
+          RESULT=$(node --input-type=module -e "
+            import { entryForUpload } from './scripts/resolve-library.mjs';
+            const found = entryForUpload(process.cwd(), '$UPLOAD_ID');
+            const entry = found ? found.entry : null;
+            // Diagnostics go to stderr so they never pollute the JSON the shell
+            // captures into $RESULT — a stray console.log line used to break
+            // the downstream JSON.parse with "Unexpected token 'C'".
+            const log = (...a) => process.stderr.write(a.join(' ') + '\n');
+            if (found) log('Collection folder: ' + found.basePath);
             if (!entry || !Array.isArray(entry.animations) || entry.animations.length === 0) {
               console.log(JSON.stringify({ matrix: [], has_items: false }));
             } else {
@@ -85,7 +90,7 @@ jobs:
             libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
             libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
             libatspi2.0-0 libwayland-client0 libwayland-cursor0 \
-            libwayland-egl1 ffmpeg
+            libwayland-egl1 ffmpeg webp
 
       - name: Export WebM preview (opaque · 3 qualities)
         id: export-webm
@@ -203,7 +208,7 @@ jobs:
             libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
             libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
             libatspi2.0-0 libwayland-client0 libwayland-cursor0 \
-            libwayland-egl1 ffmpeg
+            libwayland-egl1 ffmpeg webp
 
       - name: Export transparent WebM (alpha VP9 · 3 qualities)
         id: export-alpha
@@ -248,6 +253,36 @@ jobs:
           echo "$SAFE" > "$DIR/safe-name.txt"
           echo "type=alpha" > "$DIR/export-type.txt"
 
+          # From each transparent WebM the site also offers MOV (ProRes 4444,
+          // keeps the alpha), GIF (palette-based) and a PNG sequence (one PNG
+          // per frame, keeps the alpha). All three are derived from the alpha
+          // WebM so they carry the same transparency and the same 3-quality
+          // ladder as the WebM itself.
+          for suffix in "" "-medium" "-low"; do
+            SRC="$DIR/${UPLOAD_ID}-anim-${SAFE}-alpha${suffix}.webm"
+            [ -f "$SRC" ] || continue
+
+            # MOV with alpha — prores_ks in yuva444p preserves transparency.
+            ffmpeg -y -v error -i "$SRC"               -c:v prores_ks -profile:v 4 -pix_fmt yuva444p               "$DIR/${UPLOAD_ID}-anim-${SAFE}-alpha${suffix}.mov"
+
+            # GIF — two-pass palette. The alpha channel of the source is
+            // folded into the 1-bit transparency of the GIF.
+            ffmpeg -y -v error -i "$SRC"               -vf "fps=15,scale=360:-1:flags=lanczos,split[s0][p1];[s0]palettegen[p];[p][p1]paletteuse"               "$DIR/${UPLOAD_ID}-anim-${SAFE}-alpha${suffix}.gif"
+
+            # PNG sequence — one PNG per frame, alpha channel kept, packed
+            // into a single zip so it ships as one downloadable file.
+            TMPDIR="$DIR/pngseq${suffix//-/}"
+            mkdir -p "$TMPDIR"
+            ffmpeg -y -v error -i "$SRC" -vsync vfr "$TMPDIR/frame-%04d.png"
+            if [ -d "$TMPDIR" ] && [ "$(ls -A "$TMPDIR" 2>/dev/null)" ]; then
+              (cd "$TMPDIR" && zip -q -j "../${UPLOAD_ID}-anim-${SAFE}-alpha${suffix}.png.zip" .)
+              rm -rf "$TMPDIR"
+            else
+              rm -rf "$TMPDIR"
+              echo "No PNG frames for suffix: $suffix"
+            fi
+          done
+
           ls -lah "$DIR/"
 
       - name: Upload alpha artifact
@@ -269,6 +304,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
+    # Every commit job writes library_NN/index.json in the same branch, so they
+    # must take turns: a concurrent push is rejected by the branch lock and the
+    # loser rebuilds on a HEAD the winner has already moved.
+    concurrency:
+      group: spine-library-commit
+      cancel-in-progress: false
 
     steps:
       - name: Checkout repository
@@ -297,8 +339,14 @@ jobs:
         run: |
           UPLOAD_ID="${{ github.event.client_payload.uploadId }}"
           ORIGIN="${{ github.event.client_payload.origin }}"
-          BASE_PATH="library"
+          # The work may live in any library_NN collection, and the active one
+          # moves as the library rotates, so the folder is resolved by upload id.
+          BASE_PATH=$(node --input-type=module -e "
+            import { collectionPathForUpload } from './scripts/resolve-library.mjs';
+            console.log(collectionPathForUpload(process.cwd(), process.argv[1]));
+          " "$UPLOAD_ID")
           INDEX_PATH="${BASE_PATH}/index.json"
+          echo "Collection folder for $UPLOAD_ID: $BASE_PATH"
 
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -307,9 +355,12 @@ jobs:
           for i in $(seq 1 $MAX_RETRIES); do
             echo "=== Attempt $i/$MAX_RETRIES ==="
 
-            # 1. Always start from fresh remote HEAD to avoid conflicts
-            git fetch origin main
-            git reset --hard origin/main
+            # 1. Always start from fresh remote HEAD to avoid conflicts.
+            # Shallow checkouts do not refresh origin/main on a plain fetch, so
+            # FETCH_HEAD is used directly; otherwise every retry rebuilt on the
+            # stale HEAD and the push was rejected all the same.
+            git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+            git reset --hard refs/remotes/origin/main
 
             # 2. Process all downloaded artifacts and update index.json
             node -e "
@@ -377,6 +428,18 @@ jobs:
                     else if (file === prefix + 'alpha.webm')          allAnimPreviews[animName].webmAlpha = url;
                     else if (file === prefix + 'alpha-medium.webm')   allAnimPreviews[animName].webmAlphaMedium = url;
                     else if (file === prefix + 'alpha-low.webm')      allAnimPreviews[animName].webmAlphaLow = url;
+                    # MOV with alpha (ProRes 4444)
+                    else if (file === prefix + 'alpha.mov')            allAnimPreviews[animName].movAlpha = url;
+                    else if (file === prefix + 'alpha-medium.mov')    allAnimPreviews[animName].movAlphaMedium = url;
+                    else if (file === prefix + 'alpha-low.mov')       allAnimPreviews[animName].movAlphaLow = url;
+                    # GIF (derived from the alpha WebM)
+                    else if (file === prefix + 'alpha.gif')            allAnimPreviews[animName].gifAlpha = url;
+                    else if (file === prefix + 'alpha-medium.gif')    allAnimPreviews[animName].gifAlphaMedium = url;
+                    else if (file === prefix + 'alpha-low.gif')       allAnimPreviews[animName].gifAlphaLow = url;
+                    # PNG sequence (one PNG per frame, zip-packed)
+                    else if (file === prefix + 'alpha.png.zip')        allAnimPreviews[animName].pngAlpha = url;
+                    else if (file === prefix + 'alpha-medium.png.zip') allAnimPreviews[animName].pngAlphaMedium = url;
+                    else if (file === prefix + 'alpha-low.png.zip')    allAnimPreviews[animName].pngAlphaLow = url;
                   }
                 }
               }
@@ -395,7 +458,7 @@ jobs:
             "
 
             # 3. Stage everything
-            git add library/
+            git add "$BASE_PATH"
             if git diff-index --quiet HEAD --; then
               echo "No changes to commit — all animations already up to date."
               exit 0

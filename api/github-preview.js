@@ -707,11 +707,94 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3) {
   return found;
 }
 
+// Download buttons for the work page sidebar — mirrors the editor block in
+// src/SpineApp.tsx so the server-rendered /p/<id> page offers the same files.
+// Each animation in `entry.allAnimationPreviews` carries its own set of URLs;
+// the "All" variants fall back to whichever animation actually has the file.
+function animationDownloadButton(label, url) {
+  const safe = safePublicAsset(url);
+  if (!safe) return "";
+  return `<a class="animation-download-button" href="${escapeHtml(safe)}" download rel="noreferrer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0-12l4 4m-4-4-4 4M5 17v3h14v-3"/></svg> ${escapeHtml(label)}</a>`;
+}
+
+function animationDownloadBlock(entry) {
+  const previews = entry && entry.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
+    ? entry.allAnimationPreviews
+    : null;
+  if (!previews || !Object.keys(previews).length) return "";
+
+  const pick = (name, keys) => {
+    const p = previews[name];
+    if (!p) return "";
+    for (const k of keys) {
+      const v = p[k];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return "";
+  };
+
+  const rows = [];
+  const qualities = [
+    { label: 'high', suffix: '', tag: '1080p' },
+    { label: 'medium', suffix: 'Medium', tag: '720p' },
+    { label: 'low', suffix: 'Low', tag: '360p' },
+  ];
+
+  const webm = [];
+  const mp4 = [];
+  const mov = [];
+  const gif = [];
+  const png = [];
+  for (const name of Object.keys(previews)) {
+    for (const q of qualities) {
+      if (pick(name, ['webm' + q.suffix + 'Preview'])) webm.push(animationDownloadButton(`WebM · ${q.tag}`, pick(name, ['webm' + q.suffix + 'Preview'])));
+      if (pick(name, ['mp4' + q.suffix + 'Preview'])) mp4.push(animationDownloadButton(`MP4 · ${q.tag}`, pick(name, ['mp4' + q.suffix + 'Preview'])));
+      if (pick(name, ['mov' + q.suffix + 'Alpha'])) mov.push(animationDownloadButton(`MOV α · ${q.tag}`, pick(name, ['mov' + q.suffix + 'Alpha'])));
+      if (pick(name, ['gif' + q.suffix + 'Alpha'])) gif.push(animationDownloadButton(`GIF α · ${q.tag}`, pick(name, ['gif' + q.suffix + 'Alpha'])));
+      if (pick(name, ['png' + q.suffix + 'Alpha'])) png.push(animationDownloadButton(`PNG seq α · ${q.tag}`, pick(name, ['png' + q.suffix + 'Alpha'])));
+    }
+  }
+
+  // "All animations" variants: scan every animation for the first file that exists.
+  const allKeys = (keys) => {
+    for (const name of Object.keys(previews)) {
+      const u = pick(name, keys);
+      if (u) return u;
+    }
+    return "";
+  };
+  const allMov = animationDownloadButton('All MOV α · 1080p', allKeys(['movAlpha']));
+  const allGif = animationDownloadButton('All GIF α · 1080p', allKeys(['gifAlpha']));
+  const allPng = animationDownloadButton('All PNG seq α · 1080p', allKeys(['pngAlpha']));
+
+  const section = (title, buttons) => {
+    const items = [...new Set(buttons)].filter(Boolean).join("");
+    if (!items) return "";
+    return `<div class="animation-download-group"><div class="animation-download-group-title">${escapeHtml(title)}</div><div class="animation-download-row">${items}</div></div>`;
+  };
+
+  const groups = [
+    section('WebM', webm),
+    section('MP4', mp4),
+    section('MOV with alpha', [...mov, allMov]),
+    section('GIF with alpha', [...gif, allGif]),
+    section('PNG sequence with alpha', [...png, allPng]),
+  ].filter(Boolean).join("");
+
+  if (!groups) return "";
+
+  return `<div class="animation-download-block">
+    <div class="animation-download-title">Download animations</div>
+    ${groups}
+  </div>`;
+}
+
 function createHtml(config) {
   const video = config.video || null;
   const origin = config.origin || 'https://spine-link.vercel.app';
   const entryMetricId = String(config.entryId || 'spine-preview');
   const metric = metricCountsForId(config.metrics, entryMetricId);
+  const entry = config.entry || {};
   const clientConfig = {
     ...config,
     metrics: {
@@ -1032,6 +1115,7 @@ function createHtml(config) {
           <div class="preview-card" id="set-card"><div class="section-title">Set</div><select id="set-select"></select></div>
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
           <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
+          ${animationDownloadBlock(entry)}
           ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<details class="preview-card proof-card"><summary class="section-title">Origin proof</summary><div class="proof-links">${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div></details>` : ''}
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
@@ -2101,7 +2185,7 @@ async function createDynamicPreview(settings, uploadPath, origin) {
     };
   }
   return {
-    html: createHtml({ sets, note, ownerProfile, entryId, origin, video, metrics, robots, playerUrl, archiveUrl }),
+    html: createHtml({ sets, note, ownerProfile, entryId, entry, origin, video, metrics, robots, playerUrl, archiveUrl }),
     robots,
   };
 }
