@@ -415,9 +415,13 @@ function isPublicArchiveEntry(entry, exclusions) {
 
 function videoMetadataForEntry(origin, entry, entryId, note = '', canonicalUrl = '', embedUrl = '') {
   const id = String(entry?.id || entryId || '').trim();
-  const contentUrl = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  // Prefer the preview of an animation that is actually long enough to show as
+  // a moving clip. A 1-frame `idle` preview is a still image, so the video-watch
+  // panel and the SEO metadata would otherwise surface a zero-length video.
+  const target = resolvePreviewTarget(entry);
+  const contentUrl = entryVideoAsset(target.url || entry?.webmPreview || '', entry, 'webm');
   const poster =
-    entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') ||
+    entryImageAsset(target.poster || entry?.thumbnailPoster || '', entry, 'poster') ||
     generatedThumbnailUrl(origin, entry) ||
     entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
   if (!id || !contentUrl || !poster) return null;
@@ -441,7 +445,7 @@ function videoMetadataForEntry(origin, entry, entryId, note = '', canonicalUrl =
     proofHash: sanitizeSha256(entry?.sourceProof?.proofHash || entry?.blockchainAnchor?.sourceProofHash),
     anchorHash: sanitizeSha256(entry?.blockchainAnchor?.anchorHash),
     uploadDate: isoDate(entry?.uploadedAt) || '2026-05-04T00:00:00.000Z',
-    duration: durationToIso8601(entry?.previewDuration),
+    duration: durationToIso8601(Number.isFinite(target.duration) && target.duration > 0 ? target.duration : entry?.previewDuration),
     width: positiveInteger(entry?.previewWidth),
     height: positiveInteger(entry?.previewHeight),
   };
@@ -711,6 +715,57 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3) {
 // src/SpineApp.tsx so the server-rendered /p/<id> page offers the same files.
 // Each animation in `entry.allAnimationPreviews` carries its own set of URLs;
 // the "All" variants fall back to whichever animation actually has the file.
+// Resolves which preview a work should present as its moving thumbnail.
+//
+// A work is created from one Spine skeleton that can carry several animations
+// (idle, win, …). The exporter records one preview per animation, but the work
+// only has a single "main" preview — the one for its defaultAnimation. When
+// that animation is a 1–3 frame clip (e.g. an `idle` that is a single held
+// frame) the resulting WebM is effectively a still image: the owner-thumb and
+// the video-watch panel show a zero-length video and the user sees nothing
+// moving.
+//
+// This resolver checks the chosen animation's preview duration. If it is too
+// short (< 2 s) it walks the remaining animations in declaration order and
+// returns the first one whose preview is long enough. The returned object
+// carries the URL, the poster and the duration so every consumer (owner card,
+// video-watch panel, SEO metadata) renders the same moving clip.
+function resolvePreviewTarget(entry) {
+  const previews = entry && entry.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
+    ? entry.allAnimationPreviews
+    : null;
+  const animations = Array.isArray(entry?.animations) ? entry.animations : (previews ? Object.keys(previews) : []);
+  const chosen = String(entry?.defaultAnimation || '').trim();
+
+  const pick = (name) => {
+    const p = previews && previews[name];
+    if (!p) return null;
+    return {
+      name,
+      url: typeof p.webmPreview === 'string' && p.webmPreview.trim() ? p.webmPreview.trim() : '',
+      poster: typeof p.webpPoster === 'string' && p.webpPoster.trim() ? p.webpPoster.trim() : '',
+      duration: Number(p.previewDuration),
+    };
+  };
+
+  const order = [];
+  if (chosen && animations.includes(chosen)) order.push(chosen);
+  for (const a of animations) if (!order.includes(a)) order.push(a);
+
+  const candidates = order.map(pick).filter(Boolean);
+  const first = candidates[0] || null;
+  const fallback = candidates.find((c) => Number.isFinite(c.duration) && c.duration >= 2) || null;
+  const target = fallback || first;
+
+  return {
+    name: target ? target.name : chosen,
+    url: target ? target.url : (typeof entry?.webmPreview === 'string' ? entry.webmPreview.trim() : ''),
+    poster: target ? target.poster : '',
+    duration: target ? target.duration : Number(entry?.previewDuration || 0),
+    isFallback: Boolean(target && fallback && target.name !== chosen),
+  };
+}
+
 function animationDownloadButton(label, url) {
   const safe = safePublicAsset(url);
   if (!safe) return "";
@@ -2148,15 +2203,20 @@ async function createDynamicPreview(settings, uploadPath, origin) {
           })
         : [];
       ownerEntries.sort(compareLibraryEntries);
-      const ownerLibraryItems = ownerEntries.map((item) => ({
-        title: cleanPublicText(item?.title || item?.id || 'Spine preview'),
-        url: `${origin}/p/${encodeURIComponent(String(item?.id || '').trim())}`,
-        thumbnail: item?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(item?.thumbnail || '')) ? '' : entryImageAsset(item?.thumbnail || '', item, 'thumbnail'),
-        thumbnailPoster: entryImageAsset(item?.thumbnailPoster || '', item, 'poster') || generatedThumbnailUrl(origin, item),
-        webmPreview: entryVideoAsset(item?.webmPreview || '', item, 'webm'),
-        thumbnailType: '',
-        animations: Array.isArray(item?.animations) ? item.animations.length : 0,
-      }));
+      const ownerLibraryItems = ownerEntries.map((item) => {
+        const target = resolvePreviewTarget(item);
+        return {
+          title: cleanPublicText(item?.title || item?.id || 'Spine preview'),
+          url: `${origin}/p/${encodeURIComponent(String(item?.id || '').trim())}`,
+          thumbnail: item?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(item?.thumbnail || '')) ? '' : entryImageAsset(item?.thumbnail || '', item, 'thumbnail'),
+          thumbnailPoster: entryImageAsset(target.poster || item?.thumbnailPoster || '', item, 'poster') || generatedThumbnailUrl(origin, item),
+          webmPreview: entryVideoAsset(target.url || item?.webmPreview || '', item, 'webm'),
+          previewDuration: Number.isFinite(target.duration) && target.duration > 0 ? target.duration : (Number(item?.previewDuration || 0) || undefined),
+          previewAnimation: target.name || '',
+          thumbnailType: '',
+          animations: Array.isArray(item?.animations) ? item.animations.length : 0,
+        };
+      });
       ownerProfile = {
         visible: true,
         name: cleanPublicText(entry.ownerName || ownerEmail.split('@')[0] || 'anonim'),
