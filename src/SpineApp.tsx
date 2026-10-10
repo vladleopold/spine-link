@@ -307,6 +307,7 @@ type LibraryEntry = {
   fullExportStatus?: string;
   fullExportGeneratedAt?: string;
   allAnimationPreviews?: Record<string, {
+    previewDuration?: number;
     webmPreview?: string;
     webmPreviewMedium?: string;
     webmPreviewLow?: string;
