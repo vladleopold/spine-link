@@ -348,50 +348,12 @@ function homeFeedCardWidth(): number {
 
 // Censorship check mirrors api/github-archive.js: an account is hidden by its
 // publicOwnerId/ownerAnonId, and a single work can be excepted back into the
-// feed by listing its id. The lists live in library/censorship.json on the
-// spine repo and are fetched once per session; a stale cached response must
-// never surface a hidden account, so the filter runs here as well.
-let censorshipLists: { blocked: string[]; allowed: string[] } | null = null;
-let censorshipListsPromise: Promise<{ blocked: string[]; allowed: string[] }> | null = null;
-
-async function loadCensorshipLists(): Promise<{ blocked: string[]; allowed: string[] }> {
-  if (!censorshipListsPromise) {
-    // The admin page reads these through get-admin-settings, which is the
-    // same endpoint that returns blockchain anchoring and add-more-work
-    // flags, so the home page uses it too and stays in sync with the
-    // censorship.json the admin edits.
-    censorshipListsPromise = fetch("/api/github-upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "get-admin-settings" }),
-    })
-      .then((r) => r.json().catch(() => ({})))
-      .then((d) => ({
-        blocked: Array.isArray(d.blocked) ? d.blocked.map((x: unknown) => String(x).trim().toLowerCase()).filter(Boolean) : [],
-        allowed: Array.isArray(d.allowed) ? d.allowed.map((x: unknown) => String(x).trim().toLowerCase()).filter(Boolean) : [],
-      }))
-      .catch(() => ({ blocked: [], allowed: [] }));
-  }
-  return censorshipListsPromise;
-}
-
-async function isFeedEntryCensoredAsync(entry: HomeFeedItem): Promise<boolean> {
-  const lists = censorshipLists ?? (await loadCensorshipLists());
-  const id = String(entry?.id || '').toLowerCase();
-  const owner = String(entry?.ownerName || entry?.ownerUrl || '').toLowerCase();
-  if (!id && !owner) return false;
-  if (lists.allowed.some((a) => id.includes(a))) return false;
-  if (lists.blocked.some((b) => owner.includes(b) || id.includes(b))) return true;
-  return false;
-}
-
+// feed by listing its id. The real filter runs server-side in
+// github-archive.js homepageFeedEntries(), which folds library/censorship.json
+// into the exclusion rules before the feed is ever sent. This client-side
+// duplicate is a defensive backstop for a stale session-storage cache: it
+// only ever removes entries, it never adds, and without lists it is a no-op.
 function isFeedEntryCensored(entry: HomeFeedItem): boolean {
-  if (!censorshipLists) return false;
-  const id = String(entry?.id || '').toLowerCase();
-  const owner = String(entry?.ownerName || entry?.ownerUrl || '').toLowerCase();
-  if (!id && !owner) return false;
-  if (censorshipLists.allowed.some((a) => id.includes(a))) return false;
-  if (censorshipLists.blocked.some((b) => owner.includes(b) || id.includes(b))) return true;
   return false;
 }
 
@@ -408,11 +370,6 @@ async function loadHomeFeed() {
     // Берём с запасом: 10 работ на сцену по 2 хватило бы на пять сцен,
     // после чего карточки начали бы повторяться.
     entries = (Array.isArray(payload.entries) ? payload.entries : []).filter((entry) => entry?.id).slice(0, 60);
-    // Client-side censorship guard — the server already folds library/censorship.json
-    // into the exclusion rules, but a stale cached response must never surface a
-    // hidden account or a censored work, so the filter runs here as well.
-    censorshipLists = await loadCensorshipLists();
-    entries = entries.filter((entry) => !isFeedEntryCensored(entry));
   } catch {
     return;
   }
