@@ -3596,6 +3596,36 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     setSelectedCardSize(currentLibraryEntry.cardSize || "auto");
   }, [currentLibraryEntry]);
 
+  // Automatic preview fallback after publish/save.
+  //
+  // A work's "main" preview is the one for defaultAnimation. When that
+  // animation's preview is a 1-3 frame clip (an `idle` that is a single held
+  // frame) the moving thumbnail is effectively a still image. After every
+  // publish the work is re-checked: if the chosen preview is shorter than 2 s
+  // and another animation in the same skeleton has a long-enough preview, the
+  // work is re-published with that animation as defaultAnimation. This runs
+  // automatically — no user action, no confirmation.
+  useEffect(() => {
+    if (!currentLibraryEntry || !preparedSpine) return;
+    if (isPublishingLink) return;
+    const previews = currentLibraryEntry.allAnimationPreviews;
+    if (!previews || !Object.keys(previews).length) return;
+    const animations = Array.isArray(currentLibraryEntry.animations) && currentLibraryEntry.animations.length
+      ? currentLibraryEntry.animations
+      : Object.keys(previews);
+    const chosen = String(currentLibraryEntry.defaultAnimation || '').trim();
+    const chosenDur = previews[chosen] ? Number(previews[chosen].previewDuration) : NaN;
+    if (Number.isFinite(chosenDur) && chosenDur >= 2) return;
+    const fallback = animations.find((a) => {
+      const d = previews[a] ? Number(previews[a].previewDuration) : NaN;
+      return Number.isFinite(d) && d >= 2;
+    });
+    if (!fallback || fallback === chosen) return;
+    const active = activeAnimation || preparedSpine.defaultAnimation || animations[0] || "";
+    void publishToGitHub(preparedSpine, animations, fallback);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLibraryEntry?.id]);
+
   useEffect(() => {
     animationsRef.current = animations;
   }, [animations]);
