@@ -362,7 +362,12 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
       const thumbnailPoster = entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || derivedTexture;
       // No shared placeholder video: a card without its own webm renders the
       // poster only, so a fresh entry never borrows another entry's clip.
-      const webmPreview = entryVideoAsset(entry.webmPreview || '', entry, 'webm') || derivedMediaFromFiles(origin, entry, ['.webm']);
+      // The profile page is a video gallery for Google video search, so every
+      // card is presented as a moving clip. Medium (720p) is used: light enough
+      // to play several cards at once, but no longer the 360p low tier. The
+      // full-quality clip is still reachable from the dedicated video watch
+      // page (/video/<id>).
+      const webmPreview = entryVideoAsset(entry.webmPreviewMedium || entry.webmPreview || '', entry, 'webm') || derivedMediaFromFiles(origin, entry, ['.webm']);
       const isGifPreview = entry.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(rawThumbnail);
       const thumbnail = isGifPreview ? '' : rawThumbnail;
       const date = entry.uploadedAt ? new Date(entry.uploadedAt) : null;
@@ -377,12 +382,17 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
       const likeCount = metric.likes;
       const viewCount = metric.views;
       const thumbnailStyle = thumbnail || thumbnailPoster ? ` style="--library-thumbnail: url('${escapeHtml(thumbnailPoster || thumbnail)}')"` : '';
+      // The profile page is a video gallery for Google video search: every work
+      // is presented as a moving clip. First click on the clip plays it; the
+      // second click — the dedicated "Spine" button — sends the user to the
+      // interactive Spine animation page (/p/<id>) for that exact video.
       const previewMedia = `<video class="library-card-webm"${webmPreview ? ` src="${escapeHtml(webmPreview)}" data-video-src="${escapeHtml(webmPreview)}"` : ''}${thumbnailPoster || thumbnail ? ` poster="${escapeHtml(thumbnailPoster || thumbnail)}"` : ''} muted playsinline preload="metadata" autoplay aria-label="${itemTitle} video preview"></video>`;
       const likeButton = isPortfolioMode ? `<button class="portfolio-like-button" type="button" data-metric-id="${escapeHtml(likeId)}" data-metric-like data-metric-current-likes="${likeCount}" data-metric-current-views="${viewCount}" aria-pressed="false" title="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${likeCount}</strong></button>` : '';
       const cardSizeMode = entry.cardSize && entry.cardSize !== 'auto' ? 'manual' : 'auto';
       return `<article class="library-card ${libraryCardSizeClass(entry, index)}" data-entry-id="${entryId}" data-card-size-mode="${cardSizeMode}"${thumbnailStyle}>
         ${likeButton}
         <a class="library-card-link" href="${previewUrl}" aria-label="Open ${itemTitle}${isPortfolioMode ? ' in World SPINE ARCHIVE' : ''}">
+          ${webmPreview ? `<span class="library-card-spine-link" data-spine-href="${escapeHtml(playerPathForEntry(entry) || previewUrl)}" role="link" tabindex="0" aria-label="Open Spine animation for ${itemTitle}">Spine</span>` : ''}
           <div class="library-card-visual">
             ${previewMedia}
             <span class="stack-icon" aria-hidden="true"></span>
@@ -579,6 +589,38 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
       .library-card-link { position: relative; z-index: 1; display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; color: inherit; text-decoration: none; }
       .library-card-visual { position: relative; display: flex; flex: 1 1 auto; align-items: flex-end; justify-content: space-between; min-height: 0; padding: 24px; color: #fff; background: linear-gradient(rgba(9,11,13,.05), rgba(9,11,13,.18)); overflow: hidden; }
       .library-card-webm { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; opacity: .96; transform: none; transform-origin: center; pointer-events: none; }
+      /* Explicit second-click affordance: the "Spine" badge jumps straight to
+         the interactive Spine animation page for the video that is playing. */
+      .library-card-spine-link {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        z-index: 3;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 54px;
+        min-height: 28px;
+        padding: 0 10px;
+        border: 1px solid rgba(179,255,64,.72);
+        border-radius: 999px;
+        color: #eaffc2;
+        background: rgba(10,18,6,.78);
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        cursor: pointer;
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity .16s ease, transform .16s ease;
+        pointer-events: auto;
+      }
+      .library-card:hover .library-card-spine-link,
+      .library-card:focus-within .library-card-spine-link { opacity: 1; transform: translateY(0); }
+      .library-card-spine-link:hover { border-color: rgba(179,255,64,.95); background: rgba(179,255,64,.16); }
+      .library-card-spine-link:focus-visible { outline: 2px solid rgba(179,255,64,.9); outline-offset: 2px; }
+      .library-card-link { position: relative; z-index: 1; display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; color: inherit; text-decoration: none; }
       .portfolio-like-button { position: absolute; top: 14px; right: 14px; z-index: 3; display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 10px; border: 1px solid rgba(255,185,214,.42); border-radius: 999px; color: #ffe4ef; background: rgba(8,9,11,.68); box-shadow: 0 12px 30px rgba(0,0,0,.32); backdrop-filter: blur(10px); cursor: pointer; }
       .portfolio-like-button span { color: currentColor; font-size: 20px; line-height: 1; transform: translateY(-1px); }
       .portfolio-like-button strong { color: currentColor; font-size: 12px; font-weight: 950; line-height: 1; }
@@ -818,7 +860,56 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
         }, { once: true });
         scheduleChaos();
       }
-      installChaoticCardPlayback();
+      // Video gallery for Google video search: every work is presented as a
+      // moving clip. First click on a card plays that clip; the second click
+      // sends the user to the interactive Spine animation page (/p/<id>) for
+      // the video they just clicked. The "Spine" badge is the explicit second
+      // click affordance.
+      function installVideoSecondClickNavigation() {
+        document.querySelectorAll(".library-card").forEach((card) => {
+          const link = card.querySelector(".library-card-link");
+          const spineLink = card.querySelector(".library-card-spine-link");
+          if (!link) return;
+          const target = (spineLink && spineLink.dataset.spineHref) || link.getAttribute("href") || "";
+          if (!target) return;
+          let clickedOnce = false;
+          const navigate = () => { window.location.href = target; };
+          link.addEventListener("click", (event) => {
+            if (event.target.closest(".library-card-spine-link")) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (!clickedOnce) {
+              clickedOnce = true;
+              const video = card.querySelector(".library-card-webm");
+              if (video) {
+                video.muted = true;
+                video.loop = false;
+                try { video.currentTime = 0; } catch {}
+                const src = video.dataset.videoSrc || video.getAttribute("src") || "";
+                if (src && !video.getAttribute("src")) video.setAttribute("src", src);
+                video.play().catch(() => {});
+                window.setTimeout(() => { clickedOnce = false; }, 2200);
+                return;
+              }
+            }
+            navigate();
+          }, true);
+          if (spineLink) {
+            spineLink.addEventListener("click", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              navigate();
+            });
+            spineLink.addEventListener("keydown", (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                navigate();
+              }
+            });
+          }
+        });
+      }
+      installVideoSecondClickNavigation();
     </script>
     <script>window.SpineLinkMetricsConfig = {};</script>
     <script src="/spine-metrics.js" defer></script>
