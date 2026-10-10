@@ -457,6 +457,8 @@ function homepageFeedEntries(origin, entries, metrics) {
       thumbnailType: isGifThumbnail ? 'gif' : 'image',
       previewWidth: Number(entry?.previewWidth || 0) || undefined,
       previewHeight: Number(entry?.previewHeight || 0) || undefined,
+      // The feed filters on this, so it has to reach the client-facing entry.
+      previewDuration: Number(entry?.previewDuration || 0) || undefined,
       mediaAspectRatio: Number(entry?.mediaAspectRatio || 0) || undefined,
       animations: Array.isArray(entry?.animations) ? entry.animations.length : 0,
       uploadedAt: entry?.uploadedAt || '',
