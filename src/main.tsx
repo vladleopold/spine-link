@@ -972,7 +972,10 @@ function startBackgroundUpload(files: File[]) {
   const title = files.find((f) => f.name.toLowerCase().endsWith(".json"))?.name.replace(/\.[^.]+$/, "") || "Spine animation";
   const safeTitle = title.replace(/[^a-z0-9._-]/gi, "-").replace(/-+/g, "-").slice(0, 60);
   const uploadId = `${safeTitle}-${uploadedAt.replace(/[:.]/g, "-")}`;
-  const uploadPath = `library/${uploadId}`;
+  // The collection folder is chosen server-side, so the client sends only the
+  // work folder. The server joins it onto whichever library_NN folder is active
+  // and returns the real path, which the finalize step then records.
+  const uploadPath = uploadId;
   const origin = window.location.origin;
   const uploadEntry = addBackgroundUpload({
     uploadId,
@@ -998,7 +1001,7 @@ function startBackgroundUpload(files: File[]) {
       uploadPath,
       uploadedAt,
       anonymousAccount,
-      settings: { owner: "vladleopold", repo: "spine", branch: "main", basePath: "library", title },
+      settings: { owner: "vladleopold", repo: "spine", branch: "main", basePath: "", title },
       file,
       anonymousAccountId: anonymousAccount.id,
       anonymousFingerprint: anonymousAccount.fingerprint,
@@ -1024,7 +1027,7 @@ async function finalizeBackgroundUpload(entryId: string, uploadId: string, uploa
     uploadId,
     uploadPath,
     anonymousAccount,
-    settings: { owner: "vladleopold", repo: "spine", branch: "main", basePath: "library" },
+    settings: { owner: "vladleopold", repo: "spine", branch: "main", basePath: "" },
     entry: { id: uploadId, uploadedAt, previewPath: uploadPath },
     commitPrefix: "Background upload",
   });

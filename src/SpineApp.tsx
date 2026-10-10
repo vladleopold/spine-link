@@ -533,8 +533,10 @@ const githubPublishSettings: GitHubSettings = {
   owner: import.meta.env.VITE_GITHUB_OWNER ?? "vladleopold",
   repo: import.meta.env.VITE_GITHUB_REPO ?? "spine",
   branch: import.meta.env.VITE_GITHUB_BRANCH ?? "main",
-  // library is frozen and still serves the published works; uploads go to library_02.
-  basePath: import.meta.env.VITE_GITHUB_BASE_PATH ?? "library_02",
+  // Empty by default: the server resolves whichever library_NN folder is active,
+  // so a rotation moves uploads without a redeploy. VITE_GITHUB_BASE_PATH still
+  // pins a folder when a build needs to target one explicitly.
+  basePath: import.meta.env.VITE_GITHUB_BASE_PATH ?? "",
   title: "",
 };
 
@@ -4979,7 +4981,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       owner: githubPublishSettings.owner.trim(),
       repo: githubPublishSettings.repo.trim(),
       branch: githubPublishSettings.branch.trim() || "main",
-      basePath: cleanRepoPath(githubPublishSettings.basePath || "library_02"),
+      basePath: cleanRepoPath(githubPublishSettings.basePath),
       title: existingEntry?.title || githubPublishSettings.title.trim() || spine.label,
     };
 

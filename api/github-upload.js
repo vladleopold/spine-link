@@ -59,25 +59,113 @@ async function writeCensorshipLists(settings, { blocked, allowed }) {
   return payload;
 }
 
-// Newest library_NN folder: uploads go there until it fills up. Numbering starts at
-// 02 because `library` is the first permanent collection.
-async function newestLibraryBasePath(settings) {
-  if (process.env.LIBRARY_BASE_PATH) return cleanRepoPath(process.env.LIBRARY_BASE_PATH);
+// The collection that receives new uploads: the highest-numbered library_NN
+// folder that actually holds an index.json. Empty placeholder folders are
+// skipped, so a rotation that pre-created `library_90` never strands uploads
+// there. Numbering starts at 02 because `library` is the first permanent
+// collection, which is frozen and only read.
+/** Collection folders that hold an index.json, newest first. */
+async function collectionFoldersWithIndex(settings) {
   try {
     const response = await fetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
       { headers: githubHeaders(settings.token) },
     );
-    if (!response.ok) return `${DEFAULT_BASE_PATH_PREFIX}02`;
+    if (!response.ok) return [];
     const items = await response.json();
-    const highest = (Array.isArray(items) ? items : [])
+    const numbered = (Array.isArray(items) ? items : [])
       .map((item) => (item && item.type === "dir" ? String(item.name || "").match(new RegExp(`^${DEFAULT_BASE_PATH_PREFIX}(\\d+)$`)) : null))
       .filter(Boolean)
-      .reduce((max, match) => Math.max(max, Number(match[1])), 1);
-    return `${DEFAULT_BASE_PATH_PREFIX}${String(highest + 1).padStart(2, "0")}`;
-  } catch (e) {
-    return `${DEFAULT_BASE_PATH_PREFIX}02`;
+      .map((match) => ({ name: match[0], index: Number(match[1]) }))
+      .sort((a, b) => b.index - a.index);
+    const out = [];
+    for (const { name } of numbered) {
+      const folder = await fetch(
+        `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodeURIComponent(name)}/index.json?ref=${encodeURIComponent(settings.branch)}`,
+        { headers: githubHeaders(settings.token) },
+      );
+      if (folder.ok) out.push(name);
+    }
+    return out;
+  } catch {
+    return [];
   }
+}
+
+/** metrics.json of the collection that holds this work, else the active folder. */
+async function metricsPathForEntry(settings, entryId) {
+  for (const folder of await collectionFoldersWithIndex(settings)) {
+    const index = await getGitHubContent(settings, joinRepoPath(folder, 'index.json'));
+    if (!index || index.encoding !== 'base64') continue;
+    try {
+      const entries = JSON.parse(base64ToText(index.content));
+      if (Array.isArray(entries) && entries.some((entry) => entry && entry.id === entryId)) {
+        return joinRepoPath(folder, 'metrics.json');
+      }
+    } catch {}
+  }
+  return joinRepoPath(settings.basePath, 'metrics.json');
+}
+
+/** Metrics for these ids, merged across every collection. */
+async function readMetricsAcrossCollections(settings, ids) {
+  const wanted = new Set(sanitizeMetricIds(ids));
+  const merged = { entries: {} };
+  for (const folder of await collectionFoldersWithIndex(settings)) {
+    const { metrics } = await readMetrics(settings, joinRepoPath(folder, 'metrics.json'));
+    const entries = metrics && typeof metrics === 'object' ? metrics.entries : null;
+    if (!entries || typeof entries !== 'object') continue;
+    for (const [id, value] of Object.entries(entries)) {
+      if (!wanted.size || wanted.has(id)) merged.entries[id] = value;
+    }
+  }
+  return merged;
+}
+
+async function newestLibraryBasePath(settings) {
+  if (process.env.LIBRARY_BASE_PATH) return cleanRepoPath(process.env.LIBRARY_BASE_PATH);
+  const fallback = `${DEFAULT_BASE_PATH_PREFIX}02`;
+  try {
+    const headers = githubHeaders(settings.token);
+    const response = await fetch(
+      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
+      { headers },
+    );
+    if (!response.ok) return fallback;
+    const items = await response.json();
+    const numbered = (Array.isArray(items) ? items : [])
+      .map((item) => (item && item.type === "dir" ? String(item.name || "").match(new RegExp(`^${DEFAULT_BASE_PATH_PREFIX}(\\d+)$`)) : null))
+      .filter(Boolean)
+      .map((match) => ({ name: match[0], index: Number(match[1]) }))
+      .sort((a, b) => b.index - a.index);
+    // Newest first, and only a folder that carries an index can take uploads.
+    for (const { name } of numbered) {
+      const folder = await fetch(
+        `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodeURIComponent(name)}/index.json?ref=${encodeURIComponent(settings.branch)}`,
+        { headers },
+      );
+      if (folder.ok) return name;
+    }
+    return fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+/**
+ * Resolves a work folder against the active collection. Clients that only know
+ * the upload id send a bare id, and the active library_NN folder is prepended
+ * here, so a rotation moves uploads without touching the client. A path that
+ * already starts with a collection folder is left alone.
+ */
+function resolveUploadPath(rawPath, basePath, uploadId = '') {
+  const value = cleanRepoPath(rawPath || '');
+  if (!value) return value;
+  if (/^library(_\d+)?\//.test(value)) return value;
+  const id = cleanRepoPath(uploadId || '');
+  if (id && value === id) return joinRepoPath(basePath, id);
+  if (id && value.startsWith(id + '/')) return joinRepoPath(basePath, value);
+  return value;
 }
 
 function cleanRepoPath(value = '') {
@@ -1008,7 +1096,7 @@ export default async function handler(request, response) {
     const file = body?.file;
     const entry = body?.entry;
     const previewHtml = String(body?.previewHtml || '');
-    const uploadPath = cleanRepoPath(body?.uploadPath || '');
+    const uploadPath = resolveUploadPath(body?.uploadPath, settings.basePath, String(body?.entry?.id || body?.uploadId || ''));
     const commitPrefix = String(body?.commitPrefix || 'Add Spine preview');
     const action = String(body?.action || '');
     failedAction = action || 'unknown';
@@ -1016,7 +1104,7 @@ export default async function handler(request, response) {
     if (action === 'background-upload') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const uploadId = String(body?.uploadId || '').trim();
-      const uploadPathBg = cleanRepoPath(body?.uploadPath || '');
+      const uploadPathBg = resolveUploadPath(body?.uploadPath, settings.basePath, uploadId);
       const uploadedAt = String(body?.uploadedAt || '').trim();
       const fileName = String(body?.fileName || '').trim();
       const fileBase64 = String(body?.fileBase64 || '').trim();
@@ -1040,7 +1128,7 @@ export default async function handler(request, response) {
     if (action === 'background-upload-chunk') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const uploadId = String(body?.uploadId || '').trim();
-      const uploadPathBg = cleanRepoPath(body?.uploadPath || '');
+      const uploadPathBg = resolveUploadPath(body?.uploadPath, settings.basePath, uploadId);
       const fileName = String(body?.fileName || '').trim();
       const chunkIndex = Number(body?.chunkIndex);
       const chunkCount = Number(body?.chunkCount);
@@ -1087,7 +1175,7 @@ export default async function handler(request, response) {
     if (action === 'background-upload-reassemble') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const uploadId = String(body?.uploadId || '').trim();
-      const uploadPathBg = cleanRepoPath(body?.uploadPath || '');
+      const uploadPathBg = resolveUploadPath(body?.uploadPath, settings.basePath, uploadId);
       const fileName = String(body?.fileName || '').trim();
       const chunkCount = Number(body?.chunkCount);
       if (!uploadId || !uploadPathBg || !fileName || !Number.isFinite(chunkCount)) {
@@ -1116,7 +1204,7 @@ export default async function handler(request, response) {
     if (action === 'background-finalize-index') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const uploadId = String(body?.uploadId || '').trim();
-      const uploadPathBg = cleanRepoPath(body?.uploadPath || '');
+      const uploadPathBg = resolveUploadPath(body?.uploadPath, settings.basePath, uploadId);
       const uploadedAt = String(body?.uploadedAt || '').trim();
       if (!uploadId) return response.status(400).json({ error: 'Missing uploadId' });
       const indexPath = joinRepoPath(settings.basePath, 'index.json');
@@ -1145,10 +1233,9 @@ export default async function handler(request, response) {
     if (action === 'get-metrics') {
       const ids = sanitizeMetricIds(body?.ids);
       const hash = metricsVisitorHash(request, body);
-      const metricsPath = joinRepoPath(settings.basePath, 'metrics.json');
-      const { metrics } = await readMetrics(settings, metricsPath);
+      const merged = await readMetricsAcrossCollections(settings, ids);
       response.setHeader('Cache-Control', 'no-store');
-      return response.status(200).json({ ok: true, metrics: metricCountsForIds(metrics, ids, hash) });
+      return response.status(200).json({ ok: true, metrics: metricCountsForIds(merged, ids, hash) });
     }
 
     if (action === 'track-metric') {
@@ -1156,7 +1243,9 @@ export default async function handler(request, response) {
       const entryId = sanitizeMetricId(body?.entryId);
       if (!entryId) return response.status(400).json({ error: 'Invalid metrics entry id' });
       const hash = metricsVisitorHash(request, body);
-      const metricsPath = joinRepoPath(settings.basePath, 'metrics.json');
+      // Counters are written into the collection that actually holds the work,
+      // so tracking a rotated work never creates a new empty collection.
+      const metricsPath = await metricsPathForEntry(settings, entryId);
       response.setHeader('Cache-Control', 'no-store');
 
       if (metricAction === 'view') {

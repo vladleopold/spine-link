@@ -136,6 +136,34 @@ function githubHeaders(token) {
 // Works are spread across library_01, library_02, ... folders, each capped at the
 // GitHub limit. They are listed at runtime so a folder added by a rotation shows up
 // without a code change or a deploy.
+/**
+ * Merges two metrics documents. View counts add up because they are independent
+ * events; a like is counted once per visitor, so it is merged as a set and
+ * re-counted, which also repairs folders that were split by an earlier bug.
+ */
+function mergeMetrics(a, b) {
+  const out = { entries: {} };
+  for (const doc of [a, b]) {
+    const entries = doc && typeof doc === 'object' ? doc.entries : null;
+    if (!entries || typeof entries !== 'object') continue;
+    for (const [id, value] of Object.entries(entries)) {
+      if (!value || typeof value !== 'object') continue;
+      const target = out.entries[id] || { likes: 0, views: 0, likedBy: {}, recentViews: {} };
+      target.likedBy = { ...(target.likedBy || {}), ...(value.likedBy || {}) };
+      target.likes = Object.keys(target.likedBy).length;
+      target.views = (Number(target.views) || 0) + (Number(value.views) || 0);
+      const recent = { ...(target.recentViews || {}) };
+      for (const [key, at] of Object.entries(value.recentViews || {})) {
+        if (!recent[key] || String(at) > String(recent[key])) recent[key] = at;
+      }
+      target.recentViews = recent;
+      out.entries[id] = target;
+    }
+  }
+  out.updatedAt = new Date().toISOString();
+  return out;
+}
+
 async function libraryCollectionPaths(settings) {
   const paths = [cleanRepoPath(settings.basePath || defaultBasePath)];
   try {
@@ -836,8 +864,16 @@ export default async function handler(request, response) {
         if (Array.isArray(parsed)) collected.push(...parsed);
       } catch (err) {}
     }
-    const metricsText = await githubText(settings, `${settings.basePath}/metrics.json`);
-    const metrics = parseMetricsJson(metricsText);
+    // Metrics live in the collection that received the work, so every
+    // collection is read and the entries merged. Reading only the active folder
+    // silently dropped the counters of works that had already rotated away.
+    let metrics = { entries: {} };
+    for (const basePath of basePaths) {
+      const text = await githubText(settings, `${basePath}/metrics.json`);
+      if (!text) continue;
+      const parsed = parseMetricsJson(text);
+      metrics = mergeMetrics(metrics, parsed);
+    }
     // Цензура применяется и к ленте: закрытые авторы и работы не должны попадать
     // в выдачу. Список правил общий с архивом, включая список исключений.
     const exclusionsText = await githubText(settings, `${settings.basePath}/archive-exclusions.json`);

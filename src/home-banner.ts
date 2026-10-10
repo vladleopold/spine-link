@@ -141,18 +141,19 @@ export function mountHomeBanner(options: {
     return found;
   }
 
-  // Collections are library_01, library_02, ... The bare `library` folder is
-  // skipped: after the rename it kept a stale index pointing at files that now
-  // live in library_01, so every work read from it would 404.
+  // Collections are library_01, library_02, ... and rotation keeps adding them.
+  // The range is generous on purpose: a collection above it would be invisible
+  // here, and the banner loops folders newest-last anyway, so the extra requests
+  // only cost a 404 per empty folder.
+  // The bare `library` folder is skipped: after the rename it kept a stale index
+  // pointing at files that now live in library_01, so every work read from it 404s.
   function listCollectionFolders(): string[] {
-    // Works live in library_01, library_02, ... The bare `library` folder is left
-    // out on purpose: after the rename it kept a stale index whose paths point at
-    // files that no longer exist there, so every entry read from it failed.
     const folders: string[] = [];
-    for (let index = 1; index <= 60; index += 1) {
+    for (let index = 1; index <= 400; index += 1) {
       folders.push(`library_${String(index).padStart(2, "0")}`);
     }
-    return folders;
+    // Newest first: the banner cycles the most recent works.
+    return folders.reverse();
   }
 
   // Work files are often stored in a folder of their own; the index lists the
