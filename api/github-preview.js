@@ -1171,16 +1171,9 @@ function createHtml(config) {
         border-radius: 50%;
         object-fit: cover;
         background: rgba(255,255,255,.08);
-        /* Anonymous owners share one sprite laid out 6 across by 4 down. The
-           sheet is scaled to 600% x 400% of the avatar box, so one cell fills the
-           box exactly. The offsets are computed in JS (--owner-avatar-x/y):
-           calc() cannot take a modulo, and the invalid expression it used to
-           hold here aborted parsing of the rest of this stylesheet. */
-        background-image: url("/avatars/anonim-sprite.png");
+        background-size: cover;
+        background-position: center;
         background-repeat: no-repeat;
-        background-size: 600% 400%;
-        background-position: var(--owner-avatar-x, 0%) var(--owner-avatar-y, 0%);
-        /* Кадр не должен вылезать за круг. */
         overflow: hidden;
       }
       .owner-avatar-fallback { display: grid; place-items: center; color: #111; font-weight: 900; background: #b3ff40; }
@@ -1236,7 +1229,7 @@ function createHtml(config) {
         .preview-view-count span:first-child { position: relative; flex: 0 0 clamp(18px, 3.2vw, 24px); width: clamp(18px, 3.2vw, 24px); height: clamp(12px, 2.2vw, 16px); overflow: hidden; border: 2px solid currentColor; border-radius: 50% / 62%; color: rgba(231,237,244,.76); font-size: 0; }
         .preview-view-count span:first-child::after { content: ""; position: absolute; top: 50%; left: 50%; width: 34%; aspect-ratio: 1 / 1; border-radius: 50%; background: currentColor; transform: translate(-50%, -50%); }
         .preview-view-count strong { font-size: clamp(16px, 3.4vw, 22px); }
-        .topbar .preview-like-button { order: 1; width: clamp(38px, 10vw, 44px); height: clamp(38px, 10vw, 44px); min-height: 0; padding: 0; gap: 0; flex-direction: column; border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 15px; }
+        .topbar .preview-like-button { order: 1; width: clamp(38px, 10vw, 44px); height: clamp(38px, 10vw, 44px); min-height: 0; padding: 0; gap: 0; flex-direction: column; border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 15px; white-space: nowrap; }
         .preview-like-button span { font-size: clamp(18px, 3.4vw, 24px); }
         .preview-like-button strong { font-size: clamp(15px, 3vw, 20px); }
         #player { width: 100%; height: calc(100dvh - 236px); min-height: 300px; max-height: 760px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
@@ -1539,24 +1532,17 @@ const pinchDistance = { value: null };
         video.pause();
         try { video.currentTime = 0; } catch {}
       }
-      // Shared sprite for anonymous owners: 24 frames laid out 6 across by 4 down.
-      const OWNER_AVATAR_COLUMNS = 6;
-      const OWNER_AVATAR_ROWS = 4;
-      const OWNER_AVATAR_FRAMES = OWNER_AVATAR_COLUMNS * OWNER_AVATAR_ROWS;
+      // Anonymous owners: 30 individual images. Pick one deterministically by owner id.
+      const ANON_AVATAR_COUNT = 30;
 
-      function ownerAvatarSpriteUrl() {
-        return "/avatars/anonim-sprite.png";
-      }
-
-      // The frame follows the owner id, so an owner always gets the same face, and two
-      // different owners rarely land on the same one.
-      function ownerAvatarFrame(seed) {
+      function ownerAvatarUrl(seed) {
         const text = String(seed || "");
         let hash = 0;
         for (let i = 0; i < text.length; i += 1) {
           hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
         }
-        return hash % OWNER_AVATAR_FRAMES;
+        const idx = (hash % ANON_AVATAR_COUNT) + 1;
+        return "/avatars/sprite_" + String(idx).padStart(2, "0") + ".png";
       }
       function renderOwnerCard() {
         const owner = config.ownerProfile || {};
@@ -1576,15 +1562,14 @@ const pinchDistance = { value: null };
         // the same face everywhere and two owners rarely collide. The sprite is
         // painted with background-image (a <div>), because an <img> would show the
         // whole PNG instead of the one cell the CSS background-position crops out.
-        const avatarFrame = ownerAvatarFrame(owner.id || owner.name || "");
         if (owner.picture) {
           avatar.style.backgroundImage = "url('" + owner.picture + "')";
           avatar.style.backgroundSize = "cover";
           avatar.style.backgroundPosition = "center";
         } else {
-          avatar.style.backgroundImage = "url('" + ownerAvatarSpriteUrl(owner.id || owner.name || "") + "')";
-          avatar.style.backgroundSize = "600% 400%";
-          avatar.style.backgroundPosition = ((avatarFrame % 6) * (100/6)) + "% " + (Math.floor(avatarFrame / 6) * 25) + "%";
+          avatar.style.backgroundImage = "url('" + ownerAvatarUrl(owner.id || owner.name || "") + "')";
+          avatar.style.backgroundSize = "cover";
+          avatar.style.backgroundPosition = "center";
         }
         const ownerText = document.createElement("div");
         ownerText.className = "owner-profile-text";
