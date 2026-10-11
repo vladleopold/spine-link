@@ -1590,7 +1590,7 @@ const pinchDistance = { value: null };
         } else {
           avatar.style.backgroundImage = "url('" + ownerAvatarSpriteUrl(owner.id || owner.name || "") + "')";
           avatar.style.backgroundSize = "600% 400%";
-          avatar.style.backgroundPosition = `${(avatarFrame % 6) * 20}% ${Math.floor(avatarFrame / 6) * 33.3333}%`;
+          avatar.style.backgroundPosition = ((avatarFrame % 6) * 20) + "% " + (Math.floor(avatarFrame / 6) * 33.3333) + "%";
         }
         const ownerText = document.createElement("div");
         ownerText.className = "owner-profile-text";
