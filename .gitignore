@@ -16,3 +16,8 @@ scripts/request-indexing.mjs
 # Одноразовые скрипты проверки
 *.mjs
 !scripts/**/*.mjs
+
+# Local scratch files
+api/*.backup
+home-medium-test.png
+*.backup

@@ -1584,11 +1584,11 @@ const pinchDistance = { value: null };
         // whole PNG instead of the one cell the CSS background-position crops out.
         const avatarFrame = ownerAvatarFrame(owner.id || owner.name || "");
         if (owner.picture) {
-          avatar.style.backgroundImage = `url(${JSON.stringify(owner.picture)})`;
+          avatar.style.backgroundImage = "url('" + owner.picture + "')";
           avatar.style.backgroundSize = "cover";
           avatar.style.backgroundPosition = "center";
         } else {
-          avatar.style.backgroundImage = `url(${JSON.stringify(ownerAvatarSpriteUrl(owner.id || owner.name || ""))})`;
+          avatar.style.backgroundImage = "url('" + ownerAvatarSpriteUrl(owner.id || owner.name || "") + "')";
           avatar.style.backgroundSize = "600% 400%";
           avatar.style.backgroundPosition = `${(avatarFrame % 6) * 20}% ${Math.floor(avatarFrame / 6) * 33.3333}%`;
         }
