@@ -1310,7 +1310,7 @@ function createHtml(config) {
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
       </div>
-      ${video ? "<section class=\"video-watch-panel video-watch-panel--bottom\" aria-label=\"".concat(escapeHtml(video.name)).concat(" video preview\">\n        <div class=\"section-title\">Video preview</div>\n        <div class=\"seo-video-frame\" style=\"--video-preview-ratio: ").concat(escapeHtml(videoPreviewRatio)).concat("\">\n          <video class=\"video-watch-player seo-video-preview\" src=\"").concat(escapeHtml(video.contentUrl)).concat("\" poster=\"").concat(escapeHtml(video.thumbnailUrl)).concat("\" muted playsinline preload=\"metadata\" autoplay controls></video>\n        </div>\n        <div class=\"video-watch-copy\"><h1>").concat(escapeHtml(video.name)).concat("</h1><p>").concat(escapeHtml(video.description)).concat("</p></div>\n      </section>") : ""}
+      
     </div>
     <script type="application/json" id="spine-preview-config">${escapedJson(clientConfig)}</script>
     <script>
