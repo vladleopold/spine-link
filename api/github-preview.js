@@ -1064,26 +1064,7 @@ function createHtml(config) {
       .topbar .preview-top-row .like-card { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; height: auto; min-height: 0; }
       .topbar .preview-top-row .section-title { display: none; }
       /* The like is the rightmost control and reads as a round badge. */
-      .topbar .preview-like-button {
-        aspect-ratio: 1;
-        flex: 0 0 40px;
-        width: 40px;
-        height: 40px;
-        min-height: 40px;
-        min-width: 40px;
-        padding: 0;
-        gap: 0;
-        border-radius: 50%;
-        display: inline-flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-      }
-      .section-title { margin: 0 0 10px; color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-      .seo-video-card { display: none; }
-      .seo-video-card.is-visible { display: block; }
-      .preview-like-button { display: inline-flex; align-items: center; justify-content: center; gap: 0; width: 44px; height: 44px; aspect-ratio: 1; border: 1px solid rgba(255,185,214,.42); border-radius: 50%; white-space: nowrap; color: #ffe4ef; background: rgba(8,9,11,.68); box-shadow: 0 12px 30px rgba(0,0,0,.22); cursor: pointer; }
-      .preview-like-button span { color: currentColor; font-size: 22px; line-height: 1; transform: translateY(-1px); white-space: nowrap; }
+      .topbar .preview-like-button { order: 1; width: clamp(38px, 10vw, 44px); height: clamp(38px, 10vw, 44px); min-height: 0; aspect-ratio: 1; padding: 0; gap: 4px; flex-direction: row; align-items: center; justify-content: center; border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 15px; white-space: nowrap; }
       .preview-like-button strong { color: currentColor; font-size: 14px; font-weight: 950; line-height: 1; white-space: nowrap; }
       .preview-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.14); }
       .preview-view-count { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 34px; margin-top: 8px; color: rgba(231,237,244,.78); font-size: 13px; font-weight: 850; }
@@ -1230,9 +1211,7 @@ function createHtml(config) {
         .preview-view-count span:first-child { position: relative; flex: 0 0 clamp(18px, 3.2vw, 24px); width: clamp(18px, 3.2vw, 24px); height: clamp(12px, 2.2vw, 16px); overflow: hidden; border: 2px solid currentColor; border-radius: 50% / 62%; color: rgba(231,237,244,.76); font-size: 0; }
         .preview-view-count span:first-child::after { content: ""; position: absolute; top: 50%; left: 50%; width: 34%; aspect-ratio: 1 / 1; border-radius: 50%; background: currentColor; transform: translate(-50%, -50%); }
         .preview-view-count strong { font-size: clamp(16px, 3.4vw, 22px); }
-        .topbar .preview-like-button {
-        aspect-ratio: 1; order: 1; width: clamp(38px, 10vw, 44px); height: clamp(38px, 10vw, 44px); min-height: 0; aspect-ratio: 1; padding: 0; gap: 0; flex-direction: column; border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 15px; white-space: nowrap; }
-        .preview-like-button span { font-size: clamp(18px, 3.4vw, 24px); }
+        .topbar .preview-like-button { order: 1; width: clamp(38px, 10vw, 44px); height: clamp(38px, 10vw, 44px); min-height: 0; aspect-ratio: 1; padding: 0; gap: 4px; flex-direction: row; align-items: center; justify-content: center; border-color: rgba(255,118,171,.76); border-radius: 50%; color: #ff8dbc; background: rgba(74,18,39,.5); box-shadow: none; font-size: 15px; white-space: nowrap; }        .preview-like-button span { font-size: clamp(18px, 3.4vw, 24px); }
         .preview-like-button strong { font-size: clamp(15px, 3vw, 20px); }
         #player { width: 100%; height: calc(100dvh - 236px); min-height: 300px; max-height: 760px; border-color: rgba(255,255,255,.18); border-radius: 12px; background-size: 132px 132px; }
         .spine-player-controls { min-height: 74px; }
