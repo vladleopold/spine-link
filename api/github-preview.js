@@ -1162,7 +1162,7 @@ function createHtml(config) {
       .preview-top-row .owner-profile span { overflow: hidden; min-width: 0; font-size: 10px; text-overflow: ellipsis; }
       .preview-top-row .preview-view-count { order: 2; flex: 0 0 auto; width: auto; min-height: 0; margin: 0; gap: 6px; font-size: 12px; white-space: nowrap; }
       .preview-top-row .preview-view-count span:last-child { display: none; }
-      .preview-top-row .like-card .preview-like-button { order: 1; flex: 0 0 auto; width: auto; min-height: 38px; padding: 0 14px; gap: 8px; }
+      .preview-top-row .like-card .preview-like-button { order: 1; flex: 0 0 auto; width: 38px; height: 38px; aspect-ratio: 1; padding: 0; gap: 0; border-radius: 50%; }
       .owner-profile { display: flex; align-items: center; gap: 12px; min-width: 0; }
       .owner-avatar {
         width: 46px;
