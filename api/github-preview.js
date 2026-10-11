@@ -299,7 +299,7 @@ function sourceProofUrlForEntry(origin, entry) {
   const path = cleanRepoPath(entry?.sourceProofPath || entry?.sourceProof?.proofPath || '');
   if (path) return `${origin}/assets/${encodeRepoPath(path)}`;
   if (entryHasFile(entry, 'source-proof.json') && entry?.previewPath) {
-    return `${origin}/assets/${encodeRepoPath(\`${entry.previewPath}/source-proof.json\`)}`;
+    return `${origin}/assets/${encodeRepoPath(`${entry.previewPath}/source-proof.json`)}`;
   }
   return '';
 }
@@ -310,7 +310,7 @@ function blockchainAnchorUrlForEntry(origin, entry) {
   const path = cleanRepoPath(entry?.blockchainAnchor?.anchorPath || entry?.blockchainAnchor?.github?.anchorPath || '');
   if (path) return `${origin}/assets/${encodeRepoPath(path)}`;
   if (entryHasFile(entry, 'blockchain-anchor.json') && entry?.previewPath) {
-    return `${origin}/assets/${encodeRepoPath(\`${entry.previewPath}/blockchain-anchor.json\`)}`;
+    return `${origin}/assets/${encodeRepoPath(`${entry.previewPath}/blockchain-anchor.json`)}`;
   }
   return '';
 }
@@ -539,27 +539,27 @@ function seoHead({
     <meta name="apple-mobile-web-app-title" content="Spine Portfolio" />
     <meta name="theme-color" content="#000000" />
     <link rel="canonical" href="${escapeHtml(video?.playerPageUrl || url)}" />
-    ${video?.url && video.url !== url ? \`<link rel="alternate" href="${escapeHtml(video.url)}" title="${escapeHtml(video.name)} video watch page" />\` : ''}
-    ${archiveUrl && archiveUrl !== url ? \`<link rel="alternate" href="${escapeHtml(archiveUrl)}" title="World SPINE ARCHIVE detail page" />\` : ''}
+    ${video?.url && video.url !== url ? `<link rel="alternate" href="${escapeHtml(video.url)}" title="${escapeHtml(video.name)} video watch page" />` : ''}
+    ${archiveUrl && archiveUrl !== url ? `<link rel="alternate" href="${escapeHtml(archiveUrl)}" title="World SPINE ARCHIVE detail page" />` : ''}
     <meta property="og:type" content="${video ? 'video.other' : 'website'}" />
     <meta property="og:title" content="${escapeHtml(title)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:url" content="${escapeHtml(url)}" />
     <meta property="og:site_name" content="Spine Portfolio" />
-    <meta property="og:image" content="${escapeHtml(image)}" />${video ? \`
+    <meta property="og:image" content="${escapeHtml(image)}" />${video ? `
     <meta property="og:video" content="${escapeHtml(video.contentUrl)}" />
     <meta property="og:video:secure_url" content="${escapeHtml(video.contentUrl)}" />
     <meta property="og:video:type" content="video/webm" />
-    ${video.width ? \`<meta property="og:video:width" content="${video.width}" />\` : ''}
-    ${video.height ? \`<meta property="og:video:height" content="${video.height}" />\` : ''}\` : ''}
+    ${video.width ? `<meta property="og:video:width" content="${video.width}" />` : ''}
+    ${video.height ? `<meta property="og:video:height" content="${video.height}" />` : ''}` : ''}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
-    <meta name="twitter:image" content="${escapeHtml(image)}" />${structuredData ? \`
+    <meta name="twitter:image" content="${escapeHtml(image)}" />${structuredData ? `
     <script type="application/ld+json">${escapedJson(structuredData)}</script>
-    <script type="application/ld+json">${escapedJson(imageStructuredData)}</script>${proofStructuredData ? \`
-    <script type="application/ld+json">${escapedJson(proofStructuredData)}</script>\` : ''}\` : ''}${breadcrumbs ? \`
-    <script type="application/ld+json">${escapedJson(breadcrumbs)}</script>\` : ''}`;
+    <script type="application/ld+json">${escapedJson(imageStructuredData)}</script>${proofStructuredData ? `
+    <script type="application/ld+json">${escapedJson(proofStructuredData)}</script>` : ''}` : ''}${breadcrumbs ? `
+    <script type="application/ld+json">${escapedJson(breadcrumbs)}</script>` : ''}`;
 }
 
 function githubHeaders(token) {
@@ -1012,9 +1012,9 @@ function createHtml(config) {
       .brand-plus { margin-left: 10px; color: #ff6a28; font-size: .72em; font-weight: 800; letter-spacing: .22em; line-height: 1; text-transform: uppercase; }
       .brand-link:hover .brand-plus { color: #8cc7ff; }
       /* Плеер — почти на весь экран; панель справа уходит вниз и растягивается
-         по ширине, вместо того чтобы растягивать страницу вниз и создавать скрол. *
+         по ширине, вместо того чтобы растягивать страницу вниз и создавать скрол. */
       /* Desktop layout: the Spine player takes the full window height and stays
-         adaptive, while the side panel on its right never exceeds 420px. *
+         adaptive, while the side panel on its right never exceeds 420px. */
       .stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 28vw, 420px); gap: 16px; min-height: 0; height: calc(100vh - 104px); max-height: calc(100vh - 104px); }
       .player-frame { position: relative; min-width: 0; min-height: 0; }
       #player { width: 100%; height: 100%; min-height: 0; }
@@ -1028,7 +1028,7 @@ function createHtml(config) {
       /* Сцена под анимацию тёмная: мягкое свечение и полупрозрачные частицы на
          средне-серой шахматке почти не читались — больше половины видимых пикселей
          не набирали контраста с фоном. Узор оставлен тёмным, чтобы прозрачные
-         области всё так же читались, но не съедали контраст анимации. *
+         области всё так же читались, но не съедали контраст анимации. */
       #player { width: 100%; height: 100%; min-height: 0; touch-action: none; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; overflow: hidden; background: conic-gradient(#1c1f24 25%, #141619 0 50%, #1c1f24 0 75%, #141619 0); background-size: var(--preview-pattern-size, 140px) var(--preview-pattern-size, 140px); }
       .library-nav-button { position: absolute; top: 50%; z-index: 8; display: grid; place-items: center; width: 52px; min-height: 78px; padding: 0; border: 1px solid rgba(140,199,255,.55); border-radius: 8px; color: #f7fbff; background: rgba(9,13,17,.68); box-shadow: 0 16px 34px rgba(0,0,0,.38), inset 0 0 22px rgba(140,199,255,.08); font-size: 42px; font-weight: 800; line-height: 1; transform: translateY(-50%); backdrop-filter: blur(10px); }
       .library-nav-button:hover { border-color: rgba(179,255,64,.78); background: rgba(23,31,18,.78); }
@@ -1040,7 +1040,7 @@ function createHtml(config) {
 
       /* Большое видео-превью остаётся на странице: это главная видео-поверхность
          работы и единственное место, где показывается клип в полном качестве.
-         Оно живёт под плеером и не мешает сайдпанелу. *
+         Оно живёт под плеером и не мешает сайдпанелу. */
       .video-watch-panel { display: grid; }
       .video-watch-panel .seo-video-frame { height: min(58vh, 720px); max-height: min(58vh, 720px); }
       .preview-card { padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
@@ -1063,7 +1063,7 @@ function createHtml(config) {
       .topbar .preview-top-row .owner-card.is-visible { display: flex; flex: 1 1 auto; min-width: 0; }
       .topbar .preview-top-row .like-card { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
       .topbar .preview-top-row .section-title { display: none; }
-      /* The like is the rightmost control and reads as a round badge. *
+      /* The like is the rightmost control and reads as a round badge. */
       .topbar .preview-like-button {
         flex: 0 0 40px;
         width: 40px;
@@ -1095,7 +1095,7 @@ function createHtml(config) {
       .proof-card > summary:hover { color: #fff; }
       .proof-links { display: grid; gap: 10px; margin-top: 10px; }
       /* A nested display (grid/flex) beats the native <details> hiding, so the
-         collapsed state has to be stated explicitly or the links stay visible. *
+         collapsed state has to be stated explicitly or the links stay visible. */
       .proof-card:not([open]) > .proof-links { display: none; }
       .proof-card a { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; padding: 0 10px; border: 1px solid rgba(140,199,255,.2); border-radius: 8px; color: #dff1ff; background: rgba(140,199,255,.08); font-size: 12px; font-weight: 850; text-decoration: none; }
       .proof-card a:hover { border-color: rgba(179,255,64,.58); color: #fff; }
@@ -1108,7 +1108,7 @@ function createHtml(config) {
       .animation-card.is-open .animation-menu { display: grid; gap: 6px; max-height: 320px; overflow: auto; margin-top: 0; padding: 8px; border: 1px solid rgba(140,199,255,.34); border-radius: 10px; background: rgba(9,13,17,.94); box-shadow: 0 22px 50px rgba(0,0,0,.52); backdrop-filter: blur(12px); }
       /* ── Compact download picker ──────────────────────────────────────────
          Three short steps that slide sideways instead of a long button list:
-         Format → Size → Files. Everything stays inside the side panel width. *
+         Format → Size → Files. Everything stays inside the side panel width. */
       .animation-download-block { padding: 12px; border: 1px solid rgba(140,199,255,.22); border-radius: 10px; background: rgba(140,199,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.2); }
       .dl-head { display: grid; gap: 9px; }
       .dl-head-title { color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
@@ -1175,12 +1175,12 @@ function createHtml(config) {
            sheet is scaled to 600% x 400% of the avatar box, so one cell fills the
            box exactly. The offsets are computed in JS (--owner-avatar-x/y):
            calc() cannot take a modulo, and the invalid expression it used to
-           hold here aborted parsing of the rest of this stylesheet. *
+           hold here aborted parsing of the rest of this stylesheet. */
         background-image: url("/avatars/anonim-sprite.png");
         background-repeat: no-repeat;
         background-size: 600% 400%;
         background-position: var(--owner-avatar-x, 0%) var(--owner-avatar-y, 0%);
-        /* Кадр не должен вылезать за круг. *
+        /* Кадр не должен вылезать за круг. */
         overflow: hidden;
       }
       .owner-avatar-fallback { display: grid; place-items: center; color: #111; font-weight: 900; background: #b3ff40; }
@@ -1191,7 +1191,7 @@ function createHtml(config) {
       .owner-library { display: none; gap: 10px; }
       /* auto-fill keeps the columns at their intended width; auto-fit let a
          short list stretch one card across the whole panel. The fixed height
-         keeps every thumbnail a readable rectangle instead of a collapsed sliver. *
+         keeps every thumbnail a readable rectangle instead of a collapsed sliver. */
       .owner-library.is-visible { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); grid-auto-rows: 108px; align-items: stretch; align-content: start; }
       .owner-library a { position: relative; display: block; overflow: hidden; height: 108px; min-height: 108px; border: 1px solid rgba(255,255,255,.09); border-radius: 8px; color: inherit; text-decoration: none; background: rgba(255,255,255,.045); isolation: isolate; }
       .owner-library a::after { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(rgba(0,0,0,.18), rgba(0,0,0,.18) 45%, rgba(8,10,12,.82)); pointer-events: none; }
@@ -1260,7 +1260,7 @@ function createHtml(config) {
         .preview-like-button { width: 60px; height: 60px; }
       }
       .spine-link-loop-button { position: relative; margin-right: 12px !important; }
-      /* Панель управления свёрнута и выезжает по нажатию на ручку. *
+      /* Панель управления свёрнута и выезжает по нажатию на ручку. */
       .spine-player-controls { z-index: 4; }
       .spine-player-controls.spine-player-controls-hidden { pointer-events: auto; opacity: 1; }
         overflow: hidden;
@@ -1332,17 +1332,11 @@ function createHtml(config) {
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
           <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
           ${animationDownloadBlock(entry, origin)}
-          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? \`<details class="preview-card proof-card"><summary class="section-title">Origin proof</summary><div class="proof-links">${video.sourceProofUrl ? \`<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? \`<code>${escapeHtml(shortHash(video.proofHash))}</code>\` : ''}</a>\` : ''}${video.blockchainAnchorUrl ? \`<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? \`<code>${escapeHtml(shortHash(video.anchorHash))}</code>\` : ''}</a>\` : ''}</div></details>\` : ''}
+          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? "<details class=\"preview-card proof-card\"><summary class=\"section-title\">Origin proof</summary><div class=\"proof-links\">" + (video.sourceProofUrl ? "<a href=\"".concat(escapeHtml(video.sourceProofUrl)).concat("\" target=\"_blank\" rel=\"noreferrer\">source-proof.json").concat(video.proofHash ? "<code>".concat(escapeHtml(shortHash(video.proofHash))).concat("</code>") : "").concat("</a>") : "").concat(video.blockchainAnchorUrl ? "<a href=\"".concat(escapeHtml(video.blockchainAnchorUrl)).concat("\" target=\"_blank\" rel=\"noreferrer\">blockchain-anchor.json").concat(video.anchorHash ? "<code>".concat(escapeHtml(shortHash(video.anchorHash))).concat("</code>") : "").concat("</a>") : "").concat("</div></details>") : ""}
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
       </div>
-      ${video ? \`<section class="video-watch-panel video-watch-panel--bottom" aria-label="${escapeHtml(video.name)} video preview">
-        <div class="section-title">Video preview</div>
-        <div class="seo-video-frame" style="--video-preview-ratio: ${escapeHtml(videoPreviewRatio)}">
-          <video class="video-watch-player seo-video-preview" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl)}" muted playsinline preload="metadata" autoplay controls></video>
-        </div>
-        <div class="video-watch-copy"><h1>${escapeHtml(video.name)}</h1><p>${escapeHtml(video.description)}</p></div>
-      </section>\` : ''}
+      ${video ? "<section class=\"video-watch-panel video-watch-panel--bottom\" aria-label=\"".concat(escapeHtml(video.name)).concat(" video preview\">\n        <div class=\"section-title\">Video preview</div>\n        <div class=\"seo-video-frame\" style=\"--video-preview-ratio: ").concat(escapeHtml(videoPreviewRatio)).concat("\">\n          <video class=\"video-watch-player seo-video-preview\" src=\"").concat(escapeHtml(video.contentUrl)).concat("\" poster=\"").concat(escapeHtml(video.thumbnailUrl)).concat("\" muted playsinline preload=\"metadata\" autoplay controls></video>\n        </div>\n        <div class=\"video-watch-copy\"><h1>").concat(escapeHtml(video.name)).concat("</h1><p>").concat(escapeHtml(video.description)).concat("</p></div>\n      </section>") : ""}
     </div>
     <script type="application/json" id="spine-preview-config">${escapedJson(clientConfig)}</script>
     <script>
@@ -2278,7 +2272,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    ${seoHead({ origin, entryId, video: videoSeo, fallbackTitle: \`${title} - Spine-Link video preview\`, robots, playerUrl, archiveUrl })}
+    ${seoHead({ origin, entryId, video: videoSeo, fallbackTitle: `${title} - Spine-Link video preview`, robots, playerUrl, archiveUrl })}
     <link rel="stylesheet" href="/page-transitions.css" />
     <script src="/page-transitions.js" defer></script>
     <script src="/spine-embers.js?v=2026-09-30" defer></script>
@@ -2327,21 +2321,18 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
       <div class="topbar"><a class="brand" href="/" aria-label="Spine-Link home" title="На главную"><span class="brand-spine">Spine</span><span class="brand-link-part">link</span></a><a class="back" href="${ownerUrl}">Open portfolio</a></div>
       <section class="video-card">
         ${video
-          ? \`<video id="video-fallback-player" src="${escapeHtml(video)}"${poster ? \` poster="${escapeHtml(poster)}"\` : ''} muted loop playsinline preload="metadata" autoplay controls></video>\`
-          : \`<div class="video-placeholder" role="img" aria-label="${escapeHtml(title)}"${poster ? \` style="background-image:url('${escapeHtml(poster)}')"\` : ''}></div>\`}
+          ? "<video id=\"video-fallback-player\" src=\"".concat(escapeHtml(video)).concat("\"").concat(poster ? " poster=\"".concat(escapeHtml(poster)).concat("\"") : "").concat(" muted loop playsinline preload=\"metadata\" autoplay controls></video>")
+          : "<div class=\"video-placeholder\" role=\"img\" aria-label=\"".concat(escapeHtml(title)).concat("\"").concat(poster ? " style=\"background-image:url(\'".concat(escapeHtml(poster)).concat("\')\"") : "").concat("></div>")}
         <div class="body">
           <h1>${title}</h1>
-          ${note ? \`<p>${cleanPublicText(note, 240)}</p>\` : '<p>No preview video is available for this item yet.</p>'}
+          ${note ? "<p>".concat(cleanPublicText(note, 240)).concat("</p>") : "<p>No preview video is available for this item yet.</p>"}
           <button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(metricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button>
           <div class="preview-view-count" data-metric-id="${escapeHtml(metricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div>
         </div>
       </section>
       ${authorWorks.length
-        ? \`<section class="author-works" aria-label="More work by ${escapeHtml(ownerProfile?.name || 'this author')}">
-            <h2 class="author-works-title">More work by ${escapeHtml(ownerProfile?.name || 'this author')}</h2>
-            <div class="author-works-grid" id="author-works-grid" data-works='${authorWorksJson}'></div>
-          </section>\`
-        : ''}
+        ? "<section class=\"author-works\" aria-label=\"More work by ".concat(escapeHtml(ownerProfile?.name || 'this author')).concat("\">\n            <h2 class=\"author-works-title\">More work by ").concat(escapeHtml(ownerProfile?.name || 'this author')).concat("</h2>\n            <div class=\"author-works-grid\" id=\"author-works-grid\" data-works=\"'").concat(authorWorksJson).concat("'\'></div>\n          </section>")
+        : ""}
     </main>
     <script>
       // Главное видео играет по кругу и само перезапускается,
