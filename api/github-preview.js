@@ -1061,7 +1061,7 @@ function createHtml(config) {
       .topbar .preview-top-row .preview-card { min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
       .topbar .preview-top-row .owner-card { display: none; }
       .topbar .preview-top-row .owner-card.is-visible { display: flex; flex: 1 1 auto; min-width: 0; }
-      .topbar .preview-top-row .like-card { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+      .topbar .preview-top-row .like-card { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; height: auto; min-height: 0; }
       .topbar .preview-top-row .section-title { display: none; }
       /* The like is the rightmost control and reads as a round badge. */
       .topbar .preview-like-button {
