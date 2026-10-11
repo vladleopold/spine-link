@@ -1015,10 +1015,10 @@ function createHtml(config) {
          по ширине, вместо того чтобы растягивать страницу вниз и создавать скрол. */
       /* Desktop layout: the Spine player takes the full window height and stays
          adaptive, while the side panel on its right never exceeds 420px. */
-      .stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 28vw, 420px); gap: 16px; min-height: 0; height: calc(100vh - 104px); max-height: calc(100vh - 104px); }
+      .stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) clamp(300px, 28vw, 420px); gap: 16px; min-height: 0; height: calc(100vh - 104px); max-height: calc(100vh - 104px); }
       .player-frame { position: relative; min-width: 0; min-height: 0; }
       #player { width: 100%; height: 100%; min-height: 0; }
-      .video-watch-panel { position: relative; display: grid; gap: 10px; overflow: hidden; padding: 16px; border: 1px solid rgba(255,185,214,.46); border-radius: 8px; background: #020304; box-shadow: 0 20px 64px rgba(0,0,0,.34); }
+      .video-watch-panel { position: relative; display: grid; gap: 10px; overflow: hidden; padding: 16px; border: 1px solid rgba(255,185,214,.46); border-radius: 8px; background: #020304; box-shadow: 0 20px 64px rgba(0,0,0,.34); min-height: 0; height: 100%; }
       .video-watch-panel--bottom { margin-top: 4px; }
       .seo-video-frame { display: flex; align-items: center; justify-content: center; width: 100%; height: min(70vh, 820px); min-height: 220px; max-height: min(70vh, 820px); overflow: hidden; border: 1px solid rgba(140,199,255,.22); border-radius: 8px; background: #000; }
       .video-watch-player, .seo-video-preview { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; aspect-ratio: var(--video-preview-ratio, 16 / 9); object-fit: contain; background: #000; }
@@ -1038,11 +1038,9 @@ function createHtml(config) {
       #sidebar { min-height: 0; max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(74,78,84,.72) transparent; }
       .animation-card.is-open .animation-menu { max-height: 240px; }
 
-      /* Большое видео-превью остаётся на странице: это главная видео-поверхность
-         работы и единственное место, где показывается клип в полном качестве.
-         Оно живёт под плеером и не мешает сайдпанелу. */
-      .video-watch-panel { display: grid; }
-      .video-watch-panel .seo-video-frame { height: min(58vh, 720px); max-height: min(58vh, 720px); }
+      /* Большое видео-превью теперь находится в средней колонке .stage на десктопе.
+         На мобильном оно скрыто (display: none в @media). */
+      .video-watch-panel .seo-video-frame { height: 100%; max-height: 100%; min-height: 0; }
       .preview-card { padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
       .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
       .topbar .preview-top-row {
@@ -1081,9 +1079,9 @@ function createHtml(config) {
       .section-title { margin: 0 0 10px; color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
       .seo-video-card { display: none; }
       .seo-video-card.is-visible { display: block; }
-      .preview-like-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 44px; border: 1px solid rgba(255,185,214,.42); border-radius: 999px; color: #ffe4ef; background: rgba(8,9,11,.68); box-shadow: 0 12px 30px rgba(0,0,0,.22); cursor: pointer; }
-      .preview-like-button span { color: currentColor; font-size: 22px; line-height: 1; transform: translateY(-1px); }
-      .preview-like-button strong { color: currentColor; font-size: 14px; font-weight: 950; line-height: 1; }
+      .preview-like-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 44px; border: 1px solid rgba(255,185,214,.42); border-radius: 50%; white-space: nowrap; color: #ffe4ef; background: rgba(8,9,11,.68); box-shadow: 0 12px 30px rgba(0,0,0,.22); cursor: pointer; }
+      .preview-like-button span { color: currentColor; font-size: 22px; line-height: 1; transform: translateY(-1px); white-space: nowrap; }
+      .preview-like-button strong { color: currentColor; font-size: 14px; font-weight: 950; line-height: 1; white-space: nowrap; }
       .preview-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.14); }
       .preview-view-count { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 34px; margin-top: 8px; color: rgba(231,237,244,.78); font-size: 13px; font-weight: 850; }
       .preview-view-count strong { color: #fff; }
@@ -1248,7 +1246,7 @@ function createHtml(config) {
         .animation-menu { position: static; max-height: 46vh; margin-top: 0; padding: 5px; gap: 4px; }
         #animation-menu button { min-height: 40px; }
         .animation-menu button { min-height: 40px; border-color: rgba(140,199,255,.78); border-radius: 8px; color: #f1f7ff; background: rgba(31,58,91,.72); font-size: 14px; font-weight: 850; }
-        #set-card, .note-card, .proof-card, .owner-library { order: 4; margin-inline: 32px; }
+        #set-card, .note-card, .proof-card, .owner-library, .animation-download-block { order: 4; margin-inline: 32px; }
         .video-watch-panel { display: none; }
         .seo-video-frame { max-height: min(62vh, 520px); }
       }
@@ -1327,22 +1325,22 @@ function createHtml(config) {
           <div id="player"></div>
           <button class="library-nav-button library-nav-button--next" id="library-nav-next" type="button" aria-label="Next Spine work" title="Next Spine work">&rsaquo;</button>
         </div>
-        <aside id="sidebar">
-          <div class="preview-card" id="set-card"><div class="section-title">Set</div><select id="set-select"></select></div>
-          <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
-          <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
-          ${animationDownloadBlock(entry, origin)}
-          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<details class="preview-card proof-card"><summary class="section-title">Origin proof</summary><div class="proof-links">${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div></details>` : ''}
-          <div class="preview-card owner-library" id="owner-library"></div>
-        </aside>
-      </div>
-      ${video ? `<section class="video-watch-panel video-watch-panel--bottom" aria-label="${escapeHtml(video.name)} video preview">
+        ${video ? `<section class="video-watch-panel video-watch-panel--bottom" aria-label="${escapeHtml(video.name)} video preview">
         <div class="section-title">Video preview</div>
         <div class="seo-video-frame" style="--video-preview-ratio: ${escapeHtml(videoPreviewRatio)}">
           <video class="video-watch-player seo-video-preview" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl)}" muted playsinline preload="metadata" autoplay controls></video>
         </div>
         <div class="video-watch-copy"><h1>${escapeHtml(video.name)}</h1><p>${escapeHtml(video.description)}</p></div>
       </section>` : ''}
+        <aside id="sidebar">
+          <div class="preview-card" id="set-card"><div class="section-title">Set</div><select id="set-select"></select></div>
+          <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
+          <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
+          ${animationDownloadBlock(entry, origin).replace('<div class="animation-download-block"', '<div class="animation-download-block" style="order: 4;"')}
+          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<details class="preview-card proof-card" style="order: 5;"><summary class="section-title">Origin proof</summary><div class="proof-links">${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div></details>` : ''}
+          <div class="preview-card owner-library" id="owner-library" style="order: 6;"></div>
+        </aside>
+      </div>
     </div>
     <script type="application/json" id="spine-preview-config">${escapedJson(clientConfig)}</script>
     <script>
@@ -1573,17 +1571,25 @@ const pinchDistance = { value: null };
         ownerLibrary.innerHTML = "";
         if (!owner.visible) return;
         ownerProfile.className = "owner-profile";
-        const avatar = document.createElement("img");
+        const avatar = document.createElement("div");
         avatar.className = "owner-avatar";
-        avatar.alt = "";
+        avatar.setAttribute("role", "img");
+        avatar.setAttribute("aria-label", owner.name || "Anonymous owner");
         // Anonymous owners have no portrait, so they get a frame from the shared
         // sprite. The frame is picked from the owner id, so the same person keeps
-        // the same face everywhere and two owners rarely collide.
-        avatar.src = owner.picture || ownerAvatarSpriteUrl(owner.id || owner.name || "");
+        // the same face everywhere and two owners rarely collide. The sprite is
+        // painted with background-image (a <div>), because an <img> would show the
+        // whole PNG instead of the one cell the CSS background-position crops out.
         const avatarFrame = ownerAvatarFrame(owner.id || owner.name || "");
-        avatar.style.setProperty("--owner-avatar-frame", String(avatarFrame));
-        avatar.style.setProperty("--owner-avatar-x", (avatarFrame % 6) * 20 + "%");
-        avatar.style.setProperty("--owner-avatar-y", Math.floor(avatarFrame / 6) * 33.3333 + "%");
+        if (owner.picture) {
+          avatar.style.backgroundImage = `url(${JSON.stringify(owner.picture)})`;
+          avatar.style.backgroundSize = "cover";
+          avatar.style.backgroundPosition = "center";
+        } else {
+          avatar.style.backgroundImage = `url(${JSON.stringify(ownerAvatarSpriteUrl(owner.id || owner.name || ""))})`;
+          avatar.style.backgroundSize = "600% 400%";
+          avatar.style.backgroundPosition = `${(avatarFrame % 6) * 20}% ${Math.floor(avatarFrame / 6) * 33.3333}%`;
+        }
         const ownerText = document.createElement("div");
         ownerText.className = "owner-profile-text";
         const ownerName = document.createElement("strong");
@@ -2287,9 +2293,9 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
       .body { display: grid; gap: 10px; padding: 18px; background: rgba(17,17,20,.86); }
       h1 { margin: 0; color: #fff; font-size: clamp(28px, 6vw, 48px); line-height: 1; }
       p { margin: 0; color: rgba(237,245,255,.72); font-size: 16px; line-height: 1.45; }
-      .preview-like-button { justify-self: start; display: inline-flex; align-items: center; gap: 9px; min-height: 42px; padding: 0 14px; border: 1px solid rgba(255,185,214,.42); border-radius: 999px; color: #ffe4ef; background: rgba(8,9,11,.68); cursor: pointer; }
-      .preview-like-button span { font-size: 22px; transform: translateY(-1px); }
-      .preview-like-button strong { font-size: 14px; font-weight: 950; }
+      .preview-like-button { justify-self: start; display: inline-flex; align-items: center; gap: 9px; min-height: 42px; padding: 0 14px; border: 1px solid rgba(255,185,214,.42); border-radius: 50%; white-space: nowrap; color: #ffe4ef; background: rgba(8,9,11,.68); cursor: pointer; }
+      .preview-like-button span { font-size: 22px; transform: translateY(-1px); white-space: nowrap; }
+      .preview-like-button strong { font-size: 14px; font-weight: 950; white-space: nowrap; }
       .preview-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.14); }
       .preview-view-count { display: inline-flex; align-items: center; gap: 8px; color: rgba(237,245,255,.72); font-size: 14px; font-weight: 850; }
       .preview-view-count strong { color: #fff; }
