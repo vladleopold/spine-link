@@ -1081,7 +1081,7 @@ function createHtml(config) {
       .section-title { margin: 0 0 10px; color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
       .seo-video-card { display: none; }
       .seo-video-card.is-visible { display: block; }
-      .preview-like-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 44px; border: 1px solid rgba(255,185,214,.42); border-radius: 50%; white-space: nowrap; color: #ffe4ef; background: rgba(8,9,11,.68); box-shadow: 0 12px 30px rgba(0,0,0,.22); cursor: pointer; }
+      .preview-like-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 44px; height: 44px; min-width: 44px; border: 1px solid rgba(255,185,214,.42); border-radius: 50%; white-space: nowrap; color: #ffe4ef; background: rgba(8,9,11,.68); box-shadow: 0 12px 30px rgba(0,0,0,.22); cursor: pointer; }
       .preview-like-button span { color: currentColor; font-size: 22px; line-height: 1; transform: translateY(-1px); white-space: nowrap; }
       .preview-like-button strong { color: currentColor; font-size: 14px; font-weight: 950; line-height: 1; white-space: nowrap; }
       .preview-like-button.is-liked { border-color: rgba(255,118,171,.78); color: #ff76ab; background: rgba(255,118,171,.14); }
