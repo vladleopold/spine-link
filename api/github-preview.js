@@ -299,7 +299,7 @@ function sourceProofUrlForEntry(origin, entry) {
   const path = cleanRepoPath(entry?.sourceProofPath || entry?.sourceProof?.proofPath || '');
   if (path) return `${origin}/assets/${encodeRepoPath(path)}`;
   if (entryHasFile(entry, 'source-proof.json') && entry?.previewPath) {
-    return `${origin}/assets/${encodeRepoPath(`${entry.previewPath}/source-proof.json`)}`;
+    return `${origin}/assets/${encodeRepoPath(\`${entry.previewPath}/source-proof.json\`)}`;
   }
   return '';
 }
@@ -310,7 +310,7 @@ function blockchainAnchorUrlForEntry(origin, entry) {
   const path = cleanRepoPath(entry?.blockchainAnchor?.anchorPath || entry?.blockchainAnchor?.github?.anchorPath || '');
   if (path) return `${origin}/assets/${encodeRepoPath(path)}`;
   if (entryHasFile(entry, 'blockchain-anchor.json') && entry?.previewPath) {
-    return `${origin}/assets/${encodeRepoPath(`${entry.previewPath}/blockchain-anchor.json`)}`;
+    return `${origin}/assets/${encodeRepoPath(\`${entry.previewPath}/blockchain-anchor.json\`)}`;
   }
   return '';
 }
@@ -539,27 +539,27 @@ function seoHead({
     <meta name="apple-mobile-web-app-title" content="Spine Portfolio" />
     <meta name="theme-color" content="#000000" />
     <link rel="canonical" href="${escapeHtml(video?.playerPageUrl || url)}" />
-    ${video?.url && video.url !== url ? `<link rel="alternate" href="${escapeHtml(video.url)}" title="${escapeHtml(video.name)} video watch page" />` : ''}
-    ${archiveUrl && archiveUrl !== url ? `<link rel="alternate" href="${escapeHtml(archiveUrl)}" title="World SPINE ARCHIVE detail page" />` : ''}
+    ${video?.url && video.url !== url ? \`<link rel="alternate" href="${escapeHtml(video.url)}" title="${escapeHtml(video.name)} video watch page" />\` : ''}
+    ${archiveUrl && archiveUrl !== url ? \`<link rel="alternate" href="${escapeHtml(archiveUrl)}" title="World SPINE ARCHIVE detail page" />\` : ''}
     <meta property="og:type" content="${video ? 'video.other' : 'website'}" />
     <meta property="og:title" content="${escapeHtml(title)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
     <meta property="og:url" content="${escapeHtml(url)}" />
     <meta property="og:site_name" content="Spine Portfolio" />
-    <meta property="og:image" content="${escapeHtml(image)}" />${video ? `
+    <meta property="og:image" content="${escapeHtml(image)}" />${video ? \`
     <meta property="og:video" content="${escapeHtml(video.contentUrl)}" />
     <meta property="og:video:secure_url" content="${escapeHtml(video.contentUrl)}" />
     <meta property="og:video:type" content="video/webm" />
-    ${video.width ? `<meta property="og:video:width" content="${video.width}" />` : ''}
-    ${video.height ? `<meta property="og:video:height" content="${video.height}" />` : ''}` : ''}
+    ${video.width ? \`<meta property="og:video:width" content="${video.width}" />\` : ''}
+    ${video.height ? \`<meta property="og:video:height" content="${video.height}" />\` : ''}\` : ''}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
-    <meta name="twitter:image" content="${escapeHtml(image)}" />${structuredData ? `
+    <meta name="twitter:image" content="${escapeHtml(image)}" />${structuredData ? \`
     <script type="application/ld+json">${escapedJson(structuredData)}</script>
-    <script type="application/ld+json">${escapedJson(imageStructuredData)}</script>${proofStructuredData ? `
-    <script type="application/ld+json">${escapedJson(proofStructuredData)}</script>` : ''}` : ''}${breadcrumbs ? `
-    <script type="application/ld+json">${escapedJson(breadcrumbs)}</script>` : ''}`;
+    <script type="application/ld+json">${escapedJson(imageStructuredData)}</script>${proofStructuredData ? \`
+    <script type="application/ld+json">${escapedJson(proofStructuredData)}</script>\` : ''}\` : ''}${breadcrumbs ? \`
+    <script type="application/ld+json">${escapedJson(breadcrumbs)}</script>\` : ''}`;
 }
 
 function githubHeaders(token) {
@@ -1332,17 +1332,17 @@ function createHtml(config) {
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
           <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
           ${animationDownloadBlock(entry, origin)}
-          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? `<details class="preview-card proof-card"><summary class="section-title">Origin proof</summary><div class="proof-links">${video.sourceProofUrl ? `<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? `<code>${escapeHtml(shortHash(video.proofHash))}</code>` : ''}</a>` : ''}${video.blockchainAnchorUrl ? `<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? `<code>${escapeHtml(shortHash(video.anchorHash))}</code>` : ''}</a>` : ''}</div></details>` : ''}
+          ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? \`<details class="preview-card proof-card"><summary class="section-title">Origin proof</summary><div class="proof-links">${video.sourceProofUrl ? \`<a href="${escapeHtml(video.sourceProofUrl)}" target="_blank" rel="noreferrer">source-proof.json${video.proofHash ? \`<code>${escapeHtml(shortHash(video.proofHash))}</code>\` : ''}</a>\` : ''}${video.blockchainAnchorUrl ? \`<a href="${escapeHtml(video.blockchainAnchorUrl)}" target="_blank" rel="noreferrer">blockchain-anchor.json${video.anchorHash ? \`<code>${escapeHtml(shortHash(video.anchorHash))}</code>\` : ''}</a>\` : ''}</div></details>\` : ''}
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
       </div>
-      ${video ? `<section class="video-watch-panel video-watch-panel--bottom" aria-label="${escapeHtml(video.name)} video preview">
+      ${video ? \`<section class="video-watch-panel video-watch-panel--bottom" aria-label="${escapeHtml(video.name)} video preview">
         <div class="section-title">Video preview</div>
         <div class="seo-video-frame" style="--video-preview-ratio: ${escapeHtml(videoPreviewRatio)}">
           <video class="video-watch-player seo-video-preview" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl)}" muted playsinline preload="metadata" autoplay controls></video>
         </div>
         <div class="video-watch-copy"><h1>${escapeHtml(video.name)}</h1><p>${escapeHtml(video.description)}</p></div>
-      </section>` : ''}
+      </section>\` : ''}
     </div>
     <script type="application/json" id="spine-preview-config">${escapedJson(clientConfig)}</script>
     <script>
@@ -2278,7 +2278,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    ${seoHead({ origin, entryId, video: videoSeo, fallbackTitle: `${title} - Spine-Link video preview`, robots, playerUrl, archiveUrl })}
+    ${seoHead({ origin, entryId, video: videoSeo, fallbackTitle: \`${title} - Spine-Link video preview\`, robots, playerUrl, archiveUrl })}
     <link rel="stylesheet" href="/page-transitions.css" />
     <script src="/page-transitions.js" defer></script>
     <script src="/spine-embers.js?v=2026-09-30" defer></script>
@@ -2327,20 +2327,20 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
       <div class="topbar"><a class="brand" href="/" aria-label="Spine-Link home" title="На главную"><span class="brand-spine">Spine</span><span class="brand-link-part">link</span></a><a class="back" href="${ownerUrl}">Open portfolio</a></div>
       <section class="video-card">
         ${video
-          ? `<video id="video-fallback-player" src="${escapeHtml(video)}"${poster ? ` poster="${escapeHtml(poster)}"` : ''} muted loop playsinline preload="metadata" autoplay controls></video>`
-          : `<div class="video-placeholder" role="img" aria-label="${escapeHtml(title)}"${poster ? ` style="background-image:url('${escapeHtml(poster)}')"` : ''}></div>`}
+          ? \`<video id="video-fallback-player" src="${escapeHtml(video)}"${poster ? \` poster="${escapeHtml(poster)}"\` : ''} muted loop playsinline preload="metadata" autoplay controls></video>\`
+          : \`<div class="video-placeholder" role="img" aria-label="${escapeHtml(title)}"${poster ? \` style="background-image:url('${escapeHtml(poster)}')"\` : ''}></div>\`}
         <div class="body">
           <h1>${title}</h1>
-          ${note ? `<p>${cleanPublicText(note, 240)}</p>` : '<p>No preview video is available for this item yet.</p>'}
+          ${note ? \`<p>${cleanPublicText(note, 240)}</p>\` : '<p>No preview video is available for this item yet.</p>'}
           <button class="preview-like-button" id="preview-like-button" type="button" data-metric-id="${escapeHtml(metricId)}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" aria-pressed="false"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></button>
           <div class="preview-view-count" data-metric-id="${escapeHtml(metricId)}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong><span>views</span></div>
         </div>
       </section>
       ${authorWorks.length
-        ? `<section class="author-works" aria-label="More work by ${escapeHtml(ownerProfile?.name || 'this author')}">
+        ? \`<section class="author-works" aria-label="More work by ${escapeHtml(ownerProfile?.name || 'this author')}">
             <h2 class="author-works-title">More work by ${escapeHtml(ownerProfile?.name || 'this author')}</h2>
             <div class="author-works-grid" id="author-works-grid" data-works='${authorWorksJson}'></div>
-          </section>`
+          </section>\`
         : ''}
     </main>
     <script>
