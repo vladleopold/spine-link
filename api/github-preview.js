@@ -2549,6 +2549,7 @@ async function createDynamicPreview(settings, uploadPath, origin) {
         };
       });
       ownerProfile = {
+        id: entry.ownerAnonId || entry.publicOwnerId || "",
         visible: true,
         name: cleanPublicText(entry.ownerName || ownerEmail.split('@')[0] || 'anonim'),
         picture: safePublicImage(entry.ownerPicture || ''),
