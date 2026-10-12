@@ -8803,3 +8803,25 @@ h1 {
   .home-feed-overlay em { display: none !important; }
   .home-feed-overlay strong { font-size: 10px !important; }
 }
+
+/* On compact viewports upload is the primary action; the feed must not
+   steal space from the drag-and-drop panel. */
+@media (max-height: 600px), (max-width: 480px) {
+  .app-shell.is-empty:not(.is-edit-page) .home-portfolio-feed { display: none !important; }
+  .app-shell.is-empty:not(.is-edit-page) .stage {
+    bottom: 0 !important;
+    top: 0 !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow-y: auto !important;
+    padding: 8px !important;
+  }
+  .app-shell.is-empty:not(.is-edit-page) .home-drop-panel {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .app-shell.is-empty:not(.is-edit-page) .main-drop-zone {
+    height: clamp(96px, 35dvh, 260px) !important;
+    min-height: 80px !important;
+  }
+}
