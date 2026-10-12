@@ -179,6 +179,23 @@ function renderHomeShell(isDragging = false) {
   `;
 
   startHomeEmbers();
+  // Keep the fixed-position feed below the actual rendered drop panel,
+  // including responsive sizes and browser zoom.
+  const homePanel = root?.querySelector<HTMLElement>(".home-drop-panel");
+  const homeFeed = root?.querySelector<HTMLElement>("#home-feed");
+  if (homePanel && homeFeed) {
+    const positionFeed = () => {
+      const bottom = homePanel.getBoundingClientRect().bottom;
+      const top = Math.max(0, Math.ceil(bottom + 12));
+      homeFeed.style.top = top + "px";
+      homeFeed.style.bottom = "0";
+      homeFeed.style.height = Math.max(0, window.innerHeight - top) + "px";
+    };
+    positionFeed();
+    const observer = new ResizeObserver(positionFeed);
+    observer.observe(homePanel);
+    window.addEventListener("resize", positionFeed, { passive: true });
+  }
   wireHomeShell();
   wireUploadToast();
   wirePublishProgressMirror();
