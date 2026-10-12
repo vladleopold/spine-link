@@ -1325,6 +1325,12 @@ function createHtml(config) {
         #animation-card { margin: 0 !important; padding: 0 !important; }
         #animation-menu { margin: 0 !important; padding-top: 0 !important; }
       }
+
+      /* Hide Spine runtime branding and debug UI; preserve playback controls. */
+      #player .spine-player-logo, #player .spine-player-branding,
+      #player .spine-player-debug, #player .spine-player-debug-button,
+      #player [class*="spine-player-logo"], #player [class*="spine-player-debug"],
+      #player [title="Debug"], #player [aria-label="Debug"] { display: none !important; }
     </style>
   </head>
       <body>
