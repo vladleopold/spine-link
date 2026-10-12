@@ -1331,6 +1331,13 @@ function createHtml(config) {
       #player .spine-player-debug, #player .spine-player-debug-button,
       #player [class*="spine-player-logo"], #player [class*="spine-player-debug"],
       #player [title="Debug"], #player [aria-label="Debug"] { display: none !important; }
+
+      /* Desktop: scroll the entire sidebar, never truncate the animation list. */
+      @media (min-width: 1024px) {
+        .stage { min-height: 0; }
+        #sidebar { height: 100%; max-height: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; }
+        #animation-card, #animation-menu { flex: 0 0 auto; height: auto; max-height: none !important; overflow: visible !important; }
+      }
     </style>
   </head>
       <body>
