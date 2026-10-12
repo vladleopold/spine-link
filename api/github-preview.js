@@ -909,9 +909,9 @@ function animationDownloadBlock(entry, origin) {
     <div class="dl-head">
       <div class="dl-head-title">Download</div>
       <div class="dl-steps" role="tablist" aria-label="Download steps" hidden>
-        <button type="button" class="dl-step is-active" data-dl-goto="format" role="tab" aria-selected="true"><b>1</b><span>Format</span></button>
-        <button type="button" class="dl-step" data-dl-goto="size" role="tab" aria-selected="false"><b>2</b><span>Size</span></button>
-        <button type="button" class="dl-step" data-dl-goto="files" role="tab" aria-selected="false"><b>3</b><span>Files</span></button>
+        <button type="button" class="dl-step is-active" data-dl-goto="format" role="tab" aria-selected="true"><b>1</b></button>
+        <button type="button" class="dl-step" data-dl-goto="size" role="tab" aria-selected="false"><b>2</b></button>
+        <button type="button" class="dl-step" data-dl-goto="files" role="tab" aria-selected="false"><b>3</b></button>
       </div>
     </div>
     <div class="dl-viewport">
@@ -932,7 +932,7 @@ function animationDownloadBlock(entry, origin) {
         </div>
       </div>
     </div>
-    <div class="dl-status" data-dl-status aria-live="polite">${animationDownloadIcon()} <span data-dl-status-text>Pick a format to start</span></div>
+    <div class="dl-status" data-dl-status aria-live="polite">${animationDownloadIcon()} <span data-dl-status-text></span></div>
     <script type="application/json" data-dl-config>${escapedJson({
       origin,
       animations,
@@ -1285,6 +1285,25 @@ function createHtml(config) {
       .spine-link-loop-button.is-on::before { content: "↻"; color: #54cfff; text-shadow: 0 0 14px rgba(84, 207, 255, 0.72); transform: translateY(-1px); }
       .spine-link-loop-button.is-off::before { content: "↻"; color: rgba(210, 216, 222, 0.42); transform: translateY(-1px); }
       .spine-link-loop-button.is-off::after { content: none; }
+
+      /* Responsive public preview: keep the player in normal document flow. */
+      #sidebar { max-height: none; overflow: visible; }
+      .animation-card.is-open .animation-menu, .animation-menu { max-height: none; overflow: visible; }
+      @media (max-width: 1023px) {
+        html, body { height: auto !important; min-height: 100%; overflow-x: hidden !important; overflow-y: auto !important; }
+        #app { display: flex !important; flex-direction: column !important; height: auto !important; min-height: 100svh; max-height: none !important; overflow: visible !important; }
+        .stage { display: flex !important; flex-direction: column !important; height: auto !important; max-height: none !important; min-height: 0 !important; gap: 12px; overflow: visible !important; }
+        .player-frame { display: block !important; order: 0 !important; position: relative !important; width: 100%; height: 90svh !important; min-height: 90svh !important; max-height: none !important; flex: none !important; margin: 0 !important; isolation: isolate; }
+        #player { display: block; position: relative; width: 100% !important; height: 100% !important; min-height: 100% !important; max-height: none !important; }
+        #sidebar { display: flex !important; order: 1 !important; position: relative !important; flex-direction: column !important; width: 100%; height: auto !important; max-height: none !important; min-height: 0 !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; gap: 12px; }
+        #animation-card { order: 0 !important; display: block; width: 100%; margin: 0 !important; }
+        #animation-card .section-title { display: block; }
+        #animation-menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); height: auto !important; max-height: none !important; overflow: visible !important; }
+        .animation-download-block { order: 1 !important; }
+        .proof-card { order: 2 !important; }
+        #owner-library { order: 3 !important; }
+        #set-card, #note-card { order: 4; }
+      }
     </style>
   </head>
       <body>
@@ -1566,7 +1585,7 @@ const pinchDistance = { value: null };
           ownerProfile.onclick = () => { window.location.href = owner.url; };
           ownerProfile.title = "Open public library";
         }
-        items.forEach((item) => {
+        items.slice(0, 8).forEach((item) => {
           const link = document.createElement("a");
           link.href = item.url;
           const thumbSrc = item.thumbnailType === "gif" ? item.thumbnailPoster || "" : item.thumbnail || item.thumbnailPoster || "";
