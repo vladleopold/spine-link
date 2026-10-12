@@ -932,7 +932,7 @@ function animationDownloadBlock(entry, origin) {
         </div>
       </div>
     </div>
-    <div class="dl-status" data-dl-status aria-live="polite">${animationDownloadIcon()} <span data-dl-status-text></span></div>
+    
     <script type="application/json" data-dl-config>${escapedJson({
       origin,
       animations,
