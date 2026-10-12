@@ -137,16 +137,6 @@ function renderHomeShell(isDragging = false) {
             </div>
           </div>
         </header>
-        <section class="home-portfolio-feed" id="home-feed" aria-label="World SPINE ARCHIVE public portfolio and library work feed" style="display:none">
-          <div class="home-feed-heading">
-            <span class="home-feed-archive-label">World SPINE ARCHIVE</span>
-            <strong>Public user works from portfolios and libraries</strong>
-            <small>Anyone can add a Spine animation with Create preview or publish through a Google account profile.</small>
-          </div>
-          <div class="home-feed-viewport">
-            <div class="home-feed-track is-scrolling" id="home-feed-track"></div>
-          </div>
-        </section>
          <div class="stage">
            <div class="home-drop-panel">
              <label class="drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}" id="home-drop-zone">
@@ -169,6 +159,16 @@ function renderHomeShell(isDragging = false) {
              </p>
            </div>
          </div>
+        <section class="home-portfolio-feed" id="home-feed" aria-label="World SPINE ARCHIVE public portfolio and library work feed" style="display:none">
+          <div class="home-feed-heading">
+            <span class="home-feed-archive-label">World SPINE ARCHIVE</span>
+            <strong>Public user works from portfolios and libraries</strong>
+            <small>Anyone can add a Spine animation with Create preview or publish through a Google account profile.</small>
+          </div>
+          <div class="home-feed-viewport">
+            <div class="home-feed-track is-scrolling" id="home-feed-track"></div>
+          </div>
+        </section>
          <div id="upload-toast" class="upload-toast" style="display:none">
            <strong>Upload complete</strong>
            <a href="" target="_blank" rel="noreferrer">Open page</a>
