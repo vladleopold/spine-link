@@ -481,15 +481,15 @@ function seoHead({
     ? {
         '@context': 'https://schema.org',
         '@type': 'VideoObject',
-        '@id': `${video.url}#video`,
+        '@id': `${video.playerPageUrl || video.url}#video`,
         name: video.name,
         description: video.description,
         thumbnailUrl: [video.thumbnailUrl],
         uploadDate: video.uploadDate,
         contentUrl: video.contentUrl,
-        embedUrl: video.embedUrl,
-        url: video.url,
-        mainEntityOfPage: video.url,
+        embedUrl: video.playerPageUrl || video.embedUrl,
+        url: video.playerPageUrl || video.url,
+        mainEntityOfPage: video.playerPageUrl || video.url,
         isFamilyFriendly: true,
         ...(Array.isArray(video.proofDocuments) && video.proofDocuments.length
           ? { subjectOf: video.proofDocuments.map((document) => ({ '@id': document['@id'] })) }
@@ -1348,7 +1348,7 @@ function createHtml(config) {
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
           <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
           ${animationDownloadBlock(entry, origin)}
-          ${video?.contentUrl ? "<section class=\\\"video-watch-panel video-watch-panel--below-list\\\" aria-label=\\\"Uploaded video preview\\\"><video src=\\\"" + escapeHtml(video.contentUrl) + "\\\" poster=\\\"" + escapeHtml(video.thumbnailUrl || "") + "\\\" muted loop playsinline controls preload=\\\"metadata\\\"></video></section>" : ""}
+          
           ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? "<details class=\"preview-card proof-card\"><summary class=\"section-title\">Origin proof</summary><div class=\"proof-links\">" + (video.sourceProofUrl ? "<a href=\"".concat(escapeHtml(video.sourceProofUrl)).concat("\" target=\"_blank\" rel=\"noreferrer\">source-proof.json").concat(video.proofHash ? "<code>".concat(escapeHtml(shortHash(video.proofHash))).concat("</code>") : "").concat("</a>") : "").concat(video.blockchainAnchorUrl ? "<a href=\"".concat(escapeHtml(video.blockchainAnchorUrl)).concat("\" target=\"_blank\" rel=\"noreferrer\">blockchain-anchor.json").concat(video.anchorHash ? "<code>".concat(escapeHtml(shortHash(video.anchorHash))).concat("</code>") : "").concat("</a>") : "").concat("</div></details>") : ""}
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
