@@ -302,7 +302,7 @@ function wireHomeShell() {
       event.stopPropagation();
       const files = Array.from(event.dataTransfer?.files ?? []);
       renderHomeShell(false);
-      if (files.length) receiveFiles(files);
+      if (files.length) startBackgroundUpload(files);
     };
     homeZone.addEventListener("dragover", zoneDragOver, true);
     homeZone.addEventListener("drop", zoneDrop, true);
@@ -315,7 +315,7 @@ function wireHomeShell() {
     window.setTimeout(() => {
       input.value = "";
     }, 0);
-    receiveFiles(files);
+    if (files.length) startBackgroundUpload(files);
   };
   bootFileInput?.addEventListener("click", () => {
     bootFileInput.value = "";
@@ -1078,10 +1078,11 @@ function startBackgroundUpload(files: File[]) {
       return;
     }
     updateBackgroundUpload(uploadEntry.id, { status: "uploading" });
-    uploadNextFile();
+    await uploadNextFile();
   };
 
-  uploadNextFile();
+  showBackgroundPopup(uploadEntry.id, null, null);
+  void uploadNextFile();
 }
 
 async function finalizeBackgroundUpload(entryId: string, uploadId: string, uploadPath: string, uploadedAt: string) {
