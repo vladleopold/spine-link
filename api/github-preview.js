@@ -1312,6 +1312,19 @@ function createHtml(config) {
       .animation-download-block .dl-track[data-dl-step="format"] .dl-panel[data-dl-panel="format"],
       .animation-download-block .dl-track[data-dl-step="size"] .dl-panel[data-dl-panel="size"],
       .animation-download-block .dl-track[data-dl-step="files"] .dl-panel[data-dl-panel="files"] { display: block; }
+
+      /* Keep first animation row partly visible beneath the player on every phone. */
+      #animation-card > .section-title { display: none !important; }
+      .preview-top-row .like-card { order: 2 !important; }
+      .preview-top-row .preview-view-count { order: 1 !important; }
+      @media (max-width: 1023px) {
+        #app { gap: 6px !important; }
+        .stage { gap: 4px !important; }
+        .player-frame { height: max(300px, calc(100svh - 165px)) !important; min-height: 0 !important; }
+        #player { height: 100% !important; min-height: 0 !important; }
+        #animation-card { margin: 0 !important; padding: 0 !important; }
+        #animation-menu { margin: 0 !important; padding-top: 0 !important; }
+      }
     </style>
   </head>
       <body>
