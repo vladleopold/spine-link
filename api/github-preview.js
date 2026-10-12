@@ -1340,6 +1340,7 @@ function createHtml(config) {
         <div class="player-frame">
           <button class="library-nav-button library-nav-button--prev" id="library-nav-prev" type="button" aria-label="Previous Spine work" title="Previous Spine work">&lsaquo;</button>
           <div id="player"></div>
+          ${video?.contentUrl ? `<video id="preview-loading-video" class="preview-fallback-video" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl || '')}" autoplay muted loop playsinline preload="auto" aria-label="${escapeHtml(video.name || 'Spine animation video preview')}"></video>` : ''}
           <button class="library-nav-button library-nav-button--next" id="library-nav-next" type="button" aria-label="Next Spine work" title="Next Spine work">&rsaquo;</button>
         </div>
         <aside id="sidebar">
@@ -1973,29 +1974,27 @@ const pinchDistance = { value: null };
       // пользователь видит тёмный бокс вместо работы. Показываем выгрузку того же
       // клипа сразу как подложку и убираем её, когда интерактивный плеер готов.
       function showPreviewVideoFallback() {
-        const box = document.getElementById("player");
-        const src = config.video?.contentUrl || "";
-        if (!box || !src) return null;
-        box.innerHTML = '<video class="preview-fallback-video" src="' + src.replace(/[<>&"]/g, "") + '" autoplay muted loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;z-index:0"></video>';
-        const video = box.querySelector("video");
-        if (video) {
-          video.muted = true;
-          const attempt = video.play();
-          if (attempt && typeof attempt.catch === "function") attempt.catch(() => {});
-        }
+        const video = document.getElementById("preview-loading-video");
+        if (!video) return null;
+        video.hidden = false;
+        video.style.display = "block";
+        video.muted = true;
+        const attempt = video.play();
+        if (attempt && typeof attempt.catch === "function") attempt.catch(() => {});
         return video;
       }
       function clearPreviewVideoFallback() {
-        const video = document.querySelector("#player .preview-fallback-video");
+        const video = document.getElementById("preview-loading-video");
         if (!video) return;
-        try { video.pause(); } catch (e) {}
-        if (video.parentNode) video.parentNode.removeChild(video);
+        video.pause();
+        video.hidden = true;
+        video.style.display = "none";
       }
 
       async function createPlayer() { if (!activeSet.value) return; resetHealAttempts(); player?.dispose(); baseViewport.value = null; showPreviewVideoFallback(); const SpinePlayer = await loadSpineRuntime(activeSet.value); player = new SpinePlayer("player", { ...activeSet.value, viewport: measuredViewport(activeSet.value), showControls: true, showLoading: true, alpha: true, preserveDrawingBuffer: false, backgroundColor: "00000000", success: (loadedPlayer) => { player = loadedPlayer; limitPlayerFps(loadedPlayer, 30); releaseRuntimeWheelCapture(); requestAnimationFrame(clearPreviewVideoFallback); const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? []; const filteredNames = names.filter(name => !name.startsWith('Backup/')); if (filteredNames.length) { animationNames.value = filteredNames; syncScenario(filteredNames); const queryAnimation = queryValue("animation"); if (queryAnimation && filteredNames.includes(queryAnimation)) activeAnimation.name = queryAnimation; if (!activeAnimation.name || !filteredNames.includes(activeAnimation.name)) activeAnimation.name = activeSet.value?.animation && filteredNames.includes(activeSet.value.animation) ? activeSet.value.animation : filteredNames[0]; renderAnimationList(); syncUrl(); } disableMix(); installLoopButton(); playActiveAnimationFromStart(); requestAnimationFrame(() => { rememberBaseViewport(); captureStageOffset(); applyZoom(currentZoom.value); window.setTimeout(ensureVisibleContent, 120); window.setTimeout(ensureVisibleContent, 420); window.setTimeout(applyStageAnchor, 560); window.setTimeout(applyStageAnchor, 900); }); }, error: (_player, message) => { const box = document.getElementById("player"); if (!box) return;
         // WebGL недоступен или рантайм не смог поднять скелет: оставляем выгрузку
         // того же клипа, чтобы работа осталась видна.
-        if (showPreviewVideoFallback()) { const v = box.querySelector("video"); if (v) v.controls = true; return; }
+        if (showPreviewVideoFallback()) { const v = document.getElementById("preview-loading-video"); if (v) { v.controls = true; v.style.pointerEvents = "auto"; } return; }
         box.innerHTML = '<div style="display:grid;place-items:center;height:100%;padding:24px;color:#ffb088;font-weight:900;text-align:center;">Spine player error: ' + String(message || "could not load animation").replace(/[<>&]/g, "") + '</div>'; } }); }
       function renderAnimationList() {
         animationMenu.innerHTML = "";
@@ -2333,6 +2332,10 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
       .author-work img, .author-work video { width: 100%; height: 100%; object-fit: cover; }
       .author-work-label { position: absolute; right: 0; bottom: 0; left: 0; padding: 16px 10px 8px; color: #fff; background: linear-gradient(transparent, rgba(3,5,7,.86)); font-size: 12px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
       @media (prefers-reduced-motion: reduce) { .author-work { content-visibility: auto; } }
+      /* Server-rendered video is visible while Spine/WebGL initializes, for users and crawlers alike. */
+      .player-frame > #preview-loading-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; z-index: 2; pointer-events: none; }
+      .player-frame > #preview-loading-video[hidden] { display: none !important; }
+      .player-frame > .library-nav-button { z-index: 3; }
     </style>
   </head>
   <body>
