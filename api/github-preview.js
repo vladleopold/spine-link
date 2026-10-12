@@ -909,9 +909,9 @@ function animationDownloadBlock(entry, origin) {
     <div class="dl-head">
       <div class="dl-head-title">Download</div>
       <div class="dl-steps" role="tablist" aria-label="Download steps">
-        <button type="button" class="dl-step is-active" data-dl-goto="format" role="tab" aria-selected="true"><b>1</b><span>Format</span></button>
-        <button type="button" class="dl-step" data-dl-goto="size" role="tab" aria-selected="false"><b>2</b><span>Size</span></button>
-        <button type="button" class="dl-step" data-dl-goto="files" role="tab" aria-selected="false"><b>3</b><span>Files</span></button>
+        <button type="button" class="dl-step is-active" data-dl-goto="format" role="tab" aria-selected="true"><b>1</b><span class="sr-only">Format</span></button>
+        <button type="button" class="dl-step" data-dl-goto="size" role="tab" aria-selected="false"><b>2</b><span class="sr-only">Size</span></button>
+        <button type="button" class="dl-step" data-dl-goto="files" role="tab" aria-selected="false"><b>3</b><span class="sr-only">Files</span></button>
       </div>
     </div>
     <div class="dl-viewport">
@@ -932,7 +932,7 @@ function animationDownloadBlock(entry, origin) {
         </div>
       </div>
     </div>
-    <div class="dl-status" data-dl-status aria-live="polite">${animationDownloadIcon()} <span data-dl-status-text>Pick a format to start</span></div>
+    <div class="dl-status" data-dl-status aria-live="polite">${animationDownloadIcon()} <span class="sr-only" data-dl-status-text>Pick a format to start</span></div>
     <script type="application/json" data-dl-config>${escapedJson({
       origin,
       animations,
@@ -1284,7 +1284,48 @@ function createHtml(config) {
       .spine-link-loop-button.is-on::before { content: "↻"; color: #54cfff; text-shadow: 0 0 14px rgba(84, 207, 255, 0.72); transform: translateY(-1px); }
       .spine-link-loop-button.is-off::before { content: "↻"; color: rgba(210, 216, 222, 0.42); transform: translateY(-1px); }
       .spine-link-loop-button.is-off::after { content: none; }
-    </style>
+    
+      /* Responsive /p pages: let the document scroll, never the sidebar. */
+      .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+      html, body { height: auto !important; min-height: 100%; overflow-x: hidden !important; overflow-y: auto !important; }
+      #app { height: auto !important; min-height: 100svh; max-height: none !important; overflow: visible !important; }
+      .stage { height: auto !important; max-height: none !important; min-height: calc(100svh - 104px); align-items: start; }
+      #sidebar { height: auto !important; max-height: none !important; overflow: visible !important; padding-right: 0; }
+      .player-frame { align-self: start; position: sticky; top: 12px; height: calc(100svh - 120px); min-height: 420px; }
+      .animation-menu, .animation-card.is-open .animation-menu { max-height: none !important; overflow: visible !important; }
+      .dl-steps .dl-step span, .dl-status [data-dl-status-text] { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+      .dl-status { display: none !important; }
+      #sidebar > #animation-card { order: 1 !important; }
+      #sidebar > .animation-download-block { order: 2 !important; }
+      #sidebar > .video-watch-panel--below-list { order: 3 !important; }
+      #sidebar > .proof-card { order: 4 !important; }
+      #sidebar > #owner-library { order: 5 !important; }
+      #sidebar > #set-card, #sidebar > .note-card { order: 6 !important; }
+      .video-watch-panel--below-list { display: grid; gap: 8px; padding: 10px; border: 1px solid rgba(255,185,214,.28); border-radius: 8px; background: #020304; }
+      .video-watch-panel--below-list video { display: block; width: 100%; max-height: 56svh; object-fit: contain; background: #000; }
+      .owner-library.is-visible { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 96px; }
+      .owner-library a { height: 96px; min-height: 96px; }
+      .owner-library-more { display: grid !important; place-items: end start; padding: 10px; color: #fff; background: linear-gradient(135deg, rgba(255,106,40,.9), rgba(26,31,38,.96)); font-size: 12px; font-weight: 900; text-decoration: none; }
+      @media (max-width: 1024px) {
+        html, body { height: auto !important; min-height: 100%; overflow-x: hidden !important; overflow-y: auto !important; }
+        #app { display: flex; flex-direction: column; height: auto !important; min-height: 100svh; max-height: none !important; overflow: visible !important; padding: 10px 12px 24px; }
+        .stage { display: flex !important; flex-direction: column; gap: 14px; height: auto !important; max-height: none !important; min-height: 0; }
+        .player-frame { position: relative !important; top: auto !important; order: 1 !important; width: 100%; height: 90svh !important; min-height: 90svh !important; max-height: none !important; flex: 0 0 auto; }
+        #player { width: 100%; height: 100% !important; min-height: 90svh !important; max-height: none !important; }
+        #sidebar { display: flex !important; flex-direction: column; order: 2 !important; width: 100%; max-height: none !important; height: auto !important; overflow: visible !important; gap: 12px; margin: 0; padding: 0; }
+        #sidebar > #animation-card { order: 1 !important; margin: 0; }
+        #sidebar > .animation-download-block { order: 2 !important; margin: 0; }
+        #sidebar > .video-watch-panel--below-list { order: 3 !important; margin: 0; }
+        #sidebar > .proof-card { order: 4 !important; margin: 0; }
+        #sidebar > #owner-library { order: 5 !important; margin: 0; }
+        #sidebar > #set-card, #sidebar > .note-card { order: 6 !important; margin: 0; }
+        .animation-menu, .animation-card.is-open .animation-menu { max-height: none !important; height: auto !important; overflow: visible !important; }
+        .animation-menu button, #animation-menu button { min-height: 40px; }
+        .video-watch-panel--below-list video { max-height: 60svh; }
+        .owner-library.is-visible { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 100px; }
+        .owner-library a { height: 100px; min-height: 100px; }
+      }
+</style>
   </head>
       <body>
     <div id="app">
@@ -1306,6 +1347,7 @@ function createHtml(config) {
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
           <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
           ${animationDownloadBlock(entry, origin)}
+          ${video?.contentUrl ? "<section class=\\\"video-watch-panel video-watch-panel--below-list\\\" aria-label=\\\"Uploaded video preview\\\"><video src=\\\"" + escapeHtml(video.contentUrl) + "\\\" poster=\\\"" + escapeHtml(video.thumbnailUrl || "") + "\\\" muted loop playsinline controls preload=\\\"metadata\\\"></video></section>" : ""}
           ${video?.sourceProofUrl || video?.blockchainAnchorUrl ? "<details class=\"preview-card proof-card\"><summary class=\"section-title\">Origin proof</summary><div class=\"proof-links\">" + (video.sourceProofUrl ? "<a href=\"".concat(escapeHtml(video.sourceProofUrl)).concat("\" target=\"_blank\" rel=\"noreferrer\">source-proof.json").concat(video.proofHash ? "<code>".concat(escapeHtml(shortHash(video.proofHash))).concat("</code>") : "").concat("</a>") : "").concat(video.blockchainAnchorUrl ? "<a href=\"".concat(escapeHtml(video.blockchainAnchorUrl)).concat("\" target=\"_blank\" rel=\"noreferrer\">blockchain-anchor.json").concat(video.anchorHash ? "<code>".concat(escapeHtml(shortHash(video.anchorHash))).concat("</code>") : "").concat("</a>") : "").concat("</div></details>") : ""}
           <div class="preview-card owner-library" id="owner-library"></div>
         </aside>
@@ -1565,7 +1607,8 @@ const pinchDistance = { value: null };
           ownerProfile.onclick = () => { window.location.href = owner.url; };
           ownerProfile.title = "Open public library";
         }
-        items.forEach((item) => {
+        const visibleItems = items.length > 8 ? items.slice(0, 7) : items.slice(0, 8);
+        visibleItems.forEach((item) => {
           const link = document.createElement("a");
           link.href = item.url;
           const thumbSrc = item.thumbnailType === "gif" ? item.thumbnailPoster || "" : item.thumbnail || item.thumbnailPoster || "";
@@ -1593,6 +1636,16 @@ const pinchDistance = { value: null };
           link.append(thumb, text);
           ownerLibrary.appendChild(link);
         });
+        if (items.length > 8 && owner.url) {
+          const more = document.createElement("a");
+          more.className = "owner-library-more";
+          more.href = owner.url;
+          more.setAttribute("aria-label", "View more animations from this user");
+          const moreLabel = document.createElement("strong");
+          moreLabel.textContent = "View more animations";
+          more.appendChild(moreLabel);
+          ownerLibrary.appendChild(more);
+        }
       }
       function installOwnerLibraryChaos() {
         const visibleVideos = new Set();
