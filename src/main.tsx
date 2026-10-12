@@ -1031,18 +1031,63 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function startBackgroundUpload(files: File[]) {
+// Durable browser-side staging: survives refresh/close after the drop event.
+// Server-side export continues after finalize; incomplete network uploads resume
+// when this browser returns. Browsers cannot guarantee transfer after closure.
+function pendingUploadDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("spine-pending-uploads", 1);
+    request.onupgradeneeded = () => request.result.createObjectStore("jobs", { keyPath: "id" });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+async function pendingUploadPut(job: { id: string; files: File[]; uploadedAt: string; title: string; uploadId: string; uploadPath: string }) {
+  const db = await pendingUploadDb();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction("jobs", "readwrite");
+    tx.objectStore("jobs").put(job);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+async function pendingUploadDelete(id: string) {
+  const db = await pendingUploadDb();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction("jobs", "readwrite");
+    tx.objectStore("jobs").delete(id);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+async function resumeStagedUploads() {
+  try {
+    const db = await pendingUploadDb();
+    const jobs = await new Promise<any[]>((resolve, reject) => {
+      const tx = db.transaction("jobs", "readonly");
+      const req = tx.objectStore("jobs").getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    for (const job of jobs) {
+      if (Array.isArray(job.files) && job.files.length) startBackgroundUpload(job.files, job);
+    }
+  } catch (error) { console.warn("[spine] pending upload recovery unavailable", error); }
+}
+
+function startBackgroundUpload(files: File[], resumed?: { id: string; files: File[]; uploadedAt: string; title: string; uploadId: string; uploadPath: string }) {
   const anonymousAccount = getAnonymousAccount();
-  const uploadedAt = new Date().toISOString();
-  const title = files.find((f) => f.name.toLowerCase().endsWith(".json"))?.name.replace(/\.[^.]+$/, "") || "Spine animation";
+  const uploadedAt = resumed?.uploadedAt || new Date().toISOString();
+  const title = resumed?.title || files.find((f) => f.name.toLowerCase().endsWith(".json"))?.name.replace(/\.[^.]+$/, "") || "Spine animation";
   const safeTitle = title.replace(/[^a-z0-9._-]/gi, "-").replace(/-+/g, "-").slice(0, 60);
-  const uploadId = `${safeTitle}-${uploadedAt.replace(/[:.]/g, "-")}`;
+  const uploadId = resumed?.uploadId || `${safeTitle}-${uploadedAt.replace(/[:.]/g, "-")}`;
   // The collection folder is chosen server-side, so the client sends only the
   // work folder. The server joins it onto whichever library_NN folder is active
   // and returns the real path, which the finalize step then records.
-  const uploadPath = uploadId;
+  const uploadPath = resumed?.uploadPath || uploadId;
   const origin = window.location.origin;
-  const uploadEntry = addBackgroundUpload({
+  const uploadEntry = resumed ? (getBackgroundUploads().find(entry => entry.id === resumed.id) || addBackgroundUpload({ uploadId, uploadPath, uploadUrl: `${origin}/p/${encodeURIComponent(uploadId)}`, files: files.map(f => ({ name: f.name, size: f.size })), status: "uploading" })) : addBackgroundUpload({
     uploadId,
     uploadPath,
     uploadUrl: `${origin}/p/${encodeURIComponent(uploadId)}`,
@@ -1082,7 +1127,15 @@ function startBackgroundUpload(files: File[]) {
   };
 
   showBackgroundPopup(uploadEntry.id, null, null);
-  void uploadNextFile();
+  void (async () => {
+    try {
+      if (!resumed) await pendingUploadPut({ id: uploadEntry.id, files, uploadedAt, title, uploadId, uploadPath });
+      await uploadNextFile();
+    } catch (error) {
+      updateBackgroundUpload(uploadEntry.id, { status: 'failed', error: String(error) });
+      showBackgroundPopup(uploadEntry.id, null, String(error));
+    }
+  })();
 }
 
 async function finalizeBackgroundUpload(entryId: string, uploadId: string, uploadPath: string, uploadedAt: string) {
@@ -1112,6 +1165,7 @@ async function finalizeBackgroundUpload(entryId: string, uploadId: string, uploa
   }
   const previewUrl = `${window.location.origin}/p/${encodeURIComponent(uploadId)}`;
   updateBackgroundUpload(entryId, { status: "complete", uploadUrl: previewUrl });
+  void pendingUploadDelete(entryId).catch(() => {});
   try { localStorage.setItem("__spineUploadComplete", JSON.stringify({ url: previewUrl, timestamp: Date.now() })); } catch {}
   window.dispatchEvent(new CustomEvent("spine-upload-complete", { detail: { url: previewUrl } }));
   showBackgroundPopup(entryId, previewUrl, null);
@@ -1230,6 +1284,7 @@ function wireUploadToast() {
 }
 
 window.addEventListener("load", () => {
+  void resumeStagedUploads();
   const uploads = getBackgroundUploads();
   for (const upload of uploads) {
     if (upload.status === "complete" && upload.uploadUrl) {
