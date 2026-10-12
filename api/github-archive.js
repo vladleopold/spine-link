@@ -432,9 +432,9 @@ function previewDurationSeconds(entry) {
 
 function homepageFeedEntries(origin, entries, metrics) {
   const scoredEntries = entries
-    .filter((entry) => entry?.hiddenFromPublicLibrary !== true && (entry?.webmPreview || entry?.thumbnailPoster || entry?.thumbnail))
-    // Лента показывает только анимации с реальным превью длинной не меньше 2 секунд.
-    .filter((entry) => previewDurationSeconds(entry) >= 2)
+    .filter((entry) => entry?.hiddenFromPublicLibrary !== true && (entryVideoSrc(origin, entry) || '').length > 0)
+    // Only verified-duration motion previews belong in the moving video feed.
+    .filter((entry) => previewDurationSeconds(entry) >= 0.5 && Number(entry?.previewFrameCount || entry?.videoFrameCount || 0) !== 1 && (Number(entry?.previewFrameCount || entry?.videoFrameCount || 0) === 0 || Number(entry?.previewFrameCount || entry?.videoFrameCount || 0) > 5))
     .map((entry) => ({ entry, score: feedScore(entry, metrics) }))
     .sort((a, b) => b.score - a.score || compareArchiveEntries(a.entry, b.entry));
   const topPool = scoredEntries.slice(0, Math.min(96, Math.max(24, scoredEntries.length))).map(({ entry }) => entry);
