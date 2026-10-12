@@ -908,7 +908,7 @@ function animationDownloadBlock(entry, origin) {
   return `<section class="animation-download-block" id="animation-download-block" data-dl-block aria-label="Download animations">
     <div class="dl-head">
       <div class="dl-head-title">Download</div>
-      <div class="dl-steps" role="tablist" aria-label="Download steps">
+      <div class="dl-steps" role="tablist" aria-label="Download steps" hidden>
         <button type="button" class="dl-step is-active" data-dl-goto="format" role="tab" aria-selected="true"><b>1</b><span>Format</span></button>
         <button type="button" class="dl-step" data-dl-goto="size" role="tab" aria-selected="false"><b>2</b><span>Size</span></button>
         <button type="button" class="dl-step" data-dl-goto="files" role="tab" aria-selected="false"><b>3</b><span>Files</span></button>
@@ -1095,6 +1095,7 @@ function createHtml(config) {
       .dl-head { display: grid; gap: 9px; }
       .dl-head-title { color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
       .dl-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+      .dl-steps[hidden] { display: none !important; }
       .dl-step { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 6px; border: 1px solid rgba(255,255,255,.1); border-radius: 999px; color: rgba(231,237,244,.72); background: rgba(255,255,255,.04); font-size: 11px; font-weight: 850; cursor: pointer; transition: color .18s ease, background .18s ease, border-color .18s ease; }
       .dl-step b { display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; color: #0b0e12; background: rgba(231,237,244,.72); font-size: 9px; font-weight: 900; }
       .dl-step.is-active { border-color: rgba(140,199,255,.82); color: #fff; background: rgba(71,156,255,.2); }
@@ -2147,6 +2148,8 @@ playerElement.addEventListener("touchstart", (event) => {
             block.querySelectorAll("[data-dl-format]").forEach(function (other) {
               other.classList.toggle("is-picked", other === chip);
             });
+            var stepNav = block.querySelector(".dl-steps");
+            if (stepNav) stepNav.hidden = false;
             say((formatLabels[chosen.format] || "Format") + " selected \u2014 pick a size");
             go("size");
           });
