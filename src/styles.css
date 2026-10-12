@@ -8664,3 +8664,59 @@ h1 {
 .dark-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 106, 115, 0.78);
 }
+
+
+/* Public player pages: let the document scroll instead of clipping the sidebar. */
+.app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .animation-list,
+.app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .animation-grid {
+  max-height: none;
+  height: auto;
+  overflow: visible;
+}
+@media (max-width: 1023px) {
+  html:has(.app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page)),
+  body:has(.app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page)) {
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page),
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .app-shell-inner,
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .workspace {
+    height: auto;
+    min-height: 100svh;
+    max-height: none;
+    overflow: visible;
+  }
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .preview-panel {
+    flex: none;
+    width: 100%;
+    height: 90svh;
+    min-height: 0;
+  }
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .preview-panel .player-host,
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .preview-panel .spine-player {
+    min-height: 0;
+  }
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .inspector {
+    position: static;
+    flex: none;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+  }
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .animation-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
