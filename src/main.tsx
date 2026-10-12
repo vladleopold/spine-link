@@ -569,7 +569,7 @@ function startHomeFeed(track: HTMLElement, cards: HTMLElement[], viewport: HTMLE
     return;
   }
 
-  const speed = 17; // пикселей в секунду (2x медленнее)
+  const speed = 6.8; // 2.5x slower than the previous 17 px/s
   let moved = 0;
   let raf = 0;
   let last = performance.now();
