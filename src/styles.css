@@ -8825,3 +8825,49 @@ h1 {
     min-height: 80px !important;
   }
 }
+
+/* Drag/drop stays usable in both narrow and very short browser windows. */
+@media (max-width: 480px), (max-height: 600px) {
+  .app-shell.is-empty:not(.is-edit-page) .stage {
+    min-height: 0 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    scrollbar-gutter: stable;
+    box-sizing: border-box;
+  }
+  .app-shell.is-empty:not(.is-edit-page) .home-drop-panel {
+    width: min(100%, 560px) !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin-inline: auto !important;
+    box-sizing: border-box;
+  }
+  .app-shell.is-empty:not(.is-edit-page) .main-drop-zone {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: clamp(72px, 30dvh, 180px) !important;
+    max-height: none !important;
+    padding: clamp(6px, 2dvh, 14px) clamp(8px, 3vw, 18px) !important;
+    overflow-wrap: anywhere;
+    box-sizing: border-box;
+  }
+}
+@media (max-height: 320px) {
+  .app-shell.is-empty:not(.is-edit-page) .stage {
+    place-items: start center !important;
+    padding: 2px 6px !important;
+  }
+  .app-shell.is-empty:not(.is-edit-page) .main-drop-zone {
+    min-height: 52px !important;
+    padding: 4px 8px !important;
+  }
+  .app-shell.is-empty:not(.is-edit-page) .main-drop-zone svg {
+    display: none !important;
+  }
+  .app-shell.is-empty:not(.is-edit-page) .home-drop-caption {
+    display: none !important;
+  }
+}
