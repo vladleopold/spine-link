@@ -1304,6 +1304,14 @@ function createHtml(config) {
         #owner-library { order: 3 !important; }
         #set-card, #note-card { order: 4; }
       }
+
+      /* Keep download box only as tall as its currently visible step. */
+      .animation-download-block .dl-track { display: block; width: 100%; transform: none !important; transition: none; }
+      .animation-download-block .dl-panel { display: none; width: 100%; padding-right: 0; }
+      .animation-download-block .dl-track:not([data-dl-step]) .dl-panel[data-dl-panel="format"],
+      .animation-download-block .dl-track[data-dl-step="format"] .dl-panel[data-dl-panel="format"],
+      .animation-download-block .dl-track[data-dl-step="size"] .dl-panel[data-dl-panel="size"],
+      .animation-download-block .dl-track[data-dl-step="files"] .dl-panel[data-dl-panel="files"] { display: block; }
     </style>
   </head>
       <body>
