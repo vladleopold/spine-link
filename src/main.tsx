@@ -320,7 +320,6 @@ function wireHomeShell() {
   bootFileInput?.addEventListener("click", () => {
     bootFileInput.value = "";
   });
-  bootFileInput?.addEventListener("input", handleBootFileInput);
   bootFileInput?.addEventListener("change", handleBootFileInput);
 
   void loadHomeFeed();
