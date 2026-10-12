@@ -932,7 +932,6 @@ function animationDownloadBlock(entry, origin) {
         </div>
       </div>
     </div>
-    <div class="dl-status" data-dl-status aria-live="polite">${animationDownloadIcon()} <span data-dl-status-text>Pick a format to start</span></div>
     <script type="application/json" data-dl-config>${escapedJson({
       origin,
       animations,
@@ -1123,8 +1122,6 @@ function createHtml(config) {
       .dl-row-links { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
       .dl-mini { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 0 7px; border: 1px solid rgba(140,199,255,.28); border-radius: 999px; color: #dff1ff; background: rgba(140,199,255,.1); font-size: 10px; font-weight: 900; text-decoration: none; }
       .dl-mini:hover { border-color: rgba(179,255,64,.7); color: #eaffc2; background: rgba(179,255,64,.14); }
-      .dl-status { display: flex; align-items: center; gap: 7px; margin-top: 9px; min-height: 30px; padding: 0 9px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; color: rgba(231,237,244,.78); background: rgba(255,255,255,.03); font-size: 11px; font-weight: 800; }
-      .dl-status span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .dl-back { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; margin-top: 8px; padding: 0 9px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; color: rgba(231,237,244,.78); background: rgba(255,255,255,.05); font-size: 10px; font-weight: 900; cursor: pointer; }
       .dl-back:hover { border-color: rgba(140,199,255,.78); color: #fff; }
       @media (prefers-reduced-motion: reduce) { .dl-track { transition: none; } }
@@ -2616,9 +2613,7 @@ export default async function handler(request, response) {
       setNoStoreHeaders(response);
       return response.status(200).send('');
     }
-    // Dynamic preview HTML must not be cached: old CDN/browser copies can keep
-    // rendering stale controls after a fix has already reached the deployed code.
-    setNoStoreHeaders(response);
+    setCacheHeaders(response, cacheProfiles.dynamicHtmlBrowser, cacheProfiles.dynamicHtmlCdn);
     return response.status(200).send(html);
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Preview failed');
