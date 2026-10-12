@@ -179,23 +179,6 @@ function renderHomeShell(isDragging = false) {
   `;
 
   startHomeEmbers();
-  // Keep the fixed-position feed below the actual rendered drop panel,
-  // including responsive sizes and browser zoom.
-  const homePanel = root?.querySelector<HTMLElement>(".home-drop-panel");
-  const homeFeed = root?.querySelector<HTMLElement>("#home-feed");
-  if (homePanel && homeFeed) {
-    const positionFeed = () => {
-      const bottom = homePanel.getBoundingClientRect().bottom;
-      const top = Math.max(0, Math.ceil(bottom + 12));
-      homeFeed.style.top = top + "px";
-      homeFeed.style.bottom = "0";
-      homeFeed.style.height = Math.max(0, window.innerHeight - top) + "px";
-    };
-    positionFeed();
-    const observer = new ResizeObserver(positionFeed);
-    observer.observe(homePanel);
-    window.addEventListener("resize", positionFeed, { passive: true });
-  }
   wireHomeShell();
   wireUploadToast();
   wirePublishProgressMirror();
@@ -408,9 +391,13 @@ async function loadHomeFeed() {
         ? previewWidth / previewHeight
         : Number(entry.mediaAspectRatio || 0);
 
-    const card = document.createElement("a");
+    const card = document.createElement("div");
     card.className = "home-feed-card";
-    card.href = String(entry.previewUrl || "/world-spine-archive");
+    const openLink = document.createElement("a");
+    openLink.className = "home-feed-open-link";
+    openLink.href = String(entry.previewUrl || "/world-spine-archive");
+    openLink.setAttribute("aria-label", `Open ${title}`);
+    card.appendChild(openLink);
     card.setAttribute("aria-label", `Open ${title}`);
     // Ширина от ленты, чтобы в кадр влезали ровно три карточки.
     card.style.setProperty("--home-feed-card-width", `${homeFeedCardWidth()}px`);
@@ -451,12 +438,50 @@ async function loadHomeFeed() {
       card.appendChild(video);
     }
 
-    const like = document.createElement("span");
+    const like = document.createElement("button");
+    like.type = "button";
     like.className = "home-feed-like";
-    like.setAttribute("aria-hidden", "true");
+    like.dataset.metricId = id;
+    like.setAttribute("aria-label", `Like ${title}`);
+    like.setAttribute("aria-pressed", "false");
     like.innerHTML =
       '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>';
-    like.appendChild(document.createTextNode(` ${likes}`));
+    const likeCount = document.createElement("span");
+    likeCount.className = "home-feed-like-count";
+    likeCount.textContent = String(likes);
+    like.appendChild(likeCount);
+    like.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (like.disabled) return;
+      like.disabled = true;
+      const wasLiked = like.getAttribute("aria-pressed") === "true";
+      const previous = Number(likeCount.textContent || 0);
+      const setLiked = (liked: boolean, count: number) => {
+        like.setAttribute("aria-pressed", String(liked));
+        like.classList.toggle("is-liked", liked);
+        likeCount.textContent = String(Math.max(0, count));
+      };
+      setLiked(!wasLiked, previous + (wasLiked ? -1 : 1));
+      try {
+        let visitorId = localStorage.getItem("spine-link-metrics-visitor");
+        if (!visitorId) {
+          visitorId = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, "0")).join("");
+          localStorage.setItem("spine-link-metrics-visitor", visitorId);
+        }
+        const response = await fetch("/api/github-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "track-metric", metricAction: "like", entryId: id, visitorId, liked: !wasLiked }) });
+        const payload = await response.json();
+        if (!response.ok || !payload.metric) throw new Error("Like failed");
+        document.querySelectorAll<HTMLButtonElement>(".home-feed-like").forEach(button => {
+          if (button.dataset.metricId !== id) return;
+          button.setAttribute("aria-pressed", String(Boolean(payload.metric.liked)));
+          button.classList.toggle("is-liked", Boolean(payload.metric.liked));
+          const counter = button.querySelector(".home-feed-like-count");
+          if (counter) counter.textContent = String(Number(payload.metric.likes || 0));
+        });
+      } catch { setLiked(wasLiked, previous); }
+      finally { like.disabled = false; }
+    });
     card.appendChild(like);
 
     const overlay = document.createElement("span");
