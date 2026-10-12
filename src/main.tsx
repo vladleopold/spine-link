@@ -506,6 +506,20 @@ function startHomeFeed(track: HTMLElement, cards: HTMLElement[], viewport: HTMLE
   applyCardWidths();
   window.requestAnimationFrame(applyCardWidths);
 
+  // A short or frozen clip must not occupy an autoplay slot in the moving feed.
+  // Reject the video at metadata time as a second line of defence behind the API.
+  lane.querySelectorAll<HTMLVideoElement>(".home-feed-video").forEach((video) => {
+    video.addEventListener("loadedmetadata", () => {
+      if (!Number.isFinite(video.duration) || video.duration < 0.5) {
+        video.pause();
+        video.removeAttribute("src");
+        delete video.dataset.src;
+        video.load();
+        video.closest(".home-feed-card")?.remove();
+      }
+    }, { once: true });
+  });
+
   const videoOf = (card: Element) => card.querySelector<HTMLVideoElement>(".home-feed-video");
   const viewportWidth = () => viewport?.clientWidth || window.innerWidth;
 
