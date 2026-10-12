@@ -2616,7 +2616,9 @@ export default async function handler(request, response) {
       setNoStoreHeaders(response);
       return response.status(200).send('');
     }
-    setCacheHeaders(response, cacheProfiles.dynamicHtmlBrowser, cacheProfiles.dynamicHtmlCdn);
+    // Dynamic preview HTML must not be cached: old CDN/browser copies can keep
+    // rendering stale controls after a fix has already reached the deployed code.
+    setNoStoreHeaders(response);
     return response.status(200).send(html);
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Preview failed');
