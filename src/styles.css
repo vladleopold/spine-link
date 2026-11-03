@@ -8977,3 +8977,30 @@ h1 {
     overflow: visible !important;
   }
 }
+
+
+/* Mobile preview sizing: reserve space for the first animation control below the player. */
+@media screen and (max-width: 1023px) {
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .preview-panel {
+    height: calc(90svh - 76px) !important;
+    min-height: 240px !important;
+    max-height: none !important;
+  }
+
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .inspector {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .inspector > .animation-list {
+    order: -1 !important;
+    flex: 0 0 auto !important;
+    margin-top: 8px !important;
+  }
+
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .inspector > .animation-list .animation-grid {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+}
