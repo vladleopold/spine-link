@@ -8923,3 +8923,57 @@ h1 {
     overflow: visible !important;
   }
 }
+
+
+/* Hard override for public-preview mobile stacking; keep the player and inspector in one column. */
+@media screen and (max-width: 1023px) {
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    grid-template-columns:  minmax(0, 1fr) !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .preview-panel {
+    order: 0 !important;
+    display: block !important;
+    position: relative !important;
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    height: min(90svh, 760px) !important;
+    min-height: 320px !important;
+    max-height: 760px !important;
+    margin: 0 !important;
+  }
+
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .inspector {
+    order: 1 !important;
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    float: none !important;
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .inspector .animation-list,
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .stage > .inspector .animation-grid {
+    width: 100% !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}
