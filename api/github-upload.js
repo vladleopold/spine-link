@@ -1799,116 +1799,43 @@ export default async function handler(request, response) {
       });
     }
 
-    if (action === 'update-profile-name') {
+    if (['update-profile-name', 'update-profile-visibility', 'update-owner-portfolio-mode'].includes(action)) {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
-      const indexPath = joinRepoPath(settings.basePath, 'index.json');
-      const currentIndex = await getGitHubContent(settings, indexPath);
-      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
-      const userEmail = String(googlePayload?.email || '').toLowerCase();
-      const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
-      const ownerName = cleanPublicProfileText(body?.ownerName || googlePayload?.name || '', 80);
-      const ownerPicture = cleanPublicProfileImage(body?.ownerPicture || googlePayload?.picture || '');
-      const publicOwnerId = publicOwnerIdFor(googlePayload, anonymousAccount, body?.publicOwnerId);
-      if (!ownerName) return response.status(400).json({ error: 'Account name is required' });
-
+      const ownerName = cleanPublicProfileText(body.ownerName || googlePayload?.name || '', 80);
+      const ownerPicture = cleanPublicProfileImage(body.ownerPicture || googlePayload?.picture || '');
+      if (action === 'update-profile-name' && !ownerName) return response.status(400).json({ error: 'Account name is required' });
+      const collections = await libraryCollectionIndexes(settings);
       let changed = false;
-      const nextEntries = currentEntries.map((currentEntry) => {
-        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
-        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
-        const isOwner = (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
-        if (!isOwner) return currentEntry;
-        const nextEntry = { ...currentEntry, ownerName, publicOwnerId };
-        if (googlePayload?.email) nextEntry.ownerEmail = googlePayload.email;
-        if (ownerPicture) nextEntry.ownerPicture = ownerPicture;
-        changed =
-          changed ||
-          currentEntry.ownerName !== nextEntry.ownerName ||
-          currentEntry.publicOwnerId !== nextEntry.publicOwnerId ||
-          currentEntry.ownerEmail !== nextEntry.ownerEmail ||
-          currentEntry.ownerPicture !== nextEntry.ownerPicture;
-        return nextEntry;
-      });
-
-      if (changed && currentIndex?.sha) {
-        await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update account name`, currentIndex?.sha, origin);
+      for (const collection of collections) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          let dirty = false;
+          const nextEntries = collection.entries.map(entry => {
+            if (!canEditEntry(entry, googlePayload, anonymousAccount)) return entry;
+            const next = { ...entry, publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry.publicOwnerId) };
+            if (googlePayload?.email) next.ownerEmail = googlePayload.email;
+            if (ownerName) next.ownerName = ownerName;
+            if (ownerPicture) next.ownerPicture = ownerPicture;
+            if (action === 'update-profile-visibility') next.showOwnerLibrary = Boolean(body.showOwnerLibrary);
+            if (action === 'update-owner-portfolio-mode') next.portfolioMode = Boolean(body.portfolioMode);
+            if (JSON.stringify(entry) !== JSON.stringify(next)) dirty = true;
+            return next;
+          });
+          if (!dirty) break;
+          try {
+            await putGitHubContent(settings, joinRepoPath(collection.basePath, 'index.json'), textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: ${action}`, collection.sha, origin);
+            collection.entries = nextEntries;
+            changed = true;
+            break;
+          } catch (error) {
+            if (attempt === 2 || ![409, 422].includes(Number(error?.status))) throw error;
+            const fresh = await getGitHubContent(settings, joinRepoPath(collection.basePath, 'index.json'));
+            collection.entries = JSON.parse(base64ToText(fresh.content));
+            collection.sha = fresh.sha;
+          }
+        }
       }
-
-      const entries = nextEntries.filter((currentEntry) => {
-        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
-        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
-        return (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
-      }).sort(compareLibraryEntries);
-      return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, entries), changed });
-    }
-
-    if (action === 'update-profile-visibility') {
-      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
-      const indexPath = joinRepoPath(settings.basePath, 'index.json');
-      const currentIndex = await getGitHubContent(settings, indexPath);
-      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
-      const showOwnerLibrary = Boolean(body?.showOwnerLibrary);
-      const userEmail = String(googlePayload?.email || '').toLowerCase();
-      const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
-      const ownerName = cleanPublicProfileText(body?.ownerName || googlePayload?.name || '');
-      const ownerPicture = cleanPublicProfileImage(body?.ownerPicture || googlePayload?.picture || '');
-      const publicOwnerId = publicOwnerIdFor(googlePayload, anonymousAccount, body?.publicOwnerId);
-      let changed = false;
-      const nextEntries = currentEntries.map((currentEntry) => {
-        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
-        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
-        const isOwner = (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
-        if (!isOwner) return currentEntry;
-        changed = true;
-        const nextEntry = { ...currentEntry, publicOwnerId, showOwnerLibrary };
-        if (googlePayload?.email) nextEntry.ownerEmail = googlePayload.email;
-        if (ownerName) nextEntry.ownerName = ownerName;
-        if (ownerPicture) nextEntry.ownerPicture = ownerPicture;
-        return nextEntry;
-      });
-      if (changed || currentIndex?.sha) {
-        await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update public profile setting`, currentIndex?.sha, origin);
-      }
-      const entries = nextEntries.filter((currentEntry) => {
-        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
-        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
-        return (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
-      }).sort(compareLibraryEntries);
-      return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, entries), changed });
-    }
-
-    if (action === 'update-owner-portfolio-mode') {
-      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
-      const indexPath = joinRepoPath(settings.basePath, 'index.json');
-      const currentIndex = await getGitHubContent(settings, indexPath);
-      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
-      const portfolioMode = Boolean(body?.portfolioMode);
-      const userEmail = String(googlePayload?.email || '').toLowerCase();
-      const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
-      const ownerName = cleanPublicProfileText(body?.ownerName || googlePayload?.name || '');
-      const ownerPicture = cleanPublicProfileImage(body?.ownerPicture || googlePayload?.picture || '');
-      const publicOwnerId = publicOwnerIdFor(googlePayload, anonymousAccount, body?.publicOwnerId);
-      let changed = false;
-      const nextEntries = currentEntries.map((currentEntry) => {
-        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
-        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
-        const isOwner = (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
-        if (!isOwner) return currentEntry;
-        changed = changed || Boolean(currentEntry?.portfolioMode) !== portfolioMode;
-        const nextEntry = { ...currentEntry, publicOwnerId, portfolioMode };
-        if (googlePayload?.email) nextEntry.ownerEmail = googlePayload.email;
-        if (ownerName) nextEntry.ownerName = ownerName;
-        if (ownerPicture) nextEntry.ownerPicture = ownerPicture;
-        return nextEntry;
-      });
-      if (changed || currentIndex?.sha) {
-        await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update public page mode`, currentIndex?.sha, origin);
-      }
-      const entries = nextEntries.filter((currentEntry) => {
-        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
-        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
-        return (userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId);
-      }).sort(compareLibraryEntries);
-      return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, entries), changed });
+      const entries = mergeCollectionEntries(collections).filter(entry => canEditEntry(entry, googlePayload, anonymousAccount)).sort(compareLibraryEntries);
+      return response.status(200).json({ ok: true, entries: accountLibraryEntries(origin, entries, googlePayload, anonymousAccount), changed });
     }
 
     if (action === 'delete-entry') {

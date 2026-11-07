@@ -24,9 +24,9 @@ test('signed-in portfolio and anonymous merge include every collection, with own
   }
   throw Error('Unexpected request '+url);
  };
- const call=async action=>{
+ const call=async (action,extra={})=>{
   let status,result;const response={setHeader(){},status(v){status=v;return this;},json(v){result=v;return this;}};
-  await handler({method:'POST',headers:{host:'localhost'},body:{action,scope:'mine',settings:{basePath:'library_03'},googleIdToken:'test-token',anonymousAccount:{id:'anon_test'}}},response);
+  await handler({method:'POST',headers:{host:'localhost'},body:{action,scope:'mine',settings:{basePath:'library_03'},googleIdToken:'test-token',anonymousAccount:{id:'anon_test'},...extra}},response);
   assert.equal(status,200,JSON.stringify(result));return result;
  };
  try{
@@ -37,5 +37,6 @@ test('signed-in portfolio and anonymous merge include every collection, with own
   const merged=await call('merge-anonymous-account');assert.equal(merged.merged,true);assert.deepEqual(writes.sort(),['library','library_02']);
   assert.equal(indexes.library.find(e=>e.id==='linked-other').ownerEmail,'other@example.test');
   assert.equal(indexes.library.find(e=>e.id==='anon-original').ownerEmail,'owner@example.test');assert.ok(merged.entries.every(e=>e.canEdit===true));
+  const profile=await call('update-profile-name',{ownerName:'Restored name'});assert.ok(profile.entries.some(e=>e.id==='oldest'));assert.ok(profile.entries.every(e=>e.ownerName==='Restored name'));assert.equal(indexes.library.find(e=>e.id==='linked-other').ownerName,undefined);
  }finally{globalThis.fetch=saved;for(const[key,value]of [['GITHUB_TOKEN',oldToken],['GOOGLE_CLIENT_ID',oldClient]]){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
 });
