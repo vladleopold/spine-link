@@ -603,7 +603,9 @@ function canEditEntry(entry, googlePayload, anonymousAccount) {
   const ownerEmail = String(entry?.ownerEmail || '').toLowerCase();
   const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
   const ownerAnonId = String(entry?.ownerAnonId || '').toLowerCase();
+  const emailHash = String(entry?.ownerEmailSha256 || '').toLowerCase();
   if (userEmail && ownerEmail && userEmail !== ownerEmail) return false;
+  if (userEmail && !ownerEmail && emailHash) return sha256Hex(userEmail) === emailHash;
   return Boolean((userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId));
 }
 
@@ -611,6 +613,7 @@ function accountLibraryEntries(origin, entries, googlePayload, anonymousAccount)
   return publicLibraryEntries(origin, entries).map(entry => {
     const next = { ...entry, canEdit: canEditEntry(entry, googlePayload, anonymousAccount) };
     delete next.ownerEmail;
+    delete next.ownerEmailSha256;
     delete next.ownerAnonId;
     delete next.ownerAnonFingerprint;
     // The account list is a card index, not the complete download manifest.
@@ -1984,6 +1987,7 @@ export default async function handler(request, response) {
             if (String(currentEntry?.ownerAnonId || '').toLowerCase() !== anonymousId) return currentEntry;
             const existingEmail = String(currentEntry.ownerEmail || '').toLowerCase();
             if (existingEmail && existingEmail !== userEmail) return currentEntry;
+            if (currentEntry.ownerEmailSha256 && currentEntry.ownerEmailSha256 !== sha256Hex(userEmail)) return currentEntry;
             if (existingEmail === userEmail) return currentEntry;
             changed = true;
             return { ...currentEntry, ownerEmail: googlePayload.email,
