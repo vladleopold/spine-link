@@ -1,3 +1,4 @@
+import { mergeCollectionEntries } from '../lib/library-accounts.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
@@ -90,6 +91,16 @@ async function collectionFoldersWithIndex(settings) {
   } catch {
     return [];
   }
+}
+
+async function libraryCollectionIndexes(settings) {
+  const folders = [...new Set([settings.basePath, ...(await collectionFoldersWithIndex(settings)), 'library'].filter(Boolean))];
+  return Promise.all(folders.map(async basePath => {
+    const content = await getGitHubContent(settings, joinRepoPath(basePath, 'index.json'));
+    const entries = content?.content && content.encoding === 'base64' ? JSON.parse(base64ToText(content.content)) : [];
+    if (!Array.isArray(entries)) throw new Error(`Invalid library index: ${basePath}`);
+    return { basePath, entries, sha: content?.sha };
+  }));
 }
 
 /** metrics.json of the collection that holds this work, else the active folder. */
@@ -592,7 +603,23 @@ function canEditEntry(entry, googlePayload, anonymousAccount) {
   const ownerEmail = String(entry?.ownerEmail || '').toLowerCase();
   const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
   const ownerAnonId = String(entry?.ownerAnonId || '').toLowerCase();
+  if (userEmail && ownerEmail && userEmail !== ownerEmail) return false;
   return Boolean((userEmail && ownerEmail === userEmail) || (anonymousId && ownerAnonId === anonymousId));
+}
+
+function accountLibraryEntries(origin, entries, googlePayload, anonymousAccount) {
+  return publicLibraryEntries(origin, entries).map(entry => {
+    const next = { ...entry, canEdit: canEditEntry(entry, googlePayload, anonymousAccount) };
+    delete next.ownerEmail;
+    delete next.ownerAnonId;
+    delete next.ownerAnonFingerprint;
+    // The account list is a card index, not the complete download manifest.
+    // Large per-animation exports can exceed the server response limit.
+    delete next.allAnimationPreviews;
+    delete next.blockchainAnchor;
+    delete next.sourceProof;
+    return next;
+  });
 }
 
 const archiveAdminEmails = new Set([
@@ -1100,6 +1127,12 @@ export default async function handler(request, response) {
     const commitPrefix = String(body?.commitPrefix || 'Add Spine preview');
     const action = String(body?.action || '');
     failedAction = action || 'unknown';
+    if (['get-entry', 'delete-entry', 'update-note', 'update-layout', 'update-entry-visibility'].includes(action) && body?.entryId) {
+      const collections = await libraryCollectionIndexes(settings);
+      const collection = collections.find(item => item.entries.some(entry => String(entry?.id) === String(body.entryId)));
+      if (collection) settings.basePath = collection.basePath;
+    }
+
 
     if (action === 'background-upload') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
@@ -1894,9 +1927,7 @@ export default async function handler(request, response) {
 
     if (action === 'get-index') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
-      const indexPath = joinRepoPath(settings.basePath, 'index.json');
-      const currentIndex = await getGitHubContent(settings, indexPath);
-      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
+      const currentEntries = mergeCollectionEntries(await libraryCollectionIndexes(settings));
       const userEmail = String(googlePayload?.email || '').toLowerCase();
       const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
       // "mine" powers the MY PORTFOLIO dialog, which must show only the works
@@ -1923,16 +1954,7 @@ export default async function handler(request, response) {
       // user's address to every visitor is its own leak.
       return response.status(200).json({
         ok: true,
-        entries: publicLibraryEntries(origin, entries).map((entry) => {
-          const next = { ...entry, canEdit: canEditEntry(entry, googlePayload, anonymousAccount) };
-          delete next.ownerEmail;
-          delete next.ownerAnonId;
-          // The browser fingerprint is what anonymous accounts are matched on;
-          // shipping it to every visitor lets anyone correlate entries across
-          // sessions, so it never leaves the server.
-          delete next.ownerAnonFingerprint;
-          return next;
-        }),
+        entries: accountLibraryEntries(origin, entries, googlePayload, anonymousAccount),
       });
     }
 
@@ -1951,37 +1973,40 @@ export default async function handler(request, response) {
     if (action === 'merge-anonymous-account') {
       if (!googlePayload?.email) throw unauthorized('Sign in with Google before merging library');
       if (!anonymousAccount) throw unauthorized('Anonymous account is required');
-      const indexPath = joinRepoPath(settings.basePath, 'index.json');
-      const currentIndex = await getGitHubContent(settings, indexPath);
-      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
       const anonymousId = anonymousAccount.id.toLowerCase();
-      const userEmail = String(googlePayload.email || '').toLowerCase();
-      let changed = false;
-      const nextEntries = currentEntries.map((currentEntry) => {
-        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
-        if (ownerAnonId !== anonymousId) return currentEntry;
-        changed = changed || String(currentEntry?.ownerEmail || '').toLowerCase() !== userEmail;
-        return {
-          ...currentEntry,
-          ownerEmail: googlePayload.email,
-          publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, currentEntry?.publicOwnerId),
-          ...(body?.ownerName || currentEntry?.ownerName || googlePayload.name
-            ? { ownerName: cleanPublicProfileText(body?.ownerName || currentEntry?.ownerName || googlePayload.name) }
-            : {}),
-          ...(body?.ownerPicture || currentEntry?.ownerPicture || googlePayload.picture
-            ? { ownerPicture: cleanPublicProfileImage(body?.ownerPicture || currentEntry?.ownerPicture || googlePayload.picture) }
-            : {}),
-        };
-      });
-      if (changed) {
-        await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: merge library account`, currentIndex?.sha, origin);
+      const userEmail = String(googlePayload.email).toLowerCase();
+      const collections = await libraryCollectionIndexes(settings);
+      let merged = false;
+      for (const collection of collections) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          let changed = false;
+          const nextEntries = collection.entries.map(currentEntry => {
+            if (String(currentEntry?.ownerAnonId || '').toLowerCase() !== anonymousId) return currentEntry;
+            const existingEmail = String(currentEntry.ownerEmail || '').toLowerCase();
+            if (existingEmail && existingEmail !== userEmail) return currentEntry;
+            if (existingEmail === userEmail) return currentEntry;
+            changed = true;
+            return { ...currentEntry, ownerEmail: googlePayload.email,
+              publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, currentEntry.publicOwnerId),
+              ownerName: cleanPublicProfileText(currentEntry.ownerName || body.ownerName || googlePayload.name || ''),
+              ownerPicture: cleanPublicProfileImage(currentEntry.ownerPicture || body.ownerPicture || googlePayload.picture || '') };
+          });
+          if (!changed) break;
+          try {
+            await putGitHubContent(settings, joinRepoPath(collection.basePath, 'index.json'), textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: merge library account`, collection.sha, origin);
+            collection.entries = nextEntries;
+            merged = true;
+            break;
+          } catch (error) {
+            if (attempt === 2 || ![409, 422].includes(Number(error?.status))) throw error;
+            const fresh = await getGitHubContent(settings, joinRepoPath(collection.basePath, 'index.json'));
+            collection.entries = JSON.parse(base64ToText(fresh.content));
+            collection.sha = fresh.sha;
+          }
+        }
       }
-      const entries = nextEntries.filter((currentEntry) => {
-        const ownerEmail = String(currentEntry?.ownerEmail || '').toLowerCase();
-        const ownerAnonId = String(currentEntry?.ownerAnonId || '').toLowerCase();
-        return ownerEmail === userEmail || ownerAnonId === anonymousId;
-      }).sort(compareLibraryEntries);
-      return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, entries), merged: changed });
+      const entries = mergeCollectionEntries(collections).filter(entry => canEditEntry(entry, googlePayload, anonymousAccount)).sort(compareLibraryEntries);
+      return response.status(200).json({ ok: true, entries: accountLibraryEntries(origin, entries, googlePayload, anonymousAccount), merged });
     }
 
     if (action === 'get-admin-settings') {

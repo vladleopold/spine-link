@@ -1888,7 +1888,7 @@ function buildAnimationDownloadUrl(
   if (!previews) return "";
 
   const suffix = quality === "high" ? "" : `-${quality}`;
-  const cap = (s: string) => s.replace("-", "");
+  const cap = (s: string) => s.replace(/^-(.)/, (_match, letter: string) => letter.toUpperCase());
 
   // "All animations" means every animation in the upload, so the caller
   // resolves the URL from whichever animation actually has the file.
@@ -3001,7 +3001,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       if (Array.isArray(data.allowed)) setAllowedOwners(data.allowed.map(String));
     });
   }, [isAdminPage]);
-  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() => readStoredGoogleSession()?.user ?? null);
+  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() => getValidStoredGoogleToken() ? readStoredGoogleSession()?.user ?? null : null);
   const [googleIdToken, setGoogleIdToken] = useState(() => getValidStoredGoogleToken());
   const [profileNameInput, setProfileNameInput] = useState(() => cleanAccountDisplayName(readStoredGoogleSession()?.user?.name || ""));
   const [isSavingProfileName, setIsSavingProfileName] = useState(false);
@@ -3012,6 +3012,19 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [libraryEntries, setLibraryEntries] = useState<LibraryEntry[]>([]);
+  useEffect(() => {
+    if (!googleIdToken) return;
+    const session = readStoredGoogleSession();
+    if (!session || session.accessToken !== googleIdToken) return;
+    const timer = window.setTimeout(() => {
+      setGoogleIdToken("");
+      setGoogleUser(null);
+      setLibraryEntries([]);
+      setGoogleAuthError("Your Google session expired. Sign in again to load your works.");
+    }, Math.max(0, session.expiresAt - Date.now() - 60_000));
+    return () => window.clearTimeout(timer);
+  }, [googleIdToken]);
+
   const [homeFeedEntries, setHomeFeedEntries] = useState<HomeFeedEntry[]>([]);
   const [entryMetrics, setEntryMetrics] = useState<Record<string, EntryMetric>>({});
   const [metricsVisitorId] = useState(() => getStoredMetricsVisitorId());
@@ -3080,7 +3093,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         const response = await fetch("/api/github-upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "get-entry", entryId }),
+          body: JSON.stringify({ action: "get-entry", entryId, anonymousAccount, googleIdToken }),
         });
         if (!response.ok) throw new Error(`Library API ${response.status}`);
         const result = await response.json();
@@ -4045,18 +4058,10 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       setError("");
       setStatus("Loading editable preview...");
       try {
-        let response = await fetchLibraryAction("get-index");
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : `Library API ${response.status}`);
-        let entry = (Array.isArray(result.entries) ? result.entries : []).find(
-          (candidate: LibraryEntry) => candidate.id === editEntryId,
-        ) as LibraryEntry | undefined;
-        if (!entry) {
-          response = await fetchLibraryAction("get-entry");
-          const entryResult = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(typeof entryResult?.error === "string" ? entryResult.error : `Library API ${response.status}`);
-          entry = entryResult.entry as LibraryEntry | undefined;
-        }
+        const response = await fetchLibraryAction("get-entry");
+        const entryResult = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof entryResult.error === "string" ? entryResult.error : `Library API ${response.status}`);
+        const entry = entryResult.entry ? { ...entryResult.entry, canEdit: entryResult.canEdit === true } as LibraryEntry : undefined;
         if (!entry) throw new Error("This preview is not in the library.");
         const entryFiles = Array.isArray(entry.files) ? entry.files : [];
         if (!entryFiles.length) throw new Error("This preview has no editable files.");
