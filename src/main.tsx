@@ -878,7 +878,13 @@ function withUploadSlot<T>(task: () => Promise<T>): Promise<T> {
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onload = () => {
+      // readAsDataURL returns "data:<mime>;base64,<payload>". Storage chunks
+      // must contain only RFC 4648 Base64 characters; including the data-URL
+      // prefix made the first chunk fail with GitHub 422 and broke binary files.
+      const dataUrl = String(reader.result || "");
+      resolve(dataUrl.slice(dataUrl.indexOf(",") + 1));
+    };
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
