@@ -2442,13 +2442,21 @@ async function createDynamicPreview(settings, uploadPath, origin) {
   let entry = null;
   let exclusions = { rules: [] };
   const pathParts = cleanRepoPath(uploadPath).split('/').filter(Boolean);
-  const indexPath = joinRepoPath(pathParts.slice(0, -1).join('/'), 'index.json');
+  let indexPath = joinRepoPath(pathParts.slice(0, -1).join('/'), 'index.json');
   const metricsPath = joinRepoPath(settings.basePath || defaultBasePath, 'metrics.json');
   const exclusionsPath = joinRepoPath(settings.basePath || defaultBasePath, 'archive-exclusions.json');
   const uploadId = pathParts[pathParts.length - 1] || '';
   const entryId = uploadId || uploadPath;
   let entries = [];
   let metrics = {};
+  // Legacy works keep assets at repository root while their entry lives in a
+  // library collection. Asset location cannot determine the metadata index.
+  const entryRecord = await resolveEntryRecord(settings, uploadId);
+  if (entryRecord) {
+    indexPath = joinRepoPath(entryRecord.basePath, 'index.json');
+    entry = entryRecord.entry;
+    entries = entryRecord.entries;
+  }
 
   for (const directory of setDirectories) {
     const items = await githubList(settings, directory.path);
@@ -2521,7 +2529,7 @@ async function createDynamicPreview(settings, uploadPath, origin) {
   }
 
   try {
-    const indexText = indexPath ? await githubText(settings, indexPath) : '';
+    const indexText = entryRecord ? JSON.stringify(entryRecord.entries) : (indexPath ? await githubText(settings, indexPath) : '');
     const metricsText = metricsPath ? await githubText(settings, metricsPath) : '';
     const exclusionsText = exclusionsPath ? await githubText(settings, exclusionsPath) : '';
     metrics = parseMetricsJson(metricsText);
@@ -2606,7 +2614,7 @@ async function createDynamicPreview(settings, uploadPath, origin) {
 
 // Finds the folder of a work by id across every library collection, so /p/<id>
 // keeps working while rotations move works between folders.
-async function resolveEntryPath(settings, entryId) {
+async function resolveEntryRecord(settings, entryId) {
   const id = cleanRepoPath(entryId).split('/').pop() || '';
   if (!id) return '';
   const basePaths = await libraryCollectionPaths(settings);
@@ -2620,9 +2628,13 @@ async function resolveEntryPath(settings, entryId) {
     } catch (e) {}
     const match = entries.find((entry) => String(entry?.id || '') === id);
     const previewPath = cleanRepoPath(match?.previewPath || '');
-    if (previewPath) return previewPath;
+    if (previewPath) return { previewPath, entry: match, entries, basePath };
   }
   return '';
+}
+
+async function resolveEntryPath(settings, entryId) {
+  return (await resolveEntryRecord(settings, entryId))?.previewPath || '';
 }
 
 export default async function handler(request, response) {
