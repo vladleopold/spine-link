@@ -1132,9 +1132,16 @@ export default async function handler(request, response) {
       const fileName = String(body?.fileName || '').trim();
       const chunkIndex = Number(body?.chunkIndex);
       const chunkCount = Number(body?.chunkCount);
-      const chunkBase64 = String(body?.chunkBase64 || '').trim();
-      if (!uploadId || !uploadPathBg || !fileName || !Number.isFinite(chunkIndex) || !Number.isFinite(chunkCount)) {
-        return response.status(400).json({ error: 'Missing chunk field' });
+      // Accept both the canonical Base64 payload and legacy data-URLs from
+      // already-open clients. GitHub Contents API expects valid Base64 only;
+      // passing the `data:image/...;base64,` prefix causes a 422 response.
+      const chunkBase64 = String(body?.chunkBase64 || '').trim().replace(/^data:[^;]+;base64,/i, '');
+      const validBase64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+      if (!uploadId || !uploadPathBg || !fileName || !Number.isInteger(chunkIndex) || !Number.isInteger(chunkCount) || chunkCount < 1 || chunkIndex < 0 || chunkIndex >= chunkCount) {
+        return response.status(400).json({ error: 'Missing or invalid chunk field' });
+      }
+      if (!chunkBase64 || !validBase64.test(chunkBase64)) {
+        return response.status(400).json({ error: `Invalid Base64 payload for chunk ${chunkIndex}` });
       }
       const chunkDir = `${uploadPathBg}/${fileName}.__chunks`;
       const chunkPath = `${chunkDir}/${String(chunkIndex).padStart(5, '0')}`;
