@@ -73,3 +73,27 @@ test('upload API: background, multipart and batched publishing preserve binary b
     else process.env.GITHUB_TOKEN = savedToken;
   }
 });
+
+test('concurrent finalization rereads index after SHA conflict and preserves both works',async()=>{
+ const {default:handler}=await import('../api/github-upload.js');
+ const saved=globalThis.fetch, token=process.env.GITHUB_TOKEN;process.env.GITHUB_TOKEN='test-only';
+ let writes=0; let finalIndex;
+ globalThis.fetch=async(url,options={})=>{
+  const path=new URL(url).pathname;
+  if(path.endsWith('/contents/library_02/index.json')){
+   if(options.method==='PUT'){
+    writes++;
+    if(writes===1)return new Response(JSON.stringify({message:'sha does not match'}),{status:409});
+    finalIndex=JSON.parse(Buffer.from(JSON.parse(options.body).content,'base64').toString());
+    return new Response('{}');
+   }
+   return new Response(JSON.stringify({sha:writes?'new':'old',encoding:'base64',content:Buffer.from(JSON.stringify(writes?[{id:'concurrent'}]:[])).toString('base64')}));
+  }
+  return new Response('{}',{status:404});
+ };
+ try{
+  let status,result;const response={setHeader(){},status(v){status=v;return this;},json(v){result=v;return this;}};
+  await handler({method:'POST',headers:{host:'localhost'},body:{action:'background-finalize-index',uploadId:'test',uploadPath:'library_02/test',settings:{basePath:'library_02'},anonymousAccount:{id:'anon_regression'}}},response);
+  assert.equal(status,200,JSON.stringify(result));assert.equal(writes,2);assert.deepEqual(finalIndex.map(e=>e.id),['test','concurrent']);
+ }finally{globalThis.fetch=saved;if(token===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=token;}
+});

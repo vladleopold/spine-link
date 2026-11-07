@@ -1,3 +1,4 @@
+import { uploadRequest } from "./upload-request";
 // Background publishing.
 //
 // Saving an animation used to live entirely inside the React component that
@@ -227,28 +228,14 @@ async function postPublish(job: PublishJob, payload: Record<string, unknown>): P
     ...payload,
   });
 
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const response = await fetch("/api/github-upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-      });
-      const result = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-      if (response.ok) return result;
-      const message = typeof result?.error === "string" ? result.error : `Upload API ${response.status}`;
-      // Only server faults are worth replaying; a rejected payload fails the
-      // same way every time and waiting just delays the visible error.
-      if (response.status < 500 && response.status !== 429) throw new Error(message);
-      lastError = new Error(message);
-    } catch (error) {
-      lastError = error;
-      if (error instanceof Error && /Upload API 4\d\d/.test(error.message)) throw error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
-  }
-  throw lastError instanceof Error ? lastError : new Error("Publishing failed");
+  const response = await uploadRequest("/api/github-upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+  const result = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : `Upload API ${response.status}`);
+  return result;
 }
 
 function groupFiles(files: PublishJobFile[], limit: number): PublishJobFile[][] {

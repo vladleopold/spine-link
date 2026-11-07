@@ -1,3 +1,4 @@
+import { uploadRequest } from "./upload-request";
 import "./styles.css";
 import { getPublishProgress, hidePublishProgress, resumePendingJobs, subscribePublishProgress } from "./publish-job";
 import { startParticleField } from "./particles";
@@ -908,7 +909,7 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
     try {
       // Whole-file path. Kept on the same queue: it can run alongside a
       // chunked upload, and overlapping invocations are what Vercel refuses.
-      const response = await withUploadSlot(() => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body }));
+      const response = await withUploadSlot(() => uploadRequest(url, { method: "POST", headers: { "Content-Type": "application/json" }, body }));
       return { ok: response.ok, status: response.status, data: await response.json().catch(() => ({})) };
     } catch {
       return { ok: false, status: 0 };
@@ -972,7 +973,15 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
           headers: { "Content-Type": "application/json" },
           body: chunkBody,
         }));
-        if (response.ok) return sendChunk();
+        if (response.ok) {
+          const saved = await response.json().catch(() => ({}));
+          if (typeof saved.chunkPath === "string") {
+            const suffix = `/${file.name}.__chunks/`;
+            const splitAt = saved.chunkPath.lastIndexOf(suffix);
+            if (splitAt >= 0) data.uploadPath = saved.chunkPath.slice(0, splitAt);
+          }
+          return sendChunk();
+        }
         const payload = await response.json().catch(() => ({}));
         // 4xx (other than 429) is a definitive answer from our own handler: the
         // server already tried to fix it and could not. Replaying just spends
@@ -1045,6 +1054,7 @@ function pendingUploadDb(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => request.result.createObjectStore("jobs", { keyPath: "id" });
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error("Upload recovery database is blocked"));
   });
 }
 async function pendingUploadPut(job: { id: string; files: File[]; uploadedAt: string; title: string; uploadId: string; uploadPath: string }) {
@@ -1053,7 +1063,7 @@ async function pendingUploadPut(job: { id: string; files: File[]; uploadedAt: st
     const tx = db.transaction("jobs", "readwrite");
     tx.objectStore("jobs").put(job);
     tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
   });
 }
 async function pendingUploadDelete(id: string) {
@@ -1062,7 +1072,7 @@ async function pendingUploadDelete(id: string) {
     const tx = db.transaction("jobs", "readwrite");
     tx.objectStore("jobs").delete(id);
     tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
   });
 }
 async function resumeStagedUploads() {
@@ -1081,6 +1091,8 @@ async function resumeStagedUploads() {
   } catch (error) { console.warn("[spine] pending upload recovery unavailable", error); }
 }
 
+const activeBackgroundUploads = new Set<string>();
+
 function startBackgroundUpload(files: File[], resumed?: { id: string; files: File[]; uploadedAt: string; title: string; uploadId: string; uploadPath: string }) {
   const anonymousAccount = getAnonymousAccount();
   const uploadedAt = resumed?.uploadedAt || new Date().toISOString();
@@ -1091,6 +1103,9 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
   // work folder. The server joins it onto whichever library_NN folder is active
   // and returns the real path, which the finalize step then records.
   const uploadPath = resumed?.uploadPath || uploadId;
+  if (activeBackgroundUploads.has(uploadId)) return;
+  activeBackgroundUploads.add(uploadId);
+  let resolvedUploadPath = uploadPath;
   const origin = window.location.origin;
   const uploadEntry = resumed ? (getBackgroundUploads().find(entry => entry.id === resumed.id) || addBackgroundUpload({ uploadId, uploadPath, uploadUrl: `${origin}/p/${encodeURIComponent(uploadId)}`, files: files.map(f => ({ name: f.name, size: f.size })), status: "uploading" })) : addBackgroundUpload({
     uploadId,
@@ -1105,7 +1120,7 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
 
   const uploadNextFile = async () => {
     if (fileIndex >= files.length) {
-      await finalizeBackgroundUpload(uploadEntry.id, uploadId, uploadPath, uploadedAt);
+      await finalizeBackgroundUpload(uploadEntry.id, uploadId, resolvedUploadPath, uploadedAt);
       return;
     }
     const file = files[fileIndex];
@@ -1113,7 +1128,7 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
     const result = await uploadFileKeepAlive("/api/github-upload", {
       action: "background-upload",
       uploadId,
-      uploadPath,
+      uploadPath: resolvedUploadPath,
       uploadedAt,
       anonymousAccount,
       settings: { owner: "vladleopold", repo: "spine", branch: "main", basePath: "", title },
@@ -1127,18 +1142,25 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
       showBackgroundPopup(uploadEntry.id, null, error);
       return;
     }
-    updateBackgroundUpload(uploadEntry.id, { status: "uploading" });
+    const savedPath = (result.data as { path?: string } | undefined)?.path;
+    if (savedPath) resolvedUploadPath = savedPath.slice(0, savedPath.lastIndexOf("/"));
+    updateBackgroundUpload(uploadEntry.id, { status: "uploading", uploadPath: resolvedUploadPath });
     await uploadNextFile();
   };
 
   showBackgroundPopup(uploadEntry.id, null, null);
   void (async () => {
     try {
-      if (!resumed) await pendingUploadPut({ id: uploadEntry.id, files, uploadedAt, title, uploadId, uploadPath });
+      if (!resumed) {
+        try { await pendingUploadPut({ id: uploadEntry.id, files, uploadedAt, title, uploadId, uploadPath }); }
+        catch (error) { console.warn("[spine] Upload recovery storage unavailable; continuing transfer", error); }
+      }
       await uploadNextFile();
     } catch (error) {
       updateBackgroundUpload(uploadEntry.id, { status: 'failed', error: String(error) });
       showBackgroundPopup(uploadEntry.id, null, String(error));
+    } finally {
+      activeBackgroundUploads.delete(uploadId);
     }
   })();
 }
@@ -1156,7 +1178,7 @@ async function finalizeBackgroundUpload(entryId: string, uploadId: string, uploa
     commitPrefix: "Background upload",
   });
   try {
-    const response = await withUploadSlot(() => fetch("/api/github-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body }));
+    const response = await withUploadSlot(() => uploadRequest("/api/github-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body }));
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       updateBackgroundUpload(entryId, { status: "failed", error: result?.error || "Index update failed" });

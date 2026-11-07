@@ -1215,26 +1215,33 @@ export default async function handler(request, response) {
       const uploadedAt = String(body?.uploadedAt || '').trim();
       if (!uploadId) return response.status(400).json({ error: 'Missing uploadId' });
       const indexPath = joinRepoPath(settings.basePath, 'index.json');
-      const currentIndex = await getGitHubContent(settings, indexPath);
-      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
-      const existingEntry = currentEntries.find((c) => c.id === uploadId);
-      const nextEntry = publicLibraryEntry(origin, {
-        ...body?.entry,
-        id: uploadId,
-        uploadedAt,
-        previewPath: uploadPathBg,
-        ownerEmail: googlePayload?.email,
-        ownerAnonId: anonymousAccount?.id,
-        ownerAnonFingerprint: anonymousAccount?.fingerprint,
-        publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existingEntry?.publicOwnerId),
-        sourceProof: body?.entry?.sourceProof,
-      });
-      nextEntry.webmStatus = existingEntry?.webmStatus === 'ready' ? 'ready' : 'pending';
-      nextEntry.dispatchStatus = 'pending';
-      const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== uploadId)];
-      await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
-      try { dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {}); } catch {}
-      return response.status(200).json({ ok: true, indexed: nextEntries.length });
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const currentIndex = await getGitHubContent(settings, indexPath);
+        const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
+        const existingEntry = currentEntries.find((c) => c.id === uploadId);
+        const nextEntry = publicLibraryEntry(origin, {
+          ...body?.entry,
+          id: uploadId,
+          uploadedAt,
+          previewPath: uploadPathBg,
+          ownerEmail: googlePayload?.email,
+          ownerAnonId: anonymousAccount?.id,
+          ownerAnonFingerprint: anonymousAccount?.fingerprint,
+          publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existingEntry?.publicOwnerId),
+          sourceProof: body?.entry?.sourceProof,
+        });
+        nextEntry.webmStatus = existingEntry?.webmStatus === 'ready' ? 'ready' : 'pending';
+        nextEntry.dispatchStatus = 'pending';
+        const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== uploadId)];
+        try {
+          await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
+        } catch (error) {
+          if (attempt < 2 && [409, 422].includes(Number(error?.status))) continue;
+          throw error;
+        }
+        try { dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {}); } catch {}
+        return response.status(200).json({ ok: true, indexed: nextEntries.length });
+      }
     }
 
     if (action === 'get-metrics') {
