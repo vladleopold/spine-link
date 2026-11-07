@@ -858,8 +858,8 @@ async function getGitHubContent(settings, path) {
     if (typeof data?.download_url === 'string' && data.download_url) {
       const rawResponse = await fetch(data.download_url, { headers: githubHeaders(settings.token) });
       if (rawResponse.ok) {
-        const rawText = await rawResponse.text();
-        return { ...data, encoding: 'base64', content: textToBase64(rawText) };
+        const rawBytes = Buffer.from(await rawResponse.arrayBuffer());
+        return { ...data, encoding: 'base64', content: rawBytes.toString('base64') };
       }
     }
   }
