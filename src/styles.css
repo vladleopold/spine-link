@@ -9015,4 +9015,4 @@ h1 {
 }
 
 /* Fixed homepage feed must use the viewport, not a transformed shell. */
-.app-shell.is-empty:not(.is-edit-page) { transform: none !important; }
+.app-shell.is-empty:not(.is-edit-page) { transform: none !important; animation: none !important; }
