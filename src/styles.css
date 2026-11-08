@@ -8804,15 +8804,24 @@ h1 {
   .home-feed-overlay strong { font-size: 10px !important; }
 }
 
-/* On compact viewports upload is the primary action; the feed must not
-   steal space from the drag-and-drop panel. */
+/* Keep upload and public feed visible together on compact viewports. */
 @media (max-height: 600px), (max-width: 480px) {
-  .app-shell.is-empty:not(.is-edit-page) .home-portfolio-feed { display: none !important; }
+  .app-shell.is-empty:not(.is-edit-page) .home-portfolio-feed {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    height: clamp(90px, 30dvh, 200px) !important;
+    max-height: 40dvh;
+    padding: 0 !important;
+  }
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-heading { display: none !important; }
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-viewport { height: 100%; min-height: 0; }
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-card { height: 100% !important; }
   .app-shell.is-empty:not(.is-edit-page) .stage {
-    bottom: 0 !important;
+    bottom: calc(clamp(90px, 30dvh, 200px) + 4px) !important;
     top: 0 !important;
-    height: 100dvh !important;
-    max-height: 100dvh !important;
+    height: calc(100dvh - clamp(90px, 30dvh, 200px) - 4px) !important;
+    max-height: calc(100dvh - clamp(90px, 30dvh, 200px) - 4px) !important;
     overflow-y: auto !important;
     padding: 8px !important;
   }
