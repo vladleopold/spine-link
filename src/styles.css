@@ -9016,3 +9016,8 @@ h1 {
 
 /* Fixed homepage feed must use the viewport, not a transformed shell. */
 .app-shell.is-empty:not(.is-edit-page) { transform: none !important; animation: none !important; }
+
+/* Reserve a gap above the feed in phone landscape mode. */
+@media (max-height: 600px) {
+ .app-shell.is-empty:not(.is-edit-page) .main-drop-zone { min-height: clamp(52px, 24dvh, 110px) !important; }
+}
