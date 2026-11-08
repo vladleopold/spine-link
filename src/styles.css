@@ -9013,3 +9013,6 @@ h1 {
     gap: 8px !important;
   }
 }
+
+/* Fixed homepage feed must use the viewport, not a transformed shell. */
+.app-shell.is-empty:not(.is-edit-page) { transform: none !important; }
