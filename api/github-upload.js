@@ -800,11 +800,14 @@ async function updateDataScienceCatalog(settings, body, entry, commitPrefix, ori
 // Every anonymous upload shares one GITHUB_TOKEN, so GitHub rate limits and
 // transient API failures hit all users at once. Treat those as retryable
 // instead of letting them escape as a 500 that kills the whole upload.
-const GITHUB_RETRY_STATUS = new Set([403, 408, 429, 500, 502, 503, 504]);
-const GITHUB_RETRY_ATTEMPTS = 4;
+// GitHub's Contents API returns 409 when another upload advances the branch
+// between reading and writing. This is a transient branch-head race, not a
+// malformed Spine asset. Retry it with jitter just like rate limits.
+const GITHUB_RETRY_STATUS = new Set([403, 408, 409, 429, 500, 502, 503, 504]);
+const GITHUB_RETRY_ATTEMPTS = 8;
 
 function githubRetryDelay(attempt) {
-  return 250 * 2 ** attempt + Math.floor(Math.random() * 200);
+  return Math.min(300 * 2 ** attempt + Math.floor(Math.random() * 550), 6000);
 }
 
 // The response body a client sees when the platform terminates the function
