@@ -920,7 +920,7 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
   const CHUNK_SIZE = KEEPALIVE_MAX_BYTES;
   // GitHub rate limits and transient 5xx responses are shared by every
   // anonymous upload, so replay a failed chunk instead of aborting the file.
-  const CHUNK_ATTEMPTS = 5;
+  const CHUNK_ATTEMPTS = 8;
   // Honour GitHub's own backoff when it tells us how long to wait, otherwise
   // back off exponentially with jitter so concurrent uploads don't resynchronise
   // and all retry in lockstep. Capped so a wedged upload still fails visibly
@@ -986,7 +986,9 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
         // 4xx (other than 429) is a definitive answer from our own handler: the
         // server already tried to fix it and could not. Replaying just spends
         // the user's time and hides the real message behind retry noise.
-        const definitive = response.status >= 400 && response.status < 500 && response.status !== 429;
+        // 409 is a transient GitHub branch-head collision during concurrent uploads.
+        // Retry the same chunk body; the server uses a deterministic chunk path.
+        const definitive = response.status >= 400 && response.status < 500 && response.status !== 429 && response.status !== 409;
         if (attempt === CHUNK_ATTEMPTS - 1 || definitive) {
           console.error(
             `[spine] upload chunk ${chunkIndex}/${totalChunks} for ${file.name} failed: HTTP ${response.status}`,
