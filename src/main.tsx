@@ -624,7 +624,7 @@ function startHomeFeed(track: HTMLElement, cards: HTMLElement[], viewport: HTMLE
     return;
   }
 
-  const speed = 6.8; // 2.5x slower than the previous 17 px/s
+  const speed = 20; // Readable, continuous 20 px/s auto-scroll on desktop and mobile
   let moved = 0;
   let raf = 0;
   let last = performance.now();
