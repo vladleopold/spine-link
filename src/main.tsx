@@ -1120,6 +1120,7 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
 
   const uploadNextFile = async () => {
     if (fileIndex >= files.length) {
+      showBackgroundPopup(uploadEntry.id, null, null, { completed: files.length, total: files.length, finalizing: true });
       await finalizeBackgroundUpload(uploadEntry.id, uploadId, resolvedUploadPath, uploadedAt);
       return;
     }
@@ -1145,10 +1146,11 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
     const savedPath = (result.data as { path?: string } | undefined)?.path;
     if (savedPath) resolvedUploadPath = savedPath.slice(0, savedPath.lastIndexOf("/"));
     updateBackgroundUpload(uploadEntry.id, { status: "uploading", uploadPath: resolvedUploadPath });
+    showBackgroundPopup(uploadEntry.id, null, null, { completed: fileIndex, total: files.length, current: file.name });
     await uploadNextFile();
   };
 
-  showBackgroundPopup(uploadEntry.id, null, null);
+  showBackgroundPopup(uploadEntry.id, null, null, { completed: 0, total: files.length });
   void (async () => {
     try {
       if (!resumed) {
@@ -1196,26 +1198,73 @@ async function finalizeBackgroundUpload(entryId: string, uploadId: string, uploa
   try { localStorage.setItem("__spineUploadComplete", JSON.stringify({ url: previewUrl, timestamp: Date.now() })); } catch {}
   window.dispatchEvent(new CustomEvent("spine-upload-complete", { detail: { url: previewUrl } }));
   showBackgroundPopup(entryId, previewUrl, null);
+  // A persistent link is opened only after finalization is acknowledged by the API.
+  // Clipboard may be denied without a fresh user gesture; the popup keeps a copy button.
+  try { await navigator.clipboard.writeText(previewUrl); } catch { /* manual copy remains available */ }
+  window.setTimeout(() => { window.location.assign(previewUrl); }, 900);
 }
 
-function showBackgroundPopup(entryId: string, url: string | null, error: string | null) {
+function showBackgroundPopup(entryId: string, url: string | null, error: string | null, progress?: { completed: number; total: number; current?: string; finalizing?: boolean }) {
   if (window.location.pathname.includes("/p/")) return;
-  const existing = document.getElementById("spine-upload-popup");
-  if (existing) existing.remove();
-  const popup = document.createElement("div");
-  popup.id = "spine-upload-popup";
-  popup.className = "upload-toast is-visible";
-  popup.innerHTML = `
-    <strong>${error ? "Upload failed" : url ? "Upload complete" : "Upload in progress"}</strong>
-    ${url ? `<a href="${url}" target="_blank" rel="noreferrer">Open animation</a>` : ""}
-    ${error ? `<span style="color:#ff76ab;font-size:12px">${escapeHtml(error)}</span>` : ""}
-    <button class="upload-toast-close" type="button" aria-label="Close notification">&times;</button>
-  `;
-  popup.querySelector(".upload-toast-close")?.addEventListener("click", () => {
-    popup.classList.remove("is-visible");
-    setTimeout(() => popup.remove(), 300);
-  });
-  document.body.appendChild(popup);
+  if (!document.getElementById("spine-upload-motion-style")) {
+    const css = document.createElement("style");
+    css.id = "spine-upload-motion-style";
+    css.textContent = `
+      #spine-upload-popup {position:fixed;z-index:2147481000;box-sizing:border-box;width:min(480px,calc(100vw - 32px));top:50%;left:50%;transform:translate(-50%,-50%);padding:28px 28px 24px;border:1px solid rgba(114,242,218,.65);border-radius:24px;background:linear-gradient(145deg,#081d2c 0%,#08131d 74%);color:#effffb;box-shadow:0 0 38px rgba(65,222,244,.29),0 0 95px rgba(118,255,171,.16),0 28px 90px rgba(0,0,0,.55);font:500 14px/1.5 Inter,system-ui,sans-serif;transition:top .85s cubic-bezier(.2,.75,.2,1),left .85s cubic-bezier(.2,.75,.2,1),transform .85s cubic-bezier(.2,.75,.2,1),width .85s cubic-bezier(.2,.75,.2,1),padding .85s;animation:spine-upload-glow 2.1s ease-in-out infinite alternate}
+      #spine-upload-popup.is-docked{top:18px;left:calc(100% - 18px);transform:translateX(-100%);width:min(362px,calc(100vw - 32px));padding:20px 22px}
+      #spine-upload-popup .spine-upload-kicker{font-size:11px;letter-spacing:.22em;color:#7af7da;text-transform:uppercase;margin-bottom:8px}
+      #spine-upload-popup strong{display:block;font-size:23px;font-weight:700;letter-spacing:-.04em;margin:0 20px 7px 0}
+      #spine-upload-popup .spine-upload-sub{color:#a6c9d2;font-size:12px;overflow-wrap:anywhere;min-height:18px}
+      #spine-upload-popup .spine-upload-track{height:9px;margin:22px 0 12px;border-radius:20px;background:#203e49;overflow:hidden}
+      #spine-upload-popup .spine-upload-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,#42cbfc,#b8ff81);box-shadow:0 0 14px #69eaf5;transition:width .3s}
+      #spine-upload-popup .spine-upload-meta{display:flex;justify-content:space-between;gap:12px;color:#a6c9d2;font-size:12px}
+      #spine-upload-popup .spine-upload-steps{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+      #spine-upload-popup .spine-upload-steps span{border:1px solid #25515a;border-radius:30px;padding:4px 10px;color:#b0cbd1;font-size:11px}
+      #spine-upload-popup .spine-upload-steps .active{border-color:#87fbcc;color:#b7ffe9;background:#143c3d}
+      #spine-upload-popup .spine-upload-close{position:absolute;right:15px;top:12px;background:transparent;border:0;color:#b2ced5;font-size:24px;cursor:pointer}
+      #spine-upload-popup .spine-upload-actions{display:flex;gap:10px;margin-top:16px}
+      #spine-upload-popup .spine-upload-actions a,#spine-upload-popup .spine-upload-actions button{border:1px solid #7bdfd2;border-radius:10px;padding:9px 12px;color:#d4fff4;background:#12383c;text-decoration:none;cursor:pointer;font:inherit}
+      #spine-upload-popup.is-error{border-color:#ff759e;animation:none;box-shadow:0 0 32px #b52c6055}
+      @keyframes spine-upload-glow {from{box-shadow:0 0 20px rgba(65,222,244,.20),0 0 45px rgba(118,255,171,.09),0 25px 70px #0009}to{box-shadow:0 0 36px rgba(65,222,244,.53),0 0 80px rgba(118,255,171,.25),0 25px 70px #0009}}
+      @media(prefers-reduced-motion:reduce){#spine-upload-popup{animation:none!important;transition:none!important}}
+      @media(max-width:480px){#spine-upload-popup.is-docked{top:12px;left:calc(100% - 12px)}}
+    `;
+    document.head.appendChild(css);
+  }
+  let popup = document.getElementById("spine-upload-popup");
+  const first = !popup || popup.getAttribute("data-upload-id") !== entryId;
+  if (first) {
+    popup?.remove();
+    popup = document.createElement("section");
+    popup.id = "spine-upload-popup";
+    popup.setAttribute("role","status");
+    popup.setAttribute("aria-live","polite");
+    popup.setAttribute("data-upload-id",entryId);
+    popup.innerHTML = '<button class="spine-upload-close" type="button" aria-label="Hide upload status">×</button><div class="spine-upload-kicker">SPINE LINK · UPLOAD</div><strong class="spine-upload-title"></strong><div class="spine-upload-sub"></div><div class="spine-upload-track"><div class="spine-upload-fill"></div></div><div class="spine-upload-meta"><span class="spine-upload-count"></span><b class="spine-upload-percent"></b></div><div class="spine-upload-steps"><span>01 · Files</span><span>02 · Saving</span><span>03 · Page</span></div><div class="spine-upload-actions"></div>';
+    popup.querySelector(".spine-upload-close")?.addEventListener("click",()=>popup?.remove());
+    document.body.appendChild(popup);
+    window.setTimeout(()=>{if(popup?.isConnected)popup.classList.add("is-docked");},1300);
+  }
+  popup.classList.toggle("is-error",Boolean(error));
+  const completed=Math.min(progress?.total||0,progress?.completed||0);
+  const total=progress?.total||0;
+  const percent=url?100:progress?.finalizing?95:total?Math.round(completed/total*90):0;
+  const title=error?"Upload failed":url?"Your page is ready":progress?.finalizing?"Creating permanent page":"Uploading Spine files";
+  const subtitle=error?error:url?"Link ready · opening automatically":progress?.finalizing?"Saving the index and verifying the page":progress?.current||"Preparing and transferring files";
+  const put=(cls:string,value:string)=>{const el=popup?.querySelector(cls);if(el)el.textContent=value;};
+  put(".spine-upload-title",title);
+  put(".spine-upload-sub",subtitle);
+  put(".spine-upload-count",url?"All files saved":error?"Transfer interrupted":progress?.finalizing?"Finalizing":`${completed} of ${total} files saved`);
+  put(".spine-upload-percent",`${percent}%`);
+  const fill=popup.querySelector<HTMLElement>(".spine-upload-fill");if(fill)fill.style.width=`${percent}%`;
+  popup.querySelectorAll(".spine-upload-steps span").forEach((el,index)=>el.classList.toggle("active",url?true:progress?.finalizing?index===2:index===(completed?1:0)));
+  const actions=popup.querySelector(".spine-upload-actions");
+  if(actions){actions.replaceChildren();if(url){
+    const safe=new URL(url,window.location.origin);
+    if(safe.origin!==window.location.origin)return;
+    const link=document.createElement("a");link.href=safe.href;link.textContent="Open page";actions.appendChild(link);
+    const copy=document.createElement("button");copy.type="button";copy.textContent="Copy link";copy.addEventListener("click",()=>{void navigator.clipboard.writeText(safe.href).then(()=>copy.textContent="Copied").catch(()=>copy.textContent="Copy unavailable");});actions.appendChild(copy);
+  }}
 }
 
 window.addEventListener("storage", (event: StorageEvent) => {
