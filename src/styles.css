@@ -9021,3 +9021,36 @@ h1 {
 @media (max-height: 600px) {
  .app-shell.is-empty:not(.is-edit-page) .main-drop-zone { min-height: clamp(52px, 24dvh, 110px) !important; }
 }
+
+/* Upload journey: a large central confirmation that glides into the top-right. */
+.publish-progress-overlay.is-compact {
+  top: 50%; left: 50%; right: auto; bottom: auto; inset: auto;
+  width: min(470px, calc(100vw - 32px));
+  transform: translate(-50%, -50%);
+  animation: spine-publish-dock .95s 1.2s cubic-bezier(.2,.8,.2,1) forwards;
+  z-index: 2147480000;
+}
+.publish-progress-overlay.is-compact .publish-progress-dialog {
+  padding: 28px; border-radius: 22px;
+  border-color: rgba(95,240,221,.72);
+  background: radial-gradient(circle at 10% 10%,rgba(40,164,197,.25),transparent 55%),
+    linear-gradient(145deg, #091e2d, #071219);
+  box-shadow: 0 0 42px #55dfff44, 0 0 82px #a4ff8c25, 0 30px 70px #0008;
+  animation: spine-publish-glow 2s ease-in-out infinite alternate;
+}
+.publish-progress-overlay.is-compact .publish-progress-dialog strong {font-size: 22px;letter-spacing:-.035em}
+.publish-progress-overlay.is-compact .publish-progress-bar {height: 10px; margin-top: 22px}
+.publish-progress-stages {display:flex;gap:7px;flex-wrap:wrap;margin-top:15px}
+.publish-progress-stages span {font-size:10px;border:1px solid #31606a;color:#b1cbd0;border-radius:20px;padding:5px 9px}
+.publish-progress-stages .active {border-color:#a2ffab;background:#184242;color:#d6ffe2}
+@keyframes spine-publish-dock {
+  to {top:18px;left:calc(100% - 18px);transform:translate(-100%,0);width:min(365px,calc(100vw - 32px))}
+}
+@keyframes spine-publish-glow {
+  from {box-shadow:0 0 24px #55dfff33,0 0 56px #a4ff8c11,0 25px 65px #0008}
+  to {box-shadow:0 0 46px #55dfff8a,0 0 90px #a4ff8c3c,0 25px 65px #0008}
+}
+@media(prefers-reduced-motion:reduce){
+  .publish-progress-overlay.is-compact,.publish-progress-overlay.is-compact .publish-progress-dialog {animation:none!important}
+  .publish-progress-overlay.is-compact {top:18px;left:calc(100% - 18px);transform:translate(-100%,0);width:min(365px,calc(100vw - 32px))}
+}
