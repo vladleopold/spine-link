@@ -9054,3 +9054,29 @@ h1 {
   .publish-progress-overlay.is-compact,.publish-progress-overlay.is-compact .publish-progress-dialog {animation:none!important}
   .publish-progress-overlay.is-compact {top:18px;left:calc(100% - 18px);transform:translate(-100%,0);width:min(365px,calc(100vw - 32px))}
 }
+
+/* Home carousel: JS requestAnimationFrame is the only transform owner.
+   Legacy homeFeedScroll CSS animations overrode the inline transform, making
+   the strip drift/jump independently of its measured wrap point. */
+.home-feed-track.is-scrolling .home-feed-lane {
+  animation: none !important;
+  will-change: transform;
+}
+
+/* Keep the clipping viewport at screen width on phones. Older mobile rules
+   used width:max-content on the TRACK (20,000px+), so the whole reel escaped
+   its viewport rather than scrolling inside it. Only the inner lane is wide. */
+@media (max-width: 768px) {
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-track {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    flex-wrap: nowrap !important;
+  }
+  .app-shell.is-empty:not(.is-edit-page) .home-feed-lane {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: max-content !important;
+  }
+}

@@ -637,14 +637,14 @@ function startHomeFeed(track: HTMLElement, cards: HTMLElement[], viewport: HTMLE
     // Ряд состоит из двух одинаковых наборов: когда лента проехала длину
     // набора, сдвиг возвращается к началу — второй набор встаёт на место
     // и разрыва не видно.
-    const width = lane.scrollWidth / 2;
-    if (width > 0 && moved >= width) {
-      moved -= width;
-      cards.forEach((card) => {
-        if (!card.parentElement) lane.appendChild(card);
-      });
-    }
-    lane.style.transform = `translateX(${-moved}px)`;
+    // The duplicated set begins at exactly this offset. Deriving the wrap
+    // distance from real element positions avoids a visible seam caused by
+    // lane padding, flex gaps or responsive card widths.
+    const first = lane.children[0] as HTMLElement | undefined;
+    const repeatedFirst = lane.children[cards.length] as HTMLElement | undefined;
+    const cycleWidth = first && repeatedFirst ? repeatedFirst.offsetLeft - first.offsetLeft : 0;
+    if (cycleWidth > 0 && moved >= cycleWidth) moved %= cycleWidth;
+    lane.style.transform = `translate3d(${-moved}px, 0, 0)`;
     raf = window.requestAnimationFrame(tick);
   };
 
