@@ -344,6 +344,10 @@ export async function runPublishJob(job: PublishJob): Promise<void> {
     }
     await removeJob(job.id);
     scheduleDoneHide(job.id);
+    // The published URL is usable after the server acknowledges the final batch.
+    // Clipboard writes may be blocked outside a user gesture; the result link remains visible.
+    try { await navigator.clipboard.writeText(permalink); } catch { /* user can copy manually */ }
+    window.setTimeout(() => { window.location.assign(permalink); }, 950);
   } catch (error) {
     const message = abortMessage(error);
     const attempts = Number(job.attempts || 0) + 1;
