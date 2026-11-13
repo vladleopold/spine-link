@@ -1080,16 +1080,24 @@ async function pendingUploadDelete(id: string) {
 async function resumeStagedUploads() {
   try {
     const db = await pendingUploadDb();
+    // Claim all eligible jobs in one readwrite transaction before doing any
+    // network work. A reload or second tab must not replay the same failed job.
     const jobs = await new Promise<any[]>((resolve, reject) => {
-      const tx = db.transaction("jobs", "readonly");
-      const req = tx.objectStore("jobs").getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
+      const tx = db.transaction("jobs", "readwrite");
+      const store = tx.objectStore("jobs");
+      const req = store.getAll();
+      let claimed: any[] = [];
+      req.onsuccess = () => {
+        claimed = (req.result || []).filter((job: any) =>
+          !job.recoveryAttempted && Array.isArray(job.files) && job.files.length > 0
+        );
+        for (const job of claimed) store.put({ ...job, recoveryAttempted: true });
+      };
+      tx.oncomplete = () => resolve(claimed);
+      tx.onerror = tx.onabort = () => reject(tx.error);
     });
     db.close();
-    for (const job of jobs) {
-      if (Array.isArray(job.files) && job.files.length) startBackgroundUpload(job.files, job);
-    }
+    for (const job of jobs) startBackgroundUpload(job.files, job);
   } catch (error) { console.warn("[spine] pending upload recovery unavailable", error); }
 }
 
@@ -1361,11 +1369,8 @@ function wireUploadToast() {
   } catch {}
 }
 
-// Do not automatically restart old uploads or replay success popups on page load.
-// Recovery is deliberately opt-in: a new page visit must remain idle.
-// A user may explicitly request staged recovery with ?resumeUploads=1.
+// Reopen interrupted jobs once on the next visit, but never replay completed
+// uploads or retry the same recovered job forever on repeated page loads.
 window.addEventListener("load", () => {
-  if (new URLSearchParams(window.location.search).get("resumeUploads") === "1") {
-    void resumeStagedUploads();
-  }
+  void resumeStagedUploads();
 });
