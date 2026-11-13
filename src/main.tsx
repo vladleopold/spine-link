@@ -13,7 +13,6 @@ let pendingMountedFiles: File[] | null = null;
 let bootDraggingState: boolean | null = null;
 
 const backgroundUploadKey = "__spineBackgroundUpload";
-const uploadCompletePopupKey = "__spineUploadPopupShown";
 
 type BackgroundUploadEntry = {
   id: string;
@@ -1241,9 +1240,9 @@ function showBackgroundPopup(entryId: string, url: string | null, error: string 
     document.head.appendChild(css);
   }
   let popup = document.getElementById("spine-upload-popup");
-  const first = !popup || popup.getAttribute("data-upload-id") !== entryId;
-  if (first) {
-    popup?.remove();
+  // Keep the same popup node for the whole session. Switching upload entries
+  // must not replay the central-to-corner transition.
+  if (!popup) {
     popup = document.createElement("section");
     popup.id = "spine-upload-popup";
     popup.setAttribute("role","status");
@@ -1255,6 +1254,7 @@ function showBackgroundPopup(entryId: string, url: string | null, error: string 
     window.setTimeout(()=>{if(popup?.isConnected)popup.classList.add("is-docked");},1300);
   }
   if (!popup) return;
+  popup.setAttribute("data-upload-id", entryId);
   popup.classList.toggle("is-error",Boolean(error));
   const completed=Math.min(progress?.total||0,progress?.completed||0);
   const total=progress?.total||0;
@@ -1278,17 +1278,8 @@ function showBackgroundPopup(entryId: string, url: string | null, error: string 
   }}
 }
 
-window.addEventListener("storage", (event: StorageEvent) => {
-  if (event.key === "__spineUploadComplete" && event.newValue) {
-    try {
-      const data = JSON.parse(event.newValue);
-      if (data?.url && !window.location.pathname.includes("/p/")) {
-        const existing = document.getElementById("spine-upload-popup");
-        if (!existing) showBackgroundPopup("storage-event", data.url, null);
-      }
-    } catch {}
-  }
-});
+// A completed upload in another tab must never open a new animated popup
+// on this page. Each upload owns its own visible progress UI.
 
 document.addEventListener("drop", (event) => {
   const files = Array.from(event.dataTransfer?.files ?? []);
@@ -1370,19 +1361,11 @@ function wireUploadToast() {
   } catch {}
 }
 
+// Do not automatically restart old uploads or replay success popups on page load.
+// Recovery is deliberately opt-in: a new page visit must remain idle.
+// A user may explicitly request staged recovery with ?resumeUploads=1.
 window.addEventListener("load", () => {
-  void resumeStagedUploads();
-  const uploads = getBackgroundUploads();
-  for (const upload of uploads) {
-    if (upload.status === "complete" && upload.uploadUrl) {
-      try {
-        const lastShown = localStorage.getItem(uploadCompletePopupKey);
-        const alreadyShown = lastShown && typeof lastShown === "string" && lastShown.includes(upload.uploadUrl);
-        if (!alreadyShown) {
-          showBackgroundPopup(upload.id, upload.uploadUrl, null);
-          localStorage.setItem(uploadCompletePopupKey, JSON.stringify({ url: upload.uploadUrl, timestamp: Date.now() }));
-        }
-      } catch {}
-    }
+  if (new URLSearchParams(window.location.search).get("resumeUploads") === "1") {
+    void resumeStagedUploads();
   }
 });
