@@ -1245,6 +1245,7 @@ function showBackgroundPopup(entryId: string, url: string | null, error: string 
     document.body.appendChild(popup);
     window.setTimeout(()=>{if(popup?.isConnected)popup.classList.add("is-docked");},1300);
   }
+  if (!popup) return;
   popup.classList.toggle("is-error",Boolean(error));
   const completed=Math.min(progress?.total||0,progress?.completed||0);
   const total=progress?.total||0;
