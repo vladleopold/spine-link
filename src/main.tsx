@@ -1349,24 +1349,9 @@ function wireUploadToast() {
     if (url) show(url);
   }) as EventListener);
 
-  window.addEventListener("storage", (event) => {
-    if (event.key === "__spineUploadComplete" && event.newValue) {
-      try {
-        const data = JSON.parse(event.newValue);
-        if (data?.url) show(data.url);
-      } catch {}
-    }
-  });
+  // Never replay an earlier upload completion from localStorage or
+  // another tab. Only a fresh completion event in this tab can show the toast.
 
-  try {
-    const raw = localStorage.getItem("__spineUploadComplete");
-    if (raw) {
-      const data = JSON.parse(raw);
-      if (data?.url && Date.now() - Number(data.timestamp || 0) < 300000) {
-        show(data.url);
-      }
-    }
-  } catch {}
 }
 
 // Reopen interrupted jobs once on the next visit, but never replay completed
