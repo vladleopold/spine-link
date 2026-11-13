@@ -9024,7 +9024,7 @@ h1 {
 
 /* Upload journey: a large central confirmation that glides into the top-right. */
 .publish-progress-overlay.is-compact {
-  top: 50%; left: 50%; right: auto; bottom: auto; inset: auto;
+  inset: auto; top: 50%; left: 50%; right: auto; bottom: auto;
   width: min(470px, calc(100vw - 32px));
   transform: translate(-50%, -50%);
   animation: spine-publish-dock .95s 1.2s cubic-bezier(.2,.8,.2,1) forwards;
