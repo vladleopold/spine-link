@@ -891,7 +891,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): Promise<{ ok: boolean; status: number; data?: unknown }> {
+async function uploadFileKeepAlive(url: string, data: Record<string, unknown>, onChunkProgress?: (done: number, total: number) => void): Promise<{ ok: boolean; status: number; data?: unknown }> {
   const file = data.file as File | undefined;
   if (!file) return { ok: false, status: 0 };
 
@@ -980,6 +980,7 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>): 
             const splitAt = saved.chunkPath.lastIndexOf(suffix);
             if (splitAt >= 0) data.uploadPath = saved.chunkPath.slice(0, splitAt);
           }
+          onChunkProgress?.(chunkIndex, totalChunks);
           return sendChunk();
         }
         const payload = await response.json().catch(() => ({}));
@@ -1138,7 +1139,13 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
       file,
       anonymousAccountId: anonymousAccount.id,
       anonymousFingerprint: anonymousAccount.fingerprint,
-    });
+    }, (done, total) => showBackgroundPopup(uploadEntry.id, null, null, {
+      completed: fileIndex - 1,
+      total: files.length,
+      current: file.name,
+      fileFraction: done / total,
+      chunkLabel: `chunk ${done}/${total}`,
+    }));
     if (!result.ok) {
       error = typeof (result.data as any)?.error === "string" ? (result.data as any).error : `Upload failed: ${result.status}`;
       updateBackgroundUpload(uploadEntry.id, { status: "failed", error: error ?? undefined });
@@ -1206,7 +1213,7 @@ async function finalizeBackgroundUpload(entryId: string, uploadId: string, uploa
   window.setTimeout(() => { window.location.assign(previewUrl); }, 900);
 }
 
-function showBackgroundPopup(entryId: string, url: string | null, error: string | null, progress?: { completed: number; total: number; current?: string; finalizing?: boolean }) {
+function showBackgroundPopup(entryId: string, url: string | null, error: string | null, progress?: { completed: number; total: number; current?: string; finalizing?: boolean; fileFraction?: number; chunkLabel?: string }) {
   if (window.location.pathname.includes("/p/")) return;
   if (!document.getElementById("spine-upload-motion-style")) {
     const css = document.createElement("style");
@@ -1251,9 +1258,10 @@ function showBackgroundPopup(entryId: string, url: string | null, error: string 
   popup.classList.toggle("is-error",Boolean(error));
   const completed=Math.min(progress?.total||0,progress?.completed||0);
   const total=progress?.total||0;
-  const percent=url?100:progress?.finalizing?95:total?Math.round(completed/total*90):0;
+  const partial = Math.max(0, Math.min(0.99, progress?.fileFraction || 0));
+  const percent=url?100:progress?.finalizing?95:total?Math.round((completed+partial)/total*90):0;
   const title=error?"Upload failed":url?"Your page is ready":progress?.finalizing?"Creating permanent page":"Uploading Spine files";
-  const subtitle=error?error:url?"Link ready · opening automatically":progress?.finalizing?"Saving the index and verifying the page":progress?.current||"Preparing and transferring files";
+  const subtitle=error?error:url?"Link ready · opening automatically":progress?.finalizing?"Saving the index and verifying the page":[progress?.current, progress?.chunkLabel].filter(Boolean).join(" · ")||"Preparing and transferring files";
   const put=(cls:string,value:string)=>{const el=popup?.querySelector(cls);if(el)el.textContent=value;};
   put(".spine-upload-title",title);
   put(".spine-upload-sub",subtitle);
