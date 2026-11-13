@@ -5415,6 +5415,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 <span style={{ width: `${Math.min(100, Math.max(0, publishProgress.value))}%` }} />
               </div>
             )}
+            <div className="publish-progress-stages" aria-label="Upload stages">
+              <span className={publishProgress.value < 15 && publishProgress.status === "running" ? "active" : ""}>01 · Preparing</span>
+              <span className={publishProgress.value >= 15 && publishProgress.status === "running" ? "active" : ""}>02 · Saving</span>
+              <span className={publishProgress.status === "done" ? "active" : ""}>03 · Page ready</span>
+            </div>
             <div className="publish-progress-meta">
               <span>{publishProgress.status === "done" ? "Permanent link ready" : publishProgress.status === "failed" ? "Save failed" : "Saving to library"}</span>
               <b>{publishProgress.status === "failed" ? "!" : `${Math.min(100, Math.max(0, publishProgress.value))}%`}</b>
