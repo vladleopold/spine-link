@@ -1182,9 +1182,9 @@ async function uploadBackgroundFilesFast(
       uploadedAt, anonymousAccount, settings, entry: {
         id: uploadId, uploadedAt, previewPath: realPath, title,
         files: files.map(file => file.name),
-        skeleton: files.find(file => /\\.(json|skel|bytes)$/i.test(file.name))?.name || "",
-        atlas: files.find(file => /\\.atlas$/i.test(file.name))?.name || "",
-        textures: files.filter(file => /\\.(png|jpe?g|webp)$/i.test(file.name)).map(file => file.name),
+        skeleton: files.find(file => /\.(json|skel|bytes)$/i.test(file.name))?.name || "",
+        atlas: files.find(file => /\.atlas$/i.test(file.name))?.name || "",
+        textures: files.filter(file => /\.(png|jpe?g|webp)$/i.test(file.name)).map(file => file.name),
       },
       stagedBlobs, stagedAssemblies, commitPrefix: "Fast Spine upload",
     }),
