@@ -1,5 +1,5 @@
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
-import { cacheProfiles, setCacheHeaders } from '../lib/cache-headers.js';
+import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
 
@@ -251,8 +251,8 @@ async function libraryCollectionPaths(settings) {
 }
 
 
-async function githubText(settings, path) {
-  return cachedGithubText(settings, path);
+async function githubText(settings, path, options = {}) {
+  return cachedGithubText(settings, path, options);
 }
 
 async function githubBuffer(settings, path) {
@@ -2120,7 +2120,7 @@ export default async function handler(request, response) {
     const basePaths = await libraryCollectionPaths(settings);
     const collectedEntries = [];
     for (const basePath of basePaths) {
-      const text = await githubText(settings, `${basePath}/index.json`);
+      const text = await githubText(settings, `${basePath}/index.json`, { ttlMs: 0 });
       if (!text) continue;
       try {
         const parsed = JSON.parse(text);
@@ -2144,7 +2144,7 @@ export default async function handler(request, response) {
 
     if (request.query?.feed === 'home') {
       response.setHeader('Content-Type', 'application/json; charset=utf-8');
-      setCacheHeaders(response, cacheProfiles.listBrowser, cacheProfiles.listCdn);
+      setNoStoreHeaders(response);
       if (request.method === 'HEAD') {
         return response.status(200).send('');
       }
@@ -2160,7 +2160,7 @@ export default async function handler(request, response) {
     const feed = String(request.query?.feed || '').trim();
     if (feed === 'home') {
       response.setHeader('Content-Type', 'application/json; charset=utf-8');
-      setCacheHeaders(response, cacheProfiles.listBrowser, cacheProfiles.listCdn);
+      setNoStoreHeaders(response);
       if (request.method === 'HEAD') {
         return response.status(200).send('');
       }
@@ -2176,7 +2176,7 @@ export default async function handler(request, response) {
     response.setHeader('X-Robots-Tag', 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1');
     if (archiveId) {
       const entry = layoutEntries.find((item) => String(item?.id || '') === archiveId);
-      setCacheHeaders(response, cacheProfiles.dynamicHtmlBrowser, cacheProfiles.dynamicHtmlCdn);
+      setNoStoreHeaders(response);
       if (request.method === 'HEAD') {
         return response.status(entry ? 200 : 404).send('');
       }
@@ -2198,7 +2198,7 @@ export default async function handler(request, response) {
       const limit = Math.min(48, Math.max(1, Number(request.query?.limit) || archivePageSize));
       const sliced = layoutEntries.slice(offset, offset + limit);
       response.setHeader('Content-Type', 'application/json; charset=utf-8');
-      setCacheHeaders(response, cacheProfiles.listBrowser, cacheProfiles.listCdn);
+      setNoStoreHeaders(response);
       if (request.method === 'HEAD') {
         return response.status(200).send('');
       }
@@ -2212,7 +2212,7 @@ export default async function handler(request, response) {
       });
     }
 
-    setCacheHeaders(response, cacheProfiles.dynamicHtmlBrowser, cacheProfiles.dynamicHtmlCdn);
+    setNoStoreHeaders(response);
     if (request.method === 'HEAD') {
       return response.status(200).send('');
     }
