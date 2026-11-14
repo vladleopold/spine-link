@@ -363,6 +363,25 @@ test('batch-staging rejects duplicate filenames and malicious paths before stori
 });
 
 
+test('new personal and administrator API keys can authenticate without uploading', async () => {
+  mockGithub();
+  const admin = await request('POST', {action:'ping'});
+  assert.equal(admin.code,200);
+  assert.equal(admin.authenticated,true);
+  assert.equal(admin.keyType,'admin');
+  const created = await request('POST', {action:'keys-create',name:'Verify animation server'}, {}, 'google-user-one');
+  assert.equal(created.code,200);
+  const personal=await request('POST', {action:'ping'}, {}, created.key);
+  assert.equal(personal.code,200);
+  assert.equal(personal.keyType,'personal');
+  const invalid=await request('POST',{action:'ping'}, {},'invalid-api-key');
+  assert.equal(invalid.code,401);
+  const revoked=await request('POST',{action:'keys-revoke',keyId:created.record.id}, {},'google-user-one');
+  assert.equal(revoked.code,200);
+  const blocked=await request('POST',{action:'ping'}, {}, created.key);
+  assert.equal(blocked.code,401);
+});
+
 test('Google account creates a one-time personal key; only masked key is listed', async () => {
   const gh = mockGithub();
   const initial = await request('POST', {action:'keys-list'}, {}, 'google-user-one');

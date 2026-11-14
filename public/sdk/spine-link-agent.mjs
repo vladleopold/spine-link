@@ -97,6 +97,11 @@ export class SpineLinkAgent {
     }
   }
 
+  verifyConnection() {
+    // The server validates the API credential against the current key registry.
+    return this.request({ action: 'ping' });
+  }
+
   createJob({ title = 'Agent animation', format = 'runtime' } = {}) {
     if (!['runtime', 'spine-project'].includes(format)) throw new TypeError('Invalid Spine format');
     return this.request({ action: 'create', title, format });

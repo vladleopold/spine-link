@@ -14,7 +14,9 @@ function simulate() {
       const action = JSON.parse(init.body);
       calls.push({ url, init, ...action });
       let value;
-      if (action.action === 'create') {
+      if (action.action === 'ping') {
+        value = {ok:true, authenticated:true, keyType:'personal', scope:'publish'};
+      } else if (action.action === 'create') {
         value = { id: 'agent-' + 'a'.repeat(32), jobToken: 'signed-test', uploadPath: 'library_02/agent-test' };
       } else if (action.action === 'stage' || action.action === 'stage-batch') {
         const files = action.action === 'stage' ? [{ name: action.name }] : action.files;
@@ -34,6 +36,14 @@ function simulate() {
   });
   return { sdk, calls };
 }
+
+test('SDK verifies API key via authenticated ping', async () => {
+  const {sdk,calls}=simulate();
+  const response=await sdk.verifyConnection();
+  assert.equal(response.authenticated,true);
+  assert.equal(calls[0].action,'ping');
+  assert.equal(calls[0].init.headers.Authorization,'Bearer ' + key);
+});
 
 test('server SDK publishes runtime by batching small files with secret only in Authorization', async () => {
   const { sdk, calls } = simulate();

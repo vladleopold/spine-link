@@ -39,6 +39,9 @@ const agent = new SpineLinkAgent({
   apiKey: process.env.SPINE_LINK_AGENT_API_KEY,
 });
 
+const checked = await agent.verifyConnection();
+console.log(checked.authenticated); // true
+
 const work = await agent.publish({
   title: 'Character walk',
   format: 'runtime',

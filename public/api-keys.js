@@ -137,6 +137,33 @@ $('#copy-key').addEventListener('click', async () => {
     notice('Clipboard permission denied. Copy the selected value manually.', true);
   }
 });
+// Test the newly created key with the actual API authorization path. It stays
+// in the one-time secret textarea and is never saved to localStorage.
+$('#test-key').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  if (!secretValue.value) return;
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/agent-animation', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + secretValue.value,
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+      body: JSON.stringify({ action: 'ping' }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.authenticated !== true || result.keyType !== 'personal') {
+      throw new Error(result.error || 'API key verification failed');
+    }
+    notice('Personal API key is valid and can authenticate. Store it on your server.');
+  } catch (error) {
+    notice(error.message || 'Could not verify this key.', true);
+  } finally {
+    button.disabled = false;
+  }
+});
 $('#create-key').addEventListener('submit', async event => {
   event.preventDefault();
   const btn = $('#create-button');

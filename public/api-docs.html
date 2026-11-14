@@ -62,6 +62,12 @@ Content-Type: application/json</code></pre>
 
 // 4. Check status; no session token in the URL
 {"action":"status","id":"agent-...","collection":"library_02"}</code></pre>
+<h2>Test your key</h2>
+<pre><code>POST /api/agent-animation
+Authorization: Bearer &lt;YOUR_PERSONAL_KEY&gt;
+
+{"action":"ping"}</code></pre>
+<p>A valid key returns <code>{"authenticated":true,"scope":"publish","keyType":"personal"}</code>. This does not upload a project.</p>
 <h2>Response</h2>
 <pre><code>{
   "id": "agent-...",

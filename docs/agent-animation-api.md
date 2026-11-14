@@ -134,6 +134,10 @@ States: awaiting_upload, processing, ready, failed. webmStatus is separate: the 
 - An agent API key is a secret and must never be placed in the website frontend.
 - This API does not grant remote code execution or unrestricted repository writes.
 
+## Check a personal API key before uploading
+
+Send `POST /api/agent-animation` with `Authorization: Bearer slk_v1_...` and body `{"action":"ping"}`. The response is `{"ok":true,"authenticated":true,"scope":"publish","keyType":"personal"}` when the key has not been revoked and is valid in the private credential registry. The SDK exposes `await agent.verifyConnection()`. The My API Keys page also includes a **Test key** button after creating a new key. This check validates authentication but does not create a project or prove a full editor export.
+
 ## SDK and web documentation
 
 Website guide: https://spine-link.vercel.app/api-docs.html
