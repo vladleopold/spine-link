@@ -1,0 +1,70 @@
+name: Spine-Link Chromium page verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/spine-link-browser-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install browser tooling
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Open newly uploaded Spine page in actual Chromium
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {chromium} from 'playwright';
+          const url = 'https://spine-link.vercel.app/p/spine-link-e2e-2026-11-14T09-30-30-139Z';
+          const browser = await chromium.launch({
+            headless:true,
+            args:['--use-gl=angle','--use-angle=swiftshader','--enable-webgl'],
+          });
+          try {
+            const page = await browser.newPage({viewport:{width:1200,height:780}});
+            const pageErrors=[];
+            const missingAssets=[];
+            page.on('pageerror',error=>pageErrors.push(String(error)));
+            page.on('response',response=>{
+              if (response.status()>=400 && /\.(?:atlas|json|png|webp|skel)(?:\?|$)/i.test(response.url())) {
+                missingAssets.push(response.status()+' '+response.url());
+              }
+            });
+            const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
+            assert.equal(response?.status(),200);
+            await page.waitForTimeout(5000);
+            const actual = await page.evaluate(()=>{
+              const script=document.querySelector('#spine-preview-config');
+              const config=script?JSON.parse(script.textContent||'{}'):null;
+              return {
+                title:document.title,
+                canvas:document.querySelectorAll('canvas').length,
+                sets:config?.sets?.length||0,
+                hasError:document.body.innerText.includes('Preview not found'),
+                player:!!document.querySelector('[class*="spine-player"]'),
+              };
+            });
+            console.log('Chromium page info: '+JSON.stringify(actual));
+            assert.ok(actual.sets>0,'Missing playable Spine set');
+            assert.equal(actual.hasError,false,'Preview not found displayed in real browser');
+            assert.equal(missingAssets.length,0,'Missing Spine assets: '+missingAssets.join('; '));
+            assert.equal(pageErrors.length,0,'Browser JavaScript errors: '+pageErrors.join('; '));
+            console.log('PASS new Spine page opens in Chromium, config loaded, no missing assets or JS errors');
+          } finally {
+            await browser.close();
+          }
+          NODE
