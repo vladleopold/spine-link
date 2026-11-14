@@ -66,6 +66,8 @@ jobs:
             const indexed=await call({action:'get-entry',entryId:id,
               settings:{...settings,basePath:actualPath.split('/')[0]}});
             assert.equal(indexed.entry.sourceKind,'spine-project');
+            assert.equal(indexed.entry.conversionStatus,'needs-editor',
+              'Cloud export must not claim success when licensed Spine Editor is not configured');
             assert.deepEqual(indexed.entry.files,['spine.spine','images/fool_demo_fx.png']);
             assert.equal(indexed.entry.projectFile,'spine.spine');
             const page=await fetch(site+'/p/'+id,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(60000)});
