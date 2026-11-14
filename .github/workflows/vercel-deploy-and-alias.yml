@@ -4,9 +4,17 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+  # One-time recovery after Vercel Hobby's 100-deployments/24h limit clears.
+  schedule:
+    - cron: '37 15 15 11 *'
 
 # Many rapid commits can otherwise race to point the production alias at an
 # older deployment after a newer one has completed.
+permissions:
+  contents: read
+  actions: read
+
 concurrency:
   group: spine-link-production
   cancel-in-progress: true
@@ -15,7 +23,25 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: One-time quota recovery gate
+        id: quota_recovery
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$(date -u +%F)" != "2026-11-15" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          last_success=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-deploy-and-alias.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].head_sha' || true)
+          if [ "$last_success" = "$GITHUB_SHA" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Validate Vercel secrets
+        if: steps.quota_recovery.outputs.skip != 'true'
         run: |
           if [ -z "$VERCEL_TOKEN" ]; then
             echo "::error::Missing VERCEL_TOKEN GitHub secret."
@@ -30,20 +56,25 @@ jobs:
           VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
 
       - name: Check out repo
+        if: steps.quota_recovery.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Set up Node
+        if: steps.quota_recovery.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Test preview lookup and cache freshness
+        if: steps.quota_recovery.outputs.skip != 'true'
         run: node --test tests/preview-cache.test.mjs tests/preview-metadata.test.mjs
 
       - name: Install Vercel CLI
+        if: steps.quota_recovery.outputs.skip != 'true'
         run: npm install -g vercel@latest
 
       - name: Deploy to Vercel
+        if: steps.quota_recovery.outputs.skip != 'true'
         id: deploy
         run: |
           DEPLOY_URL=$(vercel deploy --prod --yes --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE")
@@ -53,6 +84,7 @@ jobs:
           VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
 
       - name: Point aliases to newest deployment
+        if: steps.quota_recovery.outputs.skip != 'true'
         run: |
           vercel alias set "${{ steps.deploy.outputs.deploy_url }}" spine-link.vercel.app --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" --non-interactive
           vercel alias set "${{ steps.deploy.outputs.deploy_url }}" spinepreview-vercel.vercel.app --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" --non-interactive
@@ -61,6 +93,7 @@ jobs:
           VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
 
       - name: Smoke test new Spine preview and assets
+        if: steps.quota_recovery.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
