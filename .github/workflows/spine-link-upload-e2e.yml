@@ -1,0 +1,119 @@
+name: Spine-Link 4-file end-to-end production upload
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/spine-link-upload-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Parallel upload, atomic publish, open page, verify image, hide test
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const crypto = require('node:crypto');
+          const site = 'https://spine-link.vercel.app';
+          const uploadId = 'spine-link-e2e-' + new Date().toISOString().replace(/[:.]/g, '-');
+          const uploadedAt = new Date().toISOString();
+          const anonymousAccount = {id: 'anon_e2e_' + crypto.randomBytes(8).toString('hex'), fingerprint: 'automated-cloud-check'};
+          const settings = {owner:'vladleopold',repo:'spine',branch:'main',basePath:''};
+          const atlas = fs.readFileSync('test/anim1/fool_demo_fx.atlas', 'utf8')
+            .replace(/^\.\.\/textures\/fool_demo_fx_Material\.png/m,'fool_demo_fx.png');
+          const files = [
+            {name:'fool_demo_fx.atlas', bytes: Buffer.from(atlas)},
+            {name:'fool_demo_fx.json', bytes: fs.readFileSync('test/anim1/fool_demo_fx.json')},
+            {name:'fool_demo_fx.png', bytes: fs.readFileSync('test/anim1/fool_demo_fx.png')},
+            {name:'source-check.txt', bytes: Buffer.from('Spine-Link end-to-end upload, 4 files, GitHub runner\n')},
+          ];
+          async function api(body) {
+            const response = await fetch(site + '/api/github-upload', {
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({...body,anonymousAccount,settings}),
+              signal:AbortSignal.timeout(120000),
+            });
+            const text = await response.text();
+            let json;
+            try {json=JSON.parse(text);}catch{json={error:text.slice(0,400)};}
+            if (!response.ok || !json.ok) throw Error(String(body.action) + ': HTTP ' + response.status + ' ' + JSON.stringify(json).slice(0,400));
+            return json;
+          }
+          let published = false;
+          const start = Date.now();
+          try {
+            const receipts = await Promise.all(files.map(async file => {
+              const staged = await api({
+                action:'stage-blob',uploadId,entryId:uploadId,
+                uploadPath:uploadId,path:uploadId + '/' + file.name,
+                contentBase64:file.bytes.toString('base64'),
+              });
+              assert.equal(staged.bytes,file.bytes.length);
+              assert.equal(staged.sha256,crypto.createHash('sha256').update(file.bytes).digest('hex'));
+              return staged;
+            }));
+            const stageSeconds = ((Date.now() - start)/1000).toFixed(2);
+            const realPath = receipts[0].path.slice(0,receipts[0].path.lastIndexOf('/'));
+            assert.ok(receipts.every(item => item.path.startsWith(realPath + '/')));
+            const commit = await api({
+              action:'background-finalize-fast',uploadId,uploadPath:realPath,uploadedAt,
+              entry:{id:uploadId,uploadedAt,previewPath:realPath,title:'Spine Link automated verification',
+                files:files.map(file=>file.name),skeleton:'fool_demo_fx.json',
+                atlas:'fool_demo_fx.atlas',textures:['fool_demo_fx.png']},
+              stagedBlobs:receipts,stagedAssemblies:[],commitPrefix:'Production preview verification',
+            });
+            assert.equal(commit.indexed,true);
+            published = true;
+            const publishSeconds = ((Date.now() - start)/1000).toFixed(2);
+            const manifestResponse = await api({action:'get-entry',entryId:uploadId,settings:{...settings,basePath:realPath.split('/')[0]}});
+            assert.equal(manifestResponse.entry.id,uploadId);
+            assert.equal(manifestResponse.entry.files.length,4);
+            const readySeconds = ((Date.now() - start)/1000).toFixed(2);
+            const player = await fetch(site + '/p/' + encodeURIComponent(uploadId), {signal:AbortSignal.timeout(60000)});
+            const html = await player.text();
+            assert.equal(player.status,200,'new upload page HTTP '+player.status+': '+html.slice(0,250));
+            const configMatch = html.match(/<script type="application\/json" id="spine-preview-config">([\s\S]*?)<\/script>/);
+            assert.ok(configMatch,'Missing real Spine player configuration on new page');
+            const config = JSON.parse(configMatch[1]);
+            assert.ok(Array.isArray(config.sets) && config.sets.length > 0,'No playable Spine set on new page');
+            assert.ok(html.includes('fool_demo_fx.png'),'Atlas texture not referenced');
+            const imageResponse = await fetch(site + '/assets/' + realPath + '/fool_demo_fx.png',{signal:AbortSignal.timeout(60000)});
+            assert.equal(imageResponse.status,200,'Uploaded PNG is inaccessible');
+            const image = Buffer.from(await imageResponse.arrayBuffer());
+            assert.equal(image.subarray(0,8).toString('hex'),'89504e470d0a1a0a','PNG signature incorrect');
+            assert.equal(image.length,files[2].bytes.length,'PNG size changed');
+            console.log('PASS upload ID: ' + uploadId);
+            console.log('PASS playable page: ' + site + '/p/' + uploadId);
+            console.log('PASS 4 staged file SHA256 receipts, atomic commit, index, JSON config and PNG');
+            console.log('Stage 4 files parallel: ' + stageSeconds + 's');
+            console.log('Atomic publish elapsed: ' + publishSeconds + 's');
+            console.log('Indexed and ready: ' + readySeconds + 's');
+            console.log('Total including page and PNG GET: ' + ((Date.now() - start)/1000).toFixed(2) + 's');
+          } finally {
+            if (published) {
+              for (let attempt=0;attempt<3;attempt++) {
+                try {
+                  const hidden=await api({action:'update-entry-visibility',entryId:uploadId,hiddenFromPublicLibrary:true,commitPrefix:'Hide test upload'});
+                  assert.equal(hidden.entry.hiddenFromPublicLibrary,true);
+                  console.log('PASS test upload hidden from public library');
+                  break;
+                } catch(error) {
+                  if (attempt===2) console.error('WARNING: could not hide test upload: '+String(error));
+                  else await new Promise(resolve=>setTimeout(resolve,750));
+                }
+              }
+            }
+          }
+          NODE
