@@ -1007,8 +1007,9 @@ function loadImageFromDataUri(dataUri: string) {
   });
 }
 
-async function readAsTransparentizedImageDataUri(file: File) {
-  const sourceDataUri = await readAsDataUri(file);
+async function readAsTransparentizedImageDataUri(file: File, sourceDataUri: string) {
+  // The caller already reads this file for the player. Reuse those bytes instead
+  // of reading and decoding every texture a second time.
   const image = await loadImageFromDataUri(sourceDataUri);
   const canvas = document.createElement("canvas");
   canvas.width = image.naturalWidth || image.width;
@@ -1018,10 +1019,10 @@ async function readAsTransparentizedImageDataUri(file: File) {
   if (!context || canvas.width === 0 || canvas.height === 0) return { dataUri: sourceDataUri, hasBlackMatte: false };
 
   context.drawImage(image, 0, 0);
+  // Read the full pixel buffer once. A second getImageData call copied the
+  // entire texture again even when no alpha repair was needed.
   const straightImageData = context.getImageData(0, 0, canvas.width, canvas.height);
-  const pmaImageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const data = straightImageData.data;
-  const pmaData = pmaImageData.data;
   let changedPixels = 0;
   let visiblePixels = 0;
   let nearBlackPixels = 0;
@@ -1041,6 +1042,9 @@ async function readAsTransparentizedImageDataUri(file: File) {
   }
 
   const hasBlackMatte = visiblePixels > 0 && nearBlackPixels / visiblePixels > 0.18;
+  // Keep a second pixel buffer only for the black-matte path, where the player
+  // also needs the original-alpha variant.
+  const pmaData = hasBlackMatte ? new Uint8ClampedArray(data) : null;
 
   for (let index = 0; index < data.length; index += 4) {
     const alpha = data[index + 3];
@@ -1057,10 +1061,12 @@ async function readAsTransparentizedImageDataUri(file: File) {
         data[index + 1] = 0;
         data[index + 2] = 0;
         data[index + 3] = 0;
-        pmaData[index] = 0;
-        pmaData[index + 1] = 0;
-        pmaData[index + 2] = 0;
-        pmaData[index + 3] = 0;
+        if (pmaData) {
+          pmaData[index] = 0;
+          pmaData[index + 1] = 0;
+          pmaData[index + 2] = 0;
+          pmaData[index + 3] = 0;
+        }
         changedPixels += 1;
         continue;
       }
@@ -1082,8 +1088,12 @@ async function readAsTransparentizedImageDataUri(file: File) {
 
   context.putImageData(straightImageData, 0, 0);
   const straightDataUri = canvas.toDataURL("image/png");
-  context.putImageData(pmaImageData, 0, 0);
-  const premultipliedDataUri = canvas.toDataURL("image/png");
+  const premultipliedDataUri = pmaData
+    ? (() => {
+        context.putImageData(new ImageData(pmaData, canvas.width, canvas.height), 0, 0);
+        return canvas.toDataURL("image/png");
+      })()
+    : undefined;
 
   return {
     dataUri: straightDataUri,
@@ -2446,7 +2456,7 @@ async function loadFiles(files: File[]) {
           : binaryBuffer
             ? `data:application/octet-stream;base64,${bytesToBase64FromBytes(new Uint8Array(binaryBuffer))}`
             : await readAsDataUri(file);
-      const transparentizedImage = isImageFile(file) ? await readAsTransparentizedImageDataUri(file) : undefined;
+      const transparentizedImage = isImageFile(file) ? await readAsTransparentizedImageDataUri(file, dataUri) : undefined;
 
 if (extensionOf(file.name) === "json" && text) {
          const decodedJson = sanitizeSkeletonData(stripPackedPlaceholders(decodePackedSkeletonJson(text)));
