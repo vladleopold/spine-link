@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'api/agent-animation.js'
+      - 'api/github-upload.js'
+      - 'lib/agent-animation.js'
       - 'tests/agent-animation-api.test.mjs'
       - 'scripts/spine-link-agent-publish.mjs'
       - 'docs/agent-animation-api.md'
@@ -35,7 +36,7 @@ jobs:
         run: node --test tests/agent-animation-api.test.mjs
       - name: Syntax check client and server
         run: |
-          node --check api/agent-animation.js
+          node --check lib/agent-animation.js
           node --check scripts/spine-link-agent-publish.mjs
       - name: Build site
         run: npm run build
