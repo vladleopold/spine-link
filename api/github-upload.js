@@ -1419,6 +1419,9 @@ export default async function handler(request, response) {
       const relativeFiles = prepared.receipts.map(item =>
         item.path.startsWith(workPath + '/') ? item.path.slice(workPath.length + 1) : '');
       const isEditorProject = body?.entry?.sourceKind === 'spine-project';
+      // Do not report an export as queued unless an authorized cloud Spine
+      // Editor runner has been installed and explicitly enabled by the owner.
+      const editorExportEnabled = process.env.SPINE_PROJECT_EXPORT_ENABLED === 'true';
       const projectFile = String(body?.entry?.projectFile || '');
       if (isEditorProject && (!/^[^/\\]+\.spine$/i.test(projectFile) ||
           !relativeFiles.includes(projectFile) ||
@@ -1440,7 +1443,8 @@ export default async function handler(request, response) {
           id: uploadId, uploadedAt, previewPath: workPath,
           ...(isEditorProject ? {
             sourceKind: 'spine-project', projectFile,
-            imagesRoot: 'images', conversionStatus: 'pending',
+            imagesRoot: 'images',
+            conversionStatus: editorExportEnabled ? 'pending' : 'needs-editor',
             webmStatus: 'waiting-for-editor',
             skeleton: '', atlas: '', animations: [],
           } : {}),
@@ -1451,7 +1455,9 @@ export default async function handler(request, response) {
         });
         nextEntry.webmStatus = isEditorProject ? 'waiting-for-editor' :
           existing?.webmStatus === 'ready' ? 'ready' : 'pending';
-        nextEntry.dispatchStatus = isEditorProject ? 'project-export-pending' : 'pending';
+        nextEntry.dispatchStatus = isEditorProject
+          ? editorExportEnabled ? 'project-export-pending' : 'editor-unavailable'
+          : 'pending';
         const nextEntries = [nextEntry, ...currentEntries.filter(item => item.id !== uploadId)];
         try {
           commit = await commitGitHubChanges(settings, {
@@ -1466,8 +1472,9 @@ export default async function handler(request, response) {
         }
       }
       try {
-        if (isEditorProject) dispatchSpineProjectExport(settings, nextEntry, origin).catch(() => {});
-        else dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {});
+        if (isEditorProject) {
+          if (editorExportEnabled) dispatchSpineProjectExport(settings, nextEntry, origin).catch(() => {});
+        } else dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {});
       } catch {}
       return response.status(200).json({
         ok: true, path: workPath, indexed: true,
