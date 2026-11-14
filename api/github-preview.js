@@ -2717,7 +2717,9 @@ export default async function handler(request, response) {
       setNoStoreHeaders(response);
       return response.status(200).send('');
     }
-    setCacheHeaders(response, cacheProfiles.dynamicHtmlBrowser, cacheProfiles.dynamicHtmlCdn);
+    // Work pages must not survive deletion in a browser/CDN for minutes.
+    // The assets can remain cacheable; the entry lookup is always fresh.
+    setNoStoreHeaders(response);
     return response.status(200).send(html);
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Preview failed');
