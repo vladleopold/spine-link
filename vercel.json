@@ -6,9 +6,6 @@
   "functions": {
     "api/github-upload.js": {
       "maxDuration": 60
-    },
-    "api/agent-animation.js": {
-      "maxDuration": 60
     }
   },
   "headers": [
@@ -364,6 +361,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/agent-animation",
+      "destination": "/api/github-upload?__spine_link_agent_v1=1"
+    },
     {
       "source": "/google2ea7251338911e7a.html",
       "destination": "/google2ea7251338911e7a.html"
