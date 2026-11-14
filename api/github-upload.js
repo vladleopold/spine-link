@@ -1014,7 +1014,7 @@ async function githubApi(settings, method, apiPath, payload) {
   throw lastError;
 }
 
-async function commitGitHubChanges(settings, { writes, stagedBlobs = [], deletions = [], message, origin = '' }) {
+async function commitGitHubChanges(settings, { writes, stagedBlobs = [], deletions = [], deleteTrees = [], message, origin = '' }) {
   const repoApi = '/repos/' + settings.owner + '/' + settings.repo;
   const branchRef = repoApi + '/git/refs/heads/' + encodeURIComponent(settings.branch);
   const normalized = Array.isArray(writes)
@@ -1045,6 +1045,12 @@ async function commitGitHubChanges(settings, { writes, stagedBlobs = [], deletio
   for (const rawPath of deletions) {
     const path = cleanRepoPath(String(rawPath || ''));
     if (path) preparedEntries.push({ path, mode: '100644', type: 'blob', sha: null });
+  }
+  // Git's tree API supports deleting a whole subtree (040000, sha:null).
+  // Use it instead of a GitHub Contents DELETE and commit per uploaded file.
+  for (const rawPath of deleteTrees) {
+    const path = cleanRepoPath(String(rawPath || ''));
+    if (path) preparedEntries.push({ path, mode: '040000', type: 'tree', sha: null });
   }
   if (!preparedEntries.length) throw new Error('Nothing to write');
 
@@ -1216,7 +1222,7 @@ export default async function handler(request, response) {
     const commitPrefix = String(body?.commitPrefix || 'Add Spine preview');
     const action = String(body?.action || '');
     failedAction = action || 'unknown';
-    if (['delete-entry', 'update-note', 'update-layout', 'update-entry-visibility'].includes(action) && body?.entryId) {
+    if (['update-note', 'update-layout', 'update-entry-visibility'].includes(action) && body?.entryId) {
       const collections = await libraryCollectionIndexes(settings);
       const collection = collections.find(item => item.entries.some(entry => String(entry?.id) === String(body.entryId)));
       if (collection) settings.basePath = collection.basePath;
@@ -2036,23 +2042,73 @@ export default async function handler(request, response) {
     if (action === 'delete-entry') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const entryId = String(body?.entryId || '').trim();
-      if (!entryId) return response.status(400).json({ error: 'Invalid delete payload' });
-      const indexPath = joinRepoPath(settings.basePath, 'index.json');
-      const currentIndex = await getGitHubContent(settings, indexPath);
-      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
-      const entry = currentEntries.find((currentEntry) => String(currentEntry?.id || '') === entryId);
-      if (!entry) return response.status(404).json({ error: 'Library entry not found' });
-      if (!canEditEntry(entry, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can delete this entry', 403);
-      const previewPath = cleanRepoPath(entry.previewPath || joinRepoPath(settings.basePath, entryId));
-      if (previewPath) await deleteGitHubPath(settings, previewPath, commitPrefix);
-      const nextEntries = currentEntries.filter((currentEntry) => String(currentEntry?.id || '') !== entryId);
-      await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
-      return response.status(200).json({ ok: true, deleted: entryId });
+      if (!/^[a-z0-9][a-z0-9._-]{0,180}$/i.test(entryId) || entryId === '..') {
+        return response.status(400).json({ error: 'Invalid delete payload' });
+      }
+      // Portfolio already knows the index containing its card. Read that
+      // one index first; the old path scanned every (sometimes huge) archive.
+      const hint = String(body?.collectionBasePath || '').trim();
+      let collection = null;
+      if (/^library(?:_\d+)?$/.test(hint)) {
+        const index = await getGitHubContent(settings, joinRepoPath(hint, 'index.json'));
+        const entries = index?.encoding === 'base64' && index?.content
+          ? JSON.parse(base64ToText(index.content)) : [];
+        if (Array.isArray(entries) && entries.some(item => String(item?.id || '') === entryId)) {
+          collection = { basePath: hint, entries, sha: index?.sha };
+        }
+      }
+      if (!collection) {
+        const collections = await libraryCollectionIndexes(settings);
+        collection = collections.find(item => item.entries.some(entry => String(entry?.id || '') === entryId));
+      }
+      if (!collection) return response.status(404).json({ error: 'Library entry not found' });
+      const entry = collection.entries.find(item => String(item?.id || '') === entryId);
+      if (!canEditEntry(entry, googlePayload, anonymousAccount)) {
+        throw unauthorized('Only the owner can delete this entry', 403);
+      }
+      const previewPath = cleanRepoPath(entry.previewPath || joinRepoPath(collection.basePath, entryId));
+      // Never trust a client-supplied folder for deletion. The path comes
+      // from the authorised index and must address exactly this work.
+      const pathParts = previewPath.split('/');
+      if (!previewPath || pathParts.at(-1) !== entryId ||
+          pathParts.some(part => !part || part === '.' || part === '..') ||
+          previewPath === collection.basePath || previewPath === 'library') {
+        return response.status(409).json({ error: 'Stored preview path is unsafe; no files deleted' });
+      }
+      const directory = await getGitHubContent(settings, previewPath);
+      if (directory && !Array.isArray(directory)) {
+        return response.status(409).json({ error: 'Stored preview path is not a folder; no files deleted' });
+      }
+      // One atomic Git commit removes both the card and the complete asset tree.
+      // If GitHub rejects the commit, neither change becomes visible.
+      const indexPath = joinRepoPath(collection.basePath, 'index.json');
+      const nextEntries = collection.entries.filter(item => String(item?.id || '') !== entryId);
+      const commit = await commitGitHubChanges(settings, {
+        writes: [{ path: indexPath, contentBase64: textToBase64(JSON.stringify(nextEntries, null, 2)) }],
+        deleteTrees: directory ? [previewPath] : [],
+        message: `${commitPrefix}: delete work and assets atomically`,
+        origin,
+      });
+      response.setHeader('Cache-Control', 'no-store');
+      return response.status(200).json({
+        ok: true, deleted: entryId, filesDeleted: Boolean(directory),
+        commitSha: String(commit?.sha || ''),
+      });
     }
 
     if (action === 'get-index') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
-      const currentEntries = mergeCollectionEntries(await libraryCollectionIndexes(settings));
+      const collections = await libraryCollectionIndexes(settings);
+      const collectionById = new Map();
+      for (const collection of collections) {
+        for (const item of collection.entries) {
+          const id = String(item?.id || '');
+          if (id && !collectionById.has(id)) collectionById.set(id, collection.basePath);
+        }
+      }
+      const currentEntries = mergeCollectionEntries(collections).map(item => ({
+        ...item, collectionBasePath: collectionById.get(String(item.id)) || '',
+      }));
       const userEmail = String(googlePayload?.email || '').toLowerCase();
       const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
       // "mine" powers the MY PORTFOLIO dialog, which must show only the works
