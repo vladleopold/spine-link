@@ -7,7 +7,7 @@ const defaultBranch = 'main';
 // the newest folder under the 999-item GitHub limit by moving it into a permanent
 // collection and opening the next one.
 const DEFAULT_BASE_PATH_PREFIX = 'library_';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-science.js';
 import { metricCountsForIds, parseMetricsJson, sanitizeMetricId, sanitizeMetricIds } from '../lib/spine-metrics.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
@@ -803,7 +803,10 @@ async function updateDataScienceCatalog(settings, body, entry, commitPrefix, ori
 // GitHub's Contents API returns 409 when another upload advances the branch
 // between reading and writing. This is a transient branch-head race, not a
 // malformed Spine asset. Retry it with jitter just like rate limits.
-const GITHUB_RETRY_STATUS = new Set([403, 408, 409, 429, 500, 502, 503, 504]);
+// GitHub 409 on a write means the expected branch/file SHA is stale. It must
+// be returned to the caller so the index can be re-read, not replayed with the
+// same stale SHA (which can overwrite another person's just-published work).
+const GITHUB_RETRY_STATUS = new Set([403, 408, 429, 500, 502, 503, 504]);
 const GITHUB_RETRY_ATTEMPTS = 8;
 
 function githubRetryDelay(attempt) {
@@ -1011,7 +1014,7 @@ async function githubApi(settings, method, apiPath, payload) {
   throw lastError;
 }
 
-async function commitGitHubChanges(settings, { writes, deletions = [], message, origin = '' }) {
+async function commitGitHubChanges(settings, { writes, stagedBlobs = [], deletions = [], message, origin = '' }) {
   const repoApi = `/repos/${settings.owner}/${settings.repo}`;
   const branchRef = `${repoApi}/git/refs/heads/${encodeURIComponent(settings.branch)}`;
   const normalized = Array.isArray(writes)
@@ -1031,7 +1034,7 @@ async function commitGitHubChanges(settings, { writes, deletions = [], message, 
     const baseTree = String(headCommit?.tree?.sha || '');
     if (!baseTree) throw new Error('GitHub head tree not found');
 
-    const treeEntries = [];
+    const treeEntries = stagedBlobs.map((item) => ({ path: item.path, mode: '100644', type: 'blob', sha: item.sha }));
     // Four at a time: GitHub throttles bursts of parallel writes against the
     // shared upload token, and a secondary rate limit costs more than it saves.
     const CONCURRENCY = 4;
@@ -1071,7 +1074,7 @@ async function commitGitHubChanges(settings, { writes, deletions = [], message, 
       };
     } catch (error) {
       lastError = error;
-      if (Number(error?.status) !== 422 || attempt === 2) break;
+      if (![409, 422].includes(Number(error?.status)) || attempt === 2) break;
       await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
     }
   }
@@ -1090,6 +1093,88 @@ function publicBatchReceipts(commit, writes) {
     sha256: sha256HexFromBase64(write.contentBase64),
     github: { contentSha: '', commitSha, commitUrl, downloadUrl: '' },
   }));
+}
+
+// Staged Git blobs are not visible on the branch until the final atomic commit.
+// Sign every receipt with the server-side GitHub token so a client cannot make
+// the server publish unrelated blob SHAs or paths by fabricating a receipt.
+const STAGE_BASE64_LIMIT = 3_300_000;
+function stageReceiptSignature(token, uploadId, path, sha, bytes, sha256) {
+  return createHmac('sha256', token)
+    .update('spine-link-stage-v1:')
+    .update(JSON.stringify([String(uploadId), String(path), String(sha), Number(bytes), String(sha256)]))
+    .digest('hex');
+}
+function verifyStageReceipt(settings, item, uploadId, workPath) {
+  const path = cleanRepoPath(item?.path || '');
+  const sha = String(item?.blobSha || '');
+  const bytes = Number(item?.bytes);
+  const sha256 = String(item?.sha256 || '');
+  const signature = String(item?.signature || '');
+  const prefix = cleanRepoPath(workPath);
+  if (!uploadId || !prefix || !path.startsWith(prefix + '/') ||
+      !/^[a-f0-9]{40}$/i.test(sha) || !Number.isSafeInteger(bytes) || bytes < 1 ||
+      !/^[a-f0-9]{64}$/i.test(sha256) || !/^[a-f0-9]{64}$/i.test(signature)) {
+    throw unauthorized('Invalid staged asset receipt', 400);
+  }
+  const expected = stageReceiptSignature(settings.token, uploadId, path, sha, bytes, sha256);
+  if (!timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))) {
+    throw unauthorized('Staged asset receipt does not match', 400);
+  }
+  return { path, sha, bytes, sha256 };
+}
+
+// One atomic final commit references staged file SHAs. A file too large for
+// Vercel's request body is split into staged blobs, fetched in parallel and
+// reassembled once (not committed as hundreds of temporary GitHub files).
+async function prepareStagedAssets(settings, uploadId, workPath, singles = [], assemblies = []) {
+  const committed = [];
+  const receipts = [];
+  const seen = new Set();
+  for (const item of singles) {
+    const verified = verifyStageReceipt(settings, item, uploadId, workPath);
+    if (seen.has(verified.path)) throw unauthorized('Duplicate staged file path', 400);
+    seen.add(verified.path);
+    committed.push(verified);
+    receipts.push({ path: verified.path, bytes: verified.bytes, sha256: verified.sha256 });
+  }
+  for (const assembly of assemblies) {
+    const parts = Array.isArray(assembly?.parts) ? assembly.parts : [];
+    if (parts.length < 2 || parts.length > 150) throw unauthorized('Invalid staged file parts', 400);
+    const verified = parts.map(part => verifyStageReceipt(settings, part, uploadId, workPath));
+    const filePath = verified[0].path;
+    if (seen.has(filePath) || verified.some(item => item.path !== filePath)) {
+      throw unauthorized('Invalid staged file assembly', 400);
+    }
+    seen.add(filePath);
+    const contents = [];
+    for (let i = 0; i < verified.length; i += 4) {
+      const slice = verified.slice(i, i + 4);
+      const fetched = await Promise.all(slice.map(item =>
+        githubApi(settings, 'GET', '/repos/' + settings.owner + '/' + settings.repo + '/git/blobs/' + item.sha)));
+      for (let k = 0; k < fetched.length; k++) {
+        const raw = String(fetched[k]?.content || '').replace(/\\s/g, '');
+        if (fetched[k]?.encoding !== 'base64') throw new Error('Staged Git blob has wrong encoding');
+        const bytes = Buffer.from(raw, 'base64');
+        if (bytes.length !== slice[k].bytes ||
+            createHash('sha256').update(bytes).digest('hex') !== slice[k].sha256) {
+          throw new Error('Staged Git blob integrity check failed');
+        }
+        contents.push(bytes);
+      }
+    }
+    const joined = Buffer.concat(contents);
+    if (joined.length > 95_000_000) throw unauthorized('Staged file exceeds GitHub file size limit', 413);
+    const blob = await githubApi(settings, 'POST',
+      '/repos/' + settings.owner + '/' + settings.repo + '/git/blobs',
+      { content: joined.toString('base64'), encoding: 'base64' });
+    const sha = String(blob?.sha || '');
+    if (!/^[a-f0-9]{40}$/i.test(sha)) throw new Error('Assembled Git blob SHA is missing');
+    const sha256 = createHash('sha256').update(joined).digest('hex');
+    committed.push({ path: filePath, sha, bytes: joined.length, sha256 });
+    receipts.push({ path: filePath, bytes: joined.length, sha256 });
+  }
+  return { committed, receipts };
 }
 
 export default async function handler(request, response) {
@@ -1139,6 +1224,32 @@ export default async function handler(request, response) {
       if (collection) settings.basePath = collection.basePath;
     }
 
+
+    // Fast path: one Vercel request per file (or large-file part), with no
+    // GitHub branch write or intermediate commit. Four files may stage in parallel.
+    if (action === 'stage-blob') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const entryId = String(body?.entryId || body?.uploadId || '').trim();
+      const workPath = resolveUploadPath(body?.uploadPath, settings.basePath, entryId);
+      const filePath = resolveUploadPath(body?.path, settings.basePath, entryId);
+      const contentBase64 = String(body?.contentBase64 || '').trim().replace(/^data:[^;]+;base64,/i, '');
+      if (!entryId || !workPath || !filePath || !filePath.startsWith(workPath + '/') ||
+          !contentBase64 || contentBase64.length > STAGE_BASE64_LIMIT ||
+          !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(contentBase64)) {
+        return response.status(400).json({ error: 'Invalid staged asset' });
+      }
+      const bytes = Buffer.from(contentBase64, 'base64').length;
+      const sha256 = sha256HexFromBase64(contentBase64);
+      const blob = await githubApi(settings, 'POST',
+        `/repos/${settings.owner}/${settings.repo}/git/blobs`,
+        { content: contentBase64, encoding: 'base64' });
+      const blobSha = String(blob?.sha || '');
+      if (!/^[a-f0-9]{40}$/i.test(blobSha)) throw new Error('GitHub did not return a valid blob SHA');
+      return response.status(200).json({
+        ok: true, path: filePath, blobSha, bytes, sha256,
+        signature: stageReceiptSignature(settings.token, entryId, filePath, blobSha, bytes, sha256),
+      });
+    }
 
     if (action === 'background-upload') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
@@ -1257,6 +1368,56 @@ export default async function handler(request, response) {
         path: filePath,
         bytes: Buffer.from(fullBase64, 'base64').byteLength,
         github: { commitSha: String(commit?.sha || ''), commitUrl: String(commit?.html_url || '') },
+      });
+    }
+
+    // Home-page uploads stage in parallel and become visible together.
+    // Unlike the legacy flow, no per-file commits or 60 KB chunk commits.
+    if (action === 'background-finalize-fast') {
+      if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
+      const uploadId = String(body?.uploadId || '').trim();
+      const workPath = resolveUploadPath(body?.uploadPath, settings.basePath, uploadId);
+      const uploadedAt = String(body?.uploadedAt || '').trim();
+      if (!uploadId || !workPath) return response.status(400).json({ error: 'Missing uploadId or work path' });
+      const prepared = await prepareStagedAssets(settings, uploadId, workPath,
+        Array.isArray(body?.stagedBlobs) ? body.stagedBlobs : [],
+        Array.isArray(body?.stagedAssemblies) ? body.stagedAssemblies : []);
+      if (!prepared.committed.length) return response.status(400).json({ error: 'No staged Spine files' });
+      const indexPath = joinRepoPath(settings.basePath, 'index.json');
+      let nextEntry = null;
+      let commit;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const index = await getGitHubContent(settings, indexPath);
+        const currentEntries = index?.content && index.encoding === 'base64'
+          ? JSON.parse(base64ToText(index.content)) : [];
+        const existing = currentEntries.find(item => item.id === uploadId);
+        nextEntry = publicLibraryEntry(origin, {
+          ...body?.entry, id: uploadId, uploadedAt, previewPath: workPath,
+          ownerEmail: googlePayload?.email,
+          ownerAnonId: anonymousAccount?.id,
+          ownerAnonFingerprint: anonymousAccount?.fingerprint,
+          publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existing?.publicOwnerId),
+        });
+        nextEntry.webmStatus = existing?.webmStatus === 'ready' ? 'ready' : 'pending';
+        nextEntry.dispatchStatus = 'pending';
+        const nextEntries = [nextEntry, ...currentEntries.filter(item => item.id !== uploadId)];
+        try {
+          commit = await commitGitHubChanges(settings, {
+            writes: [{ path: indexPath, contentBase64: textToBase64(JSON.stringify(nextEntries, null, 2)) }],
+            stagedBlobs: prepared.committed,
+            message: commitPrefix + ': four-file parallel upload',
+            origin,
+          });
+          break;
+        } catch (error) {
+          if (attempt === 2 || ![409, 422].includes(Number(error?.status))) throw error;
+        }
+      }
+      try { dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {}); } catch {}
+      return response.status(200).json({
+        ok: true, path: workPath, indexed: true,
+        files: prepared.receipts.map(item => ({ ...item, name: item.path.split('/').pop() })),
+        github: { commitSha: String(commit?.commit?.sha || commit?.sha || '') },
       });
     }
 
@@ -1558,8 +1719,11 @@ export default async function handler(request, response) {
       const batchFiles = Array.isArray(body?.files) ? body.files : [];
       const stageChunks = Array.isArray(body?.stageChunks) ? body.stageChunks : [];
       const assembles = Array.isArray(body?.assembles) ? body.assembles : [];
+      const stagedBlobs = Array.isArray(body?.stagedBlobs) ? body.stagedBlobs : [];
+      const stagedAssemblies = Array.isArray(body?.stagedAssemblies) ? body.stagedAssemblies : [];
       const finalize = Boolean(entryPayload);
-      if (!batchFiles.length && !stageChunks.length && !assembles.length && !finalize) {
+      if (!batchFiles.length && !stageChunks.length && !assembles.length &&
+          !stagedBlobs.length && !stagedAssemblies.length && !finalize) {
         return response.status(400).json({ error: 'Invalid publish payload' });
       }
 
@@ -1603,6 +1767,10 @@ export default async function handler(request, response) {
         writes.push({ path: filePath, contentBase64 });
         assetPaths.push(filePath);
       }
+
+      const preparedStages = await prepareStagedAssets(settings,
+        String(body?.entryId || entryPayload?.id || ''), uploadPath, stagedBlobs, stagedAssemblies);
+      assetPaths.push(...preparedStages.receipts.map(item => item.path));
 
       let nextEntry = null;
       let anchor = null;
@@ -1648,14 +1816,17 @@ export default async function handler(request, response) {
             const anchorUploads =
               Array.isArray(body?.uploadedFiles) && body.uploadedFiles.length
                 ? body.uploadedFiles
-                : writes
-                    .filter((write) => assetPaths.includes(write.path))
-                    .map((write) => ({
-                      name: String(write.path).split('/').pop() || '',
-                      path: write.path,
-                      bytes: Buffer.from(String(write.contentBase64).replace(/\s/g, ''), 'base64').byteLength,
-                      sha256: sha256HexFromBase64(write.contentBase64),
-                    }));
+                : [
+                    ...preparedStages.receipts.map(item => ({ name: item.path.split('/').pop() || '', ...item })),
+                    ...writes
+                      .filter((write) => assetPaths.includes(write.path))
+                      .map((write) => ({
+                        name: String(write.path).split('/').pop() || '',
+                        path: write.path,
+                        bytes: Buffer.from(String(write.contentBase64).replace(/\s/g, ''), 'base64').byteLength,
+                        sha256: sha256HexFromBase64(write.contentBase64),
+                      })),
+                  ];
             const created = await createBlockchainAnchor({ sourceProof, uploadedFiles: anchorUploads, body, settings, googlePayload, anonymousAccount, origin });
             anchor = { ...created, anchorPath, anchorUrl: assetUrlForRepoPath(origin, anchorPath) };
             anchor.github = { ...(anchor.github || {}), anchorPath, anchorUrl: anchor.anchorUrl };
@@ -1682,18 +1853,26 @@ export default async function handler(request, response) {
         }
       }
 
-      if (!writes.length) return response.status(400).json({ error: 'Nothing to publish' });
+      if (!writes.length && !preparedStages.committed.length) {
+        return response.status(400).json({ error: 'Nothing to publish' });
+      }
 
       const commit = await commitGitHubChanges(settings, {
         writes,
+        stagedBlobs: preparedStages.committed,
         deletions,
         message: String(body?.commitPrefix || 'Add Spine preview'),
         origin,
       });
-      const receipts = publicBatchReceipts(
-        commit,
-        writes.filter((write) => assetPaths.includes(write.path)),
-      );
+      const receipts = [
+        ...preparedStages.receipts.map(item => ({
+          path: item.path, name: item.path.split('/').pop() || '',
+          bytes: item.bytes, sha256: item.sha256,
+          github: { contentSha: '', commitSha: String(commit?.commit?.sha || commit?.sha || ''), commitUrl: String(commit?.commit?.html_url || ''), downloadUrl: '' },
+        })),
+        ...publicBatchReceipts(commit,
+          writes.filter((write) => assetPaths.includes(write.path))),
+      ];
 
       if (finalize && nextEntry) {
         const isNewUpload = !existingEntry || existingEntry.webmStatus !== 'ready';

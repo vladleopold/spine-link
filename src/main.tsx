@@ -1106,6 +1106,90 @@ async function resumeStagedUploads() {
   } catch (error) { console.warn("[spine] pending upload recovery unavailable", error); }
 }
 
+type FastStageReceipt = {
+  path: string; blobSha: string; bytes: number; sha256: string; signature: string;
+};
+
+// Four concurrent Git Blob uploads and one atomic commit. No 60 KB chunk
+// commits, and no global single-request queue: Vercel supports concurrent
+// invocations, while Git's branch is only advanced once at finalization.
+async function uploadBackgroundFilesFast(
+  files: File[],
+  uploadId: string,
+  uploadPath: string,
+  uploadedAt: string,
+  anonymousAccount: { id: string; fingerprint: string },
+  title: string,
+  onProgress: (completed: number, current: string, fraction: number) => void,
+): Promise<string> {
+  const CHUNK = 3_200_000; // Base64 chars, divisible by 4; < 4.5 MB request limit
+  const settings = { owner: "vladleopold", repo: "spine", branch: "main", basePath: "", title };
+  const contents = await Promise.all(files.map(file => fileToBase64(file)));
+  const tasks: Array<{ fileIndex: number; path: string; contentBase64: string }> = [];
+  const totals = new Array(files.length).fill(0);
+  for (let i = 0; i < files.length; i++) {
+    const encoded = contents[i];
+    const path = uploadPath + "/" + files[i].name;
+    for (let offset = 0; offset < encoded.length; offset += CHUNK) {
+      tasks.push({ fileIndex: i, path, contentBase64: encoded.slice(offset, offset + CHUNK) });
+      totals[i]++;
+    }
+  }
+  if (!tasks.length) throw new Error("No Spine files selected");
+  const results: FastStageReceipt[] = new Array(tasks.length);
+  const completedByFile = new Array(files.length).fill(0);
+  let index = 0;
+  await Promise.all(Array.from({ length: Math.min(4, tasks.length) }, async () => {
+    while (index < tasks.length) {
+      const taskIndex = index++;
+      const task = tasks[taskIndex];
+      const response = await uploadRequest("/api/github-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "stage-blob", uploadId, entryId: uploadId, uploadPath,
+          path: task.path, contentBase64: task.contentBase64, anonymousAccount, settings,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || typeof payload?.blobSha !== "string" || typeof payload?.signature !== "string") {
+        throw new Error(typeof payload?.error === "string" ? payload.error : "Spine asset staging failed: HTTP " + response.status);
+      }
+      results[taskIndex] = payload as FastStageReceipt;
+      completedByFile[task.fileIndex]++;
+      const completed = completedByFile.filter((count, i) => count >= totals[i]).length;
+      onProgress(completed, files[task.fileIndex].name, completedByFile[task.fileIndex] / totals[task.fileIndex]);
+    }
+  }));
+  const byPath = new Map<string, FastStageReceipt[]>();
+  for (const receipt of results) {
+    const list = byPath.get(receipt.path) || [];
+    list.push(receipt);
+    byPath.set(receipt.path, list);
+  }
+  const stagedBlobs: FastStageReceipt[] = [];
+  const stagedAssemblies: Array<{ path: string; parts: FastStageReceipt[] }> = [];
+  for (const [path, parts] of byPath) {
+    if (parts.length === 1) stagedBlobs.push(parts[0]);
+    else stagedAssemblies.push({ path, parts });
+  }
+  const realPath = results[0].path.slice(0, results[0].path.lastIndexOf("/"));
+  const response = await uploadRequest("/api/github-upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "background-finalize-fast", uploadId, uploadPath: realPath,
+      uploadedAt, anonymousAccount, settings, entry: { id: uploadId, uploadedAt, previewPath: realPath },
+      stagedBlobs, stagedAssemblies, commitPrefix: "Fast Spine upload",
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result?.ok !== true) {
+    throw new Error(typeof result?.error === "string" ? result.error : "Spine finalization failed: HTTP " + response.status);
+  }
+  return String(result.path || realPath);
+}
+
 const activeBackgroundUploads = new Set<string>();
 
 function startBackgroundUpload(files: File[], resumed?: { id: string; files: File[]; uploadedAt: string; title: string; uploadId: string; uploadPath: string }) {
@@ -1130,45 +1214,16 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
     status: "uploading",
   });
 
-  let fileIndex = 0;
-  let error: string | null = null;
-
   const uploadNextFile = async () => {
-    if (fileIndex >= files.length) {
-      showBackgroundPopup(uploadEntry.id, null, null, { completed: files.length, total: files.length, finalizing: true });
-      await finalizeBackgroundUpload(uploadEntry.id, uploadId, resolvedUploadPath, uploadedAt);
-      return;
-    }
-    const file = files[fileIndex];
-    fileIndex++;
-    const result = await uploadFileKeepAlive("/api/github-upload", {
-      action: "background-upload",
-      uploadId,
-      uploadPath: resolvedUploadPath,
-      uploadedAt,
-      anonymousAccount,
-      settings: { owner: "vladleopold", repo: "spine", branch: "main", basePath: "", title },
-      file,
-      anonymousAccountId: anonymousAccount.id,
-      anonymousFingerprint: anonymousAccount.fingerprint,
-    }, (done, total) => showBackgroundPopup(uploadEntry.id, null, null, {
-      completed: fileIndex - 1,
-      total: files.length,
-      current: file.name,
-      fileFraction: done / total,
-      chunkLabel: `chunk ${done}/${total}`,
-    }));
-    if (!result.ok) {
-      error = typeof (result.data as any)?.error === "string" ? (result.data as any).error : `Upload failed: ${result.status}`;
-      updateBackgroundUpload(uploadEntry.id, { status: "failed", error: error ?? undefined });
-      showBackgroundPopup(uploadEntry.id, null, error);
-      return;
-    }
-    const savedPath = (result.data as { path?: string } | undefined)?.path;
-    if (savedPath) resolvedUploadPath = savedPath.slice(0, savedPath.lastIndexOf("/"));
+    resolvedUploadPath = await uploadBackgroundFilesFast(
+      files, uploadId, resolvedUploadPath, uploadedAt, anonymousAccount, title,
+      (completed, current, fraction) => showBackgroundPopup(uploadEntry.id, null, null, {
+        completed, total: files.length, current, fileFraction: fraction,
+      }),
+    );
     updateBackgroundUpload(uploadEntry.id, { status: "uploading", uploadPath: resolvedUploadPath });
-    showBackgroundPopup(uploadEntry.id, null, null, { completed: fileIndex, total: files.length, current: file.name });
-    await uploadNextFile();
+    showBackgroundPopup(uploadEntry.id, null, null, { completed: files.length, total: files.length, finalizing: true });
+    await finishBackgroundUpload(uploadEntry.id, uploadId);
   };
 
   showBackgroundPopup(uploadEntry.id, null, null, { completed: 0, total: files.length });
@@ -1213,14 +1268,17 @@ async function finalizeBackgroundUpload(entryId: string, uploadId: string, uploa
     showBackgroundPopup(entryId, null, "Finalization failed");
     return;
   }
+  await finishBackgroundUpload(entryId, uploadId);
+}
+
+async function finishBackgroundUpload(entryId: string, uploadId: string) {
   const previewUrl = `${window.location.origin}/p/${encodeURIComponent(uploadId)}`;
   updateBackgroundUpload(entryId, { status: "complete", uploadUrl: previewUrl });
   void pendingUploadDelete(entryId).catch(() => {});
   try { localStorage.setItem("__spineUploadComplete", JSON.stringify({ url: previewUrl, timestamp: Date.now() })); } catch {}
   window.dispatchEvent(new CustomEvent("spine-upload-complete", { detail: { url: previewUrl } }));
   showBackgroundPopup(entryId, previewUrl, null);
-  // A persistent link is opened only after finalization is acknowledged by the API.
-  // Clipboard may be denied without a fresh user gesture; the popup keeps a copy button.
+  // Only open the link after the server confirms the atomic commit.
   try { await navigator.clipboard.writeText(previewUrl); } catch { /* manual copy remains available */ }
   window.setTimeout(() => { window.location.assign(previewUrl); }, 900);
 }

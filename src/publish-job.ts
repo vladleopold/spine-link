@@ -52,11 +52,15 @@ const MAX_ATTEMPTS = 5;
 const JOB_MAX_AGE_MS = 30 * 60 * 1000;
 // Vercel refuses request bodies over 4.5MB, and the JSON envelope costs a few
 // kilobytes on top of the payload, so a batch stops well below the cap.
-const BATCH_BYTES = 3_000_000;
+const BATCH_BYTES = 3_400_000;
 // The entry, source proof and settings ride along in every batch request, so
 // they are subtracted from the payload budget instead of pushing the body past
 // the platform's request size limit.
-const BATCH_OVERHEAD = 500_000;
+const BATCH_OVERHEAD = 450_000;
+// The Git Blob staging endpoint accepts at most this many Base64 characters
+// per request, leaving plenty of headroom below Vercel's 4.5 MB body limit.
+const STAGE_BYTES = 3_200_000;
+const PARALLEL_STAGE_REQUESTS = 4;
 const DONE_HIDE_AFTER_MS = 15_000;
 
 const IDLE: PublishProgress = {
@@ -210,9 +214,9 @@ function abortMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error || "Publishing error");
 }
 
-async function postPublish(job: PublishJob, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function postPublish(job: PublishJob, payload: Record<string, unknown>, action = "publish-entry"): Promise<Record<string, unknown>> {
   const body = JSON.stringify({
-    action: "publish-entry",
+    action,
     googleIdToken: job.googleIdToken || "",
     anonymousAccount: job.anonymousAccount,
     settings: job.settings,
@@ -278,44 +282,54 @@ export async function runPublishJob(job: PublishJob): Promise<void> {
   try {
     report("Saving files");
 
-    const fileLimit = Math.max(200_000, BATCH_BYTES - BATCH_OVERHEAD);
-    const oversize = job.files.filter((file) => file.contentBase64.length > fileLimit);
-    const regular = job.files.filter((file) => file.contentBase64.length <= fileLimit);
-
-    const assembles: Array<{ path: string; chunkCount: number }> = [];
-    for (const file of oversize) {
-      const chunkCount = Math.ceil(file.contentBase64.length / fileLimit);
-      for (let index = 0; index < chunkCount; index += 1) {
-        await postPublish(job, {
-          stageChunks: [
-            {
-              path: file.path,
-              index,
-              contentBase64: file.contentBase64.slice(index * fileLimit, (index + 1) * fileLimit),
-            },
-          ],
-        });
-        sentBytes += fileLimit;
-        report("Saving files");
-      }
-      assembles.push({ path: file.path, chunkCount });
-    }
-
-    const groups = groupFiles(regular, fileLimit);
-    if (groups.length) {
-      for (let index = 0; index < groups.length; index += 1) {
-        const isLast = index === groups.length - 1;
-        await postPublish(
-          job,
-          isLast ? { files: groups[index], assembles, entry: job.entry } : { files: groups[index] },
-        );
-        sentBytes += groups[index].reduce((total, file) => total + file.contentBase64.length, 0);
-        report(isLast ? "Writing source proof anchor" : "Saving files");
-      }
-    } else {
-      await postPublish(job, { assembles, entry: job.entry });
+    // Small Spine projects publish in one request and one commit, without any
+    // staging round trip. For larger projects stage all assets independently,
+    // in up to four simultaneous network requests, and commit them once.
+    const directLimit = Math.max(200_000, BATCH_BYTES - BATCH_OVERHEAD);
+    if (totalBytes <= directLimit) {
+      await postPublish(job, { files: job.files, entry: job.entry });
       sentBytes = totalBytes;
       report("Writing source proof anchor");
+    } else {
+      type StageReceipt = {
+        path: string; blobSha: string; bytes: number; sha256: string; signature: string;
+      };
+      const tasks: Array<{ path: string; contentBase64: string }> = [];
+      for (const file of job.files) {
+        for (let index = 0; index < file.contentBase64.length; index += STAGE_BYTES) {
+          tasks.push({ path: file.path, contentBase64: file.contentBase64.slice(index, index + STAGE_BYTES) });
+        }
+      }
+      const receipts: StageReceipt[] = new Array(tasks.length);
+      let cursor = 0;
+      await Promise.all(Array.from({ length: Math.min(PARALLEL_STAGE_REQUESTS, tasks.length) }, async () => {
+        while (cursor < tasks.length) {
+          const index = cursor++;
+          const task = tasks[index];
+          const result = await postPublish(job, task, "stage-blob");
+          if (typeof result.blobSha !== "string" || typeof result.signature !== "string" ||
+              result.path !== task.path) {
+            throw new Error("Server did not acknowledge the staged Spine asset");
+          }
+          receipts[index] = result as StageReceipt;
+          sentBytes += task.contentBase64.length;
+          report("Uploading files in parallel");
+        }
+      }));
+      const groups = new Map<string, StageReceipt[]>();
+      for (const receipt of receipts) {
+        const existing = groups.get(receipt.path) || [];
+        existing.push(receipt);
+        groups.set(receipt.path, existing);
+      }
+      const stagedBlobs: StageReceipt[] = [];
+      const stagedAssemblies: Array<{ path: string; parts: StageReceipt[] }> = [];
+      for (const [path, parts] of groups) {
+        if (parts.length === 1) stagedBlobs.push(parts[0]);
+        else stagedAssemblies.push({ path, parts });
+      }
+      report("Publishing all files in one commit");
+      await postPublish(job, { stagedBlobs, stagedAssemblies, entry: job.entry });
     }
 
     const permalink = job.permalink;

@@ -39,9 +39,9 @@ test('browser storage failure does not stop transfer; duplicate recovery is igno
  const deps={
   getAnonymousAccount:()=>({id:'anon_test'}), window:{location:{origin:'https://example.test'}},
   getBackgroundUploads:()=>[], addBackgroundUpload:()=>({id:'job'}),
-  uploadFileKeepAlive:async()=>{uploads++;await gate;return{ok:true,data:{path:'library_03/work/frame.png'}};},
-  finalizeBackgroundUpload:async(_id,_uploadId,path)=>{finalized++;finalPath=path;},
-  updateBackgroundUpload:()=>{},showBackgroundPopup:()=>{},
+  uploadBackgroundFilesFast:async()=>{uploads++;await gate;return 'library_03/work';},
+  finishBackgroundUpload:async()=>{finalized++;},
+  updateBackgroundUpload:(_id,value)=>{if(value.uploadPath)finalPath=value.uploadPath;},showBackgroundPopup:()=>{},
   pendingUploadPut:async()=>{throw new Error('Quota exceeded');},console:{warn:()=>{}}
  };
  const code=ts.transpile(snippet,{target:ts.ScriptTarget.ES2022});
