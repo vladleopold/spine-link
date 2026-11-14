@@ -2,7 +2,7 @@
 // Example server-side client for /api/agent-animation. Node.js 20+.
 // Usage: SPINE_LINK_AGENT_API_KEY=... node scripts/spine-link-agent-publish.mjs ./export --title "My animation"
 // Or:  ... ./project --format spine-project --wait
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve, relative } from 'node:path';
 
 const args = process.argv.slice(2);
@@ -69,9 +69,7 @@ async function upload(path) {
   const name = relative(root, path).replace(/\\/g, '/');
   const bytes = await readFile(path);
   if (!bytes.length || bytes.length > 95_000_000) throw Error('Invalid file size: ' + name);
-  if (bytes.length <= PART_BYTES) {
-    return { type: 'single', receipt: await stage(name, bytes) };
-  }
+  if (bytes.length <= PART_BYTES) return { type: 'single', receipt: await stage(name, bytes) };
   const parts = [];
   for (let offset = 0; offset < bytes.length; offset += PART_BYTES) {
     parts.push(await stage(name, bytes.subarray(offset, offset + PART_BYTES)));
@@ -79,10 +77,48 @@ async function upload(path) {
   return { type: 'assembly', name, parts };
 }
 
-// At most three concurrent uploads: avoids exceeding GitHub API secondary rate limits.
-for (let i = 0; i < paths.length; i += 3) {
-  const batch = await Promise.all(paths.slice(i, i + 3).map(upload));
-  for (const item of batch) {
+async function uploadBatch(paths) {
+  const data = await Promise.all(paths.map(async path => ({
+    name: relative(root, path).replace(/\\/g, '/'),
+    contentBase64: (await readFile(path)).toString('base64'),
+  })));
+  const result = await call({ action: 'stage-batch', jobToken: job.jobToken, files: data });
+  if (!Array.isArray(result.receipts) || result.receipts.length !== paths.length) {
+    throw Error('Server returned incomplete upload batch');
+  }
+  return result.receipts.map(receipt => ({ type: 'single', receipt }));
+}
+
+const SMALL_FILE_LIMIT = 512_000;
+const MAX_BATCH_BYTES = 2_000_000;
+const tasks = [];
+let pending = [], pendingBytes = 0;
+function flush() {
+  if (pending.length) tasks.push({ type: 'batch', paths: pending });
+  pending = [];
+  pendingBytes = 0;
+}
+const sizes = await Promise.all(paths.map(path => stat(path).then(info => info.size)));
+for (let i = 0; i < paths.length; i++) {
+  const path = paths[i], size = sizes[i];
+  if (size < 1 || size > 95_000_000) throw Error('Invalid file size: ' + path);
+  if (size > SMALL_FILE_LIMIT) {
+    flush();
+    tasks.push({ type: 'file', path });
+    continue;
+  }
+  if (pending.length >= 8 || pendingBytes + size > MAX_BATCH_BYTES) flush();
+  pending.push(path);
+  pendingBytes += size;
+}
+flush();
+
+// Two simultaneous batches use at most eight GitHub blob requests in the
+// server, balancing throughput against GitHub secondary rate limits.
+for (let i = 0; i < tasks.length; i += 2) {
+  const output = await Promise.all(tasks.slice(i, i + 2).map(async task =>
+    task.type === 'batch' ? uploadBatch(task.paths) : [await upload(task.path)]));
+  for (const item of output.flat()) {
     if (item.type === 'single') singles.push(item.receipt);
     else assemblies.push({ name: item.name, parts: item.parts });
   }

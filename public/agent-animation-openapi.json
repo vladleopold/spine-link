@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Spine-Link Animation Agent API",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Submit generated Spine runtime assets or source .spine projects from an authenticated agent backend. Pages are permanent, temporary job tokens expire after 72h."
   },
   "servers": [
@@ -69,6 +69,44 @@
                       "contentBase64": {
                         "type": "string",
                         "contentEncoding": "base64"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "jobToken",
+                      "files"
+                    ],
+                    "properties": {
+                      "action": {
+                        "const": "stage-batch"
+                      },
+                      "jobToken": {
+                        "type": "string"
+                      },
+                      "files": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 8,
+                        "description": "Distinct small asset paths; Base64 total <=3M chars.",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "name",
+                            "contentBase64"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "contentBase64": {
+                              "type": "string",
+                              "contentEncoding": "base64"
+                            }
+                          }
+                        }
                       }
                     }
                   },

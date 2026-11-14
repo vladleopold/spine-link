@@ -56,6 +56,24 @@ POST /api/agent-animation
 
 Each response returns a receipt with name, path, sha, bytes, sha256, signature. Store the complete receipt. A single stage supports up to 3,000,000 Base64 characters (roughly 2.25 MB binary). Split larger files into ordered chunks with the **same** file name, collect one receipt per chunk, and preserve order. A staged blob is not yet visible in the site library.
 
+### 2a. Stage up to 8 small independent files in one request
+
+For an atlas with many small texture images, use the batch operation rather than making one HTTP request per texture. The combined Base64 payload must be at most 3,000,000 characters. Each filename must be distinct.
+
+~~~json
+{
+  "action":"stage-batch",
+  "jobToken":"<signed job token>",
+  "files":[
+    {"name":"actor.json","contentBase64":"<base64>"},
+    {"name":"actor.atlas","contentBase64":"<base64>"},
+    {"name":"actor.png","contentBase64":"<base64>"}
+  ]
+}
+~~~
+
+HTTP 201 returns `{"ok":true,"receipts":[...]}` with each receipt signed as in the single-file stage operation. The CLI automatically batches small images and falls back to multipart stage for large files.
+
 ### 3. Publish all staged files atomically
 
 POST /api/agent-animation

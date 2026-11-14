@@ -285,6 +285,46 @@ test('reject source runtime JSON without 4.3 spine header or animations', async 
   assert.equal(output.code, 422);
 });
 
+
+test('batch-staging eight small textures returns distinct signed receipts that publish normally', async () => {
+  const gh = mockGithub();
+  const job = await create();
+  const names = ['actor.json','actor.atlas','actor.png',...Array.from({ length: 5 },(_,i)=>'extra'+i+'.png')];
+  const atlas = 'actor.png\nsize: 1,1\n';
+  const bodies = names.map(name => ({
+    name,
+    contentBase64: Buffer.from(name.endsWith('.json') ? jsonSkeleton :
+      name.endsWith('.atlas') ? atlas : 'data:' + name).toString('base64'),
+  }));
+  const staged = await request('POST',{ action:'stage-batch', jobToken:job.jobToken, files:bodies });
+  assert.equal(staged.code,201, JSON.stringify(staged));
+  assert.equal(staged.receipts.length, 8);
+  assert.equal(new Set(staged.receipts.map(item=>item.signature)).size,8);
+  assert.equal(gh.requests.filter(item=>item.method==='POST' && item.path.endsWith('/git/blobs')).length,8);
+  const completed = await request('POST',{
+    action:'complete', jobToken:job.jobToken, files:staged.receipts,
+  });
+  assert.equal(completed.code,201, JSON.stringify(completed));
+  assert.equal(gh.entries[0].files.length,8);
+});
+
+test('batch-staging rejects duplicate filenames and malicious paths before storing blobs', async () => {
+  const gh = mockGithub();
+  const job = await create();
+  const before = gh.requests.length;
+  const dup = await request('POST',{
+    action:'stage-batch',jobToken:job.jobToken,
+    files:[{name:'actor.png',contentBase64:'YQ=='},{name:'actor.png',contentBase64:'Yg=='}],
+  });
+  assert.equal(dup.code,400);
+  const bad = await request('POST',{
+    action:'stage-batch',jobToken:job.jobToken,
+    files:[{name:'../../hijack.json',contentBase64:'YQ=='}],
+  });
+  assert.equal(bad.code,400);
+  assert.equal(gh.requests.length,before);
+});
+
 test.after(() => {
   globalThis.fetch = oldFetch;
   Object.keys(process.env).forEach(key => { if (!(key in oldEnv)) delete process.env[key]; });
