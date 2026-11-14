@@ -42,7 +42,9 @@ test('browser storage failure does not stop transfer; duplicate recovery is igno
   uploadBackgroundFilesFast:async()=>{uploads++;await gate;return 'library_03/work';},
   finishBackgroundUpload:async()=>{finalized++;},
   updateBackgroundUpload:(_id,value)=>{if(value.uploadPath)finalPath=value.uploadPath;},showBackgroundPopup:()=>{},
-  pendingUploadPut:async()=>{throw new Error('Quota exceeded');},console:{warn:()=>{}}
+  pendingUploadPut:async()=>{throw new Error('Quota exceeded');},
+  isSpineProjectFile:()=>false, projectFilePath:(file)=>file.name,
+  rememberProjectFilePath:()=>{}, console:{warn:()=>{}}
  };
  const code=ts.transpile(snippet,{target:ts.ScriptTarget.ES2022});
  const start=new Function('deps',`const {${Object.keys(deps).join(',')}}=deps;${code};return startBackgroundUpload;`)(deps);
