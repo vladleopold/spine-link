@@ -273,6 +273,8 @@ type LibraryEntry = {
   defaultAnimation: string;
   files: string[];
   previewPath: string;
+  /** Server-provided source index for fast, verified deletion. */
+  collectionBasePath?: string;
   repositoryUrl: string;
   note?: string;
   thumbnail?: string;
@@ -4653,11 +4655,14 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           anonymousAccount,
           settings: githubPublishSettings,
           entryId: entry.id,
+          collectionBasePath: entry.collectionBasePath,
           commitPrefix: `Delete Spine preview ${entry.title || entry.id}`,
         }),
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : `Library API ${response.status}`);
+      if (!response.ok || result?.ok !== true || result?.deleted !== entry.id) {
+        throw new Error(typeof result?.error === "string" ? result.error : `Library API ${response.status}`);
+      }
       setLibraryEntries((currentEntries) => currentEntries.filter((currentEntry) => currentEntry.id !== entry.id));
       if (currentLibraryEntry?.id === entry.id) {
         setCurrentLibraryEntry(null);
