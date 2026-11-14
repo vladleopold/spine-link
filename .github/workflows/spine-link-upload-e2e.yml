@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Parallel upload, atomic publish, open page, verify image, hide test
+      - name: Four-file upload, real page, portfolio deletion, GitHub removal
         shell: bash
         run: |
           node --input-type=module <<'NODE'
@@ -52,6 +52,8 @@ jobs:
             return json;
           }
           let published = false;
+          let deleted = false;
+          let publishedPath = '';
           const start = Date.now();
           try {
             const receipts = await Promise.all(files.map(async file => {
@@ -66,6 +68,7 @@ jobs:
             }));
             const stageSeconds = ((Date.now() - start)/1000).toFixed(2);
             const realPath = receipts[0].path.slice(0,receipts[0].path.lastIndexOf('/'));
+            publishedPath = realPath;
             assert.ok(receipts.every(item => item.path.startsWith(realPath + '/')));
             const commit = await api({
               action:'background-finalize-fast',uploadId,uploadPath:realPath,uploadedAt,
@@ -101,19 +104,39 @@ jobs:
             console.log('Atomic publish elapsed: ' + publishSeconds + 's');
             console.log('Indexed and ready: ' + readySeconds + 's');
             console.log('Total including page and PNG GET: ' + ((Date.now() - start)/1000).toFixed(2) + 's');
+            const ownerBefore = await api({action:'get-index',scope:'mine'});
+            assert.ok(ownerBefore.entries.some(entry => entry.id === uploadId), 'New work missing from owner portfolio');
+            const ownerRecord = ownerBefore.entries.find(entry => entry.id === uploadId);
+            assert.equal(ownerRecord.collectionBasePath,realPath.split('/')[0]);
+            // Clicked Delete in the portfolio uses exactly this owned-entry request.
+            const deletion = await api({
+              action:'delete-entry',entryId:uploadId,
+              collectionBasePath:ownerRecord.collectionBasePath,
+              commitPrefix:'E2E delete uploaded Spine work',
+            });
+            assert.equal(deletion.deleted,uploadId);
+            assert.equal(deletion.filesDeleted,true);
+            assert.ok(/^[a-f0-9]{40}$/i.test(deletion.commitSha));
+            deleted=true;
+            console.log('Delete commit: '+deletion.commitSha);
+            const ownerAfter = await api({action:'get-index',scope:'mine'});
+            assert.ok(!ownerAfter.entries.some(entry => entry.id === uploadId),'Deleted work still in portfolio');
+            const githubFolder = await fetch('https://api.github.com/repos/vladleopold/spine/contents/'+publishedPath+'?ref=main',{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(60000),
+            });
+            assert.equal(githubFolder.status,404,'Uploaded asset directory still exists in repository');
+            const url=site+'/p/'+encodeURIComponent(uploadId)+'?deleted-check='+Date.now();
+            const oldPlayer=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(60000)});
+            assert.equal(oldPlayer.status,404,'Deleted Spine page still accessible');
+            console.log('PASS portfolio card removed, GitHub asset folder removed, public page HTTP 404');
           } finally {
-            if (published) {
-              for (let attempt=0;attempt<3;attempt++) {
-                try {
-                  const hidden=await api({action:'update-entry-visibility',entryId:uploadId,hiddenFromPublicLibrary:true,commitPrefix:'Hide test upload'});
-                  assert.equal(hidden.entry.hiddenFromPublicLibrary,true);
-                  console.log('PASS test upload hidden from public library');
-                  break;
-                } catch(error) {
-                  if (attempt===2) console.error('WARNING: could not hide test upload: '+String(error));
-                  else await new Promise(resolve=>setTimeout(resolve,750));
-                }
-              }
+            if (published && !deleted) {
+              // Never leave a public test upload visible when a test fails.
+              try {
+                await api({action:'update-entry-visibility',entryId:uploadId,hiddenFromPublicLibrary:true,
+                  commitPrefix:'Hide failed end-to-end test upload'});
+                console.log('Test work hidden after failed deletion');
+              } catch(error) {console.error('WARNING: failed to hide test work: '+String(error));}
             }
           }
           NODE
