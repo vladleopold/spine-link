@@ -97,3 +97,66 @@ test('concurrent finalization rereads index after SHA conflict and preserves bot
   assert.equal(status,200,JSON.stringify(result));assert.equal(writes,2);assert.deepEqual(finalIndex.map(e=>e.id),['test','concurrent']);
  }finally{globalThis.fetch=saved;if(token===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=token;}
 });
+
+
+test('concurrent branch update retries the final commit without resending asset blobs', async () => {
+  const { default: handler } = await import('../api/github-upload.js');
+  const savedFetch = globalThis.fetch, savedToken = process.env.GITHUB_TOKEN;
+  process.env.GITHUB_TOKEN = 'test-only';
+  let blobPosts = 0, commitPosts = 0, patchCalls = 0, headReads = 0;
+  const reply = (data, status = 200) => new Response(JSON.stringify(data), { status });
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    const method = options.method || 'GET';
+    if (path.endsWith('/git/blobs') && method === 'POST') {
+      blobPosts++;
+      return reply({ sha: 'immutable-asset-sha' });
+    }
+    if (path.endsWith('/git/refs/heads/main') && method === 'GET') {
+      headReads++;
+      return reply({ object: { sha: headReads === 1 ? 'head-before-race' : 'head-after-race' } });
+    }
+    if (path.includes('/git/commits/head-')) return reply({ tree: { sha: 'base-tree' } });
+    if (path.endsWith('/git/trees') && method === 'POST') return reply({ sha: 'new-tree' });
+    if (path.endsWith('/git/commits') && method === 'POST') {
+      commitPosts++;
+      return reply({ sha: 'new-commit-' + commitPosts });
+    }
+    if (path.endsWith('/git/refs/heads/main') && method === 'PATCH') {
+      patchCalls++;
+      if (patchCalls === 1) return reply({ message: 'Update is not a fast forward' }, 422);
+      return reply({ object: { sha: 'new-commit-2' } });
+    }
+    return reply({}, 404);
+  };
+  try {
+    let status, data;
+    const response = {
+      setHeader() {},
+      status(value) { status = value; return this; },
+      json(value) { data = value; return this; },
+    };
+    await handler({
+      method: 'POST', headers: { host: 'localhost' },
+      body: {
+        action: 'publish-entry',
+        settings: { basePath: 'library_02' },
+        anonymousAccount: { id: 'anon_race_test' },
+        uploadPath: 'library_02/race-project',
+        files: [{
+          path: 'library_02/race-project/texture.png',
+          contentBase64: Buffer.from('binary-asset').toString('base64'),
+        }],
+      },
+    }, response);
+    assert.equal(status, 200, JSON.stringify(data));
+    assert.equal(blobPosts, 1, 'one immutable blob upload across all retries');
+    assert.equal(commitPosts, 2, 'a fresh commit on the newer branch');
+    assert.equal(patchCalls, 2);
+    assert.equal(headReads, 2);
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (savedToken === undefined) delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN = savedToken;
+  }
+});

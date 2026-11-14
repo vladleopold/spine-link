@@ -52,11 +52,11 @@ const MAX_ATTEMPTS = 5;
 const JOB_MAX_AGE_MS = 30 * 60 * 1000;
 // Vercel refuses request bodies over 4.5MB, and the JSON envelope costs a few
 // kilobytes on top of the payload, so a batch stops well below the cap.
-const BATCH_BYTES = 3_400_000;
+const BATCH_BYTES = 4_000_000;
 // The entry, source proof and settings ride along in every batch request, so
 // they are subtracted from the payload budget instead of pushing the body past
 // the platform's request size limit.
-const BATCH_OVERHEAD = 450_000;
+const BATCH_OVERHEAD = 500_000;
 // The Git Blob staging endpoint accepts at most this many Base64 characters
 // per request, leaving plenty of headroom below Vercel's 4.5 MB body limit.
 const STAGE_BYTES = 3_200_000;

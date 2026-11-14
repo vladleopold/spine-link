@@ -1015,67 +1015,66 @@ async function githubApi(settings, method, apiPath, payload) {
 }
 
 async function commitGitHubChanges(settings, { writes, stagedBlobs = [], deletions = [], message, origin = '' }) {
-  const repoApi = `/repos/${settings.owner}/${settings.repo}`;
-  const branchRef = `${repoApi}/git/refs/heads/${encodeURIComponent(settings.branch)}`;
+  const repoApi = '/repos/' + settings.owner + '/' + settings.repo;
+  const branchRef = repoApi + '/git/refs/heads/' + encodeURIComponent(settings.branch);
   const normalized = Array.isArray(writes)
-    ? writes
-        .map((write) => ({
-          path: cleanRepoPath(String(write?.path || '')),
-          contentBase64: normalizePreviewHtml(settings, String(write?.path || ''), String(write?.contentBase64 || ''), origin),
-        }))
-        .filter((write) => write.path && write.contentBase64)
+    ? writes.map(write => ({
+        path: cleanRepoPath(String(write?.path || '')),
+        contentBase64: normalizePreviewHtml(settings, String(write?.path || ''), String(write?.contentBase64 || ''), origin),
+      })).filter(write => write.path && write.contentBase64)
     : [];
 
-  const attemptCommit = async () => {
-    const ref = await githubApi(settings, 'GET', branchRef);
-    const headSha = String(ref?.object?.sha || '');
-    if (!headSha) throw new Error(`GitHub branch ${settings.branch} not found`);
-    const headCommit = await githubApi(settings, 'GET', `${repoApi}/git/commits/${headSha}`);
-    const baseTree = String(headCommit?.tree?.sha || '');
-    if (!baseTree) throw new Error('GitHub head tree not found');
+  // Upload immutable blobs ONCE, in parallel, before reading the current branch
+  // head. GitHub writes from other users/export workers cannot invalidate blobs.
+  // Retries only reconstruct a tree/commit, never reupload megabytes of assets.
+  const preparedEntries = stagedBlobs.map(item => ({
+    path: item.path, mode: '100644', type: 'blob', sha: item.sha,
+  }));
+  const CONCURRENCY = 4;
+  for (let index = 0; index < normalized.length; index += CONCURRENCY) {
+    const slice = normalized.slice(index, index + CONCURRENCY);
+    const blobs = await Promise.all(slice.map(write =>
+      githubApi(settings, 'POST', repoApi + '/git/blobs',
+        { content: write.contentBase64, encoding: 'base64' })));
+    blobs.forEach((blob, offset) => {
+      const sha = String(blob?.sha || '');
+      if (!sha) throw new Error('GitHub did not acknowledge an uploaded asset blob');
+      preparedEntries.push({ path: slice[offset].path, mode: '100644', type: 'blob', sha });
+    });
+  }
+  for (const rawPath of deletions) {
+    const path = cleanRepoPath(String(rawPath || ''));
+    if (path) preparedEntries.push({ path, mode: '100644', type: 'blob', sha: null });
+  }
+  if (!preparedEntries.length) throw new Error('Nothing to write');
 
-    const treeEntries = stagedBlobs.map((item) => ({ path: item.path, mode: '100644', type: 'blob', sha: item.sha }));
-    // Four at a time: GitHub throttles bursts of parallel writes against the
-    // shared upload token, and a secondary rate limit costs more than it saves.
-    const CONCURRENCY = 4;
-    for (let index = 0; index < normalized.length; index += CONCURRENCY) {
-      const slice = normalized.slice(index, index + CONCURRENCY);
-      const blobs = await Promise.all(
-        slice.map((write) => githubApi(settings, 'POST', `${repoApi}/git/blobs`, { content: write.contentBase64, encoding: 'base64' })),
-      );
-      blobs.forEach((blob, offset) => {
-        const sha = String(blob?.sha || '');
-        if (sha) treeEntries.push({ path: slice[offset].path, mode: '100644', type: 'blob', sha });
-      });
-    }
-    for (const path of deletions) {
-      const cleaned = cleanRepoPath(String(path || ''));
-      if (cleaned) treeEntries.push({ path: cleaned, mode: '100644', type: 'blob', sha: null });
-    }
-    if (!treeEntries.length) throw new Error('Nothing to write');
-
-    const tree = await githubApi(settings, 'POST', `${repoApi}/git/trees`, { base_tree: baseTree, tree: treeEntries });
-    const commit = await githubApi(settings, 'POST', `${repoApi}/git/commits`, { message, tree: tree.sha, parents: [headSha] });
-    await githubApi(settings, 'PATCH', branchRef, { sha: commit.sha });
-    return commit;
-  };
-
-  // A ref update that races another writer comes back 422 (not a fast forward).
-  // Re-reading head and rebuilding the tree makes the commit land on the new
-  // tip, so a concurrent publish is a retry and not a lost upload.
   let lastError;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 7; attempt++) {
     try {
-      const commit = await attemptCommit();
+      const ref = await githubApi(settings, 'GET', branchRef);
+      const headSha = String(ref?.object?.sha || '');
+      if (!headSha) throw new Error('GitHub branch ' + settings.branch + ' not found');
+      const headCommit = await githubApi(settings, 'GET', repoApi + '/git/commits/' + headSha);
+      const baseTree = String(headCommit?.tree?.sha || '');
+      if (!baseTree) throw new Error('GitHub head tree not found');
+
+      const tree = await githubApi(settings, 'POST', repoApi + '/git/trees', {
+        base_tree: baseTree, tree: preparedEntries,
+      });
+      const commit = await githubApi(settings, 'POST', repoApi + '/git/commits', {
+        message, tree: tree.sha, parents: [headSha],
+      });
+      // Non-fast-forward is a NORMAL concurrent writer, not a broken upload.
+      // Retry against a fresh head; no blob bytes are sent again.
+      await githubApi(settings, 'PATCH', branchRef, { sha: commit.sha });
       return {
-        commit,
-        content: { sha: '' },
-        blobs: normalized.map((write) => write.path),
+        commit, content: { sha: '' },
+        blobs: normalized.map(write => write.path),
       };
     } catch (error) {
       lastError = error;
-      if (![409, 422].includes(Number(error?.status)) || attempt === 2) break;
-      await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
+      if (![409, 422].includes(Number(error?.status)) || attempt === 6) break;
+      await new Promise(resolve => setTimeout(resolve, 120 + Math.floor(Math.random() * 400)));
     }
   }
   throw lastError;
