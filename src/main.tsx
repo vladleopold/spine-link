@@ -919,7 +919,6 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>, o
     }
   }
 
-  const CHUNK_SIZE = UPLOAD_CHUNK_BASE64_SIZE;
   // GitHub rate limits and transient 5xx responses are shared by every
   // anonymous upload, so replay a failed chunk instead of aborting the file.
   const CHUNK_ATTEMPTS = 8;
@@ -971,9 +970,8 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>, o
     // for diagnosing it.
     for (let attempt = 0; attempt < CHUNK_ATTEMPTS; attempt += 1) {
       try {
-        // No keepalive here: it caps the body at 64 KB and fails at the
-        // transport layer ("TypeError: Failed to fetch") under overlap. Queued
-        // through the shared slot so we never have two in flight.
+        // Large JSON chunks are sent without keepalive and remain queued through
+        // the shared slot so we never overlap Vercel invocations.
         const response = await withUploadSlot(() => fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
