@@ -1,0 +1,94 @@
+name: Spine Project plus images production import
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/spine-link-project-ingest-e2e.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  import-project:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Upload actual .spine fixture and image folder, verify status, delete both
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+          import assert from 'node:assert/strict';
+          const site='https://spine-link.vercel.app';
+          const id='project-import-e2e-'+new Date().toISOString().replace(/[:.]/g,'-');
+          const uploadedAt=new Date().toISOString();
+          const account={id:'anon_project_e2e_'+crypto.randomBytes(7).toString('hex'),fingerprint:'cloud-test'};
+          const settings={owner:'vladleopold',repo:'spine',branch:'main',basePath:''};
+          async function call(body) {
+            const response=await fetch(site+'/api/github-upload',{
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({...body,anonymousAccount:account,settings}),
+              signal:AbortSignal.timeout(110000)
+            });
+            const raw=await response.text();
+            let data;try{data=JSON.parse(raw)}catch{data={error:raw.slice(0,300)}}
+            if(!response.ok||!data.ok)throw Error(body.action+' HTTP '+response.status+' '+JSON.stringify(data).slice(0,500));
+            return data;
+          }
+          const originals=[
+            {path:id+'/spine.spine',bytes:fs.readFileSync('test/anim4/spine.spine')},
+            {path:id+'/images/fool_demo_fx.png',bytes:fs.readFileSync('test/anim1/fool_demo_fx.png')},
+          ];
+          let published=false, deleted=false, actualPath='';
+          const started=Date.now();
+          try{
+            const receipts=await Promise.all(originals.map(async f=>{
+              const receipt=await call({action:'stage-blob',uploadId:id,entryId:id,uploadPath:id,
+                path:f.path,contentBase64:f.bytes.toString('base64')});
+              assert.equal(receipt.bytes,f.bytes.length);
+              assert.equal(receipt.sha256,crypto.createHash('sha256').update(f.bytes).digest('hex'));
+              return receipt;
+            }));
+            actualPath=receipts[0].path.slice(0,receipts[0].path.lastIndexOf('/'));
+            console.log('Upload project and images: '+((Date.now()-started)/1000).toFixed(2)+'s');
+            const entry={id,uploadedAt,title:'Spine Project Import Verification',
+              sourceKind:'spine-project',projectFile:'spine.spine',imagesRoot:'images',
+              conversionStatus:'pending',files:['spine.spine','images/fool_demo_fx.png']};
+            const result=await call({action:'background-finalize-fast',uploadId:id,uploadPath:actualPath,
+              uploadedAt,entry,stagedBlobs:receipts,stagedAssemblies:[],commitPrefix:'Project import test'});
+            published=true;
+            assert.equal(result.indexed,true);
+            assert.equal(result.requiresSpineExport,true);
+            assert.ok(/^[a-f0-9]{40}$/.test(result.github?.commitSha||''));
+            const indexed=await call({action:'get-entry',entryId:id,
+              settings:{...settings,basePath:actualPath.split('/')[0]}});
+            assert.equal(indexed.entry.sourceKind,'spine-project');
+            assert.deepEqual(indexed.entry.files,['spine.spine','images/fool_demo_fx.png']);
+            assert.equal(indexed.entry.projectFile,'spine.spine');
+            const page=await fetch(site+'/p/'+id,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(60000)});
+            const html=await page.text();
+            assert.equal(page.status,200);
+            assert.ok(html.includes('Spine Editor 4.3.26 export')||html.includes('licensed Spine Editor'));
+            assert.ok(!html.includes('Preview not found'));
+            const image=await fetch(site+'/assets/'+actualPath+'/images/fool_demo_fx.png',{signal:AbortSignal.timeout(60000)});
+            assert.equal(image.status,200);
+            assert.equal((await image.arrayBuffer()).byteLength,originals[1].bytes.length);
+            const original=await fetch(site+'/assets/'+actualPath+'/spine.spine',{signal:AbortSignal.timeout(60000)});
+            assert.equal(original.status,200);
+            assert.equal((await original.arrayBuffer()).byteLength,originals[0].bytes.length);
+            console.log('PASS source project + nested images + status page + source download, '+((Date.now()-started)/1000).toFixed(2)+'s');
+            const deletion=await call({action:'delete-entry',entryId:id,collectionBasePath:actualPath.split('/')[0]});
+            assert.equal(deletion.deleted,id);assert.equal(deletion.filesDeleted,true);deleted=true;
+            const removed=await fetch(site+'/p/'+id+'?t='+Date.now(),{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(60000)});
+            assert.equal(removed.status,404);
+            console.log('PASS deleted project source, images and page together');
+          }finally{
+            if(published&&!deleted){
+              try{await call({action:'update-entry-visibility',entryId:id,hiddenFromPublicLibrary:true});}
+              catch(e){console.error('Unable to hide failed test upload',e);}
+            }
+          }
+          NODE
