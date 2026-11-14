@@ -1,0 +1,55 @@
+name: Spine-Link live preview smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/spine-link-live-preview-smoke.yml'
+      - 'api/github-preview.js'
+      - 'api/github-upload.js'
+      - 'src/main.tsx'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify real uploaded Spine pages and measure response times
+        env:
+          SITE: https://spine-link.vercel.app
+        shell: bash
+        run: |
+          set -euo pipefail
+          ids=(
+            'spine-link-directcheck-2026-11-14T08-58-02-742Z'
+            'spine-link-fastcheck-2026-11-14T08-50-04-803Z'
+            'k_nuke-2026-11-13T08-34-56-151Z'
+          )
+          for id in "${ids[@]}"; do
+            success=0
+            for attempt in 1 2 3 4; do
+              output="$(mktemp)"
+              stats="$(curl --silent --show-error --location --max-time 45 --connect-timeout 10 -H 'Cache-Control: no-cache' --output "$output" --write-out '%{http_code} %{time_starttransfer} %{time_total}' "$SITE/p/$id" || true)"
+              read -r http ttfb total <<< "$stats"
+              echo "$id attempt=$attempt HTTP=${http:-none} TTFB=${ttfb:-?}s total=${total:-?}s"
+              if [[ "$http" == 200 ]] && grep -Fq 'id="spine-preview-config"' "$output" && ! grep -Fxq 'Preview not found' "$output"; then
+                echo "PASS: $SITE/p/$id"
+                success=1
+                rm -f "$output"
+                break
+              fi
+              echo "Preview response snippet:"
+              head -c 350 "$output" || true
+              echo
+              rm -f "$output"
+              sleep 5
+            done
+            if [[ "$success" != 1 ]]; then
+              echo "::error::Uploaded work $id did not render the Spine preview page"
+              exit 1
+            fi
+          done
