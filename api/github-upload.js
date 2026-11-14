@@ -1390,7 +1390,9 @@ export default async function handler(request, response) {
           ? JSON.parse(base64ToText(index.content)) : [];
         const existing = currentEntries.find(item => item.id === uploadId);
         nextEntry = publicLibraryEntry(origin, {
-          ...body?.entry, id: uploadId, uploadedAt, previewPath: workPath,
+          ...body?.entry,
+          files: prepared.receipts.map(item => item.path.split('/').pop()),
+          id: uploadId, uploadedAt, previewPath: workPath,
           ownerEmail: googlePayload?.email,
           ownerAnonId: anonymousAccount?.id,
           ownerAnonFingerprint: anonymousAccount?.fingerprint,
