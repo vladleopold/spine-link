@@ -398,6 +398,35 @@ function generatedThumbnailUrl(origin, entry) {
     : '';
 }
 
+async function dispatchSpineProjectExport(settings, entry, origin) {
+  const id = String(entry?.id || '').trim();
+  if (!id || entry?.sourceKind !== 'spine-project') return null;
+  // Project files are proprietary editor sources. The storage repository's
+  // licensed Spine CLI workflow must produce JSON/atlas before any runtime can
+  // animate them. Never pretend a .spine file is a .skel runtime export.
+  try {
+    const result = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
+      method: 'POST',
+      headers: githubHeaders(settings.token),
+      body: JSON.stringify({
+        event_type: 'spine-project-export',
+        client_payload: {
+          uploadId: id,
+          uploadPath: cleanRepoPath(entry.previewPath || ''),
+          projectFile: String(entry.projectFile || ''),
+          imagesRoot: 'images',
+          editorVersion: '4.3.26',
+          origin: String(origin || '').replace(/\/+$/, ''),
+        },
+      }),
+    });
+    return result.ok ? { status: 'dispatched' } :
+      { status: 'failed', error: 'Project conversion workflow dispatch HTTP ' + result.status };
+  } catch (error) {
+    return { status: 'failed', error: String(error) };
+  }
+}
+
 async function dispatchSpineExportWebm(settings, entry, origin) {
   const id = String(entry?.id || '').trim();
   if (!id) return null;
@@ -1387,6 +1416,16 @@ export default async function handler(request, response) {
         Array.isArray(body?.stagedBlobs) ? body.stagedBlobs : [],
         Array.isArray(body?.stagedAssemblies) ? body.stagedAssemblies : []);
       if (!prepared.committed.length) return response.status(400).json({ error: 'No staged Spine files' });
+      const relativeFiles = prepared.receipts.map(item =>
+        item.path.startsWith(workPath + '/') ? item.path.slice(workPath.length + 1) : '');
+      const isEditorProject = body?.entry?.sourceKind === 'spine-project';
+      const projectFile = String(body?.entry?.projectFile || '');
+      if (isEditorProject && (!/^[^/\\]+\.spine$/i.test(projectFile) ||
+          !relativeFiles.includes(projectFile) ||
+          !relativeFiles.some(path => /^images\/.+\.(png|jpe?g|webp)$/i.test(path)) ||
+          relativeFiles.some(path => !path || path.split('/').some(part => !part || part === '.' || part === '..')))) {
+        return response.status(400).json({ error: 'Spine Editor import requires a .spine project and images/ textures' });
+      }
       const indexPath = joinRepoPath(settings.basePath, 'index.json');
       let nextEntry = null;
       let commit;
@@ -1397,15 +1436,22 @@ export default async function handler(request, response) {
         const existing = currentEntries.find(item => item.id === uploadId);
         nextEntry = publicLibraryEntry(origin, {
           ...body?.entry,
-          files: prepared.receipts.map(item => item.path.split('/').pop()),
+          files: relativeFiles,
           id: uploadId, uploadedAt, previewPath: workPath,
+          ...(isEditorProject ? {
+            sourceKind: 'spine-project', projectFile,
+            imagesRoot: 'images', conversionStatus: 'pending',
+            webmStatus: 'waiting-for-editor',
+            skeleton: '', atlas: '', animations: [],
+          } : {}),
           ownerEmail: googlePayload?.email,
           ownerAnonId: anonymousAccount?.id,
           ownerAnonFingerprint: anonymousAccount?.fingerprint,
           publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existing?.publicOwnerId),
         });
-        nextEntry.webmStatus = existing?.webmStatus === 'ready' ? 'ready' : 'pending';
-        nextEntry.dispatchStatus = 'pending';
+        nextEntry.webmStatus = isEditorProject ? 'waiting-for-editor' :
+          existing?.webmStatus === 'ready' ? 'ready' : 'pending';
+        nextEntry.dispatchStatus = isEditorProject ? 'project-export-pending' : 'pending';
         const nextEntries = [nextEntry, ...currentEntries.filter(item => item.id !== uploadId)];
         try {
           commit = await commitGitHubChanges(settings, {
@@ -1419,10 +1465,14 @@ export default async function handler(request, response) {
           if (attempt === 2 || ![409, 422].includes(Number(error?.status))) throw error;
         }
       }
-      try { dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {}); } catch {}
+      try {
+        if (isEditorProject) dispatchSpineProjectExport(settings, nextEntry, origin).catch(() => {});
+        else dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {});
+      } catch {}
       return response.status(200).json({
         ok: true, path: workPath, indexed: true,
-        files: prepared.receipts.map(item => ({ ...item, name: item.path.split('/').pop() })),
+        requiresSpineExport: isEditorProject,
+        files: prepared.receipts.map((item, i) => ({ ...item, name: relativeFiles[i] })),
         github: { commitSha: String(commit?.commit?.sha || commit?.sha || '') },
       });
     }
