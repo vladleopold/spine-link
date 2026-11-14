@@ -22,10 +22,10 @@ jobs:
       - name: Parallel upload, atomic publish, open page, verify image, hide test
         shell: bash
         run: |
-          node --input-type=commonjs <<'NODE'
-          const fs = require('node:fs');
-          const assert = require('node:assert/strict');
-          const crypto = require('node:crypto');
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
           const site = 'https://spine-link.vercel.app';
           const uploadId = 'spine-link-e2e-' + new Date().toISOString().replace(/[:.]/g, '-');
           const uploadedAt = new Date().toISOString();
