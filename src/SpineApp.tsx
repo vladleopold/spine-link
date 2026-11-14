@@ -5250,6 +5250,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const homeFeedLoop = showHomeFeed ? homeFeedEntries.slice(0, 12) : [];
   const isHomeDropOnly = !preparedSpine && !isEditPage && extraSpineSets.length === 0 && !isUploadModalOpen;
   const siteReadingPages = [
+    { href: "/api-docs.html", title: "API", description: "Connect an animation agent" },
+    { href: "/sdk.html", title: "SDK", description: "Download the server-side agent SDK" },
     { href: "/spine-link.html", title: "Spine-Link", description: "Platform overview" },
     { href: "/spine-preview.html", title: "Spine Preview", description: "Open JSON, SKEL and atlas files" },
     { href: "/spine-preview-online.html", title: "Preview Online", description: "Browser Spine preview guide" },
@@ -5465,9 +5467,14 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           </a>
           <div className="top-actions-row">
             {isHomeDropOnly && (
-              <a className="world-archive-link" href="/world-spine-archive">
-                BROWSE
-              </a>
+              <>
+                <a className="world-archive-link" href="/api-docs.html" aria-label="Animation API documentation">
+                  API
+                </a>
+                <a className="world-archive-link" href="/world-spine-archive">
+                  BROWSE
+                </a>
+              </>
             )}
             <div className="auth-panel">
               {googleUser ? (
