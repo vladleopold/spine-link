@@ -1180,7 +1180,7 @@ function pendingUploadDb(): Promise<IDBDatabase> {
     request.onblocked = () => reject(new Error("Upload recovery database is blocked"));
   });
 }
-async function pendingUploadPut(job: { id: string; files: File[]; uploadedAt: string; title: string; uploadId: string; uploadPath: string }) {
+async function pendingUploadPut(job: { id: string; files: File[]; uploadedAt: string; title: string; uploadId: string; uploadPath: string; relativePaths?: string[] }) {
   const db = await pendingUploadDb();
   return new Promise<void>((resolve, reject) => {
     const tx = db.transaction("jobs", "readwrite");
@@ -1247,12 +1247,13 @@ async function uploadBackgroundFilesFast(
 ): Promise<string> {
   const CHUNK = 3_200_000; // Base64 chars, divisible by 4; < 4.5 MB request limit
   const settings = { owner: "vladleopold", repo: "spine", branch: "main", basePath: "", title };
+  const isProject = files.some(isSpineProjectFile);
   const contents = await Promise.all(files.map(file => fileToBase64(file)));
   const tasks: Array<{ fileIndex: number; path: string; contentBase64: string }> = [];
   const totals = new Array(files.length).fill(0);
   for (let i = 0; i < files.length; i++) {
     const encoded = contents[i];
-    const path = uploadPath + "/" + files[i].name;
+    const path = uploadPath + "/" + (isProject ? normalizeProjectPath(files[i]) : files[i].name);
     for (let offset = 0; offset < encoded.length; offset += CHUNK) {
       tasks.push({ fileIndex: i, path, contentBase64: encoded.slice(offset, offset + CHUNK) });
       totals[i]++;
@@ -1304,10 +1305,12 @@ async function uploadBackgroundFilesFast(
       action: "background-finalize-fast", uploadId, uploadPath: realPath,
       uploadedAt, anonymousAccount, settings, entry: {
         id: uploadId, uploadedAt, previewPath: realPath, title,
-        files: files.map(file => file.name),
+        files: files.map(file => isProject ? normalizeProjectPath(file) : file.name),
         skeleton: files.find(file => /\.(json|skel|bytes)$/i.test(file.name))?.name || "",
         atlas: files.find(file => /\.atlas$/i.test(file.name))?.name || "",
-        textures: files.filter(file => /\.(png|jpe?g|webp)$/i.test(file.name)).map(file => file.name),
+        textures: files.filter(file => /\.(png|jpe?g|webp)$/i.test(file.name)).map(file => isProject ? normalizeProjectPath(file) : file.name),
+        ...(isProject ? { sourceKind: "spine-project", projectFile: files.find(isSpineProjectFile)?.name || "",
+          imagesRoot: "images", conversionStatus: "pending" } : {}),
       },
       stagedBlobs, stagedAssemblies, commitPrefix: "Fast Spine upload",
     }),
@@ -1326,10 +1329,16 @@ async function uploadBackgroundFilesFast(
 
 const activeBackgroundUploads = new Set<string>();
 
-function startBackgroundUpload(files: File[], resumed?: { id: string; files: File[]; uploadedAt: string; title: string; uploadId: string; uploadPath: string }) {
+function startBackgroundUpload(files: File[], resumed?: { id: string; files: File[]; uploadedAt: string; title: string; uploadId: string; uploadPath: string; relativePaths?: string[] }) {
+  if (resumed?.relativePaths?.length) files.forEach((file, i) => {
+    rememberProjectFilePath(file, resumed.relativePaths?.[i] || "");
+  });
   const anonymousAccount = getAnonymousAccount();
   const uploadedAt = resumed?.uploadedAt || new Date().toISOString();
-  const title = resumed?.title || files.find((f) => f.name.toLowerCase().endsWith(".json"))?.name.replace(/\.[^.]+$/, "") || "Spine animation";
+  const title = resumed?.title ||
+    files.find(isSpineProjectFile)?.name.replace(/\.[^.]+$/, "") ||
+    files.find((f) => f.name.toLowerCase().endsWith(".json"))?.name.replace(/\.[^.]+$/, "") ||
+    "Spine animation";
   const safeTitle = title.replace(/[^a-z0-9._-]/gi, "-").replace(/-+/g, "-").slice(0, 60);
   const uploadId = resumed?.uploadId || `${safeTitle}-${uploadedAt.replace(/[:.]/g, "-")}`;
   // The collection folder is chosen server-side, so the client sends only the
@@ -1369,7 +1378,8 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
     try {
       const recoverySaved: Promise<void> = resumed
         ? Promise.resolve()
-        : pendingUploadPut({ id: uploadEntry.id, files, uploadedAt, title, uploadId, uploadPath })
+        : pendingUploadPut({ id: uploadEntry.id, files, uploadedAt, title, uploadId, uploadPath,
+            relativePaths: files.map(projectFilePath) })
             .catch((error) => { console.warn("[spine] Upload recovery storage unavailable; continuing transfer", error); });
       await uploadNextFile(recoverySaved);
     } catch (error) {
