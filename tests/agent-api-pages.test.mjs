@@ -43,3 +43,13 @@ test('agent routing does not exceed the Vercel Hobby 12-functions limit', async 
   assert(backend.includes("import agentAnimationHandler from '../lib/agent-animation.js'"));
   assert(backend.includes('return agentAnimationHandler(request, response)'));
 });
+
+test('account dashboard lists only personal projects via secure API', async () => {
+  const [html, script, manager] = await Promise.all([
+    load('public/api-keys.html'), load('public/api-keys.js'), load('lib/agent-user-keys.js')
+  ]);
+  assert(html.includes('Projects from your servers'));
+  assert(script.includes("api('keys-projects')"));
+  assert(manager.includes("const KEY_REPO = 'vladleopold/3Spine-core'"));
+  assert(!manager.includes("const KEY_FILE = 'library/agent-api-keys.json'"));
+});

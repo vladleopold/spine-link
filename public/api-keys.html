@@ -70,6 +70,16 @@ footer{border-top:1px solid #2c4851;color:#90a8ae;font-size:12px;margin-top:45px
 <p id="no-keys" class="muted" hidden>No API keys created yet.</p>
 </section>
 <section>
+<div class="controls" style="justify-content:space-between;margin:0 0 12px">
+  <h2 style="margin:0">Projects from your servers</h2>
+  <button id="refresh-projects" class="secondary" type="button">Refresh</button>
+</div>
+<p>Animations uploaded using your personal API keys. Open a project to preview it or manage it in your portfolio.</p>
+<div style="overflow-x:auto"><table><thead><tr><th>Project</th><th>Status</th><th>Added</th><th>Open</th></tr></thead>
+<tbody id="project-list"></tbody></table></div>
+<p id="no-projects" class="muted" hidden>No projects published via your API keys yet.</p>
+</section>
+<section>
 <h2>Connect your server</h2>
 <p>Send the key only from your backend. Use the <a href="/sdk.html">Node.js SDK</a> or the <a href="/api-docs.html">REST API</a>. The SDK will return your new project's page URL.</p>
 <code>SPINE_LINK_AGENT_API_KEY=your-personal-key</code>

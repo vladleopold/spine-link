@@ -38,6 +38,7 @@ function mockGithub() {
     const body = options.body ? JSON.parse(options.body) : {};
     requests.push({ path, method });
     const base = '/repos/vladleopold/spine';
+    const credentialsBase = '/repos/vladleopold/3Spine-core';
     if (url.startsWith('https://oauth2.googleapis.com/tokeninfo')) {
       const access = new URL(url).searchParams.get('access_token');
       const number = access === 'google-user-one' ? '1' : access === 'google-user-two' ? '2' : '';
@@ -54,7 +55,7 @@ function mockGithub() {
         email_verified:true,
       }) : result(401, {});
     }
-    if (path === base + '/contents/library/agent-api-keys.json') {
+    if (path === credentialsBase + '/contents/.spine-link/agent-api-keys.json') {
       if (method === 'GET') {
         return registry ? result(200, {
           sha: String(registryVersion).padStart(40,'a'),
@@ -374,6 +375,10 @@ test('Google account creates a one-time personal key; only masked key is listed'
   const registry = JSON.stringify(gh.registry);
   assert(!registry.includes(created.key), 'never persist plaintext key');
   assert(!registry.includes('owner1@test.invalid'), 'encrypt Google email in key registry');
+  assert(gh.requests.some(x => x.path === '/repos/vladleopold/3Spine-core/contents/.spine-link/agent-api-keys.json'),
+    'credential registry must be in the private repository');
+  assert(!gh.requests.some(x => x.path === '/repos/vladleopold/spine/contents/library/agent-api-keys.json'),
+    'must not write credentials to public storage');
   const own = await request('POST', {action:'keys-list'}, {}, 'google-user-one');
   assert.equal(own.keys.length, 1);
   assert(!JSON.stringify(own).includes(created.key));
@@ -418,6 +423,13 @@ test('personal API key publishes into verified owner library; another key cannot
   assert.match(entry.publicOwnerId,/^u_/);
   assert.match(entry.ownerAccountId,/^[a-f0-9]{64}$/);
   assert.equal(entry.hiddenFromPublicLibrary,true);
+  const projects = await request('POST',{action:'keys-projects'}, {}, 'google-user-one');
+  assert.equal(projects.code,200,JSON.stringify(projects));
+  assert.equal(projects.projects.length,1);
+  assert.equal(projects.projects[0].id,job.id);
+  const strangerProjects=await request('POST',{action:'keys-projects'}, {}, 'google-user-two');
+  assert.equal(strangerProjects.code,200);
+  assert.deepEqual(strangerProjects.projects,[], 'projects must be scoped to the verified owner');
   const ownerStatus = await request('POST',{
     action:'status',id:job.id,collection:job.uploadPath.split('/')[0]
   },{},token);

@@ -6,6 +6,8 @@ const signIn = $('#sign-in');
 const manager = $('#manager');
 const list = $('#key-list');
 const noKeys = $('#no-keys');
+const projectsList = $('#project-list');
+const noProjects = $('#no-projects');
 const newKeyBox = $('#new-key');
 const secretValue = $('#key-value');
 let googleToken = '';
@@ -76,9 +78,49 @@ function printKeyList(keys) {
     list.append(row);
   }
 }
+function renderProjects(projects) {
+  projectsList.replaceChildren();
+  noProjects.hidden = projects.length !== 0;
+  for (const project of projects) {
+    const row = document.createElement('tr');
+    const name = element('td', project.title);
+    const status = element('td', project.state);
+    const created = element('td',
+      Number.isFinite(Date.parse(project.createdAt))
+        ? new Date(project.createdAt).toLocaleDateString() : '—', 'muted');
+    const destination = document.createElement('td');
+    const link = element('a', 'Open');
+    // URLs are constructed by the server from random IDs, not arbitrary data.
+    if (/^https:\/\/spine-link\.vercel\.app\/p\/agent-[a-f0-9]{32}$/.test(project.pageUrl)) {
+      link.href = project.pageUrl;
+      link.rel = 'noopener noreferrer';
+      link.target = '_blank';
+      destination.append(link);
+    }
+    row.append(name, status, created, destination);
+    projectsList.append(row);
+  }
+}
+async function refreshProjects() {
+  const result = await api('keys-projects');
+  renderProjects(Array.isArray(result.projects) ? result.projects : []);
+}
+$('#refresh-projects').addEventListener('click', async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await refreshProjects();
+    notice('Your server projects are up to date.');
+  } catch (error) {
+    notice(error.message || 'Unable to load projects.', true);
+  } finally {
+    button.disabled = false;
+  }
+});
 async function refresh() {
   const result = await api('keys-list');
   printKeyList(Array.isArray(result.keys) ? result.keys : []);
+  await refreshProjects();
 }
 function clearNewKey() {
   secretValue.value = '';

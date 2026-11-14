@@ -164,6 +164,7 @@ The account holder signs in with Google to <https://spine-link.vercel.app/api-ke
 The signed-in website sends an existing Google OAuth access token in the Authorization Bearer header to `/api/agent-animation` and uses three management actions:
 
 - `{"action":"keys-list"}` returns only that Google account's masked keys.
+- `{"action":"keys-projects"}` lists the most recent projects published using that account's personal keys, without exposing other users' work.
 - `{"action":"keys-create","name":"My animation server"}` returns a one-time full `slk_v1_...` key and safe key metadata.
 - `{"action":"keys-revoke","keyId":"<16 hex>"}` revokes that user's key.
 
@@ -172,3 +173,5 @@ Management requires a verified Google token issued to the configured Spine-Link 
 Personal keys are HMAC-hashed in repository storage; the Google verified email needed to link projects to the portfolio is stored AES-256-GCM encrypted in the key record. Published project records use the verified account identity, so creations belong to the user's library and can be managed through normal site ownership checks.
 
 Revoked keys cannot create, stage, complete, or inspect projects. A personal key cannot access another account's uploads. The site owner must provision the server-side master secret `SPINE_LINK_AGENT_API_KEY`; it is never displayed on the API keys page. Rotating the master secret without migrating personal keys invalidates them.
+
+**Private credential storage:** personal API key metadata, HMAC digests and encrypted owner emails are stored in the private repository `vladleopold/3Spine-core` under `.spine-link/agent-api-keys.json`. The normal `vladleopold/spine` repository remains for animation files only. The server's GitHub token must have Contents Read/Write permission on the private repository. No fallback to public credential storage is permitted.
