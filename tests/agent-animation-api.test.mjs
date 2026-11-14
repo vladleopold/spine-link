@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import handler from '../lib/agent-animation.js';
-import siteUploadHandler from '../api/github-upload.js';
+import siteUploadHandler, { canEditEntry } from '../api/github-upload.js';
 
 const API_KEY = 'test-agent-key-that-is-at-least-32-bytes-long';
 const oldFetch = globalThis.fetch;
@@ -437,8 +437,14 @@ test('personal API key publishes into verified owner library; another key cannot
   const done = await request('POST',{action:'complete',jobToken:job.jobToken,files:receipts},{},token);
   assert.equal(done.code,201, JSON.stringify(done));
   const entry = gh.entries[0];
-  assert.equal(entry.ownerEmail,'owner1@test.invalid');
-  assert.equal(entry.showOwnerLibrary,true);
+  assert.equal(entry.ownerEmail,undefined,'no plaintext Google email in public project index');
+  assert.equal(entry.ownerEmailSha256,undefined,'no enumerable email hash in public index');
+  assert.equal(entry.showOwnerLibrary,false,'agent upload must not expose a public portfolio by default');
+  assert(!JSON.stringify(gh.entries).includes('owner1@test.invalid'));
+  assert.equal(canEditEntry(entry,{sub:'google-sub-1',email:'owner1@test.invalid'},null),true);
+  assert.equal(canEditEntry(entry,{sub:'google-sub-2',email:'owner1@test.invalid'},null),false);
+  assert.equal(canEditEntry(entry,null,{id:'anon_guess'}),false);
+  assert.equal(canEditEntry(entry,{email:'owner1@test.invalid'},null),false);
   assert.match(entry.publicOwnerId,/^u_/);
   assert.match(entry.ownerAccountId,/^[a-f0-9]{64}$/);
   assert.equal(entry.hiddenFromPublicLibrary,true);
@@ -463,6 +469,18 @@ test('personal API key publishes into verified owner library; another key cannot
   assert.equal(disabled.code,401, JSON.stringify(disabled));
   const after = await request('POST',{action:'keys-list'},{},'google-user-one');
   assert(after.keys[0].revokedAt);
+});
+
+test('legacy email ownership is preserved; agent ownership rejects spoofing', async () => {
+  mockGithub();
+  assert.equal(canEditEntry({ownerEmail:'test@test.invalid'},
+    {email:'test@test.invalid'},null),true);
+  assert.equal(canEditEntry({ownerEmailSha256:createHash('sha256').update('test@test.invalid').digest('hex')},
+    {email:'test@test.invalid'},null),true);
+  assert.equal(canEditEntry({ownerEmail:'test@test.invalid'},
+    {email:'other@test.invalid'},null),false);
+  assert.equal(canEditEntry({ownerAccountId:'a'.repeat(64),ownerEmail:'test@test.invalid'},
+    {email:'test@test.invalid'},null),false);
 });
 
 test('maximum five active personal keys and invalid Google session do not create credentials', async () => {

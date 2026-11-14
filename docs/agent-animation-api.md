@@ -179,3 +179,7 @@ Personal keys are HMAC-hashed in repository storage; the Google verified email n
 Revoked keys cannot create, stage, complete, or inspect projects. A personal key cannot access another account's uploads. The site owner must provision the server-side master secret `SPINE_LINK_AGENT_API_KEY`; it is never displayed on the API keys page. Rotating the master secret without migrating personal keys invalidates them.
 
 **Private credential storage:** personal API key metadata, HMAC digests and encrypted owner emails are stored in the private repository `vladleopold/3Spine-core` under `.spine-link/agent-api-keys.json`. The normal `vladleopold/spine` repository remains for animation files only. The server's GitHub token must have Contents Read/Write permission on the private repository. No fallback to public credential storage is permitted.
+
+### Personal data protection in public animation indexes
+
+Animation assets and collection indexes live in the PUBLIC storage repository. An unlisted work is NOT access-restricted. New personal-key uploads do not store the account's email or an enumerable email SHA-256. The index holds only a keyed Google-account pseudonym (`ownerAccountId`); the separate private key store holds encrypted verified email. Owner editing requires the matching validated Google `sub`, not a self-declared email or anonymous account. Agent publication does not force public library visibility on.

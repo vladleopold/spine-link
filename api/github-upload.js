@@ -630,7 +630,20 @@ function publicOwnerIdFor(googlePayload, anonymousAccount, fallback = '') {
   return source ? `u_${hashString(source)}` : '';
 }
 
-function canEditEntry(entry, googlePayload, anonymousAccount) {
+// Agent-created works store a non-reversible HMAC of Google's account sub.
+// Verify the same Google subject, ignoring spoofed email or anonymous IDs.
+function agentOwnerMatches(entry, googlePayload) {
+  const stored = String(entry?.ownerAccountId || '');
+  if (!/^[a-f0-9]{64}$/.test(stored)) return false;
+  const sub = String(googlePayload?.sub || '');
+  const signingKey = String(process.env.SPINE_LINK_AGENT_API_KEY || '');
+  if (!sub || !signingKey || Buffer.byteLength(signingKey) < 32) return false;
+  const digest = createHmac('sha256', signingKey).update('owner-v1:' + sub).digest('hex');
+  return timingSafeEqual(Buffer.from(stored), Buffer.from(digest));
+}
+
+export function canEditEntry(entry, googlePayload, anonymousAccount) {
+  if (entry?.ownerAccountId) return agentOwnerMatches(entry, googlePayload);
   const userEmail = String(googlePayload?.email || '').toLowerCase();
   const ownerEmail = String(entry?.ownerEmail || '').toLowerCase();
   const anonymousId = String(anonymousAccount?.id || '').toLowerCase();
@@ -646,6 +659,7 @@ function accountLibraryEntries(origin, entries, googlePayload, anonymousAccount)
     const next = { ...entry, canEdit: canEditEntry(entry, googlePayload, anonymousAccount) };
     delete next.ownerEmail;
     delete next.ownerEmailSha256;
+    delete next.ownerAccountId;
     delete next.ownerAnonId;
     delete next.ownerAnonFingerprint;
     // The account list is a card index, not the complete download manifest.

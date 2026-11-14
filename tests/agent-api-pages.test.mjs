@@ -53,3 +53,13 @@ test('account dashboard lists only personal projects via secure API', async () =
   assert(manager.includes("const KEY_REPO = 'vladleopold/3Spine-core'"));
   assert(!manager.includes("const KEY_FILE = 'library/agent-api-keys.json'"));
 });
+
+test('personal API work uses verified owner identity, no public Google email', async () => {
+  const [agent, upload] = await Promise.all([
+    load('lib/agent-animation.js'), load('api/github-upload.js')
+  ]);
+  assert(!agent.includes('ownerEmail: auth.ownerEmail'));
+  assert(agent.includes('ownerAccountId: auth.ownerId'));
+  assert(agent.includes('showOwnerLibrary: false'));
+  assert(upload.includes('if (entry?.ownerAccountId) return agentOwnerMatches(entry, googlePayload)'));
+});
