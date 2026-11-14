@@ -1,3 +1,4 @@
+import agentAnimationHandler from '../lib/agent-animation.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -1213,6 +1214,12 @@ async function prepareStagedAssets(settings, uploadId, workPath, singles = [], a
 }
 
 export default async function handler(request, response) {
+  // Keep the public agent endpoint inside this existing Vercel function;
+  // the Hobby deployment limit is 12 serverless functions.
+  if (String(request.query?.__spine_link_agent_v1 || '') === '1' ||
+      /^\/api\/agent-animation(?:[/?]|$)/.test(String(request.url || ''))) {
+    return agentAnimationHandler(request, response);
+  }
   if (request.method !== 'POST') {
     response.setHeader('Allow', 'POST');
     return response.status(405).json({ error: 'Method not allowed' });
