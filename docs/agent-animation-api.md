@@ -189,3 +189,7 @@ Google OAuth verification now requires the credential to be issued to the config
 ### Delete a published personal API project
 
 Sign in on **My API Keys** and click **Delete** next to one of your server-created projects. This reuses the site's existing `POST /api/github-upload` `delete-entry` action with the Google session in the Bearer header and the `entryId` plus `collectionBasePath` from the authenticated project list. The backend checks owner identity against the signed-in Google account, derives the asset folder from the stored record (not client input), and atomically removes the card and full server asset tree. This action is permanent; no secret API key is transmitted to the browser delete endpoint. The dashboard reacts to sign-out in another tab by clearing any exposed new secret.
+
+### Recover after a lost publication response
+
+The Node.js SDK now uses three read-only status checks when the `complete` request fails ambiguously. If the job exists with state `ready`, `processing`, or `failed`, it returns the stored page URL with `recovered: true` rather than re-uploading or creating a duplicate. If storage still reports `awaiting_upload` or cannot be reached, the original error is preserved. `complete` is never automatically repeated.

@@ -178,13 +178,31 @@ export class SpineLinkAgent {
       }
     }
     await flush();
-    // A publish may commit even if its HTTP response is lost; do not blindly
-    // retry "complete". A consumer can call status with id/collection afterward.
-    const result = await this.request({
-      action: 'complete', jobToken: job.jobToken,
-      files: receipts, assemblies, agentName, defaultAnimation, public: isPublic,
-    });
-    return { ...result, collection: job.uploadPath.split('/')[0], uploadId: job.id };
+    // A publish can commit even if the final HTTP response is lost.
+    // Never retry this mutating action. Instead check immutable job ID:
+    // a ready/processing/failed state proves the work was committed.
+    const collection = job.uploadPath.split('/')[0];
+    let result;
+    try {
+      result = await this.request({
+        action: 'complete', jobToken: job.jobToken,
+        files: receipts, assemblies, agentName, defaultAnimation, public: isPublic,
+      });
+    } catch (completionError) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt) await sleep(250 * attempt);
+        try {
+          const current = await this.status({ id: job.id, collection });
+          if (['ready', 'processing', 'failed'].includes(current?.state)) {
+            return { ...current, collection, uploadId: job.id, recovered: true };
+          }
+        } catch {
+          // A transient status error does not prove that publication failed.
+        }
+      }
+      throw completionError;
+    }
+    return { ...result, collection, uploadId: job.id };
   }
 
   async waitReady(job, { intervalMs = 5000, timeoutMs = 12 * 60_000 } = {}) {

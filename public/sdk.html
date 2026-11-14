@@ -66,7 +66,7 @@ console.log(work.pageUrl); // Permanent Spine-Link page</code></pre>
 const finished = await agent.waitReady(work);
 console.log(finished.pageUrl);</code></pre>
 <h2>Built-in features</h2>
-<p>The SDK handles small-texture batches, large multipart uploads, signed receipts, API errors and status polling. It checks paths before transferring data. It does not run Spine Editor; that conversion runs in the licensed server workflow.</p>
+<p>The SDK handles small-texture batches, large multipart uploads, signed receipts, API errors and status polling. If the final publish response is lost, it checks the unique project ID rather than repeating the commit. It checks paths before transferring data. It does not run Spine Editor; that conversion runs in the licensed server workflow.</p>
 <p>For an agent with a directory of output files, the repository also includes a <a href="https://github.com/vladleopold/spine-link/blob/main/scripts/spine-link-agent-publish.mjs">command-line publishing example</a>.</p>
 <p><strong>Security:</strong> the SDK is for trusted server-side use only. A published, unlisted page is accessible to anyone with the direct link.</p>
 </main><footer>Spine-Link · <a href="/api-docs.html">API documentation</a></footer>

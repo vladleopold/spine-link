@@ -102,6 +102,61 @@ test('SDK rejects invalid paths, duplicate files and invalid endpoints without n
   assert.equal(calls.length,0);
 });
 
+test('SDK recovers a committed publication when the complete HTTP response is lost', async () => {
+  const { sdk, calls } = simulate();
+  const original = sdk.fetchImpl;
+  sdk.fetchImpl = async (url, init) => {
+    const action = JSON.parse(init.body).action;
+    if (action === 'complete') {
+      calls.push({ url, init, action });
+      throw new Error('response lost after Git commit');
+    }
+    return original(url, init);
+  };
+  const work = await sdk.publish({
+    title:'Reliable workflow',format:'runtime',
+    files:[
+      {path:'actor.json',bytes:source('json')},
+      {path:'actor.atlas',bytes:source('atlas')},
+      {path:'actor.png',bytes:source('png')},
+    ],
+  });
+  assert.equal(work.state, 'ready');
+  assert.equal(work.recovered, true);
+  assert.equal(work.collection, 'library_02');
+  assert.equal(work.uploadId, work.id);
+  assert.equal(calls.filter(x => x.action==='complete').length,1,
+    'complete must never be retried when it may have committed');
+  assert.equal(calls.filter(x => x.action==='status').length,1);
+});
+
+test('SDK retains error if status cannot prove that a failed complete committed', async () => {
+  const { sdk, calls } = simulate();
+  const original = sdk.fetchImpl;
+  sdk.fetchImpl = async (url, init) => {
+    const action = JSON.parse(init.body).action;
+    if (action === 'complete') {
+      calls.push({ url, init, action });
+      throw new Error('network interrupted');
+    }
+    if (action === 'status') {
+      calls.push({ url, init, action });
+      return { ok:true, status:200, json:async()=>({ok:true,state:'awaiting_upload'}) };
+    }
+    return original(url, init);
+  };
+  await assert.rejects(() => sdk.publish({
+    title:'Not committed',format:'runtime',
+    files:[
+      {path:'actor.json',bytes:source('json')},
+      {path:'actor.atlas',bytes:source('atlas')},
+      {path:'actor.png',bytes:source('png')},
+    ],
+  }),/network interrupted/);
+  assert.equal(calls.filter(x => x.action==='complete').length,1);
+  assert.equal(calls.filter(x => x.action==='status').length,3);
+});
+
 test('SDK surfaces only safe API errors and never retries a complete operation', async () => {
   let tries=0;
   const sdk = new SpineLinkAgent({
