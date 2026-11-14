@@ -117,7 +117,7 @@ function fileName(value, format) {
   }
   if (format === 'spine-project') {
     if (/^[^/]+\.spine$/i.test(name) || /^images\/.+\.(png|jpe?g|webp)$/i.test(name)) return name;
-  } else if (/\.(json|skel|atlas|png|jpe?g|webp)$/i.test(name)) {
+  } else if (/\.(json|skel|atlas(?:\.txt)?|png|jpe?g|webp)$/i.test(name)) {
     return name;
   }
   throw apiError(400, 'Unsupported Spine file for this format');
@@ -198,8 +198,8 @@ function safeAnimations(input) {
 
 async function prepareFiles(settings, job, singles, assemblies) {
   if (!Array.isArray(singles) || !Array.isArray(assemblies) ||
-      singles.length + assemblies.length < 3 || singles.length + assemblies.length > MAX_FILES) {
-    throw apiError(400, 'Submit a skeleton/project, atlas, and textures as signed receipts');
+      singles.length + assemblies.length < 2 || singles.length + assemblies.length > MAX_FILES) {
+    throw apiError(400, 'Submit a project with images or runtime skeleton, atlas, and textures as signed receipts');
   }
   const items = [];
   const seen = new Set();
@@ -245,7 +245,7 @@ async function prepareFiles(settings, job, singles, assemblies) {
     }
   } else {
     const skeletons = names.filter(name => /\.(json|skel)$/i.test(name));
-    if (!skeletons.length || !names.some(name => /\.atlas$/i.test(name)) ||
+    if (!skeletons.length || !names.some(name => /\.atlas(?:\.txt)?$/i.test(name)) ||
         !names.some(name => /\.(png|jpe?g|webp)$/i.test(name))) {
       throw apiError(422, 'Runtime needs JSON/SKEL, .atlas, and textures');
     }
@@ -431,7 +431,7 @@ export async function handler(request, response) {
           ? { projectFile, imagesRoot: 'images', conversionStatus: process.env.SPINE_PROJECT_EXPORT_ENABLED === 'false'
             ? 'needs-editor' : 'pending' }
           : { conversionStatus: 'ready', skeleton: names.find(name => /\.(json|skel)$/i.test(name)) || '',
-            atlas: names.find(name => /\.atlas$/i.test(name)) || '', textures: names.filter(name => /\.(png|jpe?g|webp)$/i.test(name)) }),
+            atlas: names.find(name => /\.atlas(?:\.txt)?$/i.test(name)) || '', textures: names.filter(name => /\.(png|jpe?g|webp)$/i.test(name)) }),
       };
       const commitSha = await commitJob(settings, job, items, entry);
       const dispatchState = await dispatch(settings, { ...job, projectFile });
