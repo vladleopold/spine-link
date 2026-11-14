@@ -66,7 +66,7 @@ test('personal API work uses verified owner identity, no public Google email', a
   assert(upload.includes('if (entry?.ownerAccountId) {'));
 });
 
-test('personal agent uploads can be deleted from UI with owner's Google session', async () => {
+test("personal agent uploads can be deleted from UI with the owner's Google session", async () => {
   const [html, js, upload] = await Promise.all([
     load('public/api-keys.html'),load('public/api-keys.js'),load('api/github-upload.js')
   ]);
