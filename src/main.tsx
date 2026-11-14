@@ -1,6 +1,7 @@
 import { uploadRequest } from "./upload-request";
 import { isSpineProjectFile, isSpineImageFile, normalizeProjectPath, validateProjectSelection, readDroppedProjectEntries, rememberProjectFilePath, projectFilePath } from "./spine-project-import.js";
 import "./styles.css";
+import "./spine-project-import.css";
 import { getPublishProgress, hidePublishProgress, resumePendingJobs, subscribePublishProgress } from "./publish-job";
 import { startParticleField } from "./particles";
 import { mountHomeBanner } from "./home-banner";
