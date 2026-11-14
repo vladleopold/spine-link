@@ -2609,6 +2609,36 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     ? 'noindex,follow'
     : 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1';
   const video = videoMetadataForEntry(origin, entry, entryId, note, canonicalUrl, playerUrl);
+  if (sets.length === 0 && entry?.sourceKind === 'spine-project') {
+    // A .spine editor project cannot run in spine-player. Do not display the
+    // misleading video fallback until the licensed CLI has exported runtime
+    // JSON, atlas and textures. The permanent link is available immediately.
+    const status = String(entry?.conversionStatus || 'pending');
+    const waiting = status === 'pending' || status === 'running';
+    const projectFile = String(entry?.projectFile || 'project.spine');
+    const download = `${origin}/assets/${encodeRepoPath(joinRepoPath(uploadPath, projectFile))}`;
+    const message = waiting
+      ? 'Project uploaded. Waiting for Spine Editor 4.3.26 export.'
+      : status === 'ready'
+        ? 'Spine export is marked ready, but its runtime assets were not found.'
+        : 'Automatic Spine Editor export is not configured or failed. The source project and images have been preserved.';
+    const title = escapeHtml(cleanPublicText(entry?.title || entryId || 'Spine project'));
+    return {
+      html: `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title} | Spine-Link</title>
+<meta name="robots" content="noindex,follow">
+${waiting ? '<meta http-equiv="refresh" content="15">' : ''}
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08131d;color:#ecffff;font:16px/1.5 system-ui}main{max-width:570px;padding:32px;border:1px solid #41646b;border-radius:18px;background:#0b202d}a{color:#76e9d4}small{color:#a0b9c0}h1{font-size:25px}</style>
+</head><body><main><p><a href="/">Spine-Link</a></p><h1>${title}</h1>
+<p>${escapeHtml(message)}</p>
+<p><small>Source: ${escapeHtml(projectFile)} + images/</small></p>
+<p><a href="${escapeHtml(download)}">Download original .spine</a></p>
+${waiting ? '<small>This page will refresh when the editor export finishes.</small>' : '<small>Only licensed Spine Editor can export a project to playable JSON/SKEL and atlas.</small>'}
+</main></body></html>`,
+      robots: 'noindex,follow',
+    };
+  }
   if (sets.length === 0) {
     return {
       html: createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo: video, robots, playerUrl, archiveUrl }),
