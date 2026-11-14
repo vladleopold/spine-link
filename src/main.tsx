@@ -1,4 +1,5 @@
 import { uploadRequest } from "./upload-request";
+import { isSpineProjectFile, isSpineImageFile, normalizeProjectPath, validateProjectSelection, readDroppedProjectEntries, rememberProjectFilePath, projectFilePath } from "./spine-project-import.js";
 import "./styles.css";
 import { getPublishProgress, hidePublishProgress, resumePendingJobs, subscribePublishProgress } from "./publish-job";
 import { startParticleField } from "./particles";
@@ -187,6 +188,13 @@ function renderHomeShell(isDragging = false) {
                <strong>Drag'and'Drop files here</strong>
                <span>JSON or SKEL, atlas, and textures become a Spine preview.</span>
              </label>
+             <div class="project-import-controls" aria-label="Spine project import">
+               <input type="file" id="spine-project-picker" accept=".spine" hidden>
+               <input type="file" id="spine-images-picker" webkitdirectory directory multiple hidden>
+               <button type="button" data-pick-spine-project>Project .spine</button>
+               <button type="button" data-pick-spine-images>Images folder</button>
+               <span id="spine-project-status" role="status">Choose a project and images/</span>
+             </div>
              <p class="home-drop-caption" style="font-size: 8px; line-height: 1.2">
                <strong>Upload agreement:</strong> by adding files here, you agree to the{" "}
                <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public works and uploaded animation
@@ -305,6 +313,57 @@ function wirePublishProgressMirror() {
   new MutationObserver(sync).observe(document.documentElement, { childList: true, subtree: true });
 }
 
+let pendingProjectFile: File | null = null;
+let pendingProjectImages: File[] = [];
+
+function projectSelectionStatus(message: string) {
+  const status = root?.querySelector<HTMLElement>("#spine-project-status");
+  if (status) status.textContent = message;
+}
+
+function addProjectSelection(files: File[]) {
+  const projects = files.filter(isSpineProjectFile);
+  const images = files.filter(isSpineImageFile);
+  if (projects.length > 1) {
+    projectSelectionStatus("Choose just one .spine project");
+    return;
+  }
+  if (projects.length) pendingProjectFile = projects[0];
+  if (images.length) pendingProjectImages = images;
+  if (!pendingProjectFile || !pendingProjectImages.length) {
+    projectSelectionStatus(pendingProjectFile ? "Now choose images folder" : "Now choose .spine project");
+    return;
+  }
+  try {
+    const selected = validateProjectSelection([pendingProjectFile, ...pendingProjectImages]);
+    pendingProjectFile = null;
+    pendingProjectImages = [];
+    projectSelectionStatus("Uploading Spine project and images...");
+    startBackgroundUpload(selected);
+  } catch (error) {
+    projectSelectionStatus(error instanceof Error ? error.message : "Invalid images folder");
+  }
+}
+
+function acceptHomeDroppedFiles(files: File[], items?: DataTransferItemList | null) {
+  // Capture directory entries before leaving the drop handler: the browser
+  // invalidates DataTransferItemList after the current event finishes.
+  const entries = Array.from(items || [])
+    .map(item => (item as DataTransferItem & { webkitGetAsEntry?: () => unknown }).webkitGetAsEntry?.())
+    .filter(Boolean) as Array<{ isDirectory?: boolean }>;
+  if (entries.some(entry => entry.isDirectory)) {
+    void readDroppedProjectEntries(entries).then(addProjectSelection)
+      .catch(error => projectSelectionStatus(String(error)));
+    return;
+  }
+  if (files.some(isSpineProjectFile) || (pendingProjectFile && files.some(isSpineImageFile)) ||
+      (pendingProjectImages.length && files.some(isSpineProjectFile))) {
+    addProjectSelection(files);
+  } else if (files.length) {
+    startBackgroundUpload(files);
+  }
+}
+
 function wireHomeShell() {
   if (!root) return;
 
@@ -343,8 +402,9 @@ function wireHomeShell() {
       event.preventDefault();
       event.stopPropagation();
       const files = Array.from(event.dataTransfer?.files ?? []);
+      const items = event.dataTransfer?.items ?? null;
       renderHomeShell(false);
-      if (files.length) startBackgroundUpload(files);
+      acceptHomeDroppedFiles(files, items);
     };
     homeZone.addEventListener("dragover", zoneDragOver, true);
     homeZone.addEventListener("drop", zoneDrop, true);
@@ -357,12 +417,26 @@ function wireHomeShell() {
     window.setTimeout(() => {
       input.value = "";
     }, 0);
-    if (files.length) startBackgroundUpload(files);
+    if (files.length) acceptHomeDroppedFiles(files);
   };
   bootFileInput?.addEventListener("click", () => {
     bootFileInput.value = "";
   });
   bootFileInput?.addEventListener("change", handleBootFileInput);
+  const projectPicker = root.querySelector<HTMLInputElement>("#spine-project-picker");
+  const imagesPicker = root.querySelector<HTMLInputElement>("#spine-images-picker");
+  root.querySelector("[data-pick-spine-project]")?.addEventListener("click", () => projectPicker?.click());
+  root.querySelector("[data-pick-spine-images]")?.addEventListener("click", () => imagesPicker?.click());
+  projectPicker?.addEventListener("change", () => {
+    const files = Array.from(projectPicker.files || []);
+    if (files.length) addProjectSelection(files);
+    projectPicker.value = "";
+  });
+  imagesPicker?.addEventListener("change", () => {
+    const files = Array.from(imagesPicker.files || []);
+    if (files.length) addProjectSelection(files);
+    imagesPicker.value = "";
+  });
 
   void loadHomeFeed();
 
@@ -1426,7 +1500,7 @@ document.addEventListener("drop", (event) => {
   if (isAppMounted && mountedFileReceiver) {
     mountedFileReceiver(files);
   } else {
-    startBackgroundUpload(files);
+    acceptHomeDroppedFiles(files, event.dataTransfer?.items);
   }
 });
 
