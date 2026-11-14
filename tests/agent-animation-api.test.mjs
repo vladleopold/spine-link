@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import handler from '../lib/agent-animation.js';
+import siteUploadHandler from '../api/github-upload.js';
 
 const API_KEY = 'test-agent-key-that-is-at-least-32-bytes-long';
 const oldFetch = globalThis.fetch;
@@ -199,6 +200,24 @@ test('support multipart staged bytes and reject compromised receipts and travers
   });
   assert.equal(completed.code, 201, JSON.stringify(completed));
   assert.deepEqual(completed.animations, ['walk', 'idle']);
+});
+
+test('Vercel rewrite marker routes GET status through the existing upload function', async () => {
+  mockGithub();
+  const job = await create();
+  const response = {
+    code: 200,
+    setHeader() { return this; },
+    status(value) { this.code = value; return this; },
+    json(value) { this.body = value; return this; },
+  };
+  await siteUploadHandler({
+    method: 'GET',
+    query: { __spine_link_agent_v1: '1', jobToken: job.jobToken },
+    headers: { authorization: 'Bearer ' + API_KEY },
+  }, response);
+  assert.equal(response.code, 200);
+  assert.equal(response.body.state, 'awaiting_upload');
 });
 
 test('reject incompatible runtime Spine version', async () => {
