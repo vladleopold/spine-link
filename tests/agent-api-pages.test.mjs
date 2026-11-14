@@ -62,4 +62,6 @@ test('personal API work uses verified owner identity, no public Google email', a
   assert(agent.includes('ownerAccountId: auth.ownerId'));
   assert(agent.includes('showOwnerLibrary: false'));
   assert(upload.includes('if (entry?.ownerAccountId) return agentOwnerMatches(entry, googlePayload)'));
+  assert(upload.includes('delete next.ownerAccountId'));
+  assert(upload.includes('if (entry?.ownerAccountId) {'));
 });

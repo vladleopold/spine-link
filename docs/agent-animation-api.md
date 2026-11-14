@@ -183,3 +183,5 @@ Revoked keys cannot create, stage, complete, or inspect projects. A personal key
 ### Personal data protection in public animation indexes
 
 Animation assets and collection indexes live in the PUBLIC storage repository. An unlisted work is NOT access-restricted. New personal-key uploads do not store the account's email or an enumerable email SHA-256. The index holds only a keyed Google-account pseudonym (`ownerAccountId`); the separate private key store holds encrypted verified email. Owner editing requires the matching validated Google `sub`, not a self-declared email or anonymous account. Agent publication does not force public library visibility on.
+
+Google OAuth verification now requires the credential to be issued to the configured application (`aud` or `azp`) and the userinfo `sub` to agree with token introspection. Public library API responses omit internal owner IDs. Updating a personal agent owner's profile cannot write a Google email to the public work index.

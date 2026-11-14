@@ -464,9 +464,13 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
   }
 }
 
-function publicLibraryEntry(origin, entry) {
+export function publicLibraryEntry(origin, entry) {
   if (!entry || typeof entry !== 'object') return entry;
   const next = { ...entry };
+  // Raw account identifiers never belong in public or owner library API
+  // responses. Authorization is computed against the original index record.
+  delete next.ownerAccountId;
+  delete next.apiKeyId;
   const version = assetVersionForEntry(entry);
   next.thumbnail = appendAssetVersion(safeHttpAsset(next.thumbnail), version);
   next.thumbnailPoster =
@@ -542,7 +546,7 @@ function unauthorized(message, statusCode = 401) {
   return error;
 }
 
-async function verifyGoogleToken(request, body) {
+export async function verifyGoogleToken(request, body) {
   const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
   const authHeader = request.headers.authorization || request.headers.Authorization || '';
   const bearerToken = String(authHeader).match(/^Bearer\s+(.+)$/i)?.[1] || '';
@@ -562,7 +566,10 @@ async function verifyGoogleToken(request, body) {
 
   const accessTokenResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(googleToken)}`);
   const accessPayload = await accessTokenResponse.json().catch(() => ({}));
-  if (accessTokenResponse.ok && accessPayload.aud && accessPayload.aud !== clientId) {
+  // Do not silently accept an arbitrary Google access token just because
+  // userinfo returns a verified email. It must have been issued to this app.
+  if (!accessTokenResponse.ok ||
+      (accessPayload.aud !== clientId && accessPayload.azp !== clientId)) {
     throw unauthorized('Google token audience does not match this app');
   }
 
@@ -576,7 +583,9 @@ async function verifyGoogleToken(request, body) {
   }
 
   if (userPayload.email_verified !== true && userPayload.email_verified !== 'true') throw unauthorized('Google email is not verified');
-
+  if (!userPayload.sub || (accessPayload.sub && String(accessPayload.sub) !== String(userPayload.sub))) {
+    throw unauthorized('Google token subject does not match user profile');
+  }
   return userPayload;
 }
 
@@ -2096,7 +2105,14 @@ export default async function handler(request, response) {
           const nextEntries = collection.entries.map(entry => {
             if (!canEditEntry(entry, googlePayload, anonymousAccount)) return entry;
             const next = { ...entry, publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry.publicOwnerId) };
-            if (googlePayload?.email) next.ownerEmail = googlePayload.email;
+            if (entry?.ownerAccountId) {
+              // A profile edit must not reintroduce plaintext Google email into
+              // a public agent-upload index, even for legacy agent entries.
+              delete next.ownerEmail;
+              delete next.ownerEmailSha256;
+            } else if (googlePayload?.email) {
+              next.ownerEmail = googlePayload.email;
+            }
             if (ownerName) next.ownerName = ownerName;
             if (ownerPicture) next.ownerPicture = ownerPicture;
             if (action === 'update-profile-visibility') next.showOwnerLibrary = Boolean(body.showOwnerLibrary);

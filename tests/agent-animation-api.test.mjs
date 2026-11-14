@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import handler from '../lib/agent-animation.js';
-import siteUploadHandler, { canEditEntry } from '../api/github-upload.js';
+import siteUploadHandler, { canEditEntry, publicLibraryEntry } from '../api/github-upload.js';
 
 const API_KEY = 'test-agent-key-that-is-at-least-32-bytes-long';
 const oldFetch = globalThis.fetch;
@@ -448,6 +448,9 @@ test('personal API key publishes into verified owner library; another key cannot
   assert.match(entry.publicOwnerId,/^u_/);
   assert.match(entry.ownerAccountId,/^[a-f0-9]{64}$/);
   assert.equal(entry.hiddenFromPublicLibrary,true);
+  const serialized = JSON.stringify(publicLibraryEntry('https://spine-link.vercel.app',entry));
+  assert(!serialized.includes('ownerAccountId'),'no internal owner ID in public library API responses');
+  assert(!serialized.includes('apiKeyId'),'no API key metadata in public library API responses');
   const projects = await request('POST',{action:'keys-projects'}, {}, 'google-user-one');
   assert.equal(projects.code,200,JSON.stringify(projects));
   assert.equal(projects.projects.length,1);
