@@ -1,0 +1,35 @@
+.project-import-controls {
+  pointer-events: auto;
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  width: min(760px, calc(100% - 32px));
+  padding: 7px 4px;
+  font: 500 12px/1.4 system-ui, sans-serif;
+}
+.project-import-controls button {
+  cursor: pointer;
+  background: rgba(10, 31, 43, .92);
+  color: #d7f5f6;
+  border: 1px solid rgba(140, 199, 255, .66);
+  border-radius: 7px;
+  min-height: 36px;
+  padding: 7px 12px;
+  font: inherit;
+  white-space: nowrap;
+}
+.project-import-controls button:hover,
+.project-import-controls button:focus-visible {
+  border-color: #7fe5d4;
+  background: #183d4c;
+}
+#spine-project-status { color: #a1c6c9; overflow-wrap: anywhere; }
+@media(max-width: 520px) {
+  .project-import-controls { gap: 7px; width: calc(100% - 18px); }
+  .project-import-controls button { flex: 1 1 40%; font-size: 11px; }
+  #spine-project-status { flex: 1 1 100%; text-align: center; }
+}
