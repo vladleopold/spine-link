@@ -31,6 +31,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Test preview lookup and cache freshness
+        run: node --test tests/preview-cache.test.mjs tests/preview-metadata.test.mjs
+
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
