@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#08131d">
+<meta name="description" content="Spine-Link Animation Agent API v1.2. Publish Spine JSON, SKEL, atlas, textures or original .spine projects from your agent.">
+<title>Animation API | Spine-Link</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#08131d;color:#d9e8ef}
+*{box-sizing:border-box}body{margin:0;min-height:100dvh;line-height:1.55}
+header,main,footer{max-width:920px;margin:auto;padding:20px 22px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #263c47}
+nav{display:flex;gap:16px;flex-wrap:wrap}
+a{color:#74e3d0;text-decoration:none}a:hover{text-decoration:underline}
+.brand{color:#fff;font-weight:750;letter-spacing:-.04em;font-size:1.25rem}
+h1{font-size:clamp(2rem,6vw,3.2rem);letter-spacing:-.06em;margin:38px 0 8px;line-height:1.1}
+h2{font-size:1.25rem;margin-top:38px;color:#f2f7fb}
+p,li{color:#b5c9d2}
+small{color:#8ba4ae}
+code,pre{font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+pre{background:#0b202e;border:1px solid #24424a;border-radius:12px;padding:16px;overflow:auto;color:#ccf0f1}
+code{color:#b6e4d9}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:26px}
+.panel{background:#0b1d29;border:1px solid #23404a;padding:20px;border-radius:14px}
+.panel h2{margin:0 0 8px;font-size:1rem}.panel p{margin:0}
+.status{display:inline-block;margin:12px 0;padding:6px 10px;border-radius:6px;background:#16333b;color:#bbe1dc;font-size:12px}
+.button-link{display:inline-block;border:1px solid #4c9994;border-radius:9px;padding:10px 16px;margin:8px 10px 6px 0}
+footer{border-top:1px solid #263c47;margin-top:50px;font-size:12px;color:#829ba6}
+@media(max-width:600px){header{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr}main{padding:12px 18px}h1{margin-top:26px}}
+</style>
+</head>
+<body>
+<header><a class="brand" href="/">spine link</a><nav aria-label="Site navigation"><a href="/">Home</a><a href="/sdk.html">SDK</a><a href="/world-spine-archive">Browse</a></nav></header>
+<main>
+<h1>Animation Agent API</h1>
+<p>Connect an external animation agent to Spine-Link. Upload the files your agent produces, publish a playable page, and receive a permanent link.</p>
+<span class="status">REST API v1.2 · Server to server · Spine 4.3</span>
+<div><a class="button-link" href="/sdk.html">View SDK</a><a class="button-link" href="/agent-animation-openapi.json">OpenAPI JSON</a><a class="button-link" href="https://github.com/vladleopold/spine-link/blob/main/docs/agent-animation-api.md">Full reference</a></div>
+<section class="grid">
+<div class="panel"><h2>Runtime export</h2><p>Upload Spine JSON or SKEL, atlas, and PNG textures. Get a playable page immediately after publication.</p></div>
+<div class="panel"><h2>Editor project</h2><p>Upload original .spine and images/. Spine-Link queues a licensed editor conversion and reports progress.</p></div>
+</section>
+<h2>Endpoint</h2>
+<pre><code>POST https://spine-link.vercel.app/api/agent-animation
+Authorization: Bearer &lt;SERVER_API_KEY&gt;
+Content-Type: application/json</code></pre>
+<h2>Four actions</h2>
+<p>All operations use the same endpoint. A separate secret key is required on the server; never embed it into browser JavaScript.</p>
+<pre><code>// 1. Create a publishing job
+{"action":"create","title":"Robot walk","format":"runtime"}
+
+// 2. Stage each file, or batch up to eight small files
+{"action":"stage-batch","jobToken":"...","files":[
+  {"name":"robot.json","contentBase64":"..."},
+  {"name":"robot.atlas","contentBase64":"..."},
+  {"name":"robot.png","contentBase64":"..."}
+]}
+
+// 3. Publish using signed receipts from stage responses
+{"action":"complete","jobToken":"...","files":[...],
+  "assemblies":[],"agentName":"2Spine","public":false}
+
+// 4. Check status; no session token in the URL
+{"action":"status","id":"agent-...","collection":"library_02"}</code></pre>
+<h2>Response</h2>
+<pre><code>{
+  "id": "agent-...",
+  "state": "ready",
+  "pageUrl": "https://spine-link.vercel.app/p/agent-...",
+  "animations": ["idle", "walk"]
+}</code></pre>
+<p>Project source files can return <code>processing</code> until the licensed export worker finishes. Animation pages are unlisted by default, but anyone with the direct URL can view them.</p>
+<h2>Authentication and limits</h2>
+<p>Request your API key from the site administrator. The administrator must provision <code>SPINE_LINK_AGENT_API_KEY</code> as a server-side secret. Up to 250 files per job; batches of up to eight small assets; larger files upload in signed chunks. Upload tokens expire in 72 hours, while status-by-ID remains available.</p>
+<p><strong>Integration note:</strong> The endpoint is operational only after the site deployment and its API key configuration are complete. A documentation page does not imply a live authorized publishing service.</p>
+</main>
+<footer>Spine-Link · Animation Agent API · <a href="/sdk.html">SDK</a> · <a href="/">Home</a></footer>
+</body></html>

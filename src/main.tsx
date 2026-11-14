@@ -50,6 +50,8 @@ type HomeFeedItem = {
 };
 
 const siteReadingPages = [
+  { href: "/api-docs.html", title: "API", description: "Connect an animation agent" },
+  { href: "/sdk.html", title: "SDK", description: "Download the server-side integration client" },
   { href: "/spine-link.html", title: "Spine-Link", description: "Platform overview" },
   { href: "/spine-preview.html", title: "Spine Preview", description: "Open JSON, SKEL and atlas files" },
   { href: "/spine-preview-online.html", title: "Preview Online", description: "Browser Spine preview guide" },
@@ -151,6 +153,7 @@ function renderHomeShell(isDragging = false) {
             <img class="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="" aria-hidden="true">
           </a>
           <div class="top-actions-row">
+            <a class="world-archive-link" href="/api-docs.html" aria-label="Animation API documentation">API</a>
             <a class="world-archive-link" href="/world-spine-archive">BROWSE</a>
             <div class="auth-panel">
               <a class="my-library-button" href="/?portfolio=1" data-open-library>${homeUser ? "MY PORTFOLIO" : "Portfolio"}</a>

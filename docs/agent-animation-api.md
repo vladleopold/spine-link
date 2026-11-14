@@ -133,3 +133,26 @@ States: awaiting_upload, processing, ready, failed. webmStatus is separate: the 
 - New agent pages default to **unlisted**: anyone with their direct page URL can still view the work. This is not private storage.
 - An agent API key is a secret and must never be placed in the website frontend.
 - This API does not grant remote code execution or unrestricted repository writes.
+
+## SDK and web documentation
+
+Website guide: https://spine-link.vercel.app/api-docs.html
+
+SDK guide: https://spine-link.vercel.app/sdk.html
+
+Server-side ESM SDK (Node.js 20+, no dependencies): https://spine-link.vercel.app/sdk/spine-link-agent.mjs
+
+Example:
+
+```js
+import { SpineLinkAgent } from './spine-link-agent.mjs';
+const agent = new SpineLinkAgent({ apiKey: process.env.SPINE_LINK_AGENT_API_KEY });
+const published = await agent.publish({title:'Robot walk',format:'runtime',files:[
+  {path:'robot.json',bytes:jsonBytes},
+  {path:'robot.atlas',bytes:atlasBytes},
+  {path:'robot.png',bytes:pngBytes},
+]});
+console.log(published.pageUrl);
+```
+
+The SDK automatically batches small images and uploads large assets in signed parts. It uses POST status polling, keeping the signed upload token out of URL logs. Never embed the secret key in a public website.

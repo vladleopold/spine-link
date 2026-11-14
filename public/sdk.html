@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#08131d">
+<title>Animation SDK | Spine-Link</title>
+<meta name="description" content="Download the zero-dependency Spine-Link Animation Agent SDK for Node.js agents.">
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#08131d;color:#e1ecf2}
+*{box-sizing:border-box}body{margin:0;line-height:1.6}
+header,main,footer{max-width:900px;margin:auto;padding:20px}
+header{display:flex;justify-content:space-between;gap:16px;align-items:center;border-bottom:1px solid #304751}
+.brand{font-size:1.25rem;color:#fff;letter-spacing:-.04em;font-weight:750}
+a{color:#80e9d5;text-decoration:none}a:hover{text-decoration:underline}
+nav{display:flex;gap:14px;flex-wrap:wrap}
+h1{font-size:clamp(2rem,6vw,3rem);letter-spacing:-.055em;line-height:1.2;margin:34px 0 12px}
+h2{margin-top:36px;font-size:1.3rem}p,li{color:#b5ccd5}
+pre{border-radius:13px;border:1px solid #2d5159;background:#0a2230;color:#c6e7e9;padding:18px;overflow:auto;font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}
+code{font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:#c6e7e9}
+.button{display:inline-block;margin:10px 12px 10px 0;padding:11px 17px;border:1px solid #448f88;border-radius:10px}
+footer{margin-top:55px;border-top:1px solid #304751;font-size:12px;color:#97aab0}
+@media(max-width:600px){header{flex-direction:column;align-items:flex-start}}
+</style></head>
+<body>
+<header><a class="brand" href="/">spine link</a><nav><a href="/api-docs.html">API</a><a href="/">Home</a></nav></header>
+<main>
+<h1>Animation Agent SDK</h1>
+<p>Lightweight, dependency-free JavaScript client for Node.js 20+. Use it in an animation agent, a private automation or CI to publish Spine files and receive their page URL.</p>
+<a class="button" href="/sdk/spine-link-agent.mjs" download="spine-link-agent.mjs">Download SDK (.mjs)</a>
+<a class="button" href="/agent-animation-openapi.json">OpenAPI JSON</a>
+<h2>Setup</h2>
+<p>Download the SDK to your backend. Store the separate API key as a secret environment variable, not in the browser.</p>
+<pre><code>export SPINE_LINK_AGENT_API_KEY="your-secret"
+curl -fsSL https://spine-link.vercel.app/sdk/spine-link-agent.mjs \
+  -o spine-link-agent.mjs</code></pre>
+<h2>Publish an animation</h2>
+<pre><code>import { readFile } from 'node:fs/promises';
+import { SpineLinkAgent } from './spine-link-agent.mjs';
+
+const agent = new SpineLinkAgent({
+  apiKey: process.env.SPINE_LINK_AGENT_API_KEY,
+});
+
+const work = await agent.publish({
+  title: 'Character walk',
+  format: 'runtime',
+  agentName: 'Animation Agent',
+  files: [
+    { path: 'actor.json', bytes: await readFile('export/actor.json') },
+    { path: 'actor.atlas', bytes: await readFile('export/actor.atlas') },
+    { path: 'actor.png', bytes: await readFile('export/actor.png') },
+  ],
+});
+
+console.log(work.pageUrl); // Permanent Spine-Link page</code></pre>
+<h2>Send a .spine project</h2>
+<pre><code>const work = await agent.publish({
+  title: 'New character',
+  format: 'spine-project',
+  files: [
+    { path: 'actor.spine', bytes: await readFile('actor.spine') },
+    { path: 'images/actor.png', bytes: await readFile('images/actor.png') },
+  ],
+});
+const finished = await agent.waitReady(work);
+console.log(finished.pageUrl);</code></pre>
+<h2>Built-in features</h2>
+<p>The SDK handles small-texture batches, large multipart uploads, signed receipts, API errors and status polling. It checks paths before transferring data. It does not run Spine Editor; that conversion runs in the licensed server workflow.</p>
+<p>For an agent with a directory of output files, the repository also includes a <a href="https://github.com/vladleopold/spine-link/blob/main/scripts/spine-link-agent-publish.mjs">command-line publishing example</a>.</p>
+<p><strong>Security:</strong> the SDK is for trusted server-side use only. A published, unlisted page is accessible to anyone with the direct link.</p>
+</main><footer>Spine-Link · <a href="/api-docs.html">API documentation</a></footer>
+</body></html>
