@@ -1,0 +1,70 @@
+name: Spine project chooser Chromium end-to-end
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/spine-project-browser-e2e.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  project-folder-ui:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Use real file picker and folder picker, open uploaded page, remove test
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          import {chromium} from 'playwright';
+          fs.mkdirSync('/tmp/spine-project-e2e/images',{recursive:true});
+          fs.copyFileSync('test/anim1/fool_demo_fx.png','/tmp/spine-project-e2e/images/texture.png');
+          const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader']});
+          const site='https://spine-link.vercel.app';
+          let id='', account=null, checked=false;
+          const start=Date.now();
+          try{
+            const page=await browser.newPage({viewport:{width:1200,height:820}});
+            const pageErrors=[];
+            page.on('pageerror',error=>pageErrors.push(String(error)));
+            await page.goto(site+'/',{waitUntil:'domcontentloaded',timeout:60000});
+            await page.locator('[data-pick-spine-project]').waitFor();
+            assert.equal(await page.locator('[data-pick-spine-images]').count(),1);
+            assert.notEqual(await page.locator('#spine-images-picker').getAttribute('webkitdirectory'),null);
+            await page.locator('#spine-project-picker').setInputFiles('test/anim4/spine.spine');
+            await page.getByText('Now choose images folder').waitFor({timeout:10000});
+            await page.locator('#spine-images-picker').setInputFiles('/tmp/spine-project-e2e/images');
+            await page.waitForURL(/\/p\/[^/]+/,{timeout:110000});
+            id=new URL(page.url()).pathname.split('/').at(-1);
+            account=JSON.parse(await page.evaluate(()=>localStorage.getItem('spine-link-anonymous-account')||'null'));
+            assert.ok(id.startsWith('spine-'));
+            assert.ok(account?.id);
+            const body=await page.locator('body').innerText();
+            assert.ok(body.includes('Spine Editor 4.3.26 export')||body.includes('licensed Spine Editor'),body.slice(0,260));
+            assert.equal(body.includes('Preview not found'),false);
+            assert.deepEqual(pageErrors,[]);
+            console.log('PASS browser selected actual .spine project and images directory; page rendered');
+            console.log('Browser start-to-page: '+((Date.now()-start)/1000).toFixed(2)+'s');
+            checked=true;
+          }finally{
+            await browser.close();
+            if(id&&account){
+              const body={action:'delete-entry',entryId:id,anonymousAccount:account,
+                settings:{owner:'vladleopold',repo:'spine',branch:'main',basePath:''}};
+              const res=await fetch(site+'/api/github-upload',{
+                method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify(body),signal:AbortSignal.timeout(90000)});
+              const response=await res.json().catch(()=>({}));
+              if(!res.ok||response.deleted!==id){
+                console.error('WARNING: failed to delete test project',res.status,response.error);
+              }else console.log('PASS browser test project and images removed from server');
+            }
+          }
+          assert.equal(checked,true);
+          NODE
