@@ -65,3 +65,16 @@ test('personal API work uses verified owner identity, no public Google email', a
   assert(upload.includes('delete next.ownerAccountId'));
   assert(upload.includes('if (entry?.ownerAccountId) {'));
 });
+
+test('personal agent uploads can be deleted from UI with owner's Google session', async () => {
+  const [html, js, upload] = await Promise.all([
+    load('public/api-keys.html'),load('public/api-keys.js'),load('api/github-upload.js')
+  ]);
+  assert(html.includes('permanently delete it and its files'));
+  assert(js.includes("fetch('/api/github-upload'"));
+  assert(js.includes("action: 'delete-entry'"));
+  assert(js.includes("collectionBasePath: project.collection"));
+  assert(upload.includes("if (!canEditEntry(entry, googlePayload, anonymousAccount))"));
+  assert(upload.includes("deleteTrees: directory ? [previewPath] : []"));
+  assert(js.includes("window.addEventListener('storage'"));
+});

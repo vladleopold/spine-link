@@ -89,6 +89,7 @@ function renderProjects(projects) {
       Number.isFinite(Date.parse(project.createdAt))
         ? new Date(project.createdAt).toLocaleDateString() : '—', 'muted');
     const destination = document.createElement('td');
+    destination.className = 'controls';
     const link = element('a', 'Open');
     // URLs are constructed by the server from random IDs, not arbitrary data.
     if (/^https:\/\/spine-link\.vercel\.app\/p\/agent-[a-f0-9]{32}$/.test(project.pageUrl)) {
@@ -96,6 +97,46 @@ function renderProjects(projects) {
       link.rel = 'noopener noreferrer';
       link.target = '_blank';
       destination.append(link);
+    }
+    // Existing authenticated upload endpoint deletes the index card and its
+    // asset tree in one Git commit. Never trust a browser-supplied repo path:
+    // it derives the target from an owner-authorized library index.
+    if (/^agent-[a-f0-9]{32}$/.test(project.id) &&
+        /^library_\d{2,4}$/.test(project.collection)) {
+      const remove = element('button', 'Delete', 'danger');
+      remove.type = 'button';
+      remove.setAttribute('aria-label', 'Delete ' + project.title);
+      remove.addEventListener('click', async () => {
+        if (!window.confirm('Permanently delete "' + project.title +
+            '" from your library AND server? This cannot be undone.')) return;
+        remove.disabled = true;
+        try {
+          const response = await fetch('/api/github-upload', {
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + googleToken,
+              'Content-Type': 'application/json',
+            },
+            cache: 'no-store',
+            body: JSON.stringify({
+              action: 'delete-entry', entryId: project.id,
+              collectionBasePath: project.collection,
+            }),
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || result.ok !== true || result.deleted !== project.id) {
+            throw new Error(result.error || ('Delete failed: HTTP ' + response.status));
+          }
+          await refreshProjects();
+          notice(result.filesDeleted === true
+            ? 'Project and server files permanently deleted.'
+            : 'Project removed from library. Its asset folder was already absent.');
+        } catch (error) {
+          remove.disabled = false;
+          notice(error.message || 'Could not delete this project.', true);
+        }
+      });
+      destination.append(remove);
     }
     row.append(name, status, created, destination);
     projectsList.append(row);
@@ -184,6 +225,20 @@ $('#create-key').addEventListener('submit', async event => {
   }
 });
 window.addEventListener('pagehide', clearNewKey);
+// If the user signs out or switches Google accounts in a different tab,
+// do not leave a previously revealed personal key visible on screen.
+window.addEventListener('storage', event => {
+  if (event.key !== 'spine-link-google-session') return;
+  const next = sessionToken();
+  if (next === googleToken) return;
+  clearNewKey();
+  googleToken = '';
+  manager.hidden = true;
+  signIn.hidden = false;
+  list.replaceChildren();
+  projectsList.replaceChildren();
+  notice('Google session changed. Sign in to view your personal API keys.');
+});
 googleToken = sessionToken();
 if (googleToken) {
   manager.hidden = false;

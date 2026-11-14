@@ -18,16 +18,36 @@ async function session(context) {
   });
 }
 async function mockApi(page, calls) {
+  let projectDeleted = false;
+  await page.route('**/api/github-upload', async route => {
+    const request=route.request();
+    const body=request.postDataJSON() || {};
+    calls.push({action:body.action, auth:request.headers().authorization||'',
+      entryId:body.entryId, collectionBasePath:body.collectionBasePath});
+    const valid=request.headers().authorization ===
+      'Bearer browser-test-google-access-token' &&
+      body.action==='delete-entry' &&
+      body.entryId==='agent-'+'a'.repeat(32) &&
+      body.collectionBasePath==='library_02';
+    if(valid)projectDeleted=true;
+    await route.fulfill({
+      status:valid?200:403,
+      contentType:'application/json',
+      body:JSON.stringify(valid?
+        {ok:true, deleted:body.entryId,filesDeleted:true}:
+        {ok:false,error:'Not the authorized project owner'}),
+    });
+  });
   await page.route('**/api/agent-animation', async route => {
     const request=route.request();
     const body=request.postDataJSON() || {};
     calls.push({action:body.action,auth:request.headers().authorization||''});
     const authorized=request.headers().authorization?.includes('browser-test-google-access-token');
     const payload=body.action==='keys-list' ? {ok:true,keys:[]} :
-      body.action==='keys-projects' ? {ok:true,projects:[{
+      body.action==='keys-projects' ? {ok:true,projects:projectDeleted?[]:[{
         id:'agent-'+'a'.repeat(32),title:'Automated hero',
         pageUrl:'https://spine-link.vercel.app/p/agent-'+'a'.repeat(32),
-        state:'processing',createdAt:'2026-11-14T12:00:00Z',
+        state:'processing',collection:'library_02',createdAt:'2026-11-14T12:00:00Z',
       }]} :
       body.action==='keys-create' ? {ok:true,key:testKey,record:{id:'0123456789abcdef',name:body.name}} :
       body.action==='ping' ? {ok:true,authenticated:true,keyType:'personal',scope:'publish'} :
@@ -74,6 +94,20 @@ async function desktopAndMobile(browser,width,height) {
   await page.locator('#test-key').click();
   await page.waitForFunction(()=>document.querySelector('#status')?.textContent?.includes('Personal API key is valid'));
   assert(calls.some(c=>c.action==='ping'&&c.auth==='Bearer '+testKey));
+  // Deletion goes through the existing authenticated API, not the agent API.
+  // Test that both storage folder and collection ID are derived correctly.
+  page.once('dialog', async dialog => {
+    assert.match(dialog.message(),/AND server/);
+    await dialog.accept();
+  });
+  await page.getByRole('button',{name:'Delete Automated hero'}).click();
+  await page.waitForFunction(()=>document.querySelector('#no-projects')?.hidden===false);
+  assert.equal(await page.locator('#project-list tr').count(),0);
+  const deleteCall=calls.find(c=>c.action==='delete-entry');
+  assert.equal(deleteCall.entryId,'agent-'+'a'.repeat(32));
+  assert.equal(deleteCall.collectionBasePath,'library_02');
+  assert.equal(deleteCall.auth,'Bearer browser-test-google-access-token');
+  assert.match(await page.locator('#status').innerText(),/Project and server files permanently deleted/);
   await page.locator('#hide-key').click();
   assert.equal(await page.locator('#key-value').inputValue(),'');
   assert.equal(await page.locator('#new-key').isVisible(),false);
