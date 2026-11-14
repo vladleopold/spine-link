@@ -661,8 +661,8 @@ async function libraryCollectionPaths(settings) {
 }
 
 
-async function githubText(settings, path) {
-  return cachedGithubText(settings, path);
+async function githubText(settings, path, options = {}) {
+  return cachedGithubText(settings, path, options);
 }
 
 async function githubFileContent(settings, path) {
@@ -2619,7 +2619,7 @@ async function resolveEntryRecord(settings, entryId) {
   if (!id) return '';
   const basePaths = await libraryCollectionPaths(settings);
   for (const basePath of basePaths) {
-    const indexText = await githubText(settings, `${basePath}/index.json`);
+    const indexText = await githubText(settings, `${basePath}/index.json`, { ttlMs: 0 });
     if (!indexText) continue;
     let entries = [];
     try {
