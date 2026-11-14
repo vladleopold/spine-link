@@ -858,7 +858,12 @@ function updateBackgroundUpload(id: string, updates: Partial<BackgroundUploadEnt
   saveBackgroundUploads(uploads);
 }
 
-const KEEPALIVE_MAX_BYTES = 60000;
+// Keep ordinary uploads in one request when their Base64 envelope stays small.
+// Large files are read and sent in 2.1 MB binary slices (2.8 MB Base64), not
+// hundreds of 60 KB requests.
+const KEEPALIVE_MAX_BYTES = 1_500_000;
+const UPLOAD_CHUNK_BASE64_SIZE = 2_800_000;
+const UPLOAD_CHUNK_BYTES = (UPLOAD_CHUNK_BASE64_SIZE / 4) * 3;
 
 // Vercel refuses to run overlapping invocations of the upload function and
 // answers with a non-JSON "FUNCTION_INVOCATION_FAILED" 500, which loses the
@@ -875,13 +880,12 @@ function withUploadSlot<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
-function fileToBase64(file: File): Promise<string> {
+function fileToBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       // readAsDataURL returns "data:<mime>;base64,<payload>". Storage chunks
-      // must contain only RFC 4648 Base64 characters; including the data-URL
-      // prefix made the first chunk fail with GitHub 422 and broke binary files.
+      // must contain only RFC 4648 Base64 characters.
       const dataUrl = String(reader.result || "");
       resolve(dataUrl.slice(dataUrl.indexOf(",") + 1));
     };
@@ -894,8 +898,8 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>, o
   const file = data.file as File | undefined;
   if (!file) return { ok: false, status: 0 };
 
-  const base64 = await fileToBase64(file);
   const fileSize = file.size;
+  const base64 = fileSize <= KEEPALIVE_MAX_BYTES ? await fileToBase64(file) : "";
 
   if (fileSize <= KEEPALIVE_MAX_BYTES) {
     const body = JSON.stringify({
@@ -915,8 +919,7 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>, o
     }
   }
 
-  const chunkBase64 = base64;
-  const CHUNK_SIZE = KEEPALIVE_MAX_BYTES;
+  const CHUNK_SIZE = UPLOAD_CHUNK_BASE64_SIZE;
   // GitHub rate limits and transient 5xx responses are shared by every
   // anonymous upload, so replay a failed chunk instead of aborting the file.
   const CHUNK_ATTEMPTS = 8;
@@ -933,13 +936,17 @@ async function uploadFileKeepAlive(url: string, data: Record<string, unknown>, o
     if (asked > 0) return Math.min(asked, 60_000);
     return Math.min(400 * 2 ** attempt + Math.floor(Math.random() * 250), 10_000);
   };
-  const totalChunks = Math.ceil(base64.length / CHUNK_SIZE);
+  // A binary chunk size divisible by three keeps Base64 padding only on the
+  // final chunk, so concatenating the stored chunks recreates the exact file.
+  const totalChunks = Math.ceil(fileSize / UPLOAD_CHUNK_BYTES);
   const uploadId = String(data.uploadId || "");
   let chunkIndex = 0;
 
   const sendChunk = async (): Promise<{ ok: boolean; status: number; data?: unknown }> => {
     if (chunkIndex >= totalChunks) return { ok: true, status: 200 };
-    const chunk = chunkBase64.slice(chunkIndex * CHUNK_SIZE, (chunkIndex + 1) * CHUNK_SIZE);
+    const start = chunkIndex * UPLOAD_CHUNK_BYTES;
+    const end = Math.min(fileSize, start + UPLOAD_CHUNK_BYTES);
+    const chunk = await fileToBase64(file.slice(start, end));
     chunkIndex++;
     const chunkBody = JSON.stringify({
       action: "background-upload-chunk",
