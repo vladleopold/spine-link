@@ -159,9 +159,10 @@ $('#refresh-projects').addEventListener('click', async event => {
   }
 });
 async function refresh() {
+  // Key management must remain usable if GitHub collection discovery is slow
+  // or an old project's index is temporarily unavailable.
   const result = await api('keys-list');
   printKeyList(Array.isArray(result.keys) ? result.keys : []);
-  await refreshProjects();
 }
 function clearNewKey() {
   secretValue.value = '';
@@ -242,13 +243,24 @@ window.addEventListener('storage', event => {
 googleToken = sessionToken();
 if (googleToken) {
   manager.hidden = false;
-  refresh().then(() => notice('Your API keys are ready.')).catch(e => {
-    if (/Google|session|401/i.test(e.message || '')) {
-      manager.hidden = true;
-      signIn.hidden = false;
-      googleToken = '';
+  // The two data sources are independent: a slow/failed project scan must
+  // never prevent the user from viewing, creating or revoking their keys.
+  Promise.allSettled([refresh(), refreshProjects()]).then(([keys, projects]) => {
+    if (!googleToken) return; // Google session changed during loading
+    if (keys.status === 'rejected') {
+      const error = keys.reason;
+      if (/Google|session|401/i.test(error.message || '')) {
+        manager.hidden = true;
+        signIn.hidden = false;
+        googleToken = '';
+        clearNewKey();
+      }
+      notice(error.message || 'Could not load API keys.', true);
+    } else if (projects.status === 'rejected') {
+      notice('Keys are available, but server projects could not be loaded. Use Refresh to retry.', true);
+    } else {
+      notice('Your API keys and server projects are ready.');
     }
-    notice(e.message || 'Could not load API keys.', true);
   });
 } else {
   signIn.hidden = false;

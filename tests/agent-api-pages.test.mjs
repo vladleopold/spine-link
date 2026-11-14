@@ -78,3 +78,15 @@ test("personal agent uploads can be deleted from UI with the owner's Google sess
   assert(upload.includes("deleteTrees: directory ? [previewPath] : []"));
   assert(js.includes("window.addEventListener('storage'"));
 });
+
+test('API keys list and write operations are independent of slow project scanning', async()=>{
+  const js=await load('public/api-keys.js');
+  const position=js.indexOf('async function refresh()');
+  assert(position>=0);
+  const end=js.indexOf('function clearNewKey()',position);
+  const refresh=js.slice(position,end);
+  assert(refresh.includes("api('keys-list')"));
+  assert(!refresh.includes('refreshProjects()'),'key management must not await heavy project scan');
+  assert(js.includes('Promise.allSettled([refresh(), refreshProjects()])'));
+  assert(js.includes('Keys are available, but server projects could not be loaded.'));
+});
