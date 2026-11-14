@@ -50,3 +50,21 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
+
+      - name: Smoke test new Spine preview and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          preview_url="https://spine-link.vercel.app/p/symbols-2026-11-14T09-03-37-245Z"
+          for attempt in $(seq 1 8); do
+            status=$(curl -sSL --max-time 25 -o /tmp/spine-preview-smoke.html -w '%{http_code}' "$preview_url" || true)
+            if [ "$status" = 200 ] && grep -q 'spine-preview-config' /tmp/spine-preview-smoke.html && grep -q 'symbols.json' /tmp/spine-preview-smoke.html && grep -q 'symbols.atlas.txt' /tmp/spine-preview-smoke.html; then
+              echo "Preview page renders Spine skeleton and atlas: HTTP 200"
+              exit 0
+            fi
+            echo "Preview smoke attempt $attempt failed (HTTP $status); retrying"
+            sleep 5
+          done
+          echo "::error::Freshly uploaded Spine preview is missing or incomplete"
+          sed -n '1,8p' /tmp/spine-preview-smoke.html || true
+          exit 1
