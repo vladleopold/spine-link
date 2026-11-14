@@ -1,0 +1,317 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Spine-Link Animation Agent API",
+    "version": "1.1.0",
+    "description": "Submit generated Spine runtime assets or source .spine projects from an authenticated agent backend. Pages are permanent, temporary job tokens expire after 72h."
+  },
+  "servers": [
+    {
+      "url": "https://spine-link.vercel.app"
+    }
+  ],
+  "paths": {
+    "/api/agent-animation": {
+      "post": {
+        "operationId": "agentAnimationAction",
+        "summary": "Create job, stage asset parts, publish the work or query its status.",
+        "security": [
+          {
+            "AgentKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "format"
+                    ],
+                    "properties": {
+                      "action": {
+                        "const": "create"
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "format": {
+                        "enum": [
+                          "runtime",
+                          "spine-project"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "jobToken",
+                      "name",
+                      "contentBase64"
+                    ],
+                    "properties": {
+                      "action": {
+                        "const": "stage"
+                      },
+                      "jobToken": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "contentBase64": {
+                        "type": "string",
+                        "contentEncoding": "base64"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "action",
+                      "jobToken"
+                    ],
+                    "properties": {
+                      "action": {
+                        "const": "complete"
+                      },
+                      "jobToken": {
+                        "type": "string"
+                      },
+                      "files": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/Receipt"
+                        }
+                      },
+                      "assemblies": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "parts": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/components/schemas/Receipt"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "defaultAnimation": {
+                        "type": "string"
+                      },
+                      "agentName": {
+                        "type": "string"
+                      },
+                      "public": {
+                        "type": "boolean",
+                        "default": false
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "action"
+                    ],
+                    "properties": {
+                      "action": {
+                        "const": "status"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "collection": {
+                        "type": "string"
+                      },
+                      "jobToken": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Job status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatus"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created or published"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Invalid API key or signed job token"
+          },
+          "409": {
+            "description": "Work already published"
+          },
+          "422": {
+            "description": "Invalid Spine export or missing atlas pages"
+          },
+          "503": {
+            "description": "API key or storage is not configured"
+          }
+        }
+      },
+      "get": {
+        "operationId": "getAgentAnimationStatus",
+        "summary": "Read job status using signed token or id plus collection.",
+        "security": [
+          {
+            "AgentKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "jobToken",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Signed temporary session token. Alternative to id and collection."
+          },
+          {
+            "in": "query",
+            "name": "id",
+            "schema": {
+              "type": "string",
+              "pattern": "^agent-[0-9a-f]{32}$"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collection",
+            "schema": {
+              "type": "string",
+              "pattern": "^library_[0-9]{2,4}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed query"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "AgentKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Server-side SPINE_LINK_AGENT_API_KEY; never use in browser."
+      }
+    },
+    "schemas": {
+      "Receipt": {
+        "type": "object",
+        "required": [
+          "name",
+          "path",
+          "sha",
+          "bytes",
+          "sha256",
+          "signature"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "sha": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string"
+          }
+        }
+      },
+      "JobStatus": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "awaiting_upload",
+              "processing",
+              "ready",
+              "failed"
+            ]
+          },
+          "format": {
+            "enum": [
+              "runtime",
+              "spine-project"
+            ]
+          },
+          "conversionStatus": {
+            "type": "string"
+          },
+          "webmStatus": {
+            "type": "string"
+          },
+          "animations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pageUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      }
+    }
+  }
+}

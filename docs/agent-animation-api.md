@@ -88,6 +88,14 @@ Put unsplit receipts in files and split files in assemblies. The response contai
 
 GET /api/agent-animation?jobToken=<urlencoded signed job token>
 
+Or use POST /api/agent-animation with the following body to keep the signed token out of proxy logs:
+
+~~~json
+{"action":"status","id":"agent-...","collection":"library_02"}
+~~~
+
+An agent may query by id and collection at any time, even after its 72-hour signed upload session expires. The Bearer API key is required for both.
+
 The Bearer key is still required.
 
 ~~~json
@@ -100,6 +108,7 @@ States: awaiting_upload, processing, ready, failed. webmStatus is separate: the 
 
 - Authentication is required on **all** operations; no anonymous publishing.
 - Session tokens expire after 72 hours. The permanent page link remains.
+- Before publication, runtime skeletons, atlas pages, and textures are validated as a playable set in the same directory. Missing texture pages or incompatible versions produce HTTP 422.
 - File and folder paths are relative, and parent traversal is rejected. Accepted suffixes are Spine JSON/SKEL, atlas and textures; source projects accept .spine and images/ textures only.
 - Maximum 250 files per job, 95 MB per file, 200 MB per job. Each stage has a request size bound. SHA-256 and server HMAC receipts protect staged bytes.
 - Entries and assets become visible in one Git commit with retries for concurrent writers. Existing IDs cannot be overwritten.

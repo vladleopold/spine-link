@@ -233,6 +233,58 @@ test('reject incompatible runtime Spine version', async () => {
   assert.equal(completed.code, 422);
 });
 
+
+test('reject atlas texture pages missing from the uploaded image set', async () => {
+  const gh = mockGithub();
+  const job = await create();
+  const skeleton = await stage(job.jobToken, 'actor.json', jsonSkeleton);
+  const atlas = await stage(job.jobToken, 'actor.atlas', 'different.png\nsize: 1,1\n');
+  const texture = await stage(job.jobToken, 'actor.png', Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const output = await request('POST', { action: 'complete', jobToken: job.jobToken, files: [skeleton, atlas, texture] });
+  assert.equal(output.code, 422, JSON.stringify(output));
+  assert.match(output.error, /Missing atlas texture/);
+  assert.equal(gh.entries.length, 0, 'invalid assets must not create a page');
+});
+
+test('reject a skeleton with textures in a different folder from atlas', async () => {
+  mockGithub();
+  const job = await create();
+  const skeleton = await stage(job.jobToken, 'export/actor.json', jsonSkeleton);
+  const atlas = await stage(job.jobToken, 'export/actor.atlas', 'actor.png\n');
+  const texture = await stage(job.jobToken, 'textures/actor.png', Buffer.from([1, 2, 3]));
+  const output = await request('POST', { action: 'complete', jobToken: job.jobToken, files: [skeleton, atlas, texture] });
+  assert.equal(output.code, 422);
+  assert.match(output.error, /side by side/);
+});
+
+test('accept nested runtime export, POST status and status by id after signed session', async () => {
+  mockGithub();
+  const job = await create();
+  const skeleton = await stage(job.jobToken, 'export/actor.json', jsonSkeleton);
+  const atlas = await stage(job.jobToken, 'export/actor.atlas.txt', 'actor.png\nsize:1,1\n');
+  const texture = await stage(job.jobToken, 'export/actor.png', Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const output = await request('POST', { action: 'complete', jobToken: job.jobToken, files: [skeleton, atlas, texture] });
+  assert.equal(output.code, 201, JSON.stringify(output));
+  const fromId = await request('POST', { action: 'status', id: job.id, collection: 'library_02' });
+  assert.equal(fromId.code, 200);
+  assert.equal(fromId.state, 'ready');
+  assert.deepEqual(fromId.animations, ['walk','idle']);
+  const fromToken = await request('POST', { action: 'status', jobToken: job.jobToken });
+  assert.equal(fromToken.code, 200);
+  const invalid = await request('POST', { action: 'status', id: job.id, collection: '../library_02' });
+  assert.equal(invalid.code, 400);
+});
+
+test('reject source runtime JSON without 4.3 spine header or animations', async () => {
+  mockGithub();
+  const job = await create();
+  const skeleton = await stage(job.jobToken, 'actor.json', '{"skeleton":{},"animations":{}}');
+  const atlas = await stage(job.jobToken, 'actor.atlas', 'actor.png\n');
+  const texture = await stage(job.jobToken, 'actor.png', Buffer.from([1, 2, 3]));
+  const output = await request('POST', { action: 'complete', jobToken: job.jobToken, files: [skeleton, atlas, texture] });
+  assert.equal(output.code, 422);
+});
+
 test.after(() => {
   globalThis.fetch = oldFetch;
   Object.keys(process.env).forEach(key => { if (!(key in oldEnv)) delete process.env[key]; });

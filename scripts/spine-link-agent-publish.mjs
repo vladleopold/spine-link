@@ -95,7 +95,7 @@ if (waitForReady && published.state !== 'ready') {
   const limit = Date.now() + 12 * 60 * 1000;
   while (Date.now() < limit) {
     await new Promise(resolve => setTimeout(resolve, 5000));
-    const latest = await call(null, '?jobToken=' + encodeURIComponent(job.jobToken));
+    const latest = await call({ action: 'status', id: job.id, collection: job.uploadPath.split('/')[0] });
     published = { ...published, ...latest };
     if (latest.state === 'ready' || latest.state === 'failed') break;
   }
