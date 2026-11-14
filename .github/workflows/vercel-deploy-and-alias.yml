@@ -73,6 +73,29 @@ jobs:
         if: steps.quota_recovery.outputs.skip != 'true'
         run: npm install -g vercel@latest
 
+      - name: Initialize missing production API signing secret
+        if: steps.quota_recovery.outputs.skip != 'true'
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
+        run: |
+          set -euo pipefail
+          # Never print, download or rotate an existing signing secret.
+          # Rotating it would invalidate every user's personal key.
+          vercel link --yes --project spine-link --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" >/dev/null
+          configured=$(vercel env ls production --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" 2>&1)
+          if printf '%s' "$configured" | grep -q 'SPINE_LINK_AGENT_API_KEY'; then
+            echo "Agent API signing secret is already configured in production."
+          else
+            umask 077
+            private_file=$(mktemp)
+            trap 'rm -f "$private_file"' EXIT
+            openssl rand -hex 32 > "$private_file"
+            vercel env add SPINE_LINK_AGENT_API_KEY production --type secret --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" < "$private_file" >/dev/null
+            echo "Created production Secret for the personal Agent API. Value is not logged."
+          fi
+
       - name: Deploy to Vercel
         if: steps.quota_recovery.outputs.skip != 'true'
         id: deploy
@@ -100,13 +123,24 @@ jobs:
           code=$(curl -sS --max-time 30 -o /tmp/agent-api-health.json -w '%{http_code}' 'https://spine-link.vercel.app/api/agent-animation')
           if [ "$code" = 401 ]; then
             echo "Agent API route is live and requires authentication."
-          elif [ "$code" = 503 ]; then
-            echo "::warning::Agent API code is deployed, but SPINE_LINK_AGENT_API_KEY or GitHub storage is not configured."
           else
             echo "::error::Agent API route returned unexpected HTTP $code"
             cat /tmp/agent-api-health.json
             exit 1
           fi
+      - name: Verify personal API key dashboard is published
+        if: steps.quota_recovery.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for route in api-keys.html api-keys.js; do
+            code=$(curl -fsS --max-time 30 -o "/tmp/$route" -w '%{http_code}' "https://spine-link.vercel.app/$route")
+            test "$code" = 200
+          done
+          grep -q "My API keys" /tmp/api-keys.html
+          grep -q "keys-create" /tmp/api-keys.js
+          echo "Personal API key dashboard and client JavaScript are live."
+
       - name: Smoke test new Spine preview and assets
         if: steps.quota_recovery.outputs.skip != 'true'
         shell: bash
