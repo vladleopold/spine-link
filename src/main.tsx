@@ -90,10 +90,42 @@ function receiveFiles(files: File[]) {
   }, 50);
 }
 
+function savedHomeGoogleUser(): { email: string; name: string; picture: string } | null {
+  // The lightweight homepage must reflect the same unexpired Google session
+  // as the React application. Otherwise refreshing / makes an authenticated
+  // user appear signed out until they manually open the portfolio.
+  try {
+    const raw = window.localStorage.getItem("spine-link-google-session");
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    if (typeof session?.accessToken !== "string" || !session.accessToken ||
+        typeof session?.expiresAt !== "number" ||
+        session.expiresAt <= Date.now() + 60_000 ||
+        typeof session?.user?.email !== "string" || !session.user.email.trim()) return null;
+    return {
+      email: session.user.email,
+      name: typeof session.user.name === "string" ? session.user.name : "",
+      picture: typeof session.user.picture === "string" && /^https:\/\/[^\s"'<>]+$/i.test(session.user.picture)
+        ? session.user.picture : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 function renderHomeShell(isDragging = false) {
   if (!root || isAppMounted) return;
-  if (bootDraggingState === isDragging && root.querySelector(".app-shell")) return;
+  // Dragging must not destroy and rebuild the entire homepage: that used to
+  // reload the feed, canvas, event listeners and banner on every drag state
+  // transition immediately before starting the transfer.
+  if (bootDraggingState !== null && root.querySelector(".app-shell")) {
+    bootDraggingState = isDragging;
+    root.querySelector(".main-drop-zone")?.classList.toggle("is-dragging", isDragging);
+    return;
+  }
   bootDraggingState = isDragging;
+  const homeUser = savedHomeGoogleUser();
+  const homeInitial = escapeHtml((homeUser?.name || homeUser?.email || "A").charAt(0).toUpperCase());
 
   root.innerHTML = `
     <main class="app-shell is-empty">
@@ -119,10 +151,20 @@ function renderHomeShell(isDragging = false) {
           <div class="top-actions-row">
             <a class="world-archive-link" href="/world-spine-archive">BROWSE</a>
             <div class="auth-panel">
-              <a class="my-library-button" href="/?portfolio=1" data-open-library>Portfolio</a>
-              <button class="guest-account-button" type="button" data-open-login title="Sign in" aria-label="Sign in">
-                <svg class="user_icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              </button>
+              <a class="my-library-button" href="/?portfolio=1" data-open-library>${homeUser ? "MY PORTFOLIO" : "Portfolio"}</a>
+              ${homeUser ? `
+                <div class="auth-user">
+                  <div class="avatar-menu">
+                    <button class="avatar-menu-toggle" type="button" data-open-library title="Account" aria-label="Open my account and portfolio">
+                      ${homeUser.picture ? `<img src="${escapeHtml(homeUser.picture)}" alt="" referrerpolicy="no-referrer">` : `<span>${homeInitial}</span>`}
+                    </button>
+                  </div>
+                </div>
+              ` : `
+                <button class="guest-account-button" type="button" data-open-login title="Sign in" aria-label="Sign in">
+                  <svg class="user_icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </button>
+              `}
             </div>
             <div class="site-menu-group">
               <button class="site-add-button" type="button" data-open-upload aria-label="Add new animation card" title="Add new animation card">
@@ -1091,10 +1133,17 @@ async function resumeStagedUploads() {
       const tx = db.transaction("jobs", "readwrite");
       const store = tx.objectStore("jobs");
       const req = store.getAll();
+      const completed = new Set(getBackgroundUploads()
+        .filter((item) => item.status === "complete")
+        .map((item) => item.id));
       let claimed: any[] = [];
       req.onsuccess = () => {
+        for (const job of req.result || []) {
+          if (completed.has(job.id)) store.delete(job.id);
+        }
         claimed = (req.result || []).filter((job: any) =>
-          !job.recoveryAttempted && Array.isArray(job.files) && job.files.length > 0
+          !completed.has(job.id) && !job.recoveryAttempted &&
+          Array.isArray(job.files) && job.files.length > 0
         );
         for (const job of claimed) store.put({ ...job, recoveryAttempted: true });
       };
@@ -1233,9 +1282,11 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
       }),
     );
     updateBackgroundUpload(uploadEntry.id, { status: "uploading", uploadPath: resolvedUploadPath });
-    // Recovery snapshot is saved IN PARALLEL with the transfer, rather than
-    // delaying the first byte sent to the server after drag-and-drop.
-    await recoverySaved;
+    // Do not wait for IndexedDB (which can stall with large textures) after the
+    // server has already committed the page. Clean up the snapshot when its
+    // write finishes. If navigation happens first, the completed upload's local
+    // receipt ensures it will not resume on the next visit.
+    void recoverySaved.then(() => pendingUploadDelete(uploadEntry.id)).catch(() => {});
     await finishBackgroundUpload(uploadEntry.id, uploadId);
   };
 
@@ -1292,7 +1343,7 @@ async function finishBackgroundUpload(entryId: string, uploadId: string) {
   window.dispatchEvent(new CustomEvent("spine-upload-complete", { detail: { url: previewUrl } }));
   showBackgroundPopup(entryId, previewUrl, null);
   // Only open the link after the server confirms the atomic commit.
-  try { await navigator.clipboard.writeText(previewUrl); } catch { /* manual copy remains available */ }
+  void navigator.clipboard?.writeText(previewUrl).catch(() => { /* manual copy remains available */ });
   // Make the page visible as soon as GitHub confirms the atomic commit.
   window.setTimeout(() => { window.location.assign(previewUrl); }, 80);
 }
