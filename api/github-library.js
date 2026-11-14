@@ -1,5 +1,5 @@
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
-import { cacheProfiles, setCacheHeaders } from '../lib/cache-headers.js';
+import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
 
@@ -272,8 +272,8 @@ function entryHiddenByCensorship(entry, exclusions) {
   return !allow.some((rule) => censorshipRuleMatches(entry, rule));
 }
 
-async function githubText(settings, path) {
-  return cachedGithubText(settings, path);
+async function githubText(settings, path, options = {}) {
+  return cachedGithubText(settings, path, options);
 }
 
 function compareLibraryEntries(a, b) {
@@ -948,7 +948,7 @@ export default async function handler(request, response) {
     const basePaths = await libraryCollectionPaths(settings);
     const collected = [];
     for (const basePath of basePaths) {
-      const text = await githubText(settings, `${basePath}/index.json`);
+      const text = await githubText(settings, `${basePath}/index.json`, { ttlMs: 0 });
       if (!text) continue;
       try {
         const parsed = JSON.parse(text);
@@ -985,7 +985,8 @@ export default async function handler(request, response) {
       : (Array.isArray(allEntries)
           ? allEntries.filter((entry) => String(entry?.publicOwnerId || '') === publicOwnerId)
           : []);
-    const entriesWithFallback = entries.length > 0 ? entries : allEntries;
+    // Never show somebody else's works when an owner's portfolio is empty.
+    const entriesWithFallback = entries;
     entriesWithFallback.sort(compareLibraryEntries);
     const { visibleEntries, isPortfolioMode } = indexablePortfolioState(entriesWithFallback);
     const robotsTag = isPortfolioMode && visibleEntries.length > 0
@@ -994,7 +995,8 @@ export default async function handler(request, response) {
 
     response.setHeader('Content-Type', 'text/html; charset=utf-8');
     response.setHeader('X-Robots-Tag', robotsTag);
-    setCacheHeaders(response, cacheProfiles.dynamicHtmlBrowser, cacheProfiles.dynamicHtmlCdn);
+    // Removing a work must immediately remove its public portfolio card.
+    setNoStoreHeaders(response);
     if (request.method === 'HEAD') {
       return response.status(200).send('');
     }
