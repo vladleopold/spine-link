@@ -1224,27 +1224,40 @@ export default async function handler(request, response) {
       const uploadPathBg = resolveUploadPath(body?.uploadPath, settings.basePath, uploadId);
       const fileName = String(body?.fileName || '').trim();
       const chunkCount = Number(body?.chunkCount);
-      if (!uploadId || !uploadPathBg || !fileName || !Number.isFinite(chunkCount)) {
-        return response.status(400).json({ error: 'Missing reassemble field' });
+      if (!uploadId || !uploadPathBg || !fileName || !Number.isInteger(chunkCount) || chunkCount < 1 || chunkCount > 1000) {
+        return response.status(400).json({ error: 'Missing or invalid reassemble field' });
       }
-      let fullBase64 = '';
+
       const chunkDir = `${uploadPathBg}/${fileName}.__chunks`;
-      for (let i = 0; i < chunkCount; i++) {
-        const chunkPath = `${chunkDir}/${String(i).padStart(5, '0')}`;
-        const chunk = await getGitHubContent(settings, chunkPath);
-        if (!chunk || chunk.encoding !== 'base64') throw new Error(`Chunk ${i} not found at ${chunkPath}`);
-        fullBase64 += String(chunk.content).replace(/\s/g, '');
+      const chunkPaths = Array.from({ length: chunkCount }, (_, index) =>
+        `${chunkDir}/${String(index).padStart(5, '0')}`,
+      );
+      // Fetch staged chunks concurrently, then publish the reconstructed file
+      // and remove all temporary chunks in one Git Data API commit. The former
+      // Contents-API loop made several sequential GitHub round trips per chunk.
+      const parts = await Promise.all(chunkPaths.map((path) => getGitHubContent(settings, path)));
+      let fullBase64 = '';
+      for (let index = 0; index < parts.length; index++) {
+        const part = parts[index];
+        if (!part || part.encoding !== 'base64') {
+          throw new Error(`Chunk ${index} not found at ${chunkPaths[index]}`);
+        }
+        fullBase64 += String(part.content).replace(/\\s/g, '');
       }
-      const filePath = joinRepoPath(uploadPathBg, fileName.replace(/^\.+\//, ''));
-      const message = `${commitPrefix}: reassembled ${fileName}`;
-      const existingFile = await getGitHubContent(settings, filePath);
-      const writeResult = await putGitHubContent(settings, filePath, fullBase64, message, existingFile?.sha, origin);
-      for (let i = 0; i < chunkCount; i++) {
-        const chunkPath = `${chunkDir}/${String(i).padStart(5, '0')}`;
-        const chunkSha = await getGitHubContent(settings, chunkPath);
-        try { await deleteGitHubContent(settings, chunkPath, `${commitPrefix}: cleanup chunk ${i} of ${fileName}`, chunkSha?.sha); } catch {}
-      }
-      return response.status(200).json({ ok: true, path: filePath, bytes: Buffer.from(fullBase64.replace(/\s/g, ''), 'base64').byteLength });
+
+      const filePath = joinRepoPath(uploadPathBg, fileName.replace(/^\\.\\.\\//, ''));
+      const commit = await commitGitHubChanges(settings, {
+        writes: [{ path: filePath, contentBase64: fullBase64 }],
+        deletions: chunkPaths,
+        message: `${commitPrefix}: reassembled ${fileName}`,
+        origin,
+      });
+      return response.status(200).json({
+        ok: true,
+        path: filePath,
+        bytes: Buffer.from(fullBase64, 'base64').byteLength,
+        github: { commitSha: String(commit?.sha || ''), commitUrl: String(commit?.html_url || '') },
+      });
     }
 
     if (action === 'background-finalize-index') {
