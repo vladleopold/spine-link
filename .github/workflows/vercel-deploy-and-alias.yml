@@ -5,6 +5,12 @@ on:
     branches:
       - main
 
+# Many rapid commits can otherwise race to point the production alias at an
+# older deployment after a newer one has completed.
+concurrency:
+  group: spine-link-production
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
