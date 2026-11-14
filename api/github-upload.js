@@ -1067,10 +1067,9 @@ async function commitGitHubChanges(settings, { writes, stagedBlobs = [], deletio
       // Non-fast-forward is a NORMAL concurrent writer, not a broken upload.
       // Retry against a fresh head; no blob bytes are sent again.
       await githubApi(settings, 'PATCH', branchRef, { sha: commit.sha });
-      return {
-        commit, content: { sha: '' },
-        blobs: normalized.map(write => write.path),
-      };
+      // Callers consume the GitHub commit SHA and URL directly; returning a
+      // wrapper silently erased commit receipts and source audit metadata.
+      return commit;
     } catch (error) {
       lastError = error;
       if (![409, 422].includes(Number(error?.status)) || attempt === 6) break;

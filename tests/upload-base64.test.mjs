@@ -150,6 +150,7 @@ test('concurrent branch update retries the final commit without resending asset 
       },
     }, response);
     assert.equal(status, 200, JSON.stringify(data));
+    assert.equal(data.github.commitSha, 'new-commit-2');
     assert.equal(blobPosts, 1, 'one immutable blob upload across all retries');
     assert.equal(commitPosts, 2, 'a fresh commit on the newer branch');
     assert.equal(patchCalls, 2);

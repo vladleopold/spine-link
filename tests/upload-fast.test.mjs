@@ -88,6 +88,7 @@ test('fast path uploads four Spine files concurrently and commits only once', as
       stagedBlobs: stage,
     });
     assert.equal(published.status, 200, JSON.stringify(published.data));
+    assert.equal(published.data.github.commitSha, 'commit-2', 'real commit SHA returned to uploader');
     assert.equal(commits, 1, 'exactly one commit for the whole project');
     assert.equal(published.data.receipts.length, 4);
     const tree = branches.at(-1);
