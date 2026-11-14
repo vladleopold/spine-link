@@ -1,0 +1,34 @@
+name: Spine-Link upload and delete regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/github-upload.js'
+      - 'api/github-preview.js'
+      - 'api/github-library.js'
+      - 'api/github-archive.js'
+      - 'src/main.tsx'
+      - 'src/SpineApp.tsx'
+      - 'tests/**'
+      - '.github/workflows/spine-link-upload-delete-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: TypeScript, Vite, and upload regression tests
+        run: |
+          npm run build
+          node --test tests/upload-fast.test.mjs tests/upload-base64.test.mjs tests/upload-recovery.test.mjs tests/library-accounts.test.mjs
