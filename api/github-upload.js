@@ -1353,10 +1353,10 @@ export default async function handler(request, response) {
         if (!part || part.encoding !== 'base64') {
           throw new Error(`Chunk ${index} not found at ${chunkPaths[index]}`);
         }
-        fullBase64 += String(part.content).replace(/\\s/g, '');
+        fullBase64 += String(part.content).replace(/\s/g, '');
       }
 
-      const filePath = joinRepoPath(uploadPathBg, fileName.replace(/^\\.\\.\\//, ''));
+      const filePath = joinRepoPath(uploadPathBg, fileName.replace(/^\.+\//, ''));
       const commit = await commitGitHubChanges(settings, {
         writes: [{ path: filePath, contentBase64: fullBase64 }],
         deletions: chunkPaths,
