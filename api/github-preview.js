@@ -640,26 +640,33 @@ async function githubJson(settings, path) {
 // GitHub limit. They are listed at runtime so a folder added by a rotation shows up
 // without a code change or a deploy.
 async function libraryCollectionPaths(settings) {
-  const paths = [cleanRepoPath(settings.basePath || defaultBasePath)];
+  const paths = new Set([cleanRepoPath(settings.basePath || defaultBasePath)]);
   try {
     const response = await fetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
       { headers: githubHeaders(settings.token) },
     );
-    if (!response.ok) return paths;
-    const items = await response.json();
-    if (!Array.isArray(items)) return paths;
-    const folders = items
-      .filter((item) => item && item.type === "dir" && /^library(_\d+)?$/.test(String(item.name || "")))
-      .map((item) => item.name)
-      .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
-    for (const name of folders) if (!paths.includes(name)) paths.push(name);
-  } catch (e) {
-    // Listing failed: the configured folder alone still beats an empty site.
+    if (response.ok) {
+      const items = await response.json();
+      if (Array.isArray(items)) {
+        for (const item of items) {
+          if (item?.type === 'dir' && /^library(_\d+)?$/.test(String(item.name || ''))) {
+            paths.add(item.name);
+          }
+        }
+      }
+    }
+  } catch {
+    // Fall back to the configured collection if the root listing is unavailable.
   }
-  return paths;
+  // New uploads are in the newest collection. Searching library_01 first can
+  // download a 20+ MB legacy index, time out the Vercel invocation, and make a
+  // successfully uploaded /p/<id> appear missing. Put the newest first.
+  const rank = (name) => /^library_(\d+)$/.test(name)
+    ? Number(name.match(/^library_(\d+)$/)[1])
+    : name === 'library' ? 0 : -1;
+  return [...paths].filter(Boolean).sort((a, b) => rank(b) - rank(a));
 }
-
 
 async function githubText(settings, path, options = {}) {
   return cachedGithubText(settings, path, options);
@@ -2434,7 +2441,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
 </html>`;
 }
 
-async function createDynamicPreview(settings, uploadPath, origin) {
+async function createDynamicPreview(settings, uploadPath, origin, knownEntryRecord = undefined) {
   const setDirectories = await findSpineSetDirectories(settings, uploadPath);
   const sets = [];
   let note = '';
@@ -2451,7 +2458,9 @@ async function createDynamicPreview(settings, uploadPath, origin) {
   let metrics = {};
   // Legacy works keep assets at repository root while their entry lives in a
   // library collection. Asset location cannot determine the metadata index.
-  const entryRecord = await resolveEntryRecord(settings, uploadId);
+  const entryRecord = knownEntryRecord === undefined
+    ? await resolveEntryRecord(settings, uploadId)
+    : knownEntryRecord;
   if (entryRecord) {
     indexPath = joinRepoPath(entryRecord.basePath, 'index.json');
     entry = entryRecord.entry;
@@ -2616,25 +2625,50 @@ async function createDynamicPreview(settings, uploadPath, origin) {
 // keeps working while rotations move works between folders.
 async function resolveEntryRecord(settings, entryId) {
   const id = cleanRepoPath(entryId).split('/').pop() || '';
-  if (!id) return '';
+  if (!id) return null;
   const basePaths = await libraryCollectionPaths(settings);
   for (const basePath of basePaths) {
-    const indexText = await githubText(settings, `${basePath}/index.json`, { ttlMs: 0 });
-    if (!indexText) continue;
-    let entries = [];
     try {
-      const parsed = JSON.parse(indexText);
-      if (Array.isArray(parsed)) entries = parsed;
-    } catch (e) {}
-    const match = entries.find((entry) => String(entry?.id || '') === id);
-    const previewPath = cleanRepoPath(match?.previewPath || '');
-    if (previewPath) return { previewPath, entry: match, entries, basePath };
+      const indexText = await githubText(settings, `${basePath}/index.json`, { ttlMs: 0 });
+      if (!indexText) continue;
+      const entries = JSON.parse(indexText);
+      if (!Array.isArray(entries)) continue;
+      const match = entries.find((entry) => String(entry?.id || '') === id);
+      const previewPath = cleanRepoPath(match?.previewPath || '');
+      if (previewPath) return { previewPath, entry: match, entries, basePath };
+    } catch (error) {
+      // One legacy/corrupt/oversized index must never hide newer previews.
+      console.warn('[preview] collection lookup failed:', basePath, String(error));
+    }
+  }
+  return null;
+}
+
+// The asset directory is a durable source of truth even when an index write
+// is delayed or temporarily unreadable. Verify actual Spine files are present
+// rather than returning "Preview not found" for an otherwise valid upload.
+async function findDirectPreviewPath(settings, entryId) {
+  const id = cleanRepoPath(entryId);
+  if (!/^[a-z0-9._-]{3,180}$/i.test(id) || id === '.' || id === '..') return '';
+  for (const basePath of await libraryCollectionPaths(settings)) {
+    const candidate = joinRepoPath(basePath, id);
+    try {
+      const items = await githubList(settings, candidate);
+      if (items.some((file) => file?.type === 'file' && isSkeleton(file.name)) &&
+          items.some((file) => file?.type === 'file' && isAtlas(file.name)) &&
+          items.some((file) => file?.type === 'file' && isImage(file.name))) {
+        return candidate;
+      }
+    } catch {
+      // Keep looking; the work may have moved to a different collection.
+    }
   }
   return '';
 }
 
 async function resolveEntryPath(settings, entryId) {
-  return (await resolveEntryRecord(settings, entryId))?.previewPath || '';
+  return (await resolveEntryRecord(settings, entryId))?.previewPath ||
+    (await findDirectPreviewPath(settings, entryId));
 }
 
 export default async function handler(request, response) {
@@ -2655,10 +2689,12 @@ export default async function handler(request, response) {
   };
 
   let path = cleanRepoPath(request.query?.path || '');
+  let entryRecord;
   if (!path) {
     const entryId = cleanRepoPath(request.query?.entry || '');
     if (!entryId) return response.status(400).send('Invalid preview path');
-    path = await resolveEntryPath(settings, entryId);
+    entryRecord = await resolveEntryRecord(settings, entryId);
+    path = entryRecord?.previewPath || await findDirectPreviewPath(settings, entryId);
     if (!path) return response.status(404).send('Preview not found');
   }
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
@@ -2670,7 +2706,7 @@ export default async function handler(request, response) {
       html = await githubText(settings, path);
       if (!html) return response.status(404).send('Preview not found');
     } else {
-      const preview = await createDynamicPreview(settings, path, origin);
+      const preview = await createDynamicPreview(settings, path, origin, entryRecord);
       html = preview.html;
       robotsHeader = preview.robots;
     }
