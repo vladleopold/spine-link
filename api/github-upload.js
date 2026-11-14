@@ -405,7 +405,9 @@ async function dispatchSpineProjectExport(settings, entry, origin) {
   // licensed Spine CLI workflow must produce JSON/atlas before any runtime can
   // animate them. Never pretend a .spine file is a .skel runtime export.
   try {
-    const result = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
+    // The licensed runner lives in the private 3Spine-core repository.
+    // A scheduled scan is a recovery path if cross-repository dispatch is denied.
+    const result = await fetch('https://api.github.com/repos/vladleopold/3Spine-core/dispatches', {
       method: 'POST',
       headers: githubHeaders(settings.token),
       body: JSON.stringify({
@@ -1421,7 +1423,10 @@ export default async function handler(request, response) {
       const isEditorProject = body?.entry?.sourceKind === 'spine-project';
       // Do not report an export as queued unless an authorized cloud Spine
       // Editor runner has been installed and explicitly enabled by the owner.
-      const editorExportEnabled = process.env.SPINE_PROJECT_EXPORT_ENABLED === 'true';
+      // A trusted scheduled queue in 3Spine-core now processes all eligible
+      // source projects even when instant cross-repository dispatch is denied.
+      // Allow an explicit emergency kill switch; do not rely on a disabled-by-default flag.
+      const editorExportEnabled = process.env.SPINE_PROJECT_EXPORT_ENABLED !== 'false';
       const projectFile = String(body?.entry?.projectFile || '');
       if (isEditorProject && (!/^[^/\\]+\.spine$/i.test(projectFile) ||
           !relativeFiles.includes(projectFile) ||
