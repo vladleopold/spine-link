@@ -1042,9 +1042,8 @@ async function readAsTransparentizedImageDataUri(file: File, sourceDataUri: stri
   }
 
   const hasBlackMatte = visiblePixels > 0 && nearBlackPixels / visiblePixels > 0.18;
-  // Keep a second pixel buffer only for the black-matte path, where the player
-  // also needs the original-alpha variant.
-  const pmaData = hasBlackMatte ? new Uint8ClampedArray(data) : null;
+  // Preserve the original-alpha texture variant without a second canvas readback.
+  const pmaData = new Uint8ClampedArray(data);
 
   for (let index = 0; index < data.length; index += 4) {
     const alpha = data[index + 3];
@@ -1061,12 +1060,10 @@ async function readAsTransparentizedImageDataUri(file: File, sourceDataUri: stri
         data[index + 1] = 0;
         data[index + 2] = 0;
         data[index + 3] = 0;
-        if (pmaData) {
-          pmaData[index] = 0;
-          pmaData[index + 1] = 0;
-          pmaData[index + 2] = 0;
-          pmaData[index + 3] = 0;
-        }
+        pmaData[index] = 0;
+        pmaData[index + 1] = 0;
+        pmaData[index + 2] = 0;
+        pmaData[index + 3] = 0;
         changedPixels += 1;
         continue;
       }
@@ -1088,12 +1085,8 @@ async function readAsTransparentizedImageDataUri(file: File, sourceDataUri: stri
 
   context.putImageData(straightImageData, 0, 0);
   const straightDataUri = canvas.toDataURL("image/png");
-  const premultipliedDataUri = pmaData
-    ? (() => {
-        context.putImageData(new ImageData(pmaData, canvas.width, canvas.height), 0, 0);
-        return canvas.toDataURL("image/png");
-      })()
-    : undefined;
+  context.putImageData(new ImageData(pmaData, canvas.width, canvas.height), 0, 0);
+  const premultipliedDataUri = canvas.toDataURL("image/png");
 
   return {
     dataUri: straightDataUri,
