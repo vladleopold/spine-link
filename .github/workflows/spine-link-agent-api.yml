@@ -1,0 +1,41 @@
+name: Spine-Link Agent API CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/agent-animation.js'
+      - 'tests/agent-animation-api.test.mjs'
+      - 'scripts/spine-link-agent-publish.mjs'
+      - 'docs/agent-animation-api.md'
+      - 'vercel.json'
+      - '.github/workflows/spine-link-agent-api.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  agent-api:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Agent API security and publishing regression tests
+        run: node --test tests/agent-animation-api.test.mjs
+      - name: Syntax check client and server
+        run: |
+          node --check api/agent-animation.js
+          node --check scripts/spine-link-agent-publish.mjs
+      - name: Build site
+        run: npm run build
