@@ -24,10 +24,10 @@ footer{margin-top:55px;border-top:1px solid #304751;font-size:12px;color:#97aab0
 <main>
 <h1>Animation Agent SDK</h1>
 <p>Lightweight, dependency-free JavaScript client for Node.js 20+. Use it in an animation agent, a private automation or CI to publish Spine files and receive their page URL.</p>
-<a class="button" href="/sdk/spine-link-agent.mjs" download="spine-link-agent.mjs">Download SDK (.mjs)</a>
+<a class="button" href="/api-keys.html">My API keys</a><a class="button" href="/sdk/spine-link-agent.mjs" download="spine-link-agent.mjs">Download SDK (.mjs)</a>
 <a class="button" href="/agent-animation-openapi.json">OpenAPI JSON</a>
 <h2>Setup</h2>
-<p>Download the SDK to your backend. Store the separate API key as a secret environment variable, not in the browser.</p>
+<p>Download the SDK to your backend. Generate your personal key at <a href="/api-keys.html">My API keys</a>. Store it as a secret environment variable on your server, not in the browser.</p>
 <pre><code>export SPINE_LINK_AGENT_API_KEY="your-secret"
 curl -fsSL https://spine-link.vercel.app/sdk/spine-link-agent.mjs \
   -o spine-link-agent.mjs</code></pre>

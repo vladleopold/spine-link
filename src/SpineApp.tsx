@@ -5251,6 +5251,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const isHomeDropOnly = !preparedSpine && !isEditPage && extraSpineSets.length === 0 && !isUploadModalOpen;
   const siteReadingPages = [
     { href: "/api-docs.html", title: "API", description: "Connect an animation agent" },
+    { href: "/api-keys.html", title: "API Keys", description: "Create keys for your own server" },
     { href: "/sdk.html", title: "SDK", description: "Download the server-side agent SDK" },
     { href: "/spine-link.html", title: "Spine-Link", description: "Platform overview" },
     { href: "/spine-preview.html", title: "Spine Preview", description: "Open JSON, SKEL and atlas files" },
@@ -5468,6 +5469,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           <div className="top-actions-row">
             {isHomeDropOnly && (
               <>
+                <a className="world-archive-link" href="/api-keys.html" aria-label="My API keys">KEYS</a>
                 <a className="world-archive-link" href="/api-docs.html" aria-label="Animation API documentation">
                   API
                 </a>

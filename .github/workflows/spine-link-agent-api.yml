@@ -6,6 +6,9 @@ on:
     paths:
       - 'api/github-upload.js'
       - 'lib/agent-animation.js'
+      - 'lib/agent-user-keys.js'
+      - 'public/api-keys.html'
+      - 'public/api-keys.js'
       - 'public/sdk/spine-link-agent.mjs'
       - 'public/api-docs.html'
       - 'public/sdk.html'
@@ -43,6 +46,8 @@ jobs:
         run: node --test tests/agent-animation-api.test.mjs tests/spine-link-agent-sdk.test.mjs tests/agent-api-pages.test.mjs
       - name: Syntax check client and server
         run: |
+          node --check lib/agent-user-keys.js
+          node --check public/api-keys.js
           node --check lib/agent-animation.js
           node --check public/sdk/spine-link-agent.mjs
           node --check scripts/spine-link-agent-publish.mjs
@@ -50,6 +55,8 @@ jobs:
         run: npm run build
       - name: Verify published static API pages
         run: |
+          test -s dist/api-keys.html
+          test -s dist/api-keys.js
           test -s dist/api-docs.html
           test -s dist/sdk.html
           test -s dist/sdk/spine-link-agent.mjs

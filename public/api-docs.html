@@ -35,7 +35,7 @@ footer{border-top:1px solid #263c47;margin-top:50px;font-size:12px;color:#829ba6
 <h1>Animation Agent API</h1>
 <p>Connect an external animation agent to Spine-Link. Upload the files your agent produces, publish a playable page, and receive a permanent link.</p>
 <span class="status">REST API v1.2 · Server to server · Spine 4.3</span>
-<div><a class="button-link" href="/sdk.html">View SDK</a><a class="button-link" href="/agent-animation-openapi.json">OpenAPI JSON</a><a class="button-link" href="https://github.com/vladleopold/spine-link/blob/main/docs/agent-animation-api.md">Full reference</a></div>
+<div><a class="button-link" href="/api-keys.html">My API keys</a><a class="button-link" href="/sdk.html">View SDK</a><a class="button-link" href="/agent-animation-openapi.json">OpenAPI JSON</a><a class="button-link" href="https://github.com/vladleopold/spine-link/blob/main/docs/agent-animation-api.md">Full reference</a></div>
 <section class="grid">
 <div class="panel"><h2>Runtime export</h2><p>Upload Spine JSON or SKEL, atlas, and PNG textures. Get a playable page immediately after publication.</p></div>
 <div class="panel"><h2>Editor project</h2><p>Upload original .spine and images/. Spine-Link queues a licensed editor conversion and reports progress.</p></div>
@@ -71,7 +71,7 @@ Content-Type: application/json</code></pre>
 }</code></pre>
 <p>Project source files can return <code>processing</code> until the licensed export worker finishes. Animation pages are unlisted by default, but anyone with the direct URL can view them.</p>
 <h2>Authentication and limits</h2>
-<p>Request your API key from the site administrator. The administrator must provision <code>SPINE_LINK_AGENT_API_KEY</code> as a server-side secret. Up to 250 files per job; batches of up to eight small assets; larger files upload in signed chunks. Upload tokens expire in 72 hours, while status-by-ID remains available.</p>
+<p>Request your API key from the site administrator. Sign in on the <a href="/api-keys.html">My API Keys page</a> to create or revoke personal server keys. The administrator must provision <code>SPINE_LINK_AGENT_API_KEY</code> as a server-side secret. Up to 250 files per job; batches of up to eight small assets; larger files upload in signed chunks. Upload tokens expire in 72 hours, while status-by-ID remains available.</p>
 <p><strong>Integration note:</strong> The endpoint is operational only after the site deployment and its API key configuration are complete. A documentation page does not imply a live authorized publishing service.</p>
 </main>
 <footer>Spine-Link · Animation Agent API · <a href="/sdk.html">SDK</a> · <a href="/">Home</a></footer>

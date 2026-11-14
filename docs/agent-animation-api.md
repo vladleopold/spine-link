@@ -156,3 +156,19 @@ console.log(published.pageUrl);
 ```
 
 The SDK automatically batches small images and uploads large assets in signed parts. It uses POST status polling, keeping the signed upload token out of URL logs. Never embed the secret key in a public website.
+
+## Personal server API keys
+
+The account holder signs in with Google to <https://spine-link.vercel.app/api-keys.html>. From there, they can create up to five active keys, copy each full key only once, list masked keys, and revoke keys immediately.
+
+The signed-in website sends an existing Google OAuth access token in the Authorization Bearer header to `/api/agent-animation` and uses three management actions:
+
+- `{"action":"keys-list"}` returns only that Google account's masked keys.
+- `{"action":"keys-create","name":"My animation server"}` returns a one-time full `slk_v1_...` key and safe key metadata.
+- `{"action":"keys-revoke","keyId":"<16 hex>"}` revokes that user's key.
+
+Management requires a verified Google token issued to the configured Spine-Link OAuth client; a personal API key cannot manage other keys. Store the issued personal key only on the owner's server and use it as `SPINE_LINK_AGENT_API_KEY` when calling the existing SDK.
+
+Personal keys are HMAC-hashed in repository storage; the Google verified email needed to link projects to the portfolio is stored AES-256-GCM encrypted in the key record. Published project records use the verified account identity, so creations belong to the user's library and can be managed through normal site ownership checks.
+
+Revoked keys cannot create, stage, complete, or inspect projects. A personal key cannot access another account's uploads. The site owner must provision the server-side master secret `SPINE_LINK_AGENT_API_KEY`; it is never displayed on the API keys page. Rotating the master secret without migrating personal keys invalidates them.

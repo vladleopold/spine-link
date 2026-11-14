@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#08131d">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<title>My API Keys | Spine-Link</title>
+<style>
+:root{color-scheme:dark;background:#08131d;color:#e8f1f4;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+*{box-sizing:border-box}body{margin:0;min-height:100dvh;line-height:1.55}
+header,main,footer{max-width:920px;margin:auto;padding:22px}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid #2c4851}
+nav{display:flex;gap:18px;flex-wrap:wrap}.brand{color:#fff;font-size:1.3rem;font-weight:750;letter-spacing:-.05em}
+a{color:#7ce6d4;text-decoration:none}a:hover{text-decoration:underline}
+h1{font-size:clamp(2rem,6vw,3.1rem);letter-spacing:-.06em;line-height:1.12;margin:36px 0 10px}
+h2{font-size:1.18rem;margin-top:0}p,small{color:#abbfc7}small{font-size:12px}
+section{padding:20px;border-radius:16px;border:1px solid #27434d;background:#0b202d;margin:20px 0}
+section[hidden],div[hidden],form[hidden]{display:none}
+input,textarea,button{font:inherit}
+input,textarea{display:block;width:100%;background:#071720;color:#fff;border:1px solid #47636b;border-radius:10px;padding:12px}
+textarea{resize:none;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;min-height:83px}
+button{border:1px solid #68b5a5;border-radius:9px;color:#071c21;background:#7ce6d4;padding:10px 16px;font-weight:650;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.secondary{background:transparent;color:#c4e5e4;border-color:#466b70}
+button.danger{background:transparent;color:#ffc7c5;border-color:#995756}
+form{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+form label{flex:1;min-width:200px}form label>span{display:block;margin:0 0 6px;color:#b2c9d0;font-size:13px}
+#status{min-height:22px;color:#91ccc1}#status[data-error=true]{color:#ffc2c2}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;border-bottom:1px solid #2d4550;padding:13px 8px;font-size:13px}
+th{color:#b8cdd2;font-weight:650}td{word-break:break-word}.muted{color:#97abb2}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.notice{border-left:3px solid #7ce6d4;padding-left:14px}
+code{color:#a9e6dc;font-size:12px}
+footer{border-top:1px solid #2c4851;color:#90a8ae;font-size:12px;margin-top:45px}
+@media(max-width:600px){header{flex-direction:column;align-items:flex-start}section{padding:15px}th:nth-child(3),td:nth-child(3){display:none}td{padding:10px 4px}button{padding:9px 12px}}
+</style>
+</head>
+<body>
+<header><a class="brand" href="/">spine link</a><nav aria-label="Navigation"><a href="/">Home</a><a href="/api-docs.html">API</a><a href="/sdk.html">SDK</a></nav></header>
+<main>
+<h1>My API keys</h1>
+<p>Connect your own server or animation agent to Spine-Link. Keys can publish projects into your signed-in account's library.</p>
+<p id="status" role="status" aria-live="polite">Checking your Google session…</p>
+<section id="sign-in" hidden>
+<h2>Google sign-in required</h2>
+<p>Sign in to Spine-Link on the homepage first. Then return here to manage your personal keys.</p>
+<a href="/?portfolio=1">Sign in on Spine-Link</a>
+</section>
+<div id="manager" hidden>
+<section>
+<h2>Create a key</h2>
+<p>Give this key a name for the server you will connect. Up to five active keys per account.</p>
+<form id="create-key">
+<label><span>Server or agent name</span><input id="key-name" name="name" type="text" minlength="3" maxlength="60" value="My animation server" required autocomplete="off"></label>
+<button id="create-button" type="submit">Create key</button>
+</form>
+</section>
+<section id="new-key" hidden>
+<h2>Your new API key</h2>
+<p class="notice">Copy it now. This value will not be shown again after leaving the page. Do not paste it into a public website.</p>
+<textarea id="key-value" readonly spellcheck="false" aria-label="New API key"></textarea>
+<div class="controls"><button id="copy-key" type="button">Copy key</button><button id="hide-key" type="button" class="secondary">Hide key</button></div>
+</section>
+<section>
+<h2>Active and revoked keys</h2>
+<div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Key ID</th><th>Created</th><th>Access</th></tr></thead><tbody id="key-list"></tbody></table></div>
+<p id="no-keys" class="muted" hidden>No API keys created yet.</p>
+</section>
+<section>
+<h2>Connect your server</h2>
+<p>Send the key only from your backend. Use the <a href="/sdk.html">Node.js SDK</a> or the <a href="/api-docs.html">REST API</a>. The SDK will return your new project's page URL.</p>
+<code>SPINE_LINK_AGENT_API_KEY=your-personal-key</code>
+<p><small>Keys are write-capable and scoped to your account. A revoked key immediately stops new API requests. Existing published pages are unaffected.</small></p>
+</section>
+</div>
+</main>
+<footer>Spine-Link · Personal API keys · <a href="/api-docs.html">API documentation</a></footer>
+<script type="module" src="/api-keys.js"></script>
+</body>
+</html>

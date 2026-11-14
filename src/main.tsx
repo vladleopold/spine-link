@@ -51,6 +51,7 @@ type HomeFeedItem = {
 
 const siteReadingPages = [
   { href: "/api-docs.html", title: "API", description: "Connect an animation agent" },
+  { href: "/api-keys.html", title: "API Keys", description: "Create keys for your own server" },
   { href: "/sdk.html", title: "SDK", description: "Download the server-side integration client" },
   { href: "/spine-link.html", title: "Spine-Link", description: "Platform overview" },
   { href: "/spine-preview.html", title: "Spine Preview", description: "Open JSON, SKEL and atlas files" },
@@ -153,6 +154,7 @@ function renderHomeShell(isDragging = false) {
             <img class="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="" aria-hidden="true">
           </a>
           <div class="top-actions-row">
+            <a class="world-archive-link" href="/api-keys.html" aria-label="My API keys">KEYS</a>
             <a class="world-archive-link" href="/api-docs.html" aria-label="Animation API documentation">API</a>
             <a class="world-archive-link" href="/world-spine-archive">BROWSE</a>
             <div class="auth-panel">
