@@ -1190,23 +1190,13 @@ async function uploadBackgroundFilesFast(
     }),
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok || result?.ok !== true) {
-    throw new Error(typeof result?.error === "string" ? result.error : "Spine finalization failed: HTTP " + response.status);
-  }
-  // A successful write is not enough: the player must be able to resolve
-  // the indexed work and its Spine asset manifest before navigation.
-  const check = await uploadRequest("/api/github-upload", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "get-entry", entryId: uploadId, anonymousAccount,
-      settings: { ...settings, basePath: realPath.split("/")[0] },
-    }),
-  });
-  const checked = await check.json().catch(() => ({}));
-  if (!check.ok || checked?.entry?.id !== uploadId ||
-      !Array.isArray(checked.entry.files) || checked.entry.files.length !== files.length) {
-    throw new Error("Files saved but preview is not indexed correctly. Retry without re-uploading.");
+  // The server writes the index and all verified assets in ONE Git commit.
+  // Its commit receipt is the readiness guarantee; asking /get-entry for the
+  // same large index again only holds up the redirect (and may time out).
+  if (!response.ok || result?.ok !== true || result?.indexed !== true ||
+      !/^[a-f0-9]{40}$/i.test(String(result?.github?.commitSha || "")) ||
+      !Array.isArray(result?.files) || result.files.length !== files.length) {
+    throw new Error(typeof result?.error === "string" ? result.error : "Spine finalization was not confirmed: HTTP " + response.status);
   }
   return String(result.path || realPath);
 }
@@ -1235,7 +1225,7 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
     status: "uploading",
   });
 
-  const uploadNextFile = async () => {
+  const uploadNextFile = async (recoverySaved: Promise<void>) => {
     resolvedUploadPath = await uploadBackgroundFilesFast(
       files, uploadId, resolvedUploadPath, uploadedAt, anonymousAccount, title,
       (completed, current, fraction) => showBackgroundPopup(uploadEntry.id, null, null, {
@@ -1243,18 +1233,20 @@ function startBackgroundUpload(files: File[], resumed?: { id: string; files: Fil
       }),
     );
     updateBackgroundUpload(uploadEntry.id, { status: "uploading", uploadPath: resolvedUploadPath });
-    showBackgroundPopup(uploadEntry.id, null, null, { completed: files.length, total: files.length, finalizing: true });
+    // Recovery snapshot is saved IN PARALLEL with the transfer, rather than
+    // delaying the first byte sent to the server after drag-and-drop.
+    await recoverySaved;
     await finishBackgroundUpload(uploadEntry.id, uploadId);
   };
 
   showBackgroundPopup(uploadEntry.id, null, null, { completed: 0, total: files.length });
   void (async () => {
     try {
-      if (!resumed) {
-        try { await pendingUploadPut({ id: uploadEntry.id, files, uploadedAt, title, uploadId, uploadPath }); }
-        catch (error) { console.warn("[spine] Upload recovery storage unavailable; continuing transfer", error); }
-      }
-      await uploadNextFile();
+      const recoverySaved: Promise<void> = resumed
+        ? Promise.resolve()
+        : pendingUploadPut({ id: uploadEntry.id, files, uploadedAt, title, uploadId, uploadPath })
+            .catch((error) => { console.warn("[spine] Upload recovery storage unavailable; continuing transfer", error); });
+      await uploadNextFile(recoverySaved);
     } catch (error) {
       updateBackgroundUpload(uploadEntry.id, { status: 'failed', error: String(error) });
       showBackgroundPopup(uploadEntry.id, null, String(error));
@@ -1301,7 +1293,8 @@ async function finishBackgroundUpload(entryId: string, uploadId: string) {
   showBackgroundPopup(entryId, previewUrl, null);
   // Only open the link after the server confirms the atomic commit.
   try { await navigator.clipboard.writeText(previewUrl); } catch { /* manual copy remains available */ }
-  window.setTimeout(() => { window.location.assign(previewUrl); }, 900);
+  // Make the page visible as soon as GitHub confirms the atomic commit.
+  window.setTimeout(() => { window.location.assign(previewUrl); }, 80);
 }
 
 function showBackgroundPopup(entryId: string, url: string | null, error: string | null, progress?: { completed: number; total: number; current?: string; finalizing?: boolean; fileFraction?: number; chunkLabel?: string }) {
