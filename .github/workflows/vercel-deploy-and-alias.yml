@@ -69,6 +69,24 @@ jobs:
         if: steps.quota_recovery.outputs.skip != 'true'
         run: node --test tests/preview-cache.test.mjs tests/preview-metadata.test.mjs
 
+      - name: Verify full API suite and website build before release
+        if: steps.quota_recovery.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test \
+            tests/agent-animation-api.test.mjs \
+            tests/spine-link-agent-sdk.test.mjs \
+            tests/agent-api-pages.test.mjs \
+            tests/google-auth-guard.test.mjs
+          npm run build
+          test -s dist/api-keys.html
+          test -s dist/api-keys.js
+          test -s dist/sdk/spine-link-agent.mjs
+          test -s dist/agent-animation-openapi.json
+          echo "Validated API security, project deletion, authentication and static dashboard before deploying."
+
       - name: Install Vercel CLI
         if: steps.quota_recovery.outputs.skip != 'true'
         run: npm install -g vercel@latest
