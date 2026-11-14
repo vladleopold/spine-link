@@ -13,16 +13,13 @@ permissions:
 jobs:
   chromium:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
       - name: Install browser tooling
-        run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          npx playwright install --with-deps chromium
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Open newly uploaded Spine page in actual Chromium
         shell: bash
         run: |
