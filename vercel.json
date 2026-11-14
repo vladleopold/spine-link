@@ -6,6 +6,9 @@
   "functions": {
     "api/github-upload.js": {
       "maxDuration": 60
+    },
+    "api/agent-animation.js": {
+      "maxDuration": 60
     }
   },
   "headers": [
