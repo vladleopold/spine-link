@@ -12,6 +12,7 @@ process.env.GITHUB_TOKEN = 'test-github-token';
 process.env.GITHUB_OWNER = 'vladleopold';
 process.env.GITHUB_REPO = 'spine';
 process.env.GITHUB_BRANCH = 'main';
+process.env.GOOGLE_CLIENT_ID = 'test-oauth-spine-link-client';
 delete process.env.GITHUB_BASE_PATH;
 
 function result(status, value) {
@@ -24,6 +25,8 @@ function result(status, value) {
 
 function mockGithub() {
   let entries = [];
+  let registry = null;
+  let registryVersion = 0;
   let pendingTree = [];
   let head = 'a'.repeat(40);
   const blobs = new Map();
@@ -35,6 +38,39 @@ function mockGithub() {
     const body = options.body ? JSON.parse(options.body) : {};
     requests.push({ path, method });
     const base = '/repos/vladleopold/spine';
+    if (url.startsWith('https://oauth2.googleapis.com/tokeninfo')) {
+      const access = new URL(url).searchParams.get('access_token');
+      const number = access === 'google-user-one' ? '1' : access === 'google-user-two' ? '2' : '';
+      return number
+        ? result(200, { aud: 'test-oauth-spine-link-client', user_id: 'google-sub-' + number })
+        : result(401, { error:'invalid_token' });
+    }
+    if (path === '/oauth2/v3/userinfo') {
+      const access = String(options.headers?.Authorization || '').replace(/^Bearer /,'');
+      const number = access === 'google-user-one' ? '1' : access === 'google-user-two' ? '2' : '';
+      return number ? result(200, {
+        sub:'google-sub-' + number,
+        email:'owner' + number + '@test.invalid',
+        email_verified:true,
+      }) : result(401, {});
+    }
+    if (path === base + '/contents/library/agent-api-keys.json') {
+      if (method === 'GET') {
+        return registry ? result(200, {
+          sha: String(registryVersion).padStart(40,'a'),
+          encoding:'base64',
+          content: Buffer.from(JSON.stringify(registry)).toString('base64'),
+        }) : result(404, { message:'Not Found' });
+      }
+      if (method === 'PUT') {
+        const existingSha = registry ? String(registryVersion).padStart(40,'a') : null;
+        if (existingSha !== (body.sha || null)) return result(409, {message:'Conflict'});
+        registry = JSON.parse(Buffer.from(body.content, 'base64').toString('utf8'));
+        registryVersion++;
+        return result(200, {commit:{sha:String(registryVersion).padStart(40,'c')}});
+      }
+    }
+
     if (path === base + '/contents/' && method === 'GET') {
       return result(200, [{ name: 'library_02', type: 'dir' }]);
     }
@@ -81,7 +117,7 @@ function mockGithub() {
     }
     throw Error('Unexpected GitHub API: ' + method + ' ' + path);
   };
-  return { requests, dispatches, get entries() { return entries; } };
+  return { requests, dispatches, get entries() { return entries; }, get registry() { return registry; } };
 }
 
 function request(method, body, query = {}, key = API_KEY) {
@@ -323,6 +359,99 @@ test('batch-staging rejects duplicate filenames and malicious paths before stori
   });
   assert.equal(bad.code,400);
   assert.equal(gh.requests.length,before);
+});
+
+
+test('Google account creates a one-time personal key; only masked key is listed', async () => {
+  const gh = mockGithub();
+  const initial = await request('POST', {action:'keys-list'}, {}, 'google-user-one');
+  assert.equal(initial.code, 200, JSON.stringify(initial));
+  assert.deepEqual(initial.keys, []);
+  const created = await request('POST', {action:'keys-create',name:'Cloud animation server'}, {}, 'google-user-one');
+  assert.equal(created.code, 200, JSON.stringify(created));
+  assert.match(created.key,/^slk_v1_[0-9a-f]{16}_[A-Za-z0-9_-]{43}$/);
+  assert.equal(created.record.scope,'publish');
+  const registry = JSON.stringify(gh.registry);
+  assert(!registry.includes(created.key), 'never persist plaintext key');
+  assert(!registry.includes('owner1@test.invalid'), 'encrypt Google email in key registry');
+  const own = await request('POST', {action:'keys-list'}, {}, 'google-user-one');
+  assert.equal(own.keys.length, 1);
+  assert(!JSON.stringify(own).includes(created.key));
+  const other = await request('POST', {action:'keys-list'}, {}, 'google-user-two');
+  assert.deepEqual(other.keys, [], 'other Google account has no access');
+  const bad = await request('POST', {action:'keys-revoke',keyId:created.record.id}, {}, 'google-user-two');
+  assert.equal(bad.code,404);
+});
+
+test('personal API key publishes into verified owner library; another key cannot access', async () => {
+  const gh = mockGithub();
+  const created = await request('POST', {action:'keys-create', name:'Office animator'}, {}, 'google-user-one');
+  const token = created.key;
+  const second = await request('POST', {action:'keys-create', name:'Other user server'}, {}, 'google-user-two');
+  const job = await request('POST',{action:'create',format:'runtime',title:'Personal robot'}, {}, token);
+  assert.equal(job.code,201, JSON.stringify(job));
+  assert.match(job.jobToken, /^[\w-]+\.[a-f0-9]{64}$/);
+  const attackerUpload = await request('POST',{
+    action:'stage',jobToken:job.jobToken,name:'actor.png',contentBase64:'cG5n',
+  },{},second.key);
+  assert.equal(attackerUpload.code,403, JSON.stringify(attackerUpload));
+  const attackerStatus = await request('POST',{action:'status',jobToken:job.jobToken},{},second.key);
+  assert.equal(attackerStatus.code,403);
+  const files = [
+    ['actor.json', jsonSkeleton],
+    ['actor.atlas', 'actor.png\nsize: 1,1\n'],
+    ['actor.png', 'png'],
+  ];
+  const receipts = [];
+  for (const [name, data] of files) {
+    const result = await request('POST',{
+      action:'stage',jobToken:job.jobToken,name,contentBase64:Buffer.from(data).toString('base64'),
+    },{},token);
+    assert.equal(result.code,201);
+    receipts.push(result.receipt);
+  }
+  const done = await request('POST',{action:'complete',jobToken:job.jobToken,files:receipts},{},token);
+  assert.equal(done.code,201, JSON.stringify(done));
+  const entry = gh.entries[0];
+  assert.equal(entry.ownerEmail,'owner1@test.invalid');
+  assert.equal(entry.showOwnerLibrary,true);
+  assert.match(entry.publicOwnerId,/^u_/);
+  assert.match(entry.ownerAccountId,/^[a-f0-9]{64}$/);
+  assert.equal(entry.hiddenFromPublicLibrary,true);
+  const ownerStatus = await request('POST',{
+    action:'status',id:job.id,collection:job.uploadPath.split('/')[0]
+  },{},token);
+  assert.equal(ownerStatus.code,200);
+  const wrongStatus = await request('POST',{
+    action:'status',id:job.id,collection:job.uploadPath.split('/')[0]
+  },{},second.key);
+  assert.equal(wrongStatus.code,403);
+  const revoke = await request('POST',{action:'keys-revoke',keyId:created.record.id},{},'google-user-one');
+  assert.equal(revoke.code,200);
+  const disabled = await request('POST',{action:'create',format:'runtime',title:'Rejected'}, {}, token);
+  assert.equal(disabled.code,401, JSON.stringify(disabled));
+  const after = await request('POST',{action:'keys-list'},{},'google-user-one');
+  assert(after.keys[0].revokedAt);
+});
+
+test('maximum five active personal keys and invalid Google session do not create credentials', async () => {
+  const gh = mockGithub();
+  const invalid = await request('POST',{action:'keys-create',name:'Agent Z'}, {},'invalid-oauth');
+  assert.equal(invalid.code,401);
+  for (let i=1;i<=5;i++) {
+    const created=await request('POST',{action:'keys-create',name:'Agent number '+i}, {},'google-user-one');
+    assert.equal(created.code,200, JSON.stringify(created));
+  }
+  const sixth = await request('POST',{action:'keys-create',name:'Agent six'}, {},'google-user-one');
+  assert.equal(sixth.code,409);
+  const before=gh.registry.keys.filter(key=>!key.revokedAt).length;
+  assert.equal(before,5);
+  const first=gh.registry.keys[0].id;
+  const revoked=await request('POST',{action:'keys-revoke',keyId:first}, {},'google-user-one');
+  assert.equal(revoked.code,200);
+  const replacement=await request('POST',{action:'keys-create',name:'Replacement server'}, {},'google-user-one');
+  assert.equal(replacement.code,200);
+  assert.equal(gh.registry.keys.filter(key=>!key.revokedAt).length,5);
 });
 
 test.after(() => {
