@@ -1216,7 +1216,7 @@ export default async function handler(request, response) {
     const commitPrefix = String(body?.commitPrefix || 'Add Spine preview');
     const action = String(body?.action || '');
     failedAction = action || 'unknown';
-    if (['get-entry', 'delete-entry', 'update-note', 'update-layout', 'update-entry-visibility'].includes(action) && body?.entryId) {
+    if (['delete-entry', 'update-note', 'update-layout', 'update-entry-visibility'].includes(action) && body?.entryId) {
       const collections = await libraryCollectionIndexes(settings);
       const collection = collections.find(item => item.entries.some(entry => String(entry?.id) === String(body.entryId)));
       if (collection) settings.basePath = collection.basePath;
@@ -2087,12 +2087,26 @@ export default async function handler(request, response) {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const entryId = String(body?.entryId || '').trim();
       if (!entryId) return response.status(400).json({ error: 'Invalid entry payload' });
+      // The just-published client already knows its exact collection. Read that
+      // index first: scanning old collections before returning can download
+      // tens of MB and hold up navigation despite a successful atomic commit.
       const indexPath = joinRepoPath(settings.basePath, 'index.json');
       const currentIndex = await getGitHubContent(settings, indexPath);
-      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
-      const entry = currentEntries.find((currentEntry) => String(currentEntry?.id || '') === entryId);
+      const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64'
+        ? JSON.parse(base64ToText(currentIndex.content)) : [];
+      let entry = currentEntries.find((item) => String(item?.id || '') === entryId);
+      // Old saved links/editors may not know the collection after a rotation.
+      // Only they pay the price of a cross-library fallback lookup.
+      if (!entry) {
+        const collections = await libraryCollectionIndexes(settings);
+        const collection = collections.find(item => item.entries.some(itemEntry => String(itemEntry?.id || '') === entryId));
+        entry = collection?.entries.find(item => String(item?.id || '') === entryId);
+      }
       if (!entry) return response.status(404).json({ error: 'Library entry not found' });
-      return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, entry), canEdit: canEditEntry(entry, googlePayload, anonymousAccount) });
+      return response.status(200).json({
+        ok: true, entry: publicLibraryEntry(origin, entry),
+        canEdit: canEditEntry(entry, googlePayload, anonymousAccount),
+      });
     }
 
     if (action === 'merge-anonymous-account') {
