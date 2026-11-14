@@ -400,7 +400,7 @@ function generatedThumbnailUrl(origin, entry) {
 
 async function dispatchSpineProjectExport(settings, entry, origin) {
   const id = String(entry?.id || '').trim();
-  if (!id || entry?.sourceKind !== 'spine-project') return null;
+  if (!id || entry?.sourceKind !== 'spine-project' || entry?.testOnly === true) return null;
   // Project files are proprietary editor sources. The storage repository's
   // licensed Spine CLI workflow must produce JSON/atlas before any runtime can
   // animate them. Never pretend a .spine file is a .skel runtime export.
