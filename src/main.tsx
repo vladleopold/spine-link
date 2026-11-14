@@ -1179,13 +1179,34 @@ async function uploadBackgroundFilesFast(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action: "background-finalize-fast", uploadId, uploadPath: realPath,
-      uploadedAt, anonymousAccount, settings, entry: { id: uploadId, uploadedAt, previewPath: realPath },
+      uploadedAt, anonymousAccount, settings, entry: {
+        id: uploadId, uploadedAt, previewPath: realPath, title,
+        files: files.map(file => file.name),
+        skeleton: files.find(file => /\\.(json|skel|bytes)$/i.test(file.name))?.name || "",
+        atlas: files.find(file => /\\.atlas$/i.test(file.name))?.name || "",
+        textures: files.filter(file => /\\.(png|jpe?g|webp)$/i.test(file.name)).map(file => file.name),
+      },
       stagedBlobs, stagedAssemblies, commitPrefix: "Fast Spine upload",
     }),
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || result?.ok !== true) {
     throw new Error(typeof result?.error === "string" ? result.error : "Spine finalization failed: HTTP " + response.status);
+  }
+  // A successful write is not enough: the player must be able to resolve
+  // the indexed work and its Spine asset manifest before navigation.
+  const check = await uploadRequest("/api/github-upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "get-entry", entryId: uploadId, anonymousAccount,
+      settings: { ...settings, basePath: realPath.split("/")[0] },
+    }),
+  });
+  const checked = await check.json().catch(() => ({}));
+  if (!check.ok || checked?.entry?.id !== uploadId ||
+      !Array.isArray(checked.entry.files) || checked.entry.files.length !== files.length) {
+    throw new Error("Files saved but preview is not indexed correctly. Retry without re-uploading.");
   }
   return String(result.path || realPath);
 }
