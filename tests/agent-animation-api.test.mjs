@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import handler from '../api/agent-animation.js';
+import handler from '../lib/agent-animation.js';
 
 const API_KEY = 'test-agent-key-that-is-at-least-32-bytes-long';
 const oldFetch = globalThis.fetch;
