@@ -829,18 +829,21 @@ function readStoredGoogleSession(): StoredGoogleSession | null {
 
 function getValidStoredGoogleToken() {
   const storedSession = readStoredGoogleSession();
-  if (!storedSession?.accessToken || storedSession.expiresAt <= Date.now() + 60_000) return "";
+  const expiresAt = Number(storedSession?.expiresAt);
+  if (!storedSession?.accessToken || !Number.isFinite(expiresAt) || expiresAt <= Date.now() + 60_000) return "";
   return storedSession.accessToken;
 }
 
 function storeGoogleSession(user: GoogleUser, accessToken: string, expiresIn = 3300) {
   if (typeof window === "undefined") return;
+  const requestedLifetime = Number(expiresIn);
+  const lifetime = Number.isFinite(requestedLifetime) && requestedLifetime > 0 ? requestedLifetime : 3300;
   window.localStorage.setItem(
     googleSessionStorageKey,
     JSON.stringify({
       user,
       accessToken,
-      expiresAt: Date.now() + Math.max(60, expiresIn) * 1000,
+      expiresAt: Date.now() + Math.max(60, Math.min(lifetime, 3600)) * 1000,
     } satisfies StoredGoogleSession),
   );
 }
@@ -2869,6 +2872,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const homeUploadInputRef = useRef<HTMLInputElement | null>(null);
   const homeFeedRef = useRef<HTMLDivElement | null>(null);
   const googleTokenClientRef = useRef<GoogleTokenClient | null>(null);
+  const silentGoogleRefreshRef = useRef(false);
   const baseViewportRef = useRef<PlayerViewport | null>(null);
   const playerCanvasSizeRef = useRef({ width: 1, height: 1 });
   const pinchDistanceRef = useRef<number | null>(null);
@@ -3006,7 +3010,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       if (Array.isArray(data.allowed)) setAllowedOwners(data.allowed.map(String));
     });
   }, [isAdminPage]);
-  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() => getValidStoredGoogleToken() ? readStoredGoogleSession()?.user ?? null : null);
+  // Keep the remembered profile visible while the short-lived OAuth access
+  // token is renewed. The token itself is still required for private actions.
+  const [googleUser, setGoogleUser] = useState<GoogleUser | null>(() => readStoredGoogleSession()?.user ?? null);
   const [googleIdToken, setGoogleIdToken] = useState(() => getValidStoredGoogleToken());
   const [profileNameInput, setProfileNameInput] = useState(() => cleanAccountDisplayName(readStoredGoogleSession()?.user?.name || ""));
   const [isSavingProfileName, setIsSavingProfileName] = useState(false);
@@ -3022,11 +3028,13 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     const session = readStoredGoogleSession();
     if (!session || session.accessToken !== googleIdToken) return;
     const timer = window.setTimeout(() => {
+      // Access tokens expire after about an hour. Preserve the account profile
+      // and let the silent GIS refresh effect renew the token without losing
+      // the avatar on an ordinary page refresh.
       setGoogleIdToken("");
-      setGoogleUser(null);
       setLibraryEntries([]);
-      setGoogleAuthError("Your Google session expired. Sign in again to load your works.");
-    }, Math.max(0, session.expiresAt - Date.now() - 60_000));
+      setGoogleAuthError("Restoring Google session...");
+    }, Math.max(0, Number(session.expiresAt) - Date.now() - 60_000));
     return () => window.clearTimeout(timer);
   }, [googleIdToken]);
 
@@ -4782,6 +4790,10 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
   const openLibrary = () => {
     setIsAccountMenuOpen(false);
+    if (googleUser && !googleIdToken) {
+      setGoogleAuthError("Reconnect Google to open your portfolio.");
+      return;
+    }
     setIsLibraryOpen(true);
     void loadLibrary();
   };
@@ -5027,8 +5039,12 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         scope: "openid email profile",
         callback: async (response) => {
           if (response.error || !response.access_token) {
-            if (googleUser || readStoredGoogleSession()?.user?.email) {
+            const wasSilentRefresh = silentGoogleRefreshRef.current;
+            silentGoogleRefreshRef.current = false;
+            if (wasSilentRefresh || googleUser || readStoredGoogleSession()?.user?.email) {
               setGoogleIdToken("");
+              setLibraryEntries([]);
+              setGoogleAuthError("Google session expired. Reconnect to continue.");
               return;
             }
             setGoogleAuthError(response.error || "Google sign-in failed.");
@@ -5061,6 +5077,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               storedDisplayName ||
               googleDisplayName;
             const nextGoogleUser = { email, name: nextDisplayName || payload.name, picture: payload.picture };
+            silentGoogleRefreshRef.current = false;
             setGoogleUser(nextGoogleUser);
             setProfileNameInput(nextDisplayName);
             setGoogleIdToken(response.access_token);
@@ -5069,7 +5086,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             setStatus("Signed in. Library account merged.");
             void mergeAnonymousLibrary(response.access_token, nextGoogleUser);
           } catch {
-            setGoogleAuthError("Could not read Google profile.");
+            silentGoogleRefreshRef.current = false;
+            setGoogleAuthError("Could not read Google profile. Reconnect to continue.");
           }
         },
       });
@@ -5085,6 +5103,34 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     setGoogleAuthError("");
     googleTokenClientRef.current.requestAccessToken({ prompt: "select_account" });
   };
+
+  // Google GIS access tokens are short-lived. When a remembered profile has no
+  // usable token, first request a silent token; if Google requires interaction,
+  // keep the avatar and expose an explicit reconnect action instead of signing
+  // the user out on refresh.
+  useEffect(() => {
+    const storedSession = readStoredGoogleSession();
+    if (!storedSession?.user?.email || googleIdToken) return;
+    const expiresAt = Number(storedSession.expiresAt);
+    if (storedSession.accessToken && Number.isFinite(expiresAt) && expiresAt > Date.now() + 60_000) return;
+
+    let cancelled = false;
+    const restoreSession = async () => {
+      setGoogleAuthError("Restoring Google session...");
+      const ready = await ensureGoogleAuth();
+      if (cancelled) return;
+      if (!ready || !googleTokenClientRef.current) {
+        setGoogleAuthError("Google session expired. Reconnect to continue.");
+        return;
+      }
+      silentGoogleRefreshRef.current = true;
+      googleTokenClientRef.current.requestAccessToken({ prompt: "" });
+    };
+    void restoreSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [googleIdToken]);
 
   async function publishToGitHub(spine: PreparedSpine, animationNames: string[], defaultAnimation: string) {
     const existingEntry = currentLibraryEntry;
@@ -5494,7 +5540,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               {googleUser ? (
                 <div className={`auth-user ${isAccountMenuOpen ? "is-account-menu-open" : ""}`}>
                   <span>{googleUser.email}</span>
-                  <button type="button" onClick={openLibrary}>MY PORTFOLIO</button>
+                  {googleIdToken ? (
+                    <button type="button" onClick={openLibrary}>MY PORTFOLIO</button>
+                  ) : (
+                    <button type="button" aria-label="Reconnect Google" onClick={() => void openGoogleSignIn()}>RECONNECT</button>
+                  )}
                   <div className="avatar-menu">
                     <button
                       className="avatar-menu-toggle"
@@ -5511,6 +5561,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                       <span>Sign out</span>
                     </button>
                   </div>
+                  {googleAuthError && <span className="auth-error">{googleAuthError}</span>}
                 </div>
               ) : (
                 <>
