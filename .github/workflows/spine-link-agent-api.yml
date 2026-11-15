@@ -17,6 +17,7 @@ on:
       - 'tests/agent-api-pages.test.mjs'
       - 'tests/google-auth-guard.test.mjs'
       - 'tests/api-keys-browser.test.mjs'
+      - 'tests/google-session-persistence.test.mjs'
       - 'tests/spine-link-agent-sdk.test.mjs'
       - 'tests/agent-animation-api.test.mjs'
       - 'scripts/spine-link-agent-publish.mjs'
@@ -88,3 +89,5 @@ jobs:
           exit 1
       - name: Desktop/mobile real Chromium API-key UI tests
         run: node tests/api-keys-browser.test.mjs
+      - name: Google account survives reload and silently renews expired access tokens
+        run: node tests/google-session-persistence.test.mjs
