@@ -69,7 +69,16 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin "$TESTED_SHA"
           changed="$(git diff --name-only "$TESTED_SHA" "$GITHUB_SHA")"
-          unexpected="$(printf '%s\\n' "$changed" | grep -v '^.github/workflows/vercel-deploy-and-alias.yml
+          unexpected="$(printf '%s\\n' "$changed" | grep -Fvx ".github/workflows/vercel-deploy-and-alias.yml" || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error::Application or test files changed after the successful CI run for $TESTED_SHA. Refusing to deploy unverified source."
+            printf '%s\\n' "$unexpected"
+            exit 1
+          fi
+          echo "Production source matches the successful CI commit; only the deploy workflow changed afterward."
+
+      - name: Set up Node
+        if: steps.quota_recovery.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
