@@ -6,12 +6,18 @@ on:
     paths:
       - '.github/workflows/spine-link-upload-e2e.yml'
   workflow_dispatch:
+  # Exercise the actual production storage pipeline only after the deployed
+  # homepage and Spine preview have passed an independent Chromium check.
+  workflow_run:
+    workflows: ["Spine-Link Chromium production verification"]
+    types: [completed]
 
 permissions:
   contents: read
 
 jobs:
   live-upload:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -73,6 +79,7 @@ jobs:
             const commit = await api({
               action:'background-finalize-fast',uploadId,uploadPath:realPath,uploadedAt,
               entry:{id:uploadId,uploadedAt,previewPath:realPath,title:'Spine Link automated verification',
+                testOnly:true,hiddenFromPublicLibrary:true,
                 files:files.map(file=>file.name),skeleton:'fool_demo_fx.json',
                 atlas:'fool_demo_fx.atlas',textures:['fool_demo_fx.png']},
               stagedBlobs:receipts,stagedAssemblies:[],commitPrefix:'Production preview verification',
