@@ -3906,7 +3906,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       setIsDragging(false);
       setError("");
       if (window.__spineLinkReceiveDrop &&
-          (files.some(file => /\\.spine$/i.test(file.name)) || window.__spineLinkHasPendingProject?.())) {
+          (files.some(file => /\.spine$/i.test(file.name)) || window.__spineLinkHasPendingProject?.())) {
         window.__spineLinkReceiveDrop(files);
         setStatus("Preparing Spine project upload...");
         return;
