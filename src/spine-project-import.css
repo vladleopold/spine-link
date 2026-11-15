@@ -36,3 +36,21 @@
     gap: 8px;
   }
 }
+
+/* Old homepage CSS hid this line. Users must see both accepted formats. */
+.app-shell.is-empty:not(.is-edit-page) .main-drop-zone > span {
+  display: block !important;
+  visibility: visible !important;
+  max-width: min(100%, 600px);
+  font-size: clamp(11px, 1.5vw, 15px) !important;
+  line-height: 1.25 !important;
+  text-align: center;
+}
+@media (max-width: 480px), (max-height: 600px) {
+  .app-shell.is-empty:not(.is-edit-page) .main-drop-zone > span {
+    display: block !important;
+    font-size: 9px !important;
+    line-height: 1.1 !important;
+    margin: 0 !important;
+  }
+}
