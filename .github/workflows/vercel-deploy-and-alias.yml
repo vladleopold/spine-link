@@ -69,7 +69,10 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin "$TESTED_SHA"
           changed="$(git diff --name-only "$TESTED_SHA" "$GITHUB_SHA")"
-          unexpected="$(printf '%s\\n' "$changed" | grep -Fvx ".github/workflows/vercel-deploy-and-alias.yml" || true)"
+          unexpected=""
+          if [ -n "$changed" ]; then
+            unexpected="$(printf '%s\\n' "$changed" | grep -Fvx ".github/workflows/vercel-deploy-and-alias.yml" || true)"
+          fi
           if [ -n "$unexpected" ]; then
             echo "::error::Application or test files changed after the successful CI run for $TESTED_SHA. Refusing to deploy unverified source."
             printf '%s\\n' "$unexpected"
