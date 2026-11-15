@@ -99,17 +99,15 @@ function receiveFiles(files: File[]) {
 }
 
 function savedHomeGoogleUser(): { email: string; name: string; picture: string } | null {
-  // The lightweight homepage must reflect the same unexpired Google session
-  // as the React application. Otherwise refreshing / makes an authenticated
-  // user appear signed out until they manually open the portfolio.
+  // The lightweight homepage remembers the account identity independently of
+  // the short-lived OAuth access token. React renews an expired token silently
+  // after the user opens the portfolio; an expired token must not erase the
+  // avatar during a normal page refresh.
   try {
     const raw = window.localStorage.getItem("spine-link-google-session");
     if (!raw) return null;
     const session = JSON.parse(raw);
-    if (typeof session?.accessToken !== "string" || !session.accessToken ||
-        typeof session?.expiresAt !== "number" ||
-        session.expiresAt <= Date.now() + 60_000 ||
-        typeof session?.user?.email !== "string" || !session.user.email.trim()) return null;
+    if (typeof session?.user?.email !== "string" || !session.user.email.trim()) return null;
     return {
       email: session.user.email,
       name: typeof session.user.name === "string" ? session.user.name : "",
