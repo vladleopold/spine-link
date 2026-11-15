@@ -4,12 +4,11 @@ name: Vercel deploy and alias
 # 100-deployments/24h quota on frequent pushes. Manual releases remain available.
 on:
   workflow_dispatch:
-  # One immediate release when the release procedure itself is updated.
-  # Normal source commits remain batched every six hours to protect Hobby quota.
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/vercel-deploy-and-alias.yml'
+  # Deploy a source change only after the full Agent API CI workflow, including
+  # Chromium session-persistence tests, has completed successfully.
+  workflow_run:
+    workflows: ["Spine-Link Agent API CI"]
+    types: [completed]
   schedule:
     - cron: '11 0,6,12,18 * * *'
 
@@ -25,11 +24,12 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Skip scheduled release when commit is already deployed
+      - name: Skip scheduled or CI-gated release when commit is already deployed
         id: quota_recovery
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_run'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
