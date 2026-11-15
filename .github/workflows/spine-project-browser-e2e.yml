@@ -70,6 +70,22 @@ jobs:
               assert.equal(await page.locator('.site-menu-panel a[href="/world-spine-archive"]').count(),1);
               assert.match(await page.locator('#home-drop-zone').innerText(),/\.spine \+ images\//);
               assert.ok((await page.locator('[data-file-input]').getAttribute('accept')).includes('.spine'));
+              // A selected .spine SOURCE must turn the same native file picker
+              // into an images/ DIRECTORY picker: no extra page-level buttons.
+              await page.locator('[data-file-input]').setInputFiles({
+                name:'hero.spine', mimeType:'application/octet-stream',
+                buffer:Buffer.from('SPINE'),
+              });
+              await page.waitForFunction(() =>
+                document.querySelector('[data-file-input]')?.hasAttribute('webkitdirectory')
+              );
+              assert.equal(await page.locator('[data-file-input]').getAttribute('accept'),'');
+              assert.match(await page.locator('[data-file-input]').getAttribute('aria-label'),/images folder/);
+              // Reset to a fresh homepage and verify ordinary runtime picker is restored.
+              await page.reload({waitUntil:'domcontentloaded'});
+              await page.locator('#home-drop-zone').waitFor();
+              assert.equal(await page.locator('[data-file-input]').getAttribute('webkitdirectory'),null);
+              assert.ok((await page.locator('[data-file-input]').getAttribute('accept')).includes('.spine'));
               await page.locator('.site-menu-toggle').click();
               const menu=await page.locator('.site-menu-panel').boundingBox();
               assert.ok(menu && menu.x>=0 && menu.x+menu.width<=viewport.width+1,
