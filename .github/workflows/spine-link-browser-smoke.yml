@@ -209,9 +209,31 @@ jobs:
             result=failure
             description="Production Chromium failed: inspect screenshots and browser logs"
           fi
-          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$RELEASE_SHA" \
-            -f state="$result" \
-            -f context="spine-link/production-chromium" \
-            -f description="$description" \
-            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          echo "Recorded $result for deployment commit $RELEASE_SHA"
+          # The Playwright container does not provide gh CLI. Node's built-in
+          # fetch uses the existing short-lived GITHUB_TOKEN without installing
+          # another binary or leaking it to the browser under test.
+          REPORT_STATE="$result" REPORT_DESCRIPTION="$description" node --input-type=module <<'REPORT'
+          const { GITHUB_REPOSITORY, RELEASE_SHA, GITHUB_RUN_ID, GH_TOKEN,
+                  REPORT_STATE, REPORT_DESCRIPTION } = process.env;
+          const url = `https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${RELEASE_SHA}`;
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${GH_TOKEN}`,
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              state: REPORT_STATE,
+              context: 'spine-link/production-chromium',
+              description: REPORT_DESCRIPTION,
+              target_url: `https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}`
+            })
+          });
+          if (!response.ok) {
+            const details = await response.text();
+            throw Error(`GitHub commit status HTTP ${response.status}: ${details.slice(0,400)}`);
+          }
+          console.log('Recorded', REPORT_STATE, 'for deployment commit', RELEASE_SHA);
+          REPORT
