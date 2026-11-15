@@ -66,7 +66,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Ensure source has not changed since the successful CI run
-        if: github.event_name == 'workflow_run' && steps.quota_recovery.outputs.skip != 'true'
+        if: ${{ github.event_name == 'workflow_run' && steps.quota_recovery.outputs.skip != 'true' }}
         env:
           TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
