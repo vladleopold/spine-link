@@ -2976,7 +2976,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   }, []);
   const [previewNoteStatus, setPreviewNoteStatus] = useState("");
   const [currentLibraryEntry, setCurrentLibraryEntry] = useState<LibraryEntry | null>(null);
-  const [status, setStatus] = useState("Drop three Spine files here: json, atlas, and texture.");
+  const [status, setStatus] = useState("Drop Spine export files or a .spine project with images.");
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -6094,8 +6094,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                           name="spine-files"
                           type="file"
                           multiple
-                          accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
-                          aria-label="Upload Spine JSON SKEL atlas and texture files"
+                          accept=".spine,.json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
+                          aria-label="Upload Spine project or JSON SKEL atlas and texture files"
                           onDragOver={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
@@ -6108,7 +6108,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                         />
                         <Upload size={20} />
                         <strong>Choose files</strong>
-                        <span>JSON or SKEL, atlas, and textures</span>
+                        <span>JSON/SKEL + atlas + textures or .spine + images/</span>
                       </label>
                       <p className="upload-modal-agreement">
                         Upload agreement: by adding files here, you agree to the{" "}
