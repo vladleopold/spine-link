@@ -30,6 +30,8 @@ type BackgroundUploadEntry = {
 declare global {
   interface Window {
     __spineLinkReceiveFiles?: (files: File[]) => void;
+    __spineLinkReceiveDrop?: (files: File[], items?: DataTransferItemList | null) => void;
+    __spineLinkHasPendingProject?: () => boolean;
   }
 }
 
@@ -50,6 +52,7 @@ type HomeFeedItem = {
 };
 
 const siteReadingPages = [
+  { href: "/world-spine-archive", title: "Browse", description: "World SPINE ARCHIVE" },
   { href: "/api-docs.html", title: "API", description: "Connect an animation agent" },
   { href: "/api-keys.html", title: "API Keys", description: "Create keys for your own server" },
   { href: "/sdk.html", title: "SDK", description: "Download the server-side integration client" },
@@ -154,9 +157,6 @@ function renderHomeShell(isDragging = false) {
             <img class="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="" aria-hidden="true">
           </a>
           <div class="top-actions-row">
-            <a class="world-archive-link" href="/api-keys.html" aria-label="My API keys">KEYS</a>
-            <a class="world-archive-link" href="/api-docs.html" aria-label="Animation API documentation">API</a>
-            <a class="world-archive-link" href="/world-spine-archive">BROWSE</a>
             <div class="auth-panel">
               <a class="my-library-button" href="/?portfolio=1" data-open-library>${homeUser ? "MY PORTFOLIO" : "Portfolio"}</a>
               ${homeUser ? `
@@ -189,18 +189,12 @@ function renderHomeShell(isDragging = false) {
          <div class="stage">
            <div class="home-drop-panel">
              <label class="drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}" id="home-drop-zone">
-               <input name="spine-files" type="file" multiple accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp" aria-label="Upload Spine JSON SKEL atlas and texture files" data-file-input>
+               <input name="spine-files" type="file" multiple accept=".spine,.json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp" aria-label="Select Spine project, export files or textures" data-file-input>
                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13m0-13 5 5m-5-5-5 5M5 15v4h14v-4"/></svg>
-               <strong>Drag'and'Drop files here</strong>
-               <span>JSON or SKEL, atlas, and textures become a Spine preview.</span>
+               <strong>Drop Spine files to preview</strong>
+               <span>JSON/SKEL + atlas + textures or .spine + images/</span>
+               <small class="spine-import-status" id="spine-project-status" role="status" aria-live="polite"></small>
              </label>
-             <div class="project-import-controls" aria-label="Spine project import">
-               <input type="file" id="spine-project-picker" accept=".spine" hidden>
-               <input type="file" id="spine-images-picker" webkitdirectory directory multiple hidden>
-               <button type="button" data-pick-spine-project>Project .spine</button>
-               <button type="button" data-pick-spine-images>Images folder</button>
-               <span id="spine-project-status" role="status">Choose a project and images/</span>
-             </div>
              <p class="home-drop-caption" style="font-size: 8px; line-height: 1.2">
                <strong>Upload agreement:</strong> by adding files here, you agree to the{" "}
                <a href="/spine-link-manifesto.html">Spine-Link Manifesto</a>. Public works and uploaded animation
@@ -337,7 +331,7 @@ function addProjectSelection(files: File[]) {
   if (projects.length) pendingProjectFile = projects[0];
   if (images.length) pendingProjectImages = images;
   if (!pendingProjectFile || !pendingProjectImages.length) {
-    projectSelectionStatus(pendingProjectFile ? "Now choose images folder" : "Now choose .spine project");
+    projectSelectionStatus(pendingProjectFile ? "Drop the images/ folder to continue" : "Drop a .spine project to continue");
     return;
   }
   try {
@@ -352,23 +346,37 @@ function addProjectSelection(files: File[]) {
 }
 
 function acceptHomeDroppedFiles(files: File[], items?: DataTransferItemList | null) {
-  // Capture directory entries before leaving the drop handler: the browser
-  // invalidates DataTransferItemList after the current event finishes.
+  // Capture directory entries synchronously while DataTransferItemList is valid.
+  // A drop can contain both a .spine file and an images/ directory.
   const entries = Array.from(items || [])
+    .filter(item => item.kind === "file")
     .map(item => (item as DataTransferItem & { webkitGetAsEntry?: () => unknown }).webkitGetAsEntry?.())
     .filter(Boolean) as Array<{ isDirectory?: boolean }>;
+  const route = (selected: File[]) => {
+    if (!selected.length) return;
+    const hasRuntimeFiles = selected.some(file => /\.(json|skel|atlas)$/i.test(file.name));
+    const hasImagesFolder = selected.some(file => isSpineImageFile(file) &&
+      /(^|\/)images\//i.test(projectFilePath(file).replace(/\\/g, "/")));
+    if (selected.some(isSpineProjectFile) || pendingProjectFile || pendingProjectImages.length ||
+        (hasImagesFolder && !hasRuntimeFiles)) {
+      addProjectSelection(selected);
+    } else {
+      // Existing runtime exports keep their normal upload path.
+      startBackgroundUpload(selected);
+    }
+  };
   if (entries.some(entry => entry.isDirectory)) {
-    void readDroppedProjectEntries(entries).then(addProjectSelection)
+    void readDroppedProjectEntries(entries).then(route)
       .catch(error => projectSelectionStatus(String(error)));
     return;
   }
-  if (files.some(isSpineProjectFile) || (pendingProjectFile && files.some(isSpineImageFile)) ||
-      (pendingProjectImages.length && files.some(isSpineProjectFile))) {
-    addProjectSelection(files);
-  } else if (files.length) {
-    startBackgroundUpload(files);
-  }
+  route(files);
 }
+
+// Shared with the React homepage after its lazy mount, so source imports and
+// folder drops use the same upload pipeline without a separate visible control.
+window.__spineLinkReceiveDrop = acceptHomeDroppedFiles;
+window.__spineLinkHasPendingProject = () => Boolean(pendingProjectFile || pendingProjectImages.length);
 
 function wireHomeShell() {
   if (!root) return;
@@ -429,21 +437,6 @@ function wireHomeShell() {
     bootFileInput.value = "";
   });
   bootFileInput?.addEventListener("change", handleBootFileInput);
-  const projectPicker = root.querySelector<HTMLInputElement>("#spine-project-picker");
-  const imagesPicker = root.querySelector<HTMLInputElement>("#spine-images-picker");
-  root.querySelector("[data-pick-spine-project]")?.addEventListener("click", () => projectPicker?.click());
-  root.querySelector("[data-pick-spine-images]")?.addEventListener("click", () => imagesPicker?.click());
-  projectPicker?.addEventListener("change", () => {
-    const files = Array.from(projectPicker.files || []);
-    if (files.length) addProjectSelection(files);
-    projectPicker.value = "";
-  });
-  imagesPicker?.addEventListener("change", () => {
-    const files = Array.from(imagesPicker.files || []);
-    if (files.length) addProjectSelection(files);
-    imagesPicker.value = "";
-  });
-
   void loadHomeFeed();
 
   // Banner behind the drop zone: a random library work, refreshed every 5 minutes.
@@ -1509,14 +1502,18 @@ function showBackgroundPopup(entryId: string, url: string | null, error: string 
 
 document.addEventListener("drop", (event) => {
   const files = Array.from(event.dataTransfer?.files ?? []);
-  if (!files.length) return;
+  const items = event.dataTransfer?.items ?? null;
+  const hasDirectory = Array.from(items ?? []).some(item =>
+    Boolean((item as DataTransferItem & { webkitGetAsEntry?: () => { isDirectory?: boolean } | null }).webkitGetAsEntry?.()?.isDirectory));
+  if (!files.length && !hasDirectory) return;
   event.preventDefault();
   event.stopPropagation();
   renderHomeShell(false);
-  if (isAppMounted && mountedFileReceiver) {
+  if (isAppMounted && mountedFileReceiver && !hasDirectory && !files.some(isSpineProjectFile) &&
+      !pendingProjectFile && !pendingProjectImages.length) {
     mountedFileReceiver(files);
   } else {
-    acceptHomeDroppedFiles(files, event.dataTransfer?.items);
+    acceptHomeDroppedFiles(files, items);
   }
 });
 
