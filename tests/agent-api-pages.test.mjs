@@ -24,12 +24,16 @@ test('API and SDK guides publish concrete downloadable resources', async () => {
   assert(openapi.components.securitySchemes.AgentKey);
 });
 
-test('API navigation is present on both lightweight and authenticated homepages', async () => {
+test('API navigation is present in the menu on both lightweight and authenticated homepages', async () => {
   const [main, app] = await Promise.all([load('src/main.tsx'), load('src/SpineApp.tsx')]);
   for (const source of [main, app]) {
-    assert(source.includes('href="/api-docs.html"'));
-    assert(source.includes('href: "/sdk.html"'));
-    assert(source.includes('href: "/api-docs.html"'));
+    // Navigation is now generated from menu data, not hard-coded page anchors.
+    for (const href of ['/api-docs.html', '/sdk.html', '/api-keys.html']) {
+      assert(source.includes(`href: "${href}"`), `Menu is missing ${href}`);
+    }
+    assert(source.includes('siteReadingPages.map'), 'Menu must render its route list');
+    assert(source.includes('href={page.href}') || source.includes('href="${page.href}"'),
+      'Menu anchor must point to the mapped page URL');
   }
 });
 
