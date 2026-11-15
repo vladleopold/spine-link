@@ -1,5 +1,7 @@
 name: Spine-Link Agent API CI
 
+# Successful API, browser, and Google-session checks gate the production release.
+
 on:
   push:
     branches: [main]
