@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Use real file picker and folder picker, open uploaded page, remove test
+      - name: Drag Spine project and images folder together, open uploaded page, remove test
         shell: bash
         run: |
           node --input-type=module <<'NODE'
@@ -34,12 +34,30 @@ jobs:
             const pageErrors=[];
             page.on('pageerror',error=>pageErrors.push(String(error)));
             await page.goto(site+'/',{waitUntil:'domcontentloaded',timeout:60000});
-            await page.locator('[data-pick-spine-project]').waitFor();
-            assert.equal(await page.locator('[data-pick-spine-images]').count(),1);
-            assert.notEqual(await page.locator('#spine-images-picker').getAttribute('webkitdirectory'),null);
-            await page.locator('#spine-project-picker').setInputFiles('test/anim4/spine.spine');
-            await page.getByText('Now choose images folder').waitFor({timeout:10000});
-            await page.locator('#spine-images-picker').setInputFiles('/tmp/spine-project-e2e/images');
+            await page.locator('#home-drop-zone').waitFor();
+            assert.equal(await page.locator('[data-pick-spine-project], [data-pick-spine-images]').count(),0);
+            assert.equal(await page.locator('[data-file-input]').getAttribute('accept')?.includes('.spine'),true);
+            const project=fs.readFileSync('test/anim4/spine.spine').toString('base64');
+            const texture=fs.readFileSync('/tmp/spine-project-e2e/images/texture.png').toString('base64');
+            await page.evaluate(({project,texture})=>{
+              const bytes=value=>Uint8Array.from(atob(value),char=>char.charCodeAt(0));
+              const source=new File([bytes(project)],'spine.spine',{type:'application/octet-stream'});
+              const image=new File([bytes(texture)],'texture.png',{type:'image/png'});
+              const transfer=new DataTransfer();
+              transfer.items.add(source);
+              transfer.items.add(image);
+              const sourceEntry={name:'spine.spine',isFile:true,file(done){done(source)}};
+              const imageEntry={name:'texture.png',isFile:true,file(done){done(image)}};
+              const imagesEntry={name:'images',isDirectory:true,createReader(){
+                let page=0;
+                return {readEntries(done){done(page++===0?[imageEntry]:[])}};
+              }};
+              Object.defineProperty(transfer.items[0],'webkitGetAsEntry',{configurable:true,value:()=>sourceEntry});
+              Object.defineProperty(transfer.items[1],'webkitGetAsEntry',{configurable:true,value:()=>imagesEntry});
+              const zone=document.querySelector('#home-drop-zone');
+              if(!zone)throw new Error('Missing drop zone');
+              zone.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:transfer}));
+            },{project,texture});
             await page.waitForURL(/\/p\/[^/]+/,{timeout:110000});
             id=new URL(page.url()).pathname.split('/').at(-1);
             account=JSON.parse(await page.evaluate(()=>localStorage.getItem('spine-link-anonymous-account')||'null'));
