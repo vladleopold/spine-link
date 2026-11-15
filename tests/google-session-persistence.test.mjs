@@ -100,8 +100,11 @@ try {
 
   // The remembered identity/avatar must remain visible even when Google requires
   // an interactive consent step to renew the expired access token.
+  // The boot shell renders the remembered avatar before the React app mounts.
   await page.locator('.auth-user').waitFor({state:'visible',timeout:15000});
   assert.equal(await page.locator('.avatar-menu-toggle').isVisible(),true,'Avatar disappeared after refresh');
+  // Opening the portfolio mounts React, which performs the silent GIS refresh.
+  await page.locator('[data-open-library]').first().click();
   await page.locator('button[aria-label="Reconnect Google"]').waitFor({state:'visible',timeout:15000});
   assert.match(await page.locator('.auth-error').innerText(),/Reconnect to continue/i);
 
