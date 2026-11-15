@@ -4,8 +4,13 @@ name: Vercel deploy and alias
 # 100-deployments/24h quota on frequent pushes. Manual releases remain available.
 on:
   workflow_dispatch:
-  # Deploy a source change only after the full Agent API CI workflow, including
-  # Chromium session-persistence tests, has completed successfully.
+  # Updating this release procedure triggers one immediate, fully tested deploy.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vercel-deploy-and-alias.yml'
+  # Source changes deploy automatically only after the full Agent API CI workflow,
+  # including Chromium session-persistence tests, has completed successfully.
   workflow_run:
     workflows: ["Spine-Link Agent API CI"]
     types: [completed]
