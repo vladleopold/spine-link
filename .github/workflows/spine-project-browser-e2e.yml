@@ -95,11 +95,11 @@ jobs:
                 if(!zone)throw new Error('Drop zone missing');
                 zone.dispatchEvent(evt);
               });
-              await page.waitForFunction(()=>document.querySelector('#spine-project-status')?.textContent?.includes('Uploading'),{timeout:12000}).catch(()=>{});
-              await page.waitForFunction(()=>document.querySelector('.background-upload-popup, .upload-progress-popup, .upload-toast')!==null,{timeout:5000}).catch(()=>{});
-              // The stage receipts prove that both files took the project upload
-              // path; no actual external API write is permitted in this test.
-              await page.waitForTimeout(1000);
+              // Both stage requests must arrive; the mocked endpoint rejects
+              // publication, so this never creates or deletes real user data.
+              for(let retry=0;retry<40 && stagePaths.length<2;retry++){
+                await page.waitForTimeout(250);
+              }
               assert.ok(stagePaths.some(p=>/\/hero\.spine$/.test(p)),JSON.stringify(stagePaths));
               assert.ok(stagePaths.some(p=>/\/images\/texture\.png$/.test(p)),JSON.stringify(stagePaths));
               assert.deepEqual(errors,[]);
