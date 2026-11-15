@@ -5,6 +5,11 @@ name: Spine-Link Chromium production verification
 # demand; changing this workflow also starts an immediate production check.
 on:
   workflow_dispatch:
+  # Allows the exact live Chromium run to be inspected before changing this
+  # check; production URL and API writes remain protected.
+  pull_request:
+    paths:
+      - '.github/workflows/spine-link-browser-smoke.yml'
   workflow_run:
     workflows: ["Vercel deploy and alias"]
     types: [completed]
