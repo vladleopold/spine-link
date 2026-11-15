@@ -1,67 +1,188 @@
-name: Spine-Link Chromium page verification
+name: Spine-Link Chromium production verification
 
+# Verify the actual public alias, not just a successful Vercel build or a
+# localhost preview. Run after each completed production release as well as on
+# demand; changing this workflow also starts an immediate production check.
 on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Vercel deploy and alias"]
+    types: [completed]
   push:
     branches: [main]
     paths:
       - '.github/workflows/spine-link-browser-smoke.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   chromium:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
     timeout-minutes: 12
+    env:
+      SITE: https://spine-link.vercel.app
     steps:
       - uses: actions/checkout@v4
       - name: Install browser tooling
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Open newly uploaded Spine page in actual Chromium
+      - name: Verify live homepage, real interactions, and a Spine preview
         shell: bash
         run: |
+          set -euo pipefail
+          mkdir -p artifacts
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
-          import {chromium} from 'playwright';
-          const url = 'https://spine-link.vercel.app/p/spine-link-e2e-2026-11-14T09-30-30-139Z';
+          import { chromium } from 'playwright';
+
+          const site = process.env.SITE;
           const browser = await chromium.launch({
-            headless:true,
-            args:['--use-gl=angle','--use-angle=swiftshader','--enable-webgl'],
+            headless: true,
+            args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl'],
           });
+          const failures = [];
           try {
+            for (const viewport of [{width:1280,height:800},{width:390,height:844}]) {
+              const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
+              const pageErrors = [];
+              const stagePaths = [];
+              page.on('pageerror', error => pageErrors.push(String(error)));
+              // Do not publish any data while testing live Drag & Drop.
+              await page.route('**/api/github-upload', async route => {
+                let payload = {};
+                try { payload = JSON.parse(route.request().postData() || '{}'); } catch {}
+                if (payload.action === 'stage-blob') stagePaths.push(String(payload.path || ''));
+                await route.fulfill({
+                  status: 422, contentType: 'application/json',
+                  body: '{"error":"Production smoke test: upload intentionally blocked"}',
+                });
+              });
+              try {
+                const response = await page.goto(site + '/', {
+                  waitUntil: 'domcontentloaded', timeout: 60000,
+                });
+                assert.equal(response?.status(), 200, 'Homepage HTTP status');
+                await page.locator('#home-drop-zone').waitFor({state:'visible',timeout:40000});
+                assert.equal(
+                  await page.locator('[data-pick-spine-project], [data-pick-spine-images], .project-import-controls').count(),
+                  0, 'Old separate upload buttons are back',
+                );
+                assert.equal(
+                  await page.locator('.top-actions-row > .world-archive-link').count(),
+                  0, 'Navigation button is back outside the menu',
+                );
+                const dropText = await page.locator('#home-drop-zone').innerText();
+                assert.match(dropText, /\.spine\s*\+\s*images\//i,
+                  'Drag & Drop must mention .spine + images/');
+                const accepts = await page.locator('[data-file-input]').getAttribute('accept');
+                assert.ok(accepts?.includes('.spine'), 'File picker does not accept .spine');
+                await page.locator('.site-menu-toggle').click();
+                const panel = page.locator('.site-menu-panel');
+                for (const route of ['/api-keys.html', '/api-docs.html', '/world-spine-archive']) {
+                  assert.equal(await panel.locator('a[href="' + route + '"]').count(), 1,
+                    'Menu entry missing: ' + route);
+                }
+                const bounds = await panel.boundingBox();
+                assert.ok(bounds && bounds.x >= -1 &&
+                  bounds.x + bounds.width <= viewport.width + 1,
+                  'Menu overflows viewport at ' + viewport.width);
+                await page.locator('.site-menu-toggle').click();
+
+                // Exercise the deployed JS drop handler with mocked network writes.
+                await page.evaluate(() => {
+                  const source = new File([new Uint8Array([83,80,73,78,69])], 'hero.spine');
+                  const image = new File([new Uint8Array([137,80,78,71])], 'texture.png');
+                  const sourceEntry = {name:'hero.spine',isFile:true,file(done){done(source)}};
+                  const imageEntry = {name:'texture.png',isFile:true,file(done){done(image)}};
+                  const imagesEntry = {name:'images',isDirectory:true,createReader(){
+                    let page = 0;
+                    return {readEntries(done){done(page++ === 0 ? [imageEntry] : [])}};
+                  }};
+                  const event = new Event('drop',{bubbles:true,cancelable:true});
+                  Object.defineProperty(event,'dataTransfer',{value:{
+                    types:['Files'], files:[source,image],
+                    items:[
+                      {kind:'file',webkitGetAsEntry:()=>sourceEntry},
+                      {kind:'file',webkitGetAsEntry:()=>imagesEntry},
+                    ],
+                  }});
+                  document.querySelector('#home-drop-zone').dispatchEvent(event);
+                });
+                for (let retry = 0; retry < 48 && stagePaths.length < 2; retry++) {
+                  await page.waitForTimeout(250);
+                }
+                assert.ok(stagePaths.some(p => /\/hero\.spine$/.test(p)),
+                  'Missing .spine stage request: ' + JSON.stringify(stagePaths));
+                assert.ok(stagePaths.some(p => /\/images\/texture\.png$/.test(p)),
+                  'Missing images/ stage request: ' + JSON.stringify(stagePaths));
+                assert.deepEqual(pageErrors, [], 'Homepage JavaScript errors');
+                console.log('PASS LIVE HOME', viewport.width, 'px, menu + .spine/images upload paths');
+              } catch (error) {
+                failures.push('Homepage ' + viewport.width + 'px: ' + String(error));
+              } finally {
+                await page.screenshot({
+                  path: 'artifacts/home-' + viewport.width + '.png',
+                  fullPage: true, timeout: 15000,
+                }).catch(console.error);
+                await page.close();
+              }
+            }
+
             const page = await browser.newPage({viewport:{width:1200,height:780}});
-            const pageErrors=[];
-            const missingAssets=[];
-            page.on('pageerror',error=>pageErrors.push(String(error)));
-            page.on('response',response=>{
-              if (response.status()>=400 && /\.(?:atlas|json|png|webp|skel)(?:\?|$)/i.test(response.url())) {
-                missingAssets.push(response.status()+' '+response.url());
+            const pageErrors = [];
+            const missingAssets = [];
+            page.on('pageerror', error => pageErrors.push(String(error)));
+            page.on('response', response => {
+              if (response.status() >= 400 &&
+                  /\.(?:atlas|json|png|webp|skel)(?:\?|$)/i.test(response.url())) {
+                missingAssets.push(response.status() + ' ' + response.url());
               }
             });
-            const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
-            assert.equal(response?.status(),200);
-            await page.waitForTimeout(5000);
-            const actual = await page.evaluate(()=>{
-              const script=document.querySelector('#spine-preview-config');
-              const config=script?JSON.parse(script.textContent||'{}'):null;
-              return {
-                title:document.title,
-                canvas:document.querySelectorAll('canvas').length,
-                sets:config?.sets?.length||0,
-                hasError:document.body.innerText.includes('Preview not found'),
-                player:!!document.querySelector('[class*="spine-player"]'),
-              };
-            });
-            console.log('Chromium page info: '+JSON.stringify(actual));
-            assert.ok(actual.sets>0,'Missing playable Spine set');
-            assert.equal(actual.hasError,false,'Preview not found displayed in real browser');
-            assert.equal(missingAssets.length,0,'Missing Spine assets: '+missingAssets.join('; '));
-            assert.equal(pageErrors.length,0,'Browser JavaScript errors: '+pageErrors.join('; '));
-            console.log('PASS new Spine page opens in Chromium, config loaded, no missing assets or JS errors');
+            try {
+              const url = site + '/p/spine-link-e2e-2026-11-14T09-30-30-139Z';
+              const response = await page.goto(url, {
+                waitUntil: 'domcontentloaded', timeout: 60000,
+              });
+              assert.equal(response?.status(), 200, 'Spine preview HTTP status');
+              await page.waitForTimeout(4500);
+              const info = await page.evaluate(() => {
+                const raw = document.querySelector('#spine-preview-config')?.textContent;
+                const config = raw ? JSON.parse(raw) : {};
+                return {
+                  sets: config.sets?.length || 0,
+                  notFound: document.body.innerText.includes('Preview not found'),
+                  canvas: document.querySelectorAll('canvas').length,
+                };
+              });
+              assert.ok(info.sets > 0, 'Spine preview has no skeleton sets');
+              assert.equal(info.notFound, false, 'Spine preview shows not found');
+              assert.deepEqual(missingAssets, [], 'Spine preview has missing assets');
+              assert.deepEqual(pageErrors, [], 'Spine preview JavaScript errors');
+              console.log('PASS LIVE PREVIEW', JSON.stringify(info));
+            } catch (error) {
+              failures.push('Spine preview: ' + String(error));
+            } finally {
+              await page.screenshot({
+                path: 'artifacts/spine-preview.png', fullPage: true, timeout: 15000,
+              }).catch(console.error);
+              await page.close();
+            }
+            if (failures.length) {
+              console.error('PRODUCTION BROWSER FAILURES:\n' + failures.join('\n'));
+              process.exitCode = 1;
+            }
           } finally {
             await browser.close();
           }
           NODE
+      - name: Upload browser screenshots for diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-browser-screenshots
+          path: artifacts/*.png
+          retention-days: 7
+          if-no-files-found: warn
