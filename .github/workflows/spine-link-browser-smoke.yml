@@ -184,6 +184,29 @@ jobs:
             await browser.close();
           }
           NODE
+      - name: Verify production rejects invalid Google credentials
+        shell: bash
+        env:
+          SITE: https://spine-link.vercel.app
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const response = await fetch(process.env.SITE + '/api/github-upload', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+              action: 'get-index',
+              googleIdToken: 'invalid-production-browser-smoke-token',
+              settings: {owner:'vladleopold',repo:'spine',branch:'main'}
+            }),
+            signal: AbortSignal.timeout(30000)
+          });
+          const payload = await response.json().catch(() => ({}));
+          assert.equal(response.status, 401,
+            'Production must reject an invalid Google token with 401; got ' +
+            response.status + ' ' + JSON.stringify(payload).slice(0,300));
+          console.log('PASS production Google auth guard rejects invalid credentials with HTTP 401');
+          NODE
       - name: Upload browser screenshots for diagnosis
         if: always()
         uses: actions/upload-artifact@v4
