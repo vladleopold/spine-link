@@ -1,13 +1,11 @@
 name: Vercel deploy and alias
 
+# Batch automatic releases to avoid exhausting Vercel Hobby's
+# 100-deployments/24h quota on frequent pushes. Manual releases remain available.
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
-  # One-time recovery after Vercel Hobby's 100-deployments/24h limit clears.
   schedule:
-    - cron: '37 15 15 11 *'
+    - cron: '11 0,6,12,18 * * *'
 
 # Many rapid commits can otherwise race to point the production alias at an
 # older deployment after a newer one has completed.
@@ -23,20 +21,17 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: One-time quota recovery gate
+      - name: Skip scheduled release when commit is already deployed
         id: quota_recovery
         if: github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "$(date -u +%F)" != "2026-11-15" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          last_success=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-deploy-and-alias.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].head_sha' || true)
+          last_success=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-deploy-and-alias.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].head_sha // ""' || true)
           if [ "$last_success" = "$GITHUB_SHA" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No new commit since the previous successful deployment."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
