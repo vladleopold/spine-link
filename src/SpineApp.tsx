@@ -4800,10 +4800,13 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
   useEffect(() => {
     if (!initialOpenLibraryRef.current) return;
+    // If the remembered Google profile needs token renewal, wait for silent
+    // refresh or the user's reconnect action before opening the private portfolio.
+    if (googleUser && !googleIdToken) return;
     initialOpenLibraryRef.current = false;
     openLibrary();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [googleIdToken, googleUser]);
 
   useEffect(() => {
     const hasPending = libraryEntries.some(entry => entry.webmStatus === "pending");
