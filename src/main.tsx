@@ -1507,7 +1507,8 @@ document.addEventListener("drop", (event) => {
     Boolean((item as DataTransferItem & { webkitGetAsEntry?: () => { isDirectory?: boolean } | null }).webkitGetAsEntry?.()?.isDirectory));
   if (!files.length && !hasDirectory) return;
   event.preventDefault();
-  event.stopPropagation();
+  // Avoid a second React document listener processing this same drop again.
+  event.stopImmediatePropagation();
   renderHomeShell(false);
   if (isAppMounted && mountedFileReceiver && !hasDirectory && !files.some(isSpineProjectFile) &&
       !pendingProjectFile && !pendingProjectImages.length) {
