@@ -3905,10 +3905,32 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       if (!files.length) return;
       setIsDragging(false);
       setError("");
+      if (window.__spineLinkReceiveDrop &&
+          (files.some(file => /\.spine$/i.test(file.name)) || window.__spineLinkHasPendingProject?.())) {
+        window.__spineLinkReceiveDrop(files);
+        setStatus("Preparing Spine project upload...");
+        return;
+      }
       setStatus(`Selected ${files.length} file${files.length === 1 ? "" : "s"}. Reading files locally...`);
       void prepareFromFiles(files);
     },
     [prepareFromFiles],
+  );
+
+  const handleDroppedFiles = useCallback(
+    (files: File[], items?: DataTransferItemList | null) => {
+      const hasDirectory = Array.from(items ?? []).some(item =>
+        Boolean((item as DataTransferItem & { webkitGetAsEntry?: () => { isDirectory?: boolean } | null }).webkitGetAsEntry?.()?.isDirectory));
+      if (hasDirectory && window.__spineLinkReceiveDrop) {
+        setIsDragging(false);
+        setError("");
+        setStatus("Reading dropped folder...");
+        window.__spineLinkReceiveDrop(files, items);
+        return;
+      }
+      handleSelectedFiles(files);
+    },
+    [handleSelectedFiles],
   );
 
   useEffect(() => {
@@ -3955,13 +3977,13 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     };
 
     const handleDocumentDrop = (event: DragEvent) => {
-      if (!carriesFiles(event)) return;
+      if (!carriesFiles(event) || insideDropZone(event.target)) return;
       event.preventDefault();
-      if (insideDropZone(event.target)) return;
+      event.stopPropagation();
       const files = Array.from(event.dataTransfer?.files ?? []);
+      const items = event.dataTransfer?.items ?? null;
       setIsDragging(false);
-      if (!files.length) return;
-      void handleSelectedFiles(files);
+      handleDroppedFiles(files, items);
     };
 
     const handleDocumentDragLeave = (event: DragEvent) => {
@@ -3979,7 +4001,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       document.removeEventListener("drop", handleDocumentDrop, true);
       document.removeEventListener("dragleave", handleDocumentDragLeave);
     };
-  }, [handleSelectedFiles]);
+  }, [handleDroppedFiles]);
 
   useEffect(() => {
     const disposers: Array<() => void> = [];
@@ -5221,7 +5243,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    handleSelectedFiles(Array.from(event.dataTransfer.files ?? []));
+    handleDroppedFiles(Array.from(event.dataTransfer.files ?? []), event.dataTransfer.items);
   };
 
   const updateExtraPlayerAnimation = (id: string, animationName: string) => {
@@ -5250,6 +5272,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const homeFeedLoop = showHomeFeed ? homeFeedEntries.slice(0, 12) : [];
   const isHomeDropOnly = !preparedSpine && !isEditPage && extraSpineSets.length === 0 && !isUploadModalOpen;
   const siteReadingPages = [
+    { href: "/world-spine-archive", title: "Browse", description: "World SPINE ARCHIVE" },
     { href: "/api-docs.html", title: "API", description: "Connect an animation agent" },
     { href: "/api-keys.html", title: "API Keys", description: "Create keys for your own server" },
     { href: "/sdk.html", title: "SDK", description: "Download the server-side agent SDK" },
@@ -5467,17 +5490,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             <img className="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="" aria-hidden="true" />
           </a>
           <div className="top-actions-row">
-            {isHomeDropOnly && (
-              <>
-                <a className="world-archive-link" href="/api-keys.html" aria-label="My API keys">KEYS</a>
-                <a className="world-archive-link" href="/api-docs.html" aria-label="Animation API documentation">
-                  API
-                </a>
-                <a className="world-archive-link" href="/world-spine-archive">
-                  BROWSE
-                </a>
-              </>
-            )}
             <div className="auth-panel">
               {googleUser ? (
                 <div className={`auth-user ${isAccountMenuOpen ? "is-account-menu-open" : ""}`}>
@@ -5692,8 +5704,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     name="spine-files"
                     type="file"
                     multiple
-                    accept=".json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
-                    aria-label="Upload Spine JSON SKEL atlas and texture files"
+                    accept=".spine,.json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
+                    aria-label="Select Spine project, export files or textures"
                     onDragOver={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -5705,8 +5717,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     onInput={handleFileInputChange}
                   />
                   <Upload size={44} strokeWidth={1.5} />
-                  <strong>Drag'and'Drop files here</strong>
-                  <span>JSON or SKEL, atlas, and textures become a Spine preview.</span>
+                  <strong>Drop Spine files to preview</strong>
+                  <span>JSON/SKEL + atlas + textures or .spine + images/</span>
+                  <small className="spine-import-status" id="spine-project-status" role="status" aria-live="polite" />
                 </label>
                 {isHomeDropOnly && (
                   <p className="home-drop-caption" style={{ fontSize: "8px", lineHeight: 1.2 }}>

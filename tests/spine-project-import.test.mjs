@@ -43,3 +43,15 @@ test('remember original nested path for IndexedDB upload recovery',()=>{
   rememberProjectFilePath(f,'images/skin/eye.png');
   assert.equal(normalizeProjectPath(f),'images/skin/eye.png');
 });
+
+test('combined .spine file and images/ directory drop keeps both parts', async () => {
+  const source=fake('hero.spine'), texture=fake('body.png');
+  const sourceEntry={name:'hero.spine',isFile:true,file(done){done(source)}};
+  const folder={name:'images',isDirectory:true,createReader(){
+    let page=0;
+    return {readEntries(done){done(page++===0?[{name:'body.png',isFile:true,file(resolve){resolve(texture)}}]:[])}};
+  }};
+  const files=await readDroppedProjectEntries([sourceEntry,folder]);
+  assert.deepEqual(validateProjectSelection(files),[source,texture]);
+  assert.equal(normalizeProjectPath(texture),'images/body.png');
+});

@@ -1,8 +1,23 @@
-name: Spine project chooser Chromium end-to-end
+name: Spine project automatic Drag and Drop UI
 on:
+  pull_request:
+    paths:
+      - 'src/main.tsx'
+      - 'src/SpineApp.tsx'
+      - 'src/spine-project-import.js'
+      - 'src/spine-project-import.css'
+      - 'src/styles.css'
+      - 'tests/spine-project-import.test.mjs'
+      - '.github/workflows/spine-project-browser-e2e.yml'
   push:
     branches: [main]
     paths:
+      - 'src/main.tsx'
+      - 'src/SpineApp.tsx'
+      - 'src/spine-project-import.js'
+      - 'src/spine-project-import.css'
+      - 'src/styles.css'
+      - 'tests/spine-project-import.test.mjs'
       - '.github/workflows/spine-project-browser-e2e.yml'
   workflow_dispatch:
 permissions:
@@ -16,55 +31,80 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Use real file picker and folder picker, open uploaded page, remove test
+      - name: Build and project importer unit tests
+        run: |
+          npm run build
+          node --test tests/spine-project-import.test.mjs
+      - name: Check combined source and folder Drag and Drop in browser
         shell: bash
         run: |
+          set -euo pipefail
+          npx vite --host 127.0.0.1 --port 4173 > /tmp/spine-vite.log 2>&1 &
+          trap 'kill $! 2>/dev/null || true' EXIT
           node --input-type=module <<'NODE'
-          import fs from 'node:fs';
           import assert from 'node:assert/strict';
-          import {chromium} from 'playwright';
-          fs.mkdirSync('/tmp/spine-project-e2e/images',{recursive:true});
-          fs.copyFileSync('test/anim1/fool_demo_fx.png','/tmp/spine-project-e2e/images/texture.png');
-          const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader']});
-          const site='https://spine-link.vercel.app';
-          let id='', account=null, checked=false;
-          const start=Date.now();
-          try{
-            const page=await browser.newPage({viewport:{width:1200,height:820}});
-            const pageErrors=[];
-            page.on('pageerror',error=>pageErrors.push(String(error)));
-            await page.goto(site+'/',{waitUntil:'domcontentloaded',timeout:60000});
-            await page.locator('[data-pick-spine-project]').waitFor();
-            assert.equal(await page.locator('[data-pick-spine-images]').count(),1);
-            assert.notEqual(await page.locator('#spine-images-picker').getAttribute('webkitdirectory'),null);
-            await page.locator('#spine-project-picker').setInputFiles('test/anim4/spine.spine');
-            await page.getByText('Now choose images folder').waitFor({timeout:10000});
-            await page.locator('#spine-images-picker').setInputFiles('/tmp/spine-project-e2e/images');
-            await page.waitForURL(/\/p\/[^/]+/,{timeout:110000});
-            id=new URL(page.url()).pathname.split('/').at(-1);
-            account=JSON.parse(await page.evaluate(()=>localStorage.getItem('spine-link-anonymous-account')||'null'));
-            assert.ok(id.startsWith('spine-'));
-            assert.ok(account?.id);
-            const body=await page.locator('body').innerText();
-            assert.ok(body.includes('Spine Editor 4.3.26 export')||body.includes('licensed Spine Editor'),body.slice(0,260));
-            assert.equal(body.includes('Preview not found'),false);
-            assert.deepEqual(pageErrors,[]);
-            console.log('PASS browser selected actual .spine project and images directory; page rendered');
-            console.log('Browser start-to-page: '+((Date.now()-start)/1000).toFixed(2)+'s');
-            checked=true;
-          }finally{
-            await browser.close();
-            if(id&&account){
-              const body={action:'delete-entry',entryId:id,anonymousAccount:account,
-                settings:{owner:'vladleopold',repo:'spine',branch:'main',basePath:''}};
-              const res=await fetch(site+'/api/github-upload',{
-                method:'POST',headers:{'Content-Type':'application/json'},
-                body:JSON.stringify(body),signal:AbortSignal.timeout(90000)});
-              const response=await res.json().catch(()=>({}));
-              if(!res.ok||response.deleted!==id){
-                console.error('WARNING: failed to delete test project',res.status,response.error);
-              }else console.log('PASS browser test project and images removed from server');
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader']});
+          try {
+            for (const viewport of [{width:1280,height:800},{width:390,height:844}]) {
+              const page = await browser.newPage({viewport});
+              const errors = [];
+              const stagePaths = [];
+              page.on('pageerror',error=>errors.push(String(error)));
+              await page.route('**/api/github-archive?feed=home',route=>route.fulfill({status:200,contentType:'application/json',body:'{"entries":[]}'}));
+              // Never publish test files. Verify the exact outgoing upload paths,
+              // and return a terminal client error to stop the transfer.
+              await page.route('**/api/github-upload',async route=>{
+                const request=route.request();
+                let payload={};
+                try {payload=JSON.parse(request.postData()||'{}');} catch {}
+                if(payload.action==='stage-blob')stagePaths.push(String(payload.path||''));
+                await route.fulfill({status:422,contentType:'application/json',body:'{"error":"Test stub: publishing disabled"}'});
+              });
+              await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded',timeout:45000});
+              await page.locator('#home-drop-zone').waitFor();
+              assert.equal(await page.locator('[data-pick-spine-project], [data-pick-spine-images], .project-import-controls').count(),0);
+              assert.equal(await page.locator('.top-actions-row > .world-archive-link').count(),0);
+              assert.equal(await page.locator('.site-menu-panel a[href="/api-keys.html"]').count(),1);
+              assert.equal(await page.locator('.site-menu-panel a[href="/api-docs.html"]').count(),1);
+              assert.equal(await page.locator('.site-menu-panel a[href="/world-spine-archive"]').count(),1);
+              assert.match(await page.locator('#home-drop-zone').innerText(),/\.spine \+ images\//);
+              assert.ok((await page.locator('[data-file-input]').getAttribute('accept')).includes('.spine'));
+              await page.locator('.site-menu-toggle').click();
+              const menu=await page.locator('.site-menu-panel').boundingBox();
+              assert.ok(menu && menu.x>=0 && menu.x+menu.width<=viewport.width+1,
+                'Site menu fits viewport at '+viewport.width);
+              await page.locator('.site-menu-toggle').click();
+              await page.evaluate(()=>{
+                const source = new File([new Uint8Array([83,80,73,78,69])],'hero.spine');
+                const image = new File([new Uint8Array([137,80,78,71])],'texture.png');
+                const sourceEntry = {name:'hero.spine',isFile:true,file(done){done(source)}};
+                const imageEntry = {name:'texture.png',isFile:true,file(done){done(image)}};
+                const imagesEntry = {name:'images',isDirectory:true,createReader(){
+                  let page=0;
+                  return {readEntries(done){done(page++===0?[imageEntry]:[])}};
+                }};
+                const evt = new Event('drop',{bubbles:true,cancelable:true});
+                Object.defineProperty(evt,'dataTransfer',{value:{
+                  types:['Files'],files:[source,image],items:[
+                    {kind:'file',webkitGetAsEntry:()=>sourceEntry},
+                    {kind:'file',webkitGetAsEntry:()=>imagesEntry},
+                  ],
+                }});
+                const zone=document.querySelector('#home-drop-zone');
+                if(!zone)throw new Error('Drop zone missing');
+                zone.dispatchEvent(evt);
+              });
+              // Both stage requests must arrive; the mocked endpoint rejects
+              // publication, so this never creates or deletes real user data.
+              for(let retry=0;retry<40 && stagePaths.length<2;retry++){
+                await page.waitForTimeout(250);
+              }
+              assert.ok(stagePaths.some(p=>/\/hero\.spine$/.test(p)),JSON.stringify(stagePaths));
+              assert.ok(stagePaths.some(p=>/\/images\/texture\.png$/.test(p)),JSON.stringify(stagePaths));
+              assert.deepEqual(errors,[]);
+              await page.close();
+              console.log('PASS', viewport.width, 'px: menu, drop copy, .spine + images/ automatic routing');
             }
-          }
-          assert.equal(checked,true);
+          } finally {await browser.close();}
           NODE
