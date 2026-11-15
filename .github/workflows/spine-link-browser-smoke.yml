@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   chromium:
@@ -186,3 +187,26 @@ jobs:
           path: artifacts/*.png
           retention-days: 7
           if-no-files-found: warn
+
+      - name: Publish independently verified production status to GitHub
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          VERIFY_RESULT: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "$VERIFY_RESULT" = "success" ]; then
+            result=success
+            description="Production Chromium: desktop, mobile, upload routing and preview passed"
+          else
+            result=failure
+            description="Production Chromium failed: inspect screenshots and browser logs"
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$RELEASE_SHA" \
+            -f state="$result" \
+            -f context="spine-link/production-chromium" \
+            -f description="$description" \
+            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          echo "Recorded $result for deployment commit $RELEASE_SHA"
