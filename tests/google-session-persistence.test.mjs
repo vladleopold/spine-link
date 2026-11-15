@@ -78,7 +78,10 @@ try {
   await signIn.click();
 
   await page.locator('.auth-user').waitFor({state:'visible',timeout:15000});
-  assert.equal(await page.locator('.auth-user').innerText().then(value => value.includes('spine-link-test@example.invalid')),true);
+  assert.ok(
+    (await page.locator('.auth-user').evaluate(element => element.textContent || '')).includes('spine-link-test@example.invalid'),
+    'Signed-in account email must remain attached to the account panel',
+  );
   assert.equal(await page.locator('.avatar-menu-toggle').isVisible(),true,'Avatar must appear after sign-in');
 
   const firstSession = await page.evaluate(() => JSON.parse(localStorage.getItem('spine-link-google-session') || 'null'));
