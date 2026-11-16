@@ -77,8 +77,8 @@ jobs:
                   0, 'Old separate upload buttons are back',
                 );
                 const reel = page.locator('.top-actions-row > a.world-archive-link[href="/world-spine-archive"]');
-                assert.equal(await reel.count(), 1, 'Reel (browse) is missing from the homepage');
-                assert.equal((await reel.innerText()).trim(), 'Reel (browse)');
+                assert.equal(await reel.count(), 1, 'Reel is missing from the homepage');
+                assert.equal((await reel.innerText()).trim(), 'Reel');
                 const dropText = await page.locator('#home-drop-zone').innerText();
                 assert.match(dropText, /\.spine\s*\+\s*images\//i,
                   'Drag & Drop must mention .spine + images/');
