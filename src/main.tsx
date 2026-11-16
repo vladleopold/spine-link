@@ -155,7 +155,7 @@ function renderHomeShell(isDragging = false) {
             <img class="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="" aria-hidden="true">
           </a>
           <div class="top-actions-row">
-            <a class="world-archive-link" href="/world-spine-archive" aria-label="Reel (browse)" title="Browse public Spine animations">Reel (browse)</a>
+            <a class="world-archive-link" href="/world-spine-archive" aria-label="Reel" title="Browse public Spine animations">Reel</a>
             <div class="auth-panel">
               <a class="my-library-button" href="/?portfolio=1" data-open-library>${homeUser ? "MY PORTFOLIO" : "Portfolio"}</a>
               ${homeUser ? `

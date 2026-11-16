@@ -79,11 +79,11 @@ jobs:
               await page.locator('#home-drop-zone').waitFor();
               assert.equal(await page.locator('[data-pick-spine-project], [data-pick-spine-images], .project-import-controls').count(),0);
               const reel=page.locator('.top-actions-row > a.world-archive-link[href="/world-spine-archive"]');
-              assert.equal(await reel.count(),1,'Reel browse button is present');
-              assert.equal((await reel.innerText()).trim(),'Reel (browse)');
+              assert.equal(await reel.count(),1,'Reel button is present');
+              assert.equal((await reel.innerText()).trim(),'Reel');
               const reelBox=await reel.boundingBox();
               assert.ok(reelBox && reelBox.x>=0 && reelBox.x+reelBox.width<=viewport.width+1,
-                'Reel browse button fits viewport at '+viewport.width);
+                'Reel button fits viewport at '+viewport.width);
               assert.equal(await page.locator('.site-menu-panel a[href="/api-keys.html"]').count(),1);
               assert.equal(await page.locator('.site-menu-panel a[href="/api-docs.html"]').count(),1);
               assert.equal(await page.locator('.site-menu-panel a[href="/world-spine-archive"]').count(),1);
