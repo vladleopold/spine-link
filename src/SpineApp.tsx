@@ -5539,6 +5539,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             <img className="brand-logo-image brand-logo-mobile" src="/logo-mobile.png" alt="" aria-hidden="true" />
           </a>
           <div className="top-actions-row">
+            <a className="world-archive-link" href="/world-spine-archive" aria-label="Reel (browse)" title="Browse public Spine animations">Reel (browse)</a>
             <div className="auth-panel">
               {googleUser ? (
                 <div className={`auth-user ${isAccountMenuOpen ? "is-account-menu-open" : ""}`}>
