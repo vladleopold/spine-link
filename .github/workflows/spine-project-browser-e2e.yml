@@ -43,6 +43,18 @@ jobs:
           set -euo pipefail
           npx vite --host 127.0.0.1 --port 4173 > /tmp/spine-vite.log 2>&1 &
           trap 'kill $! 2>/dev/null || true' EXIT
+          # Chromium must not race the Vite listener on slower Actions hosts.
+          node --input-type=module <<'READY'
+          let ready=false;
+          for(let i=0;i<100;i++){
+            try{
+              const response=await fetch('http://127.0.0.1:4173/',{signal:AbortSignal.timeout(700)});
+              if(response.ok){ready=true;break;}
+            }catch{}
+            await new Promise(resolve=>setTimeout(resolve,150));
+          }
+          if(!ready)throw Error('Vite did not become ready on 127.0.0.1:4173');
+          READY
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { chromium } from 'playwright';
