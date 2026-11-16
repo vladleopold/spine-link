@@ -153,9 +153,9 @@ jobs:
             await staticPage.waitForURL(/restored=1/,{timeout:15000});
             for(let retry=0;retry<60 && handoffPaths.length<3;retry++)
               await staticPage.waitForTimeout(250);
-            assert.ok(handoffPaths.some(p=>/\\/hero\\.spine$/.test(p)),JSON.stringify(handoffPaths));
-            assert.ok(handoffPaths.some(p=>/\\/images\\/root\\.png$/.test(p)),JSON.stringify(handoffPaths));
-            assert.ok(handoffPaths.some(p=>/\\/images\\/sub\\/tex\\.png$/.test(p)),JSON.stringify(handoffPaths));
+            assert.ok(handoffPaths.some(p=>p.endsWith('/hero.spine')),JSON.stringify(handoffPaths));
+            assert.ok(handoffPaths.some(p=>p.endsWith('/images/root.png')),JSON.stringify(handoffPaths));
+            assert.ok(handoffPaths.some(p=>p.endsWith('/images/sub/tex.png')),JSON.stringify(handoffPaths));
             assert.deepEqual(handoffErrors,[]);
             await staticPage.close();
             console.log('PASS static page Drop handoff with paginated nested images/ paths');
