@@ -78,7 +78,16 @@ jobs:
                 );
                 const reel = page.locator('.top-actions-row > a.world-archive-link[href="/world-spine-archive"]');
                 assert.equal(await reel.count(), 1, 'Reel is missing from the homepage');
-                assert.equal((await reel.innerText()).trim(), 'Reel');
+                const liveReelLabel = (await reel.innerText()).trim();
+                // Pull requests test the currently deployed production alias,
+                // which may still contain the old label. The PR's new UI is
+                // checked by the local Chromium project-folder workflow.
+                if (process.env.GITHUB_EVENT_NAME === 'pull_request') {
+                  assert.ok(['Reel', 'Reel (browse)'].includes(liveReelLabel),
+                    'Unexpected production header label: ' + liveReelLabel);
+                } else {
+                  assert.equal(liveReelLabel, 'Reel', 'Production must use the deployed new label');
+                }
                 const dropText = await page.locator('#home-drop-zone').innerText();
                 assert.match(dropText, /\.spine\s*\+\s*images\//i,
                   'Drag & Drop must mention .spine + images/');
