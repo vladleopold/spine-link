@@ -54,18 +54,54 @@
     overlay = null;
   }
 
+  // Resolve filesystem entries before the DataTransfer object is invalidated.
+  // A directory in dataTransfer.files is not an enumerable list of its files.
+  async function readEntry(entry, parents) {
+    if (entry.isFile) {
+      var file = await new Promise(function (resolve, reject) {
+        entry.file(resolve, reject);
+      });
+      return [{ file: file, path: parents.concat(entry.name).join("/") }];
+    }
+    if (!entry.isDirectory) return [];
+    var reader = entry.createReader();
+    var children = [];
+    // readEntries is paged by Chromium: a single call can omit most textures.
+    while (true) {
+      var batch = await new Promise(function (resolve, reject) {
+        reader.readEntries(resolve, reject);
+      });
+      if (!batch.length) break;
+      children.push.apply(children, batch);
+    }
+    var nested = await Promise.all(children.map(function (child) {
+      return readEntry(child, parents.concat(entry.name));
+    }));
+    return nested.flat();
+  }
+
   async function store(files) {
     if (!("caches" in window)) return false;
+    if (!files.length || files.length > 3000) throw Error("Unsupported drop size");
+    var total = 0;
+    for (var n = 0; n < files.length; n += 1) {
+      total += files[n].file.size || 0;
+      if (total > 512 * 1024 * 1024) throw Error("Drop exceeds browser handoff limit");
+    }
+    // A failed partial handoff must never mix with an earlier manifest.
+    await caches.delete(CACHE);
     var cache = await caches.open(CACHE);
     var request = new Request("/__spine_drop__/manifest", { cache: "no-store" });
     var names = [];
     for (var i = 0; i < files.length; i += 1) {
       var key = "/__spine_drop__/f" + i;
+      var file = files[i].file;
       await cache.put(
         new Request(key, { method: "GET" }),
-        new Response(files[i], { headers: { "content-type": files[i].type || "application/octet-stream" } })
+        new Response(file, { headers: { "content-type": file.type || "application/octet-stream" } })
       );
-      names.push({ key: key, name: files[i].name, type: files[i].type || "", lastModified: files[i].lastModified || 0 });
+      names.push({ key: key, name: file.name, path: files[i].path,
+        type: file.type || "", lastModified: file.lastModified || 0 });
     }
     await cache.put(request, new Response(JSON.stringify(names), { headers: { "content-type": "application/json" } }));
     return true;
@@ -111,19 +147,29 @@
       event.preventDefault();
       event.stopPropagation();
       hide();
-      var files = Array.prototype.slice.call(event.dataTransfer.files || []);
-      if (!files.length) return;
+      var transfer = event.dataTransfer;
+      // IMPORTANT: entry handles must be acquired synchronously during drop.
+      var entries = Array.prototype.slice.call(transfer.items || [])
+        .filter(function (item) { return item.kind === "file"; })
+        .map(function (item) { return item.webkitGetAsEntry && item.webkitGetAsEntry(); })
+        .filter(Boolean);
+      var flatFiles = Array.prototype.slice.call(transfer.files || []);
+      if (!entries.length && !flatFiles.length) return;
       show();
-      store(files).then(
+      overlay.textContent = "Preparing Spine files...";
+      var selection = entries.length
+        ? Promise.all(entries.map(function (entry) { return readEntry(entry, []); }))
+            .then(function (groups) { return groups.flat(); })
+        : Promise.resolve(flatFiles.map(function (file) {
+            return { file: file, path: file.webkitRelativePath || file.name };
+          }));
+      selection.then(store).then(
         function (ok) {
-          if (ok) {
-            window.location.assign(TARGET);
-            return;
-          }
-          // No Cache API: send the user to the uploader and ask for a re-drop.
-          window.location.assign("/?upload=work&nodrop=1");
+          // All file bytes and relative texture paths are now persisted.
+          window.location.assign(ok ? TARGET : "/?upload=work&nodrop=1");
         },
         function () {
+          // Unsupported browser or quota exceeded: never claim the drop was saved.
           window.location.assign("/?upload=work&nodrop=1");
         }
       );

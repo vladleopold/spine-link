@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'src/main.tsx'
+      - 'public/drop-handoff.js'
       - 'src/SpineApp.tsx'
       - 'src/spine-project-import.js'
       - 'src/spine-project-import.css'
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - 'src/main.tsx'
+      - 'public/drop-handoff.js'
       - 'src/SpineApp.tsx'
       - 'src/spine-project-import.js'
       - 'src/spine-project-import.css'
@@ -41,6 +43,18 @@ jobs:
           set -euo pipefail
           npx vite --host 127.0.0.1 --port 4173 > /tmp/spine-vite.log 2>&1 &
           trap 'kill $! 2>/dev/null || true' EXIT
+          # Chromium must not race the Vite listener on slower Actions hosts.
+          node --input-type=module <<'READY'
+          let ready=false;
+          for(let i=0;i<100;i++){
+            try{
+              const response=await fetch('http://127.0.0.1:4173/',{signal:AbortSignal.timeout(700)});
+              if(response.ok){ready=true;break;}
+            }catch{}
+            await new Promise(resolve=>setTimeout(resolve,150));
+          }
+          if(!ready)throw Error('Vite did not become ready on 127.0.0.1:4173');
+          READY
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { chromium } from 'playwright';
@@ -111,5 +125,51 @@ jobs:
               await page.close();
               console.log('PASS', viewport.width, 'px: menu, drop copy, .spine + images/ automatic routing');
             }
+            // Regression: a drop on a server-rendered page must retain nested
+            // images/ paths through Cache API handoff and navigation.
+            const staticPage = await browser.newPage({viewport:{width:1280,height:800}});
+            const handoffPaths = [];
+            const handoffErrors = [];
+            staticPage.on('pageerror', error=>handoffErrors.push(String(error)));
+            await staticPage.route('**/api/github-archive?feed=home',route=>route.fulfill({
+              status:200,contentType:'application/json',body:'{"entries":[]}'
+            }));
+            await staticPage.route('**/api/github-upload',async route=>{
+              let payload={};
+              try{payload=JSON.parse(route.request().postData()||'{}');}catch{}
+              if(payload.action==='stage-blob')handoffPaths.push(String(payload.path||''));
+              await route.fulfill({status:422,contentType:'application/json',
+                body:'{"error":"Test stub: publishing disabled"}'});
+            });
+            await staticPage.goto('http://127.0.0.1:4173/spine-link.html',{waitUntil:'domcontentloaded'});
+            await staticPage.addScriptTag({url:'/drop-handoff.js'});
+            await staticPage.evaluate(()=>{
+              const source=new File(['spine source'],'hero.spine');
+              const atlas=new File(['png bytes'],'tex.png',{type:'image/png'});
+              const rootTexture=new File(['png bytes'],'root.png',{type:'image/png'});
+              const asFile=(file)=>({name:file.name,isFile:true,file(done){done(file);}});
+              const asDirectory=(name,batches)=>({name,isDirectory:true,createReader(){
+                let index=0;return {readEntries(done){done(batches[index++]||[]);}};
+              }});
+              const nested=asDirectory('sub',[[asFile(atlas)],[]]);
+              const images=asDirectory('images',[[asFile(rootTexture)],[nested],[]]);
+              const evt=new Event('drop',{bubbles:true,cancelable:true});
+              Object.defineProperty(evt,'dataTransfer',{value:{
+                types:['Files'],files:[source],items:[
+                  {kind:'file',webkitGetAsEntry:()=>asFile(source)},
+                  {kind:'file',webkitGetAsEntry:()=>images}
+                ]
+              }});
+              document.dispatchEvent(evt);
+            });
+            await staticPage.waitForURL(/restored=1/,{timeout:15000});
+            for(let retry=0;retry<60 && handoffPaths.length<3;retry++)
+              await staticPage.waitForTimeout(250);
+            assert.ok(handoffPaths.some(p=>p.endsWith('/hero.spine')),JSON.stringify(handoffPaths));
+            assert.ok(handoffPaths.some(p=>p.endsWith('/images/root.png')),JSON.stringify(handoffPaths));
+            assert.ok(handoffPaths.some(p=>p.endsWith('/images/sub/tex.png')),JSON.stringify(handoffPaths));
+            assert.deepEqual(handoffErrors,[]);
+            await staticPage.close();
+            console.log('PASS static page Drop handoff with paginated nested images/ paths');
           } finally {await browser.close();}
           NODE

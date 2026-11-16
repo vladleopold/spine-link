@@ -874,7 +874,7 @@ const DROP_CACHE = "spine-drop-handoff";
  */
 async function restoreDroppedFiles(): Promise<void> {
   if (typeof caches === "undefined") return;
-  let names: { key: string; name: string; type: string; lastModified: number }[];
+  let names: { key: string; name: string; path?: string; type: string; lastModified: number }[];
   try {
     const cache = await caches.open(DROP_CACHE);
     const hit = await cache.match(new Request("/__spine_drop__/manifest", { cache: "no-store" }));
@@ -888,13 +888,20 @@ async function restoreDroppedFiles(): Promise<void> {
       const files = blobs
         .map((blob, index) => {
           if (!blob || !names[index]) return null;
-          return new File([blob], names[index].name, {
+          const file = new File([blob], names[index].name, {
             type: names[index].type,
             lastModified: names[index].lastModified,
           });
+          return rememberProjectFilePath(file, names[index].path || names[index].name);
         })
         .filter((file): file is File => Boolean(file));
-      if (files.length) receiveFiles(files);
+      if (files.some(isSpineProjectFile) || files.some(file =>
+          isSpineImageFile(file) && /(^|\/)images\//i.test(projectFilePath(file)))) {
+        // Preserve project folder routing even if React is already mounting.
+        acceptHomeDroppedFiles(files);
+      } else if (files.length) {
+        receiveFiles(files);
+      }
     });
   } catch {
     return;
