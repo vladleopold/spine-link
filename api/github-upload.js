@@ -430,6 +430,13 @@ async function dispatchSpineProjectExport(settings, entry, origin) {
   }
 }
 
+function runtimeFileSetComplete(files) {
+  const names = Array.isArray(files) ? files.map((f) => String(f || '').toLowerCase()) : [];
+  return names.some((f) => /\.(?:json|skel)$/i.test(f)) &&
+    names.some((f) => /\.atlas(?:\.txt)?$/i.test(f)) &&
+    names.some((f) => /\.(?:png|jpe?g|webp|dds)$/i.test(f));
+}
+
 async function dispatchSpineExportWebm(settings, entry, origin) {
   const id = String(entry?.id || '').trim();
   if (!id) return null;
@@ -1451,6 +1458,14 @@ export default async function handler(request, response) {
       const relativeFiles = prepared.receipts.map(item =>
         item.path.startsWith(workPath + '/') ? item.path.slice(workPath.length + 1) : '');
       const isEditorProject = body?.entry?.sourceKind === 'spine-project';
+      // Source import is NOT a playable project without all three required
+      // asset classes. Never create a public entry for an isolated .skel.
+      if (!isEditorProject && !runtimeFileSetComplete(relativeFiles)) {
+        return response.status(422).json({
+          error: 'Spine file acceptance failed: skeleton (.json/.skel), atlas and texture are all required',
+          acceptance: 'rejected-incomplete-runtime-bundle',
+        });
+      }
       // Do not report an export as queued unless an authorized cloud Spine
       // Editor runner has been installed and explicitly enabled by the owner.
       // A trusted scheduled queue in 3Spine-core now processes all eligible
@@ -1506,13 +1521,21 @@ export default async function handler(request, response) {
           if (attempt === 2 || ![409, 422].includes(Number(error?.status))) throw error;
         }
       }
-      try {
-        if (isEditorProject) {
-          if (editorExportEnabled) dispatchSpineProjectExport(settings, nextEntry, origin).catch(() => {});
-        } else dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {});
-      } catch {}
+      // Serverless invocations do not guarantee fire-and-forget network calls
+      // survive the response. Await the GitHub dispatch and expose its actual
+      // outcome rather than falsely telling the user preview generation began.
+      const dispatch = isEditorProject
+        ? editorExportEnabled
+          ? await dispatchSpineProjectExport(settings, nextEntry, origin)
+          : { status: 'unavailable', error: 'Spine Editor export disabled' }
+        : await dispatchSpineExportWebm(settings, nextEntry, origin);
+      if (dispatch?.status === 'failed') {
+        console.error('[UPLOAD] Preview dispatch failed for committed upload', uploadId,
+          String(dispatch.error || '').slice(0, 300));
+      }
       return response.status(200).json({
         ok: true, path: workPath, indexed: true,
+        dispatch,
         requiresSpineExport: isEditorProject,
         files: prepared.receipts.map((item, i) => ({ ...item, name: relativeFiles[i] })),
         github: { commitSha: String(commit?.commit?.sha || commit?.sha || '') },
@@ -1550,8 +1573,8 @@ export default async function handler(request, response) {
           if (attempt < 2 && [409, 422].includes(Number(error?.status))) continue;
           throw error;
         }
-        try { dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {}); } catch {}
-        return response.status(200).json({ ok: true, indexed: nextEntries.length });
+        const dispatch = await dispatchSpineExportWebm(settings, nextEntry, origin);
+        return response.status(200).json({ ok: true, indexed: nextEntries.length, dispatch });
       }
     }
 
