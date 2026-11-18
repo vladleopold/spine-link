@@ -497,7 +497,18 @@ function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
   const image = entryImageUrl(origin, entry);
   const video = entryVideoSrc(origin, entry);
-  const lowPoster = image;
+  // preview-low.webp is deliberately 404 in the asset API; medium is the
+  // smallest supported WebP. Fallbacks remain restricted to this same work.
+  const posterCandidates = [
+    entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
+    entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
+    entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster'),
+    generatedThumbnailUrl(origin, entry),
+    entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'),
+    fallbackPosterAssetUrl(origin, entry),
+  ].filter(Boolean);
+  const lowPoster = posterCandidates[0] || image;
+  const alternatePoster = posterCandidates.find(url => url !== lowPoster) || '';
   const lowVideo = video
     ? entryVideoSrc(origin, { ...entry, webmPreview: entry?.webmPreviewLow || entry?.webmPreviewMedium || '' }) || video
     : '';
@@ -509,7 +520,7 @@ function archiveFeedEntry(origin, entry, metrics) {
     playerUrl: previewUrl(entry),
     archiveUrl: archiveItemUrl(entry),
     poster: lowPoster || image,
-    posterFallback: image || lowPoster,
+    posterFallback: alternatePoster,
     video: lowVideo,
     videoFallback: video,
     width: positiveInteger(entry?.previewWidth),
@@ -678,11 +689,11 @@ function tileClassForEntry(entry, index = 0) {
 function fallbackPosterAssetUrl(origin, entry = {}) {
   const id = String(entry?.id || '').trim();
   if (!id || !origin) return '';
-  const direct = `${origin}/assets/library/${encodeURIComponent(id)}/preview.webp`;
-  if (!isBlockedPosterUrl(direct)) return appendAssetVersion(direct, assetVersionForEntry(entry, 'thumbnail'));
-  const path = cleanRepoPath(entry?.thumbnailPath || '');
-  if (!path.startsWith('library/') || isBlockedPosterUrl(path)) return '';
-  return appendAssetVersion(`${origin}/assets/${path}`, assetVersionForEntry(entry, 'thumbnail'));
+  // Keep fallback within the same work and correct library collection.
+  const ownPath = cleanRepoPath(entry?.previewPath || `library/${id}`);
+  if (!/^library(?:_\d+)?\/[a-z0-9][a-z0-9._-]{0,180}$/i.test(ownPath)) return '';
+  const direct = `${origin}/assets/${encodeRepoPath(`${ownPath}/preview.webp`)}`;
+  return isBlockedPosterUrl(direct) ? '' : appendAssetVersion(direct, assetVersionForEntry(entry, 'thumbnail'));
 }
 
 function entryImageUrl(origin, entry) {
@@ -1579,6 +1590,8 @@ function archiveHtml({ origin, entries, metrics }) {
             const image=document.createElement('img');
             image.src=item.poster||item.posterFallback;
             image.alt=item.title+' Spine animation preview';
+            // Demand-load each card; the upcoming 12 valid WebP files are
+            // prewarmed independently before the user reaches this batch.
             image.loading=index<6?'eager':'lazy';
             image.fetchPriority=index<4?'high':'low';
             image.decoding='async';
@@ -1608,13 +1621,19 @@ function archiveHtml({ origin, entries, metrics }) {
           card.addEventListener('click',()=>{if(item.playerUrl)location.href=item.playerUrl;});
           return card;
         }
+        // Hold preloaded images until cards mount so browser does not cancel
+        // offscreen preloads and request the same WebP again during scrolling.
+        const warmedPosters=new Map();
         function warmPosters(data){
-          for(const item of (data.entries||[]).slice(0,6)){
-            if(item.poster){
-              const img=new Image();
-              img.decoding='async';
-              img.src=item.poster;
-            }
+          for(const item of (data.entries||[]).slice(0,pageSize)){
+            const url=item.poster||item.posterFallback;
+            if(!url||!/\\.webp(?:[?#]|$)/i.test(url)||warmedPosters.has(url))continue;
+            const img=new Image();
+            img.decoding='async';
+            img.fetchPriority='low';
+            img.src=url;
+            warmedPosters.set(url,img);
+            while(warmedPosters.size>24)warmedPosters.delete(warmedPosters.keys().next().value);
           }
         }
         function fetchPage(start){

@@ -20,6 +20,7 @@ const entries=Array.from({length:80},(_,i)=>({
   skeleton:'skeleton-'+i+'.skel',
   webmPreview:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webm',
   webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-low.webm',
+  webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-low.webp',
   webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-medium.webp',
   thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webp',
   animations:['walk'],
@@ -85,6 +86,12 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     assert.ok(html.includes('const batch=embeddedEntries.slice(start,start+pageSize)'),
       'client must paginate in-memory rather than waiting for a feed API request');
     assert.ok(batch.entries.every(e=>e.poster&&e.video),'Next batch has WebP poster metadata');
+    assert.match(batch.entries[0].poster,/preview-medium\.webp/,'Prefer the supported medium WebP poster');
+    assert.match(batch.entries[0].posterFallback,/preview\.webp/,'Fallback to another still for the same work');
+    assert.doesNotMatch(batch.entries[0].poster,/preview-low\.webp/,'Never request the intentionally disabled low poster');
+    assert.notEqual(batch.entries[0].poster,batch.entries[0].posterFallback,'Poster fallback must not repeat broken URL');
+    assert.ok(html.includes('const warmedPosters=new Map()'),'Keep warmed images alive through pagination');
+    assert.ok(html.includes('slice(0,pageSize)'),'Warm all next-page WebP cards before scroll');
     assert.ok(html.includes("video.preload='none'"),'dynamic video should never preload offscreen');
     const section=html.slice(html.indexOf('<script>\n      (() => {')+8,html.indexOf('</script>',html.indexOf('<script>\n      (() => {')));
     assert.doesNotThrow(()=>new Function(section),'gallery client code must parse');
