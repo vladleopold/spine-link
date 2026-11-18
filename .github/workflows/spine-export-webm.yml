@@ -142,7 +142,11 @@ jobs:
           basePath="${{ steps.basepath.outputs.basePath }}"
           indexPath="${basePath}/index.json"
           metaPath="${{ github.workspace }}/${uploadId}-preview.webm.json"
-          
+          atlasBackupDir="${RUNNER_TEMP}/spine-inferred-atlas-${uploadId}"
+
+          # Keep newly inferred atlas files outside the checkout before each clean reset.
+          node scripts/preserve-inferred-atlas.mjs --upload-id="$uploadId" --mode=backup --backup-dir="$atlasBackupDir"
+
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
@@ -156,7 +160,10 @@ jobs:
             # on the stale HEAD and the push was rejected all the same.
             git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
             git reset --hard refs/remotes/origin/main
-            
+
+            # Re-apply inferred atlases after refreshing main; stage them with the preview output.
+            node scripts/preserve-inferred-atlas.mjs --upload-id="$uploadId" --mode=restore --backup-dir="$atlasBackupDir"
+
           # 2. Copy media files on top of fresh state
           mkdir -p "${basePath}/${uploadId}"
           for ext in "webm" "webp"; do

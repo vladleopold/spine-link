@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Recover a missing atlas for the native CI WebM export path.
-// This intentionally refuses ambiguous geometry rather than publishing bogus previews.
+// Ambiguous geometry is rejected using the same confidence gate as browser import.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { reconstructAtlas } from '../lib/atlas-inference.js';
+import { assertAtlasInferenceUsable } from '../lib/atlas-inference-acceptance.js';
 import { entryForUpload } from './resolve-library.mjs';
 
 const id = process.argv.find(a => a.startsWith('--upload-id='))?.slice(12);
@@ -42,14 +43,22 @@ try {
         },{b64:bytes.toString('base64'),type});
         images.push({name,width:decoded.width,height:decoded.height,rgba:new Uint8ClampedArray(decoded.rgba)});
       }
-      const inferred=reconstructAtlas(json,images,{strict:true});
+      const inferred=reconstructAtlas(json,images);
+      const matchRatio=assertAtlasInferenceUsable(inferred);
       const target=path.join(dir,path.parse(skeleton).name+'.atlas');
       await fs.writeFile(target,inferred.text,'utf8');
-      await fs.writeFile(path.join(dir,'atlas-inference-receipt.json'),JSON.stringify({
+      // Keep the receipt beside the set directory: export scripts scan inside the set for the first *.json skeleton.
+      await fs.writeFile(path.join(folder,path.basename(dir)+'-atlas-inference-receipt.json'),JSON.stringify({
         kind:inferred.kind,confidence:inferred.confidence,coverage:inferred.coverage,
-        matched:inferred.matched,total:inferred.total,source:'reconstructed-from-json-and-images'
+        matched:inferred.matched,total:inferred.total,matchRatio:Number(matchRatio.toFixed(4)),
+        previewOnly:Boolean(inferred.inferred),source:'reconstructed-from-json-and-images'
       },null,2));
-      console.log('Reconstructed missing atlas:',target,'confidence',inferred.confidence);
+      console.log(
+        'Reconstructed missing atlas:',target,
+        'confidence',inferred.confidence,
+        'coverage',inferred.coverage,
+        'matched',inferred.matched+'/'+inferred.total
+      );
       recovered++;
     } finally {await page.close();}
   }

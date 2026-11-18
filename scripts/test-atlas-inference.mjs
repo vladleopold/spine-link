@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { reconstructAtlas } from "../lib/atlas-inference.js";
+import { assertAtlasInferenceUsable } from "../lib/atlas-inference-acceptance.js";
 
 function image(w,h,rectangles){
   const rgba=new Uint8ClampedArray(w*h*4);
@@ -28,4 +29,22 @@ assert.match(result.text,/b\n  rotate: true/);
 assert.match(result.text,/c\n  rotate: false/);
 assert.ok(result.regions.every(r=>r.box));
 assert.throws(()=>reconstructAtlas(skeleton,[image(2,2,[])]),/no visible parts/i);
-console.log("PASS infer atlas: 3/3 source regions, alpha coverage, rotation and all UV page bounds");
+assert.doesNotThrow(()=>assertAtlasInferenceUsable(result));
+
+// The measured boss_1 candidate had 13/18 strong matches, 73.57% confidence,
+// and 94.18% alpha coverage. The export path must accept the same result as
+// the browser importer rather than requiring 18/18 perfect matches.
+const boss1Metrics={
+  inferred:true,confidence:.7357,coverage:.9418,matched:13,total:18
+};
+assert.ok(Math.abs(assertAtlasInferenceUsable(boss1Metrics)-(13/18))<1e-12);
+assert.throws(()=>assertAtlasInferenceUsable({...boss1Metrics,matched:10}),/Cannot infer a reliable atlas/i);
+assert.throws(()=>assertAtlasInferenceUsable({...boss1Metrics,confidence:.51}),/Cannot infer a reliable atlas/i);
+assert.throws(()=>assertAtlasInferenceUsable({...boss1Metrics,coverage:.74}),/Cannot infer a reliable atlas/i);
+assert.throws(()=>assertAtlasInferenceUsable({...boss1Metrics,total:0}),/invalid confidence metrics/i);
+assert.doesNotThrow(()=>assertAtlasInferenceUsable({
+  inferred:false,confidence:1,coverage:1,matched:18,total:18
+}));
+
+console.log("PASS infer atlas: 3/3 source regions, alpha coverage, rotation and UV bounds");
+console.log("PASS shared confidence gate: measured 13/18 case accepted; weak and invalid results rejected");

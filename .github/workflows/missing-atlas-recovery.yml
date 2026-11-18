@@ -1,18 +1,26 @@
 name: Automatic missing-atlas recovery acceptance
 on:
   push:
-    branches: [fix/infer-missing-spine-atlas-20261118, main]
+    branches: [fix/infer-missing-spine-atlas-20261118, fix/partial-confidence-webm-atlas-20261118, main]
     paths:
       - lib/atlas-inference.*
+      - lib/atlas-inference-acceptance.*
       - src/atlas-inference-import.ts
       - src/SpineApp.tsx
+      - scripts/reconstruct-missing-atlas-for-export.mjs
+      - scripts/preserve-inferred-atlas.mjs
+      - scripts/test-preserve-inferred-atlas.mjs
       - scripts/test-atlas-inference*
       - .github/workflows/missing-atlas-recovery.yml
   pull_request:
     paths:
       - lib/atlas-inference.*
+      - lib/atlas-inference-acceptance.*
       - src/atlas-inference-import.ts
       - src/SpineApp.tsx
+      - scripts/reconstruct-missing-atlas-for-export.mjs
+      - scripts/preserve-inferred-atlas.mjs
+      - scripts/test-preserve-inferred-atlas.mjs
       - scripts/test-atlas-inference*
       - .github/workflows/missing-atlas-recovery.yml
 permissions:
@@ -28,6 +36,8 @@ jobs:
       - run: npm ci
       - name: Synthetic atlas assignment, rotated part and mesh tests
         run: node scripts/test-atlas-inference.mjs
+      - name: Inferred atlas survives clean-branch reset
+        run: node scripts/test-preserve-inferred-atlas.mjs
       - name: TypeScript + production build
         run: npm run build
       - name: Install Chromium
