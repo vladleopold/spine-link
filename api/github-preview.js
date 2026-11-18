@@ -2043,6 +2043,10 @@ const pinchDistance = { value: null };
         if (showPreviewVideoFallback()) { const v = document.getElementById("preview-loading-video"); if (v) { v.controls = true; v.style.pointerEvents = "auto"; } return; }
         box.innerHTML = '<div style="display:grid;place-items:center;height:100%;padding:24px;color:#ffb088;font-weight:900;text-align:center;">Spine player error: ' + String(message || "could not load animation").replace(/[<>&]/g, "") + '</div>'; } }); }
       function renderAnimationList() {
+        // Preserve the list position when a user switches animations. Replacing
+        // the button nodes without this resets long menus back to the top.
+        const previouslyRendered = animationMenu.childElementCount > 0;
+        const previousScrollTop = animationMenu.scrollTop;
         animationMenu.innerHTML = "";
         animationNames.value.forEach((animationName) => {
           const button = document.createElement("button");
@@ -2063,6 +2067,19 @@ const pinchDistance = { value: null };
           };
           animationMenu.appendChild(button);
         });
+        if (previouslyRendered) {
+          animationMenu.scrollTop = previousScrollTop;
+        } else if (window.innerWidth > 1000 && animationMenu.scrollHeight > animationMenu.clientHeight) {
+          // On first load reveal the animation from the URL (often near the
+          // bottom), without scrolling the surrounding page or player.
+          const selected = animationMenu.querySelector("button.active");
+          if (selected) {
+            const listBox = animationMenu.getBoundingClientRect();
+            const selectedBox = selected.getBoundingClientRect();
+            animationMenu.scrollTop += selectedBox.top - listBox.top -
+              (animationMenu.clientHeight - selectedBox.height) / 2;
+          }
+        }
       }
       function syncPreviewLike() {
         return;
