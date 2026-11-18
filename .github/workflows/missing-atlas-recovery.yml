@@ -1,0 +1,45 @@
+name: Automatic missing-atlas recovery acceptance
+on:
+  push:
+    branches: [fix/infer-missing-spine-atlas-20261118, main]
+    paths:
+      - lib/atlas-inference.*
+      - src/atlas-inference-import.ts
+      - src/SpineApp.tsx
+      - scripts/test-atlas-inference*
+      - .github/workflows/missing-atlas-recovery.yml
+  pull_request:
+    paths:
+      - lib/atlas-inference.*
+      - src/atlas-inference-import.ts
+      - src/SpineApp.tsx
+      - scripts/test-atlas-inference*
+      - .github/workflows/missing-atlas-recovery.yml
+permissions:
+  contents: read
+jobs:
+  infer-atlas:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm}
+      - run: npm ci
+      - name: Synthetic atlas assignment, rotated part and mesh tests
+        run: node scripts/test-atlas-inference.mjs
+      - name: TypeScript + production build
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start real import UI
+        run: |
+          npm run dev -- --port 4173 > /tmp/auto-atlas-vite.log 2>&1 &
+          for n in $(seq 1 80); do
+            curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep .25
+          done
+          cat /tmp/auto-atlas-vite.log
+          exit 1
+      - name: Browser JSON + PNG missing-atlas generation acceptance
+        run: node scripts/test-atlas-inference-browser.mjs
