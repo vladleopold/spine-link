@@ -1,4 +1,5 @@
 import { uploadRequest } from "./upload-request";
+import { selectSpineRuntimeSkeleton } from "../lib/spine-runtime-file-selection.js";
 import { isSpineProjectFile, isSpineImageFile, normalizeProjectPath, validateProjectSelection, readDroppedProjectEntries, rememberProjectFilePath, projectFilePath } from "./spine-project-import.js";
 import "./styles.css";
 import "./spine-project-import.css";
@@ -1311,7 +1312,7 @@ async function uploadBackgroundFilesFast(
       uploadedAt, anonymousAccount, settings, entry: {
         id: uploadId, uploadedAt, previewPath: realPath, title,
         files: files.map(file => isProject ? normalizeProjectPath(file) : file.name),
-        skeleton: files.find(file => /\.(json|skel|bytes)$/i.test(file.name))?.name || "",
+        skeleton: selectSpineRuntimeSkeleton(files, files.find(file => /\.atlas(?:\.txt|\.docx)?$/i.test(file.name))?.name)?.name || "",
         atlas: files.find(file => /\.atlas$/i.test(file.name))?.name || "",
         textures: files.filter(file => /\.(png|jpe?g|webp|dds)$/i.test(file.name)).map(file => isProject ? normalizeProjectPath(file) : file.name),
         ...(isProject ? { sourceKind: "spine-project", projectFile: files.find(isSpineProjectFile)?.name || "",
