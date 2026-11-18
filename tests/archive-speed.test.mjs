@@ -85,8 +85,8 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     assert.ok(html.includes('const batch=embeddedEntries.slice(start,start+pageSize)'),
       'client must paginate in-memory rather than waiting for a feed API request');
     assert.ok(batch.entries.every(e=>e.poster&&e.video),'Next batch has WebP poster metadata');
-    assert.match(batch.entries[0].poster,/preview-low\\.webp/,'Prefer the low-bitrate WebP poster');
-    assert.match(batch.entries[0].posterFallback,/preview-medium\\.webp/,'Fallback to a different still for the same work');
+    assert.match(batch.entries[0].poster,/preview-low\.webp/,'Prefer the low-bitrate WebP poster');
+    assert.match(batch.entries[0].posterFallback,/preview-medium\.webp/,'Fallback to a different still for the same work');
     assert.notEqual(batch.entries[0].poster,batch.entries[0].posterFallback,'Poster fallback must not repeat broken URL');
     assert.ok(html.includes('const warmedPosters=new Map()'),'Keep warmed images alive through pagination');
     assert.ok(html.includes('slice(0,pageSize)'),'Warm all next-page WebP cards before scroll');
