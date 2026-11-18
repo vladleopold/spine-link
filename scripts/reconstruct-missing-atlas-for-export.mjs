@@ -47,7 +47,8 @@ try {
       const matchRatio=assertAtlasInferenceUsable(inferred);
       const target=path.join(dir,path.parse(skeleton).name+'.atlas');
       await fs.writeFile(target,inferred.text,'utf8');
-      await fs.writeFile(path.join(dir,'atlas-inference-receipt.json'),JSON.stringify({
+      // Keep the receipt beside the set directory: export scripts scan inside the set for the first *.json skeleton.
+      await fs.writeFile(path.join(folder,path.basename(dir)+'-atlas-inference-receipt.json'),JSON.stringify({
         kind:inferred.kind,confidence:inferred.confidence,coverage:inferred.coverage,
         matched:inferred.matched,total:inferred.total,matchRatio:Number(matchRatio.toFixed(4)),
         previewOnly:Boolean(inferred.inferred),source:'reconstructed-from-json-and-images'
