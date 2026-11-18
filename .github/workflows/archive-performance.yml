@@ -6,6 +6,8 @@ on:
       - api/github-archive.js
       - tests/archive-speed.test.mjs
       - tests/spine-runtime-file-selection.test.mjs
+      - tests/spine-atlas-integrity.test.mjs
+      - lib/spine-atlas-integrity.js
       - lib/spine-runtime-file-selection.js
       - api/github-preview.js
       - src/main.tsx
@@ -26,4 +28,4 @@ jobs:
         run: |
           node --check api/github-archive.js
           node --check api/github-preview.js
-          node --test tests/archive-speed.test.mjs tests/spine-runtime-file-selection.test.mjs
+          node --test tests/archive-speed.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs
