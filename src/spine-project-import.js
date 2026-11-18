@@ -19,7 +19,7 @@ export function isSpineProjectFile(file) {
 }
 
 export function isSpineImageFile(file) {
-  return /\.(png|jpe?g|webp)$/i.test(String(file?.name || ''));
+  return /\.(png|jpe?g|webp|dds)$/i.test(String(file?.name || ''));
 }
 
 function safeParts(path) {
