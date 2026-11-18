@@ -1,4 +1,5 @@
 import { selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
+import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
@@ -2479,6 +2480,12 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     let skeletonJson = null;
     let skeletonVersion = '';
     const atlasText = await githubText(settings, atlas.path);
+    // This is a text atlas, never binary; do not interpret control bytes as
+    // texture filenames and leak corrupted URLs into the browser.
+    if (!isValidSpineAtlasHeader(atlasText)) {
+      console.warn('SPINE_ATLAS_INVALID_TEXT');
+      continue;
+    }
     if (skeleton.name.toLowerCase().endsWith('.json')) {
       try {
         skeletonJson = sanitizeSkeletonData(JSON.parse(await githubText(settings, skeleton.path)));
