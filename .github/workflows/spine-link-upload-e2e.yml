@@ -32,6 +32,9 @@ jobs:
           import fs from 'node:fs';
           import assert from 'node:assert/strict';
           import crypto from 'node:crypto';
+          import os from 'node:os';
+          import path from 'node:path';
+          import { execFileSync } from 'node:child_process';
           const site = 'https://spine-link.vercel.app';
           const uploadId = 'spine-link-e2e-' + new Date().toISOString().replace(/[:.]/g, '-');
           const uploadedAt = new Date().toISOString();
@@ -128,10 +131,24 @@ jobs:
             console.log('Delete commit: '+deletion.commitSha);
             const ownerAfter = await api({action:'get-index',scope:'mine'});
             assert.ok(!ownerAfter.entries.some(entry => entry.id === uploadId),'Deleted work still in portfolio');
-            const githubFolder = await fetch('https://api.github.com/repos/vladleopold/spine/contents/'+publishedPath+'?ref=main',{
-              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(60000),
-            });
-            assert.equal(githubFolder.status,404,'Uploaded asset directory still exists in repository');
+            // The anonymous GitHub Contents API can return HTTP 403 due to
+            // rate limits or access policy even after a successful delete.
+            // Inspect the *exact returned deletion commit* via Git instead:
+            // this proves absence of all tracked files under the upload path.
+            const proofDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spine-delete-proof-'));
+            try {
+              execFileSync('git', ['init', '-q', proofDir], {timeout:30000,stdio:'pipe'});
+              execFileSync('git', ['-C', proofDir, '-c', 'protocol.version=2',
+                'fetch', '-q', '--depth=1', '--filter=blob:none',
+                'https://github.com/vladleopold/spine.git', deletion.commitSha],
+                {timeout:90000,stdio:'pipe'});
+              const remaining = execFileSync('git', ['-C', proofDir,
+                'ls-tree', '-r', '--name-only', 'FETCH_HEAD', '--', publishedPath + '/'],
+                {encoding:'utf8',timeout:30000}).trim();
+              assert.equal(remaining, '', 'Deleted assets remain in Git deletion commit');
+            } finally {
+              fs.rmSync(proofDir, {recursive:true,force:true});
+            }
             const url=site+'/p/'+encodeURIComponent(uploadId)+'?deleted-check='+Date.now();
             const oldPlayer=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(60000)});
             assert.equal(oldPlayer.status,404,'Deleted Spine page still accessible');
