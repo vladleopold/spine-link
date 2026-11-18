@@ -1,0 +1,28 @@
+name: Verify Climax multi-atlas and DXT5 page matching
+on:
+  push:
+    branches: [fix/multiatlas-climax-preview-20261118]
+    paths:
+      - api/github-preview.js
+      - tests/multiatlas-dds-page.test.mjs
+      - .github/workflows/multiatlas-climax-e2e.yml
+  pull_request:
+    paths:
+      - api/github-preview.js
+      - tests/multiatlas-dds-page.test.mjs
+      - .github/workflows/multiatlas-climax-e2e.yml
+permissions:
+  contents: read
+jobs:
+  matching:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm}
+      - run: |
+          npm ci
+          node --check api/github-preview.js
+          node tests/multiatlas-dds-page.test.mjs
+          npm run build
