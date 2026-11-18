@@ -30,7 +30,7 @@ try {
   );
 
   const backup = await preserveInferredAtlases({ repoRoot: root, uploadId, backupDir });
-  assert.deepEqual(backup, { mode: "backup", restoredSets: 1, atlasFiles: 1 });
+  assert.deepEqual(backup, { mode: "backup", sets: 1, atlasFiles: 1 });
 
   // Simulate the workflow's git reset --hard: inferred files vanish from checkout.
   await fs.rm(path.join(setDir, atlasName));
