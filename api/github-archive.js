@@ -1409,13 +1409,12 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
 function archiveHtml({ origin, entries, metrics }) {
   const initialItems = entries.slice(0, archivePageSize).map((entry) => archiveFeedEntry(origin, entry, metrics));
   const cards = initialItems.map(lightweightCardHtml).join('');
-  // Embed only one extra small metadata page. The first lazy batch should
-  // render instantly even when a cold GitHub API request takes multiple seconds.
+  // Embed the compact metadata of all remaining cards. Scroll pagination
+  // requires zero API round trips; assets are separately demand-loaded.
   const nextOffset = initialItems.length;
   const preloadedBatch = {
-    entries: entries.slice(nextOffset, nextOffset + archivePageSize)
-      .map(entry => archiveFeedEntry(origin, entry, metrics)),
-    hasMore: nextOffset + archivePageSize < entries.length,
+    entries: entries.slice(nextOffset).map(entry => archiveFeedEntry(origin, entry, metrics)),
+    hasMore: false,
   };
   const archiveImage = initialItems.find((item) => item.poster)?.poster || `${origin}/spine-link-video-thumbnail.png`;
   const structuredData = {
@@ -1473,12 +1472,12 @@ function archiveHtml({ origin, entries, metrics }) {
         const sentinel=document.getElementById('sentinel');
         const pageSize=${archivePageSize};
         let offset=${initialItems.length}, finished=offset>=${entries.length}, loading=false;
-        let nextRequest=null,prefetched=null;
+        let nextRequest=null,prefetched=null,embeddedEntries=[];
         const nextPageData=document.getElementById('archive-next-page');
         if(nextPageData){
           try{
             const data=JSON.parse(nextPageData.textContent);
-            if(Array.isArray(data.entries)&&data.entries.length)prefetched={start:offset,data};
+            if(Array.isArray(data.entries))embeddedEntries=data.entries;
           }catch{}
           nextPageData.remove();
         }
@@ -1627,6 +1626,10 @@ function archiveHtml({ origin, entries, metrics }) {
           });
         }
         function prefetchNext(){
+          if(embeddedEntries.length){
+            warmPosters({entries:embeddedEntries.slice(Math.max(0,offset-${initialItems.length}),Math.max(0,offset-${initialItems.length})+pageSize)});
+            return;
+          }
           if(finished||loading||prefetched||nextRequest)return;
           const start=offset;
           nextRequest=fetchPage(start).then(data=>{
@@ -1642,7 +1645,11 @@ function archiveHtml({ origin, entries, metrics }) {
           loading=true;sentinel.textContent='Loading works...';
           try{
             let data;
-            if(prefetched&&prefetched.start===offset){
+            if(embeddedEntries.length){
+              const start=offset-${initialItems.length};
+              const batch=embeddedEntries.slice(start,start+pageSize);
+              data={entries:batch,hasMore:start+batch.length<embeddedEntries.length};
+            }else if(prefetched&&prefetched.start===offset){
               data=prefetched.data;prefetched=null;
             }else if(nextRequest){
               data=await nextRequest;
@@ -1679,8 +1686,9 @@ function archiveHtml({ origin, entries, metrics }) {
             if(records.some(r=>r.isIntersecting))void loadMore();
           },{rootMargin:'2200px'}).observe(sentinel);
         }
-        if(prefetched)setTimeout(()=>warmPosters(prefetched.data),80);
-        else if(!finished)setTimeout(prefetchNext,120);
+        if(embeddedEntries.length)warmPosters({entries:embeddedEntries.slice(0,pageSize)});
+        else if(prefetched)warmPosters(prefetched.data);
+        else if(!finished)prefetchNext();
         queueUpdate();
       })();
     </script>
