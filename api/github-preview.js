@@ -2441,9 +2441,46 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
 </html>`;
 }
 
+
+function createIncompleteRuntimeHtml({ origin, entry, entryId, files, missing }) {
+  const title = escapeHtml(cleanPublicText(entry?.title || entryId || 'Spine animation'));
+  const picture = files.find(file => /\.(png|jpe?g|webp)$/i.test(file.name));
+  const skeleton = files.find(file => /\.(json|skel)$/i.test(file.name));
+  const asset = file => file ? origin + '/assets/' + encodeRepoPath(file.path) : '';
+  const imageUrl = picture ? escapeHtml(asset(picture)) : '';
+  const skeletonUrl = skeleton ? escapeHtml(asset(skeleton)) : '';
+  const note = missing.includes('.atlas')
+    ? 'The original Spine atlas is missing. JSON and PNG alone do not specify the texture regions needed to animate the skeleton.'
+    : missing.includes('texture pages')
+      ? 'One or more texture pages referenced by the atlas are missing.'
+      : 'This upload does not contain a complete Spine animation.';
+  // Show the original saved artwork, but NEVER fabricate an atlas or animation.
+  const cover = imageUrl ? '<figure><img src="' + imageUrl + '" alt="Stored image" loading="eager" decoding="async"></figure>' : '';
+  const skeletonLink = skeletonUrl ? '<a href="' + skeletonUrl + '" download>Download skeleton</a>' : '';
+  const imageLink = imageUrl ? '<a href="' + imageUrl + '" download>Download image</a>' : '';
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta name="robots" content="noindex,follow"><title>' + title + ' | Spine-Link</title>' +
+    '<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#080c12;color:#f4f6fb;font:15px/1.55 system-ui,sans-serif}' +
+    'main{max-width:940px;margin:0 auto;padding:20px 18px 44px}header{display:flex;justify-content:space-between;margin-bottom:22px}' +
+    'a{color:#ffa657;text-decoration:none}a:hover{text-decoration:underline}h1{font-size:clamp(23px,4vw,38px);margin:12px 0}' +
+    'section{background:#111923;border:1px solid #344050;border-radius:14px;overflow:hidden}figure{margin:0;min-height:250px;' +
+    'max-height:78vh;padding:16px;display:grid;place-items:center;background:#070b12}figure img{display:block;max-width:100%;max-height:68vh;object-fit:contain}' +
+    'aside{padding:22px;border-top:1px solid #344050}.state{color:#ffbb77;font-weight:750}' +
+    'p{color:#c2ceda}.downloads{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}' +
+    '.downloads a{border:1px solid #667384;border-radius:8px;padding:10px 14px}</style></head><body><main>' +
+    '<header><a href="/">Spine-link</a><a href="/">Library</a></header><section>' + cover +
+    '<aside><h1>' + title + '</h1><p role="status" class="state">Animation unavailable — incomplete Spine files</p>' +
+    '<p>' + escapeHtml(note) + '</p>' +
+    '<p>Original files are preserved. This is a stored image, not a working Spine animation.</p>' +
+    '<div class="downloads">' + skeletonLink + imageLink + '</div></aside></section></main>' +
+    '<script src="/drop-handoff.js" defer></script></body></html>';
+}
+
 async function createDynamicPreview(settings, uploadPath, origin, knownEntryRecord = undefined) {
   const setDirectories = await findSpineSetDirectories(settings, uploadPath);
   const sets = [];
+  const incompleteRuntimeSets = [];
   let note = '';
   let ownerProfile = null;
   let entry = null;
@@ -2472,7 +2509,14 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     const skeleton = items.find((item) => item.type === 'file' && isSkeleton(item.name));
     const atlas = items.find((item) => item.type === 'file' && isAtlas(item.name));
     const textures = items.filter((item) => item.type === 'file' && isImage(item.name));
-    if (!skeleton || !atlas || textures.length === 0) continue;
+    if (!skeleton || !atlas || textures.length === 0) {
+      if (skeleton) incompleteRuntimeSets.push({
+        files: items.filter(item => item.type === 'file'),
+        missing: [...(!atlas ? ['.atlas'] : []),
+          ...(textures.length === 0 ? ['texture pages'] : [])],
+      });
+      continue;
+    }
 
     let skeletonJson = null;
     let skeletonVersion = '';
@@ -2644,6 +2688,13 @@ ${waiting ? '<small>This page will refresh when the editor export finishes.</sma
     };
   }
   if (sets.length === 0) {
+    if (incompleteRuntimeSets.length && !entry?.webmPreview) {
+      const broken = incompleteRuntimeSets[0];
+      return {
+        html: createIncompleteRuntimeHtml({ origin, entry, entryId, files: broken.files, missing: broken.missing }),
+        robots: 'noindex,follow',
+      };
+    }
     return {
       html: createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo: video, robots, playerUrl, archiveUrl }),
       robots,
