@@ -1,0 +1,35 @@
+name: Fail-closed missing-atlas upload acceptance and boss_1 preview
+on:
+  push:
+    branches: [fix/boss-1-missing-atlas-acceptance-20261118, main]
+    paths:
+      - api/github-preview.js
+      - api/github-upload.js
+      - lib/spine-asset-graph.js
+      - scripts/test-boss-atlas-acceptance.mjs
+      - .github/workflows/boss-missing-atlas-acceptance.yml
+  pull_request:
+    paths:
+      - api/github-preview.js
+      - api/github-upload.js
+      - lib/spine-asset-graph.js
+      - scripts/test-boss-atlas-acceptance.mjs
+      - .github/workflows/boss-missing-atlas-acceptance.yml
+permissions:
+  contents: read
+jobs:
+  source-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm}
+      - run: npm ci
+      - name: Verify fail-closed source graph and boss_1 HTML fallback
+        run: node scripts/test-boss-atlas-acceptance.mjs
+      - name: Verify production TypeScript build and JS syntax
+        run: |
+          node --check api/github-preview.js
+          node --check api/github-upload.js
+          npm run build
