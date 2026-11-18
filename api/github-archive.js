@@ -497,9 +497,9 @@ function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
   const image = entryImageUrl(origin, entry);
   const video = entryVideoSrc(origin, entry);
-  // Use small WebP first, then only stills belonging to this specific work.
+  // preview-low.webp is deliberately 404 in the asset API; medium is the
+  // smallest supported WebP. Fallbacks remain restricted to this same work.
   const posterCandidates = [
-    entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low'),
     entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
     entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
     entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster'),
@@ -1590,8 +1590,9 @@ function archiveHtml({ origin, entries, metrics }) {
             const image=document.createElement('img');
             image.src=item.poster||item.posterFallback;
             image.alt=item.title+' Spine animation preview';
-            const isWebp=/\\.webp(?:[?#]|$)/i.test(item.poster||item.posterFallback||'');
-            image.loading=isWebp||index<4?'eager':'lazy';
+            // Demand-load each card; the upcoming 12 valid WebP files are
+            // prewarmed independently before the user reaches this batch.
+            image.loading=index<6?'eager':'lazy';
             image.fetchPriority=index<4?'high':'low';
             image.decoding='async';
             image.addEventListener('error',()=>{
