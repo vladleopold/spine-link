@@ -36,6 +36,7 @@ import {
 import type { SpinePlayer as SpinePlayerInstance, SpinePlayerConfig } from "@esotericsoftware/spine-player";
 import { startParticleField } from "./particles";
 import { normalizeSpineTextureFiles } from "./dds-import";
+import { supplyMissingAtlas, type InferredAtlasReceipt } from "./atlas-inference-import";
 
 type AppProps = {
   initialFiles?: File[];
@@ -84,6 +85,7 @@ type PreparedSpine = {
   rawDataURIs: Record<string, string>;
   // Original DDS inputs are saved unchanged alongside the PNG rendering copies.
   originalTextureDataURIs?: Record<string, string>;
+  inferredAtlas?: InferredAtlasReceipt;
 };
 
 type ExtraSpinePlayer = {
@@ -307,6 +309,7 @@ type LibraryEntry = {
   sourceProofUrl?: string;
   blockchainAnchor?: BlockchainAnchor;
   webmStatus?: string;
+  inferredAtlas?: InferredAtlasReceipt;
   webmGeneratedAt?: string;
   posterGeneratedAt?: string;
   fullExportStatus?: string;
@@ -2441,14 +2444,15 @@ function ownEntryWebm(value?: string) {
 
 async function loadFiles(files: File[]) {
   const normalized = await normalizeSpineTextureFiles(files);
+  const autoAtlas = await supplyMissingAtlas(normalized.files);
   const originalTextureDataURIs: Record<string, string> = {};
   for (const original of normalized.originalDdsFiles) {
     originalTextureDataURIs[original.name] = await readAsDataUri(original);
   }
-  const usefulFiles = normalized.files.filter((file) => isSkeletonFile(file) || isAtlasFile(file) || isImageFile(file));
+  const usefulFiles = autoAtlas.files.filter((file) => isSkeletonFile(file) || isAtlasFile(file) || isImageFile(file));
 
   if (usefulFiles.length < 3) {
-    throw new Error("You need a skeleton .json/.skel, an atlas and a texture .png/.webp/.jpg/.dds.");
+    throw new Error("You need JSON/SKEL plus matching images. Missing .atlas is inferred automatically for supported JSON + PNG sets.");
   }
 
   const assets = await Promise.all(
@@ -2590,6 +2594,7 @@ if (extensionOf(file.name) === "json" && text) {
         viewport,
         rawDataURIs,
         originalTextureDataURIs,
+        inferredAtlas: autoAtlas.receipt || undefined,
       };
       }),
     )
@@ -5245,6 +5250,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         skeleton: spine.skeletonName,
         atlas: spine.atlasName,
         textures: Array.from(new Set(setsForPublish.flatMap((nextSpine) => nextSpine.atlasPages.map(basename)))),
+        ...(spine.inferredAtlas ? { inferredAtlas: spine.inferredAtlas } : {}),
         animations: animationNames,
         defaultAnimation,
         files: files.map((file) => file.name),
