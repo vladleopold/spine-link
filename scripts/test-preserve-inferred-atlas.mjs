@@ -42,7 +42,7 @@ try {
     backupDir,
     mode: "restore",
   });
-  assert.deepEqual(restore, { mode: "restore", restoredSets: 1, atlasFiles: 1 });
+  assert.deepEqual(restore, { mode: "restore", sets: 1, atlasFiles: 1 });
   assert.equal(await fs.readFile(path.join(setDir, atlasName), "utf8"), atlasContents);
   assert.equal(
     JSON.parse(await fs.readFile(path.join(previewDir, receiptName), "utf8")).source,
