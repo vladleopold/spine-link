@@ -1,3 +1,4 @@
+# Live benchmark after deploying all-page embedded archive metadata.
 name: Spine archive live one-second lazy-card browser proof
 on:
   push:
