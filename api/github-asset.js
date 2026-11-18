@@ -428,6 +428,22 @@ export default async function handler(request, response) {
     let githubResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`, {
       headers: githubHeaders(token),
     });
+    // Spine atlases exported from DXT5 packs sometimes still reference
+    // page.dds although the upload contains page.png of the SAME name.
+    // Only try the identical pathname with its extension changed, never
+    // redirect to an arbitrary image elsewhere in the library.
+    if (!githubResponse.ok && /\.dds$/i.test(assetPath)) {
+      const pngPath = assetPath.replace(/\.dds$/i, '.png');
+      const pngEncoded = encodeURIComponent(pngPath).replace(/%2F/g, '/');
+      const sameFolderPng = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${pngEncoded}?ref=${encodeURIComponent(branch)}`,
+        { headers: githubHeaders(token) },
+      );
+      if (sameFolderPng.ok) {
+        githubResponse = sameFolderPng;
+        response.setHeader('X-Spine-Link-DDS-PNG-Alias', 'same-stem');
+      }
+    }
 
     if (!githubResponse.ok) {
       const fallbackPath = await findFallbackGitHubPath({ owner, repo, branch, token, path: assetPath });
@@ -453,8 +469,12 @@ export default async function handler(request, response) {
     if (!buffer.length) return response.status(404).send('Asset is empty');
     if (/\.dds$/i.test(assetPath)) {
       try {
-        buffer = ddsToPng(buffer);
-        response.setHeader('X-Spine-Link-Texture-Transcoded', 'DXT-to-PNG-v1');
+        const alreadyPng = buffer.length >= 8 && buffer.subarray(0,8)
+          .equals(Buffer.from([137,80,78,71,13,10,26,10]));
+        if (!alreadyPng) {
+          buffer = ddsToPng(buffer);
+          response.setHeader('X-Spine-Link-Texture-Transcoded', 'DXT-to-PNG-v1');
+        }
       } catch (error) {
         setNoStoreHeaders(response);
         return response.status(415).send(error instanceof Error ? error.message : 'Unsupported DDS texture');
