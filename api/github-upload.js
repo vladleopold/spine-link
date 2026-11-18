@@ -1539,22 +1539,26 @@ export default async function handler(request, response) {
       // A late index write must not mark a PNG+JSON pair as a finished Spine
       // animation. Resolve the complete file triad before committing metadata.
       if (body?.entry?.sourceKind !== 'spine-project') {
-        const recordedFiles = Array.isArray(body?.entry?.files) ? body.entry.files : [];
-        const acceptance = validateSpineRuntimeFiles(recordedFiles);
+        // The legacy background client only sends entry.id, not entry.files.
+        // Inspect the ACTUAL uploaded GitHub directory; do not reject a
+        // complete upload because the client omitted redundant metadata.
+        const workRoot = uploadPathBg;
+        const rootItems = await getGitHubContent(settings, workRoot);
+        const listed = Array.isArray(rootItems) ? rootItems : [];
+        const actualFiles = listed.filter(item => item.type === 'file').map(item => item.name);
+        for (const folder of listed.filter(item => item.type === 'dir' &&
+          /^(images|textures)$/i.test(item.name))) {
+          const children = await getGitHubContent(settings, joinRepoPath(workRoot, folder.name));
+          if (Array.isArray(children)) {
+            actualFiles.push(...children.filter(item => item.type === 'file')
+              .map(item => folder.name + '/' + item.name));
+          }
+        }
+        const acceptance = validateSpineRuntimeFiles(actualFiles);
         if (!acceptance.ok) {
           return response.status(422).json({
             error: 'Incomplete Spine source: ' + acceptance.missing.join(', '),
             code: acceptance.code, missing: acceptance.missing,
-          });
-        }
-        const workRoot = uploadPathBg;
-        const receipts = await Promise.all(recordedFiles.filter(f =>
-          /\.(?:json|skel|atlas|atlas\.txt|atlas\.docx|png|jpe?g|webp|dds)$/i.test(String(f))
-        ).map(f => getGitHubContent(settings, joinRepoPath(workRoot, String(f)))));
-        if (receipts.some(item => !item)) {
-          return response.status(422).json({
-            error: 'Incomplete Spine source: one or more promised files are missing',
-            code: 'UNVERIFIED_SPINE_FILES',
           });
         }
       }
