@@ -161,7 +161,7 @@ jobs:
             git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
             git reset --hard refs/remotes/origin/main
 
-            # Restore inferred atlases so the clean reset does not discard the recovery result.
+            # Re-apply inferred atlases after refreshing main; stage them with the preview output.
             node scripts/preserve-inferred-atlas.mjs --upload-id="$uploadId" --mode=restore --backup-dir="$atlasBackupDir"
 
           # 2. Copy media files on top of fresh state
