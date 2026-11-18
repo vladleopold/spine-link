@@ -2,6 +2,7 @@ const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
+import { ddsToPng } from '../lib/dds-png.js';
 
 const memoryCache = globalThis.__spineLinkAssetMemoryCache || {
   entries: new Map(),
@@ -57,6 +58,8 @@ function contentTypeFor(path) {
   if (lowerPath.endsWith('.json')) return 'application/json; charset=utf-8';
   if (lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx')) return 'text/plain; charset=utf-8';
   if (lowerPath.endsWith('.png')) return 'image/png';
+  // Spine Web Player needs an image, not raw BC3/DXT DDS bytes.
+  if (lowerPath.endsWith('.dds')) return 'image/png';
   if (lowerPath.endsWith('.gif')) return 'image/gif';
   if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) return 'image/jpeg';
   if (lowerPath.endsWith('.webp')) return 'image/webp';
@@ -214,12 +217,19 @@ function sanitizeLibraryIndex(buffer) {
 }
 
 function withAtlasPageCacheBuster(buffer, version) {
-  if (!version) return buffer;
-
   const text = buffer.toString('utf8');
+  if (!version && !/\.dds(?:\?|\r|\n|$)/im.test(text)) return buffer;
   const nextText = text.replace(
-    /^([^\r\n:]+?\.(?:png|jpe?g|webp))(?:\?v=[^\r\n]*)?$/gim,
-    (_match, pageName) => `${pageName}?v=${encodeURIComponent(version)}`,
+    /^([^\r\n:]+?\.(?:png|jpe?g|webp|dds))(?:\?[^\r\n]*)?$/gim,
+    (_match, pageName) => {
+      const dds = /\.dds$/i.test(pageName);
+      if (!version && !dds) return _match;
+      const query = [
+        ...(version ? ["v=" + encodeURIComponent(version)] : []),
+        ...(dds ? ["dds=png-v1"] : []),
+      ];
+      return pageName + "?" + query.join("&");
+    },
   );
   return Buffer.from(nextText, 'utf8');
 }
@@ -308,7 +318,8 @@ function sendAssetHeadFromMetadata(request, response, { path, assetVersion, data
   const earlyResponse = setAssetResponseHeaders(request, response, { path, assetVersion, etag });
   if (earlyResponse) return earlyResponse;
   const size = githubContentSize(data);
-  if (size) response.setHeader('Content-Length', String(size));
+  // DDS is converted to PNG in GET; original DDS byte length is not PNG length.
+  if (size && !/\.dds$/i.test(path)) response.setHeader('Content-Length', String(size));
   response.setHeader('X-Spine-Link-Asset-Head', 'metadata');
   return response.status(200).end();
 }
@@ -429,7 +440,7 @@ export default async function handler(request, response) {
     }
 
     const data = await githubResponse.json();
-    const etag = data?.sha ? `"github-${data.sha}${assetVersion ? `-${assetVersion}` : ''}"` : '';
+    const etag = data?.sha ? `"github-${data.sha}${assetVersion ? `-${assetVersion}` : ''}${/\.dds$/i.test(assetPath) ? '-dds-rgba-png-v1' : ''}"` : '';
     if (requestMatchesEtag(request, etag)) {
       const earlyResponse = setAssetResponseHeaders(request, response, { path: assetPath, assetVersion, etag });
       if (earlyResponse) return earlyResponse;
@@ -440,6 +451,15 @@ export default async function handler(request, response) {
     if (rangeResponse) return rangeResponse;
     let buffer = await contentBufferFromGitHubContent(data, token);
     if (!buffer.length) return response.status(404).send('Asset is empty');
+    if (/\.dds$/i.test(assetPath)) {
+      try {
+        buffer = ddsToPng(buffer);
+        response.setHeader('X-Spine-Link-Texture-Transcoded', 'DXT-to-PNG-v1');
+      } catch (error) {
+        setNoStoreHeaders(response);
+        return response.status(415).send(error instanceof Error ? error.message : 'Unsupported DDS texture');
+      }
+    }
     if (isAtlasPath(assetPath)) {
       buffer = withAtlasPageCacheBuster(buffer, assetVersion);
     }
