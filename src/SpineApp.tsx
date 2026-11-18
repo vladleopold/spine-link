@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import type { SpinePlayer as SpinePlayerInstance, SpinePlayerConfig } from "@esotericsoftware/spine-player";
 import { startParticleField } from "./particles";
+import { normalizeSpineTextureFiles } from "./dds-import";
 
 type AppProps = {
   initialFiles?: File[];
@@ -81,6 +82,8 @@ type PreparedSpine = {
     height: number;
   };
   rawDataURIs: Record<string, string>;
+  // Original DDS inputs are saved unchanged alongside the PNG rendering copies.
+  originalTextureDataURIs?: Record<string, string>;
 };
 
 type ExtraSpinePlayer = {
@@ -2437,10 +2440,15 @@ function ownEntryWebm(value?: string) {
 }
 
 async function loadFiles(files: File[]) {
-  const usefulFiles = files.filter((file) => isSkeletonFile(file) || isAtlasFile(file) || isImageFile(file));
+  const normalized = await normalizeSpineTextureFiles(files);
+  const originalTextureDataURIs: Record<string, string> = {};
+  for (const original of normalized.originalDdsFiles) {
+    originalTextureDataURIs[original.name] = await readAsDataUri(original);
+  }
+  const usefulFiles = normalized.files.filter((file) => isSkeletonFile(file) || isAtlasFile(file) || isImageFile(file));
 
   if (usefulFiles.length < 3) {
-    throw new Error("You need at least skeleton .json/.skel, .atlas, and texture .png/.webp/.jpg.");
+    throw new Error("You need a skeleton .json/.skel, an atlas and a texture .png/.webp/.jpg/.dds.");
   }
 
   const assets = await Promise.all(
@@ -2581,6 +2589,7 @@ if (extensionOf(file.name) === "json" && text) {
         premultipliedAlpha,
         viewport,
         rawDataURIs,
+        originalTextureDataURIs,
       };
       }),
     )
@@ -2614,6 +2623,11 @@ function filesForLibrary(preparedSpine: PreparedSpine) {
 
   for (const pageName of preparedSpine.atlasPages) {
     addFile(pageName, preparedSpine.rawDataURIs[pageName] ?? preparedSpine.rawDataURIs[basename(pageName)]);
+  }
+  // Keep immutable source DDS files in the published set while the atlas
+  // points at validated, browser-compatible PNG rendering copies.
+  for (const [name, dataUri] of Object.entries(preparedSpine.originalTextureDataURIs || {})) {
+    addFile(name, dataUri);
   }
 
   return Array.from(fileMap.entries()).map(([name, dataUri]) => ({ name, dataUri }));
@@ -5759,7 +5773,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     name="spine-files"
                     type="file"
                     multiple
-                    accept=".spine,.json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
+                    accept=".spine,.json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp,.dds"
                     aria-label="Select Spine project, export files or textures"
                     onDragOver={(event) => {
                       event.preventDefault();
@@ -6149,7 +6163,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                           name="spine-files"
                           type="file"
                           multiple
-                          accept=".spine,.json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp"
+                          accept=".spine,.json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp,.dds"
                           aria-label="Upload Spine project or JSON SKEL atlas and texture files"
                           onDragOver={(event) => {
                             event.preventDefault();
