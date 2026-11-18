@@ -222,6 +222,39 @@ jobs:
                   'Download card overlaps animation list at ' + width + 'px');
                 console.log('PASS LIVE ANIMATION MENU', width, JSON.stringify(layout));
               }
+              // Select a late animation on first render, then change selections
+              // without losing the user's current scroll position.
+              const selectionScroll = await page.evaluate(() => {
+                const menu = document.getElementById('animation-menu');
+                const namesBefore = animationNames.value.slice();
+                const activeBefore = activeAnimation.name;
+                try {
+                  animationNames.value = Array.from({length:26}, (_, index) => 'menu_test_' + index);
+                  activeAnimation.name = 'menu_test_25';
+                  menu.replaceChildren();
+                  renderAnimationList();
+                  const button = menu.querySelector('button.active');
+                  const menuBox = menu.getBoundingClientRect();
+                  const buttonBox = button.getBoundingClientRect();
+                  const firstSelectionVisible =
+                    buttonBox.top >= menuBox.top - 1 && buttonBox.bottom <= menuBox.bottom + 1;
+                  menu.scrollTop = menu.scrollHeight;
+                  const before = menu.scrollTop;
+                  activeAnimation.name = 'menu_test_24';
+                  renderAnimationList();
+                  const after = menu.scrollTop;
+                  return {firstSelectionVisible, before, after};
+                } finally {
+                  animationNames.value = namesBefore;
+                  activeAnimation.name = activeBefore;
+                  renderAnimationList();
+                }
+              });
+              assert.equal(selectionScroll.firstSelectionVisible, true,
+                'Initial selected animation must be visible');
+              assert.ok(selectionScroll.before > 30 && Math.abs(selectionScroll.before - selectionScroll.after) < 2,
+                'Animation selection reset scroll: ' + JSON.stringify(selectionScroll));
+              console.log('PASS LIVE ANIMATION SCROLL RETENTION', JSON.stringify(selectionScroll));
               assert.deepEqual(missingAssets, [], 'Spine preview has missing assets');
               assert.deepEqual(pageErrors, [], 'Spine preview JavaScript errors');
               console.log('PASS LIVE PREVIEW', JSON.stringify(info));
