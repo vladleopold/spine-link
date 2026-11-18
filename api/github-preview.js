@@ -1103,7 +1103,8 @@ function createHtml(config) {
       .animation-download-block { padding: 12px; border: 1px solid rgba(140,199,255,.22); border-radius: 10px; background: rgba(140,199,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.2); }
       .dl-head { display: grid; gap: 9px; }
       .dl-head-title { color: #f7fbff; font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-      .dl-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+      .dl-steps { display: none; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+      .animation-download-block.has-format .dl-steps { display: grid; }
       .dl-step { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 6px; border: 1px solid rgba(255,255,255,.1); border-radius: 999px; color: rgba(231,237,244,.72); background: rgba(255,255,255,.04); font-size: 11px; font-weight: 850; cursor: pointer; transition: color .18s ease, background .18s ease, border-color .18s ease; }
       .dl-step b { display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; color: #0b0e12; background: rgba(231,237,244,.72); font-size: 9px; font-weight: 900; }
       .dl-step.is-active { border-color: rgba(140,199,255,.82); color: #fff; background: rgba(71,156,255,.2); }
@@ -2241,6 +2242,7 @@ playerElement.addEventListener("touchstart", (event) => {
         block.querySelectorAll("[data-dl-format]").forEach(function (chip) {
           chip.addEventListener("click", function () {
             chosen.format = chip.dataset.dlFormat || "";
+            block.classList.add("has-format");
             block.querySelectorAll("[data-dl-format]").forEach(function (other) {
               other.classList.toggle("is-picked", other === chip);
             });
