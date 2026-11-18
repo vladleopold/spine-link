@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Preserve inferred atlases across the export workflow's git reset --hard retries.
-// The recovery step creates these files in the checkout; the commit step must
-// restore them after refreshing main or the generated atlas is silently lost.
+// Back up inferred atlases outside the checkout while the export job refreshes main.
+// Re-applying them after each refresh keeps recovery output explicit and durable.
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -83,7 +82,7 @@ export async function preserveInferredAtlases({
       sets,
     };
     await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-    return { mode, restoredSets: sets.length, atlasFiles: sets.reduce((n, s) => n + s.atlasFiles.length, 0) };
+    return { mode, sets: sets.length, atlasFiles: sets.reduce((n, s) => n + s.atlasFiles.length, 0) };
   }
 
   if (mode !== "restore") throw new Error("Mode must be backup or restore");
@@ -121,7 +120,7 @@ export async function preserveInferredAtlases({
     }
   }
 
-  return { mode, restoredSets: manifest.sets.length, atlasFiles: manifest.sets.reduce((n, s) => n + s.atlasFiles.length, 0) };
+  return { mode, sets: manifest.sets.length, atlasFiles: manifest.sets.reduce((n, s) => n + s.atlasFiles.length, 0) };
 }
 
 function argument(name) {
@@ -138,6 +137,6 @@ if (isCli) {
   });
   console.log(
     "[inferred-atlas] " + result.mode +
-    ": " + result.restoredSets + " set(s), " + result.atlasFiles + " atlas file(s)"
+    ": " + result.sets + " set(s), " + result.atlasFiles + " atlas file(s)"
   );
 }
