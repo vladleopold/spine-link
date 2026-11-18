@@ -36,6 +36,7 @@ import {
 import type { SpinePlayer as SpinePlayerInstance, SpinePlayerConfig } from "@esotericsoftware/spine-player";
 import { startParticleField } from "./particles";
 import { normalizeSpineTextureFiles } from "./dds-import";
+import { recoverMissingAtlasFiles } from "./atlas-recovery";
 
 type AppProps = {
   initialFiles?: File[];
@@ -84,6 +85,8 @@ type PreparedSpine = {
   rawDataURIs: Record<string, string>;
   // Original DDS inputs are saved unchanged alongside the PNG rendering copies.
   originalTextureDataURIs?: Record<string, string>;
+  atlasRecoveryConfidence?: "matched" | "inferred" | "low";
+  atlasRecoveryDetails?: string;
 };
 
 type ExtraSpinePlayer = {
@@ -279,6 +282,7 @@ type LibraryEntry = {
   /** Server-provided source index for fast, verified deletion. */
   collectionBasePath?: string;
   repositoryUrl: string;
+  atlasRecoveryConfidence?: "matched" | "inferred" | "low";
   note?: string;
   thumbnail?: string;
   thumbnailPoster?: string;
@@ -2441,11 +2445,12 @@ function ownEntryWebm(value?: string) {
 
 async function loadFiles(files: File[]) {
   const normalized = await normalizeSpineTextureFiles(files);
+  const recovered = await recoverMissingAtlasFiles(normalized.files);
   const originalTextureDataURIs: Record<string, string> = {};
   for (const original of normalized.originalDdsFiles) {
     originalTextureDataURIs[original.name] = await readAsDataUri(original);
   }
-  const usefulFiles = normalized.files.filter((file) => isSkeletonFile(file) || isAtlasFile(file) || isImageFile(file));
+  const usefulFiles = recovered.files.filter((file) => isSkeletonFile(file) || isAtlasFile(file) || isImageFile(file));
 
   if (usefulFiles.length < 3) {
     throw new Error("You need a skeleton .json/.skel, an atlas and a texture .png/.webp/.jpg/.dds.");
@@ -2590,6 +2595,8 @@ if (extensionOf(file.name) === "json" && text) {
         viewport,
         rawDataURIs,
         originalTextureDataURIs,
+        atlasRecoveryConfidence: recovered.reports.get(skeletonStem.toLowerCase())?.confidence,
+        atlasRecoveryDetails: recovered.reports.get(skeletonStem.toLowerCase())?.details,
       };
       }),
     )
@@ -3900,7 +3907,13 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         publishedKeysRef.current.clear();
         setSpineOptions(nextSpineOptions);
         setPreparedSpine(chooseInitialSet(nextSpineOptions));
-        setStatus(nextSpineOptions.length > 1 ? `Sets found: ${nextSpineOptions.length}. Starting preview...` : "Files ready. Starting preview...");
+        const inferred = nextSpineOptions.find((item) => item.atlasRecoveryConfidence);
+        setStatus(inferred
+          ? "Missing .atlas reconstructed from JSON + PNG (" + inferred.atlasRecoveryConfidence +
+            "). Starting preview; reconstructed geometry requires visual verification."
+          : nextSpineOptions.length > 1
+            ? `Sets found: ${nextSpineOptions.length}. Starting preview...`
+            : "Files ready. Starting preview...");
       } catch (nextError) {
         setSpineOptions([]);
         setPreparedSpine(null);
@@ -4197,7 +4210,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           setError(`Animation bounds are invalid: ${initialAnimation}.`);
         }
         setStatus(
-          playableAnimation
+          playableAnimation && configuredSpine.atlasRecoveryConfidence === "low"
+            ? "Animation preview running with an approximate atlas; not published or artistically approved."
+            : playableAnimation && configuredSpine.atlasRecoveryConfidence
+            ? "Atlas recovered from JSON + textures (" + configuredSpine.atlasRecoveryConfidence + "); preview ready, verifying before publishing."
+            : playableAnimation
             ? `Ready. Animations found: ${names.length}. Creating permanent link...`
             : names.length
               ? "Ready, but the available animations have invalid bounds."
@@ -5150,6 +5167,10 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   }, [googleIdToken]);
 
   async function publishToGitHub(spine: PreparedSpine, animationNames: string[], defaultAnimation: string) {
+    if (spine.atlasRecoveryConfidence === "low") {
+      setStatus("Preview only: atlas packing is ambiguous; no unverified atlas will be published.");
+      return;
+    }
     const existingEntry = currentLibraryEntry;
     const nextSettings = {
       ...githubPublishSettings,
@@ -5250,6 +5271,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         files: files.map((file) => file.name),
         previewPath: uploadPath,
         repositoryUrl: existingEntry?.repositoryUrl || "",
+        ...(spine.atlasRecoveryConfidence ? { atlasRecoveryConfidence: spine.atlasRecoveryConfidence } : {}),
         ...(note ? { note } : {}),
         ...(thumbnailPosterPath ? { thumbnail: assetUrlForRepoPath(thumbnailPosterPath, uploadedAt), thumbnailPath: thumbnailPosterPath } : {}),
         ...(thumbnailPosterPath
