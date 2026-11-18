@@ -1465,7 +1465,7 @@ export default async function handler(request, response) {
           if (blob?.encoding !== 'base64' || !blob.content) {
             return response.status(422).json({ error: 'Staged Spine atlas could not be validated' });
           }
-          const bytes = Buffer.from(String(blob.content).replace(/\\s/g, ''), 'base64');
+          const bytes = Buffer.from(String(blob.content).replace(/\s/g, ''), 'base64');
           if (bytes.byteLength !== asset.bytes ||
               createHash('sha256').update(bytes).digest('hex') !== asset.sha256 ||
               !isValidSpineAtlasHeader(bytes.toString('utf8'))) {
