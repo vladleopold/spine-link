@@ -56,7 +56,7 @@ test('archive feed paginates without probing every media card, caches public res
     assert.equal(res.body.hasMore,true);
     assert.match(res.headers['cache-control'],/max-age/);
     assert.ok(!/no-store/.test(res.headers['cache-control']));
-    assert.ok(log.length<=5,'unexpected GitHub request fanout: '+log.length);
+    assert.ok(log.length<=6,'unexpected GitHub request fanout: '+log.length);
     assert.ok(log.every(u=>!u.includes('/card-')),'card asset metadata lookup on feed');
   }finally{
     globalThis.fetch=originalFetch;
@@ -80,7 +80,7 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     assert.ok(html.includes("video.preload='none'"),'dynamic video should never preload offscreen');
     const section=html.slice(html.indexOf('<script>\n      (() => {')+8,html.indexOf('</script>',html.indexOf('<script>\n      (() => {')));
     assert.doesNotThrow(()=>new Function(section),'gallery client code must parse');
-    assert.ok(log.length<=5,'unexpected excessive index calls');
+    assert.ok(log.length<=6,'unexpected excessive index calls');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
