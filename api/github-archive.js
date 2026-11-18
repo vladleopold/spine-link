@@ -1590,7 +1590,7 @@ function archiveHtml({ origin, entries, metrics }) {
             const image=document.createElement('img');
             image.src=item.poster||item.posterFallback;
             image.alt=item.title+' Spine animation preview';
-            const isWebp=/\.webp(?:[?#]|$)/i.test(item.poster||item.posterFallback||'');
+            const isWebp=/\\.webp(?:[?#]|$)/i.test(item.poster||item.posterFallback||'');
             image.loading=isWebp||index<4?'eager':'lazy';
             image.fetchPriority=index<4?'high':'low';
             image.decoding='async';
@@ -1626,7 +1626,7 @@ function archiveHtml({ origin, entries, metrics }) {
         function warmPosters(data){
           for(const item of (data.entries||[]).slice(0,pageSize)){
             const url=item.poster||item.posterFallback;
-            if(!url||!/\.webp(?:[?#]|$)/i.test(url)||warmedPosters.has(url))continue;
+            if(!url||!/\\.webp(?:[?#]|$)/i.test(url)||warmedPosters.has(url))continue;
             const img=new Image();
             img.decoding='async';
             img.fetchPriority='low';
