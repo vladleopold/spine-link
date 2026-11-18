@@ -1,4 +1,5 @@
 import { reconstructAtlas } from "../lib/atlas-inference.js";
+import { assertAtlasInferenceUsable } from "../lib/atlas-inference-acceptance.js";
 
 export type InferredAtlasReceipt = {
   kind: "named-pages" | "inferred-packed-sheet";
@@ -40,12 +41,7 @@ export async function supplyMissingAtlas(files:File[]):Promise<{
     return {files,receipt:null};
   const images=await Promise.all(imageFiles.map(imageData));
   const result=reconstructAtlas(skeleton as Record<string,unknown>,images);
-  const ratio=result.total?result.matched/result.total:0;
-  // If the source is a packed, flattened screenshot, do not misreport an
-  // arbitrary atlas as a verified playable character.
-  if(result.inferred && (result.confidence<.52 || result.coverage<.75 || ratio<.60))
-    throw Error("Cannot infer a reliable atlas: "+result.matched+"/"+result.total+
-      " regions, confidence "+Math.round(result.confidence*100)+"%. Source preserved.");
+  assertAtlasInferenceUsable(result);
   const atlasName=jsonFiles[0].name.replace(/\.json$/i,".atlas");
   const atlas=new File([result.text],atlasName,{type:"text/plain",
     lastModified:Date.now()});
