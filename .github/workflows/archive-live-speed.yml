@@ -29,6 +29,14 @@ jobs:
             for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
               const page=await browser.newPage({viewport});
               const pageErrors=[],mediaRequests=[];
+              let blockedApiRequests=0;
+              // Prove the first lazy page is supplied in HTML, without
+              // relying on a warm GitHub feed endpoint at all.
+              await page.route(url=>url.pathname==='/api/github-archive' &&
+                url.searchParams.get('feed')==='archive',route=>{
+                blockedApiRequests++;
+                return route.abort();
+              });
               page.on('pageerror',e=>pageErrors.push(String(e)));
               page.on('request',r=>{
                 if(/\.(?:webm|webp)(?:\?|$)/.test(r.url()))mediaRequests.push({
@@ -76,7 +84,7 @@ jobs:
                 assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
                 console.log('ARCHIVE_LAZY_CARD_EVIDENCE '+JSON.stringify({
                   viewport:viewport.width,initialMs:Date.now()-started,
-                  appendMs:latency,posterMs,before,after,
+                  appendMs:latency,posterMs,before,after,blockedApiRequests,
                   webpRequests:mediaRequests.filter(x=>x.type==='webp').length,
                   webmRequests:mediaRequests.filter(x=>x.type==='webm').length,
                 }));
