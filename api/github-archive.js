@@ -1409,6 +1409,14 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
 function archiveHtml({ origin, entries, metrics }) {
   const initialItems = entries.slice(0, archivePageSize).map((entry) => archiveFeedEntry(origin, entry, metrics));
   const cards = initialItems.map(lightweightCardHtml).join('');
+  // Embed only one extra small metadata page. The first lazy batch should
+  // render instantly even when a cold GitHub API request takes multiple seconds.
+  const nextOffset = initialItems.length;
+  const preloadedBatch = {
+    entries: entries.slice(nextOffset, nextOffset + archivePageSize)
+      .map(entry => archiveFeedEntry(origin, entry, metrics)),
+    hasMore: nextOffset + archivePageSize < entries.length,
+  };
   const archiveImage = initialItems.find((item) => item.poster)?.poster || `${origin}/spine-link-video-thumbnail.png`;
   const structuredData = {
     '@context': 'https://schema.org',
@@ -1458,6 +1466,7 @@ function archiveHtml({ origin, entries, metrics }) {
       <div class="sentinel" id="sentinel">${entries.length > initialItems.length ? 'Scroll for more' : 'End of archive'}</div>
       <footer class="footer">Video previews autoplay while in view. Open a title for the full interactive Spine player.</footer>
     </main>
+    <script type="application/json" id="archive-next-page">${jsonScript(preloadedBatch)}</script>
     <script>
       (() => {
         const feed=document.getElementById('feed');
@@ -1465,6 +1474,14 @@ function archiveHtml({ origin, entries, metrics }) {
         const pageSize=${archivePageSize};
         let offset=${initialItems.length}, finished=offset>=${entries.length}, loading=false;
         let nextRequest=null,prefetched=null;
+        const nextPageData=document.getElementById('archive-next-page');
+        if(nextPageData){
+          try{
+            const data=JSON.parse(nextPageData.textContent);
+            if(Array.isArray(data.entries)&&data.entries.length)prefetched={start:offset,data};
+          }catch{}
+          nextPageData.remove();
+        }
         const visible=new Set(),active=new Set();
         const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
         let queued=false;
@@ -1662,7 +1679,8 @@ function archiveHtml({ origin, entries, metrics }) {
             if(records.some(r=>r.isIntersecting))void loadMore();
           },{rootMargin:'2200px'}).observe(sentinel);
         }
-        if(!finished)setTimeout(prefetchNext,120);
+        if(prefetched)setTimeout(()=>warmPosters(prefetched.data),80);
+        else if(!finished)setTimeout(prefetchNext,120);
         queueUpdate();
       })();
     </script>
