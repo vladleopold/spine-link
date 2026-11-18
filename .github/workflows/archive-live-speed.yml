@@ -61,6 +61,14 @@ jobs:
                 await page.waitForFunction(n=>document.querySelectorAll('.feed-card').length>n,
                   before,{timeout:9500});
                 const latency=Date.now()-scrollStart;
+                await page.waitForFunction(n=>{
+                  const newCards=Array.from(document.querySelectorAll('.feed-card')).slice(n,n+6);
+                  return newCards.filter(card=>{
+                    const image=card.querySelector('img');
+                    return image && image.complete && image.naturalWidth>0;
+                  }).length>=3;
+                },before,{timeout:9000});
+                const posterMs=Date.now()-scrollStart;
                 const after=await page.locator('.feed-card').count();
                 const images=await page.locator('.feed-card img').count();
                 assert.ok(after>before);
@@ -68,11 +76,12 @@ jobs:
                 assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
                 console.log('ARCHIVE_LAZY_CARD_EVIDENCE '+JSON.stringify({
                   viewport:viewport.width,initialMs:Date.now()-started,
-                  appendMs:latency,before,after,
+                  appendMs:latency,posterMs,before,after,
                   webpRequests:mediaRequests.filter(x=>x.type==='webp').length,
                   webmRequests:mediaRequests.filter(x=>x.type==='webm').length,
                 }));
                 assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
+                assert.ok(posterMs<=1000,'Three new WebP posters took over one second: '+posterMs+'ms');
               } finally {
                 await page.close();
               }
