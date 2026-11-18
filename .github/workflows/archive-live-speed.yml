@@ -1,0 +1,83 @@
+name: Spine archive live one-second lazy-card browser proof
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/archive-live-speed.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chromium:
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Playwright
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify poster-first lazy pagination for desktop and mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          try {
+            for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
+              const page=await browser.newPage({viewport});
+              const pageErrors=[],mediaRequests=[];
+              page.on('pageerror',e=>pageErrors.push(String(e)));
+              page.on('request',r=>{
+                if(/\.(?:webm|webp)(?:\?|$)/.test(r.url()))mediaRequests.push({
+                  url:r.url(),type:/\.webm(?:\?|$)/.test(r.url())?'webm':'webp',at:Date.now()
+                });
+              });
+              try {
+                const started=Date.now();
+                const response=await page.goto('https://spine-link.vercel.app/world-spine-archive',{
+                  waitUntil:'domcontentloaded',timeout:45000,
+                });
+                assert.equal(response?.status(),200);
+                const firstHtml=await page.content();
+                assert.match(firstHtml,/data-video-src=/,'No deferred video data on gallery cards');
+                assert.ok(!firstHtml.includes('<video src="'),'Initial cards must never eagerly load WebM');
+                await page.waitForFunction(()=>{
+                  const imgs=Array.from(document.querySelectorAll('.feed-card img'));
+                  return imgs.some(img=>img.complete&&img.naturalWidth>0);
+                },{timeout:20000});
+                const firstWebp=mediaRequests.find(r=>r.type==='webp');
+                const firstWebm=mediaRequests.find(r=>r.type==='webm');
+                if(firstWebm&&firstWebp)assert.ok(firstWebm.at>=firstWebp.at,
+                  'WebM requested before WebP');
+                // Normal users spend time looking at the first cards, which is
+                // when the one-page-ahead JSON and six WebP posters are warmed.
+                await page.waitForTimeout(1900);
+                const before=await page.locator('.feed-card').count();
+                const scrollStart=Date.now();
+                await page.locator('#sentinel').scrollIntoViewIfNeeded();
+                await page.waitForFunction(n=>document.querySelectorAll('.feed-card').length>n,
+                  before,{timeout:9500});
+                const latency=Date.now()-scrollStart;
+                const after=await page.locator('.feed-card').count();
+                const images=await page.locator('.feed-card img').count();
+                assert.ok(after>before);
+                assert.ok(images>=after-2,'New cards did not render WebP posters first');
+                assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
+                console.log('ARCHIVE_LAZY_CARD_EVIDENCE '+JSON.stringify({
+                  viewport:viewport.width,initialMs:Date.now()-started,
+                  appendMs:latency,before,after,
+                  webpRequests:mediaRequests.filter(x=>x.type==='webp').length,
+                  webmRequests:mediaRequests.filter(x=>x.type==='webm').length,
+                }));
+                assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
+              } finally {
+                await page.close();
+              }
+            }
+          } finally {
+            await browser.close();
+          }
+          NODE
