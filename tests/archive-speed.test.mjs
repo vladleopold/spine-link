@@ -77,6 +77,12 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     assert.ok(!html.includes('<video src="'), 'eager WebM would block WebP posters');
     assert.ok(html.includes('data-video-src='),'video URL must be deferred on each card');
     assert.ok(html.includes('prefetchNext()'),'next page should be fetched before reaching sentinel');
+    const embedded=html.match(/<script type="application\/json" id="archive-next-page">([^<]+)<\/script>/);
+    assert.ok(embedded,'First lazy batch must be embedded in server HTML');
+    const batch=JSON.parse(embedded[1]);
+    assert.equal(batch.entries.length,12);
+    assert.equal(batch.hasMore,true);
+    assert.ok(batch.entries.every(e=>e.poster&&e.video),'Next batch has WebP poster metadata');
     assert.ok(html.includes("video.preload='none'"),'dynamic video should never preload offscreen');
     const section=html.slice(html.indexOf('<script>\n      (() => {')+8,html.indexOf('</script>',html.indexOf('<script>\n      (() => {')));
     assert.doesNotThrow(()=>new Function(section),'gallery client code must parse');
