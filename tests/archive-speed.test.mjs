@@ -20,6 +20,7 @@ const entries=Array.from({length:80},(_,i)=>({
   skeleton:'skeleton-'+i+'.skel',
   webmPreview:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webm',
   webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-low.webm',
+  webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-low.webp',
   webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-medium.webp',
   thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webp',
   animations:['walk'],
