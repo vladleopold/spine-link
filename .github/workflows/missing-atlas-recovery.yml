@@ -1,7 +1,7 @@
 name: Automatic missing-atlas recovery acceptance
 on:
   push:
-    branches: [fix/infer-missing-spine-atlas-20261118, main]
+    branches: [fix/infer-missing-spine-atlas-20261118, fix/partial-confidence-webm-atlas-20261118, main]
     paths:
       - lib/atlas-inference.*
       - lib/atlas-inference-acceptance.*
