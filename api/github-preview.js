@@ -1,3 +1,4 @@
+import { selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
@@ -2469,7 +2470,8 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
 
   for (const directory of setDirectories) {
     const items = await githubList(settings, directory.path);
-    const skeleton = items.find((item) => item.type === 'file' && isSkeleton(item.name));
+    const skeleton = selectSpineRuntimeSkeleton(items.filter(item => item.type === 'file'),
+      items.find(item => item.type === 'file' && isAtlas(item.name))?.name);
     const atlas = items.find((item) => item.type === 'file' && isAtlas(item.name));
     const textures = items.filter((item) => item.type === 'file' && isImage(item.name));
     if (!skeleton || !atlas || textures.length === 0) continue;
