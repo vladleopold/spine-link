@@ -4,15 +4,19 @@ on:
     branches: [fix/infer-missing-spine-atlas-20261118, main]
     paths:
       - lib/atlas-inference.*
+      - lib/atlas-inference-acceptance.*
       - src/atlas-inference-import.ts
       - src/SpineApp.tsx
+      - scripts/reconstruct-missing-atlas-for-export.mjs
       - scripts/test-atlas-inference*
       - .github/workflows/missing-atlas-recovery.yml
   pull_request:
     paths:
       - lib/atlas-inference.*
+      - lib/atlas-inference-acceptance.*
       - src/atlas-inference-import.ts
       - src/SpineApp.tsx
+      - scripts/reconstruct-missing-atlas-for-export.mjs
       - scripts/test-atlas-inference*
       - .github/workflows/missing-atlas-recovery.yml
 permissions:
