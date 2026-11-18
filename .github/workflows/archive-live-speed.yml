@@ -57,6 +57,9 @@ jobs:
                   const imgs=Array.from(document.querySelectorAll('.feed-card img'));
                   return imgs.some(img=>img.complete&&img.naturalWidth>0);
                 },{timeout:20000});
+                const initialPosterMs=Date.now()-started;
+                // Capture initial visibility BEFORE the deliberate 1.9s warm-up.
+                // The old initialMs included this sleep and misreported page latency.
                 const firstWebp=mediaRequests.find(r=>r.type==='webp');
                 const firstWebm=mediaRequests.find(r=>r.type==='webm');
                 if(firstWebm&&firstWebp)assert.ok(firstWebm.at>=firstWebp.at,
@@ -84,7 +87,7 @@ jobs:
                 assert.ok(images>=after-2,'New cards did not render WebP posters first');
                 assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
                 console.log('ARCHIVE_LAZY_CARD_EVIDENCE '+JSON.stringify({
-                  viewport:viewport.width,initialMs:Date.now()-started,
+                  viewport:viewport.width,initialMs:initialPosterMs,
                   appendMs:latency,posterMs,before,after,blockedApiRequests,
                   webpRequests:mediaRequests.filter(x=>x.type==='webp').length,
                   webmRequests:mediaRequests.filter(x=>x.type==='webm').length,
