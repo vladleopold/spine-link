@@ -1,5 +1,6 @@
 name: Vercel deploy and alias
 
+# Release major/minor-compatible Spine 4.0–4.3 player alongside the archive optimizations.
 # Release source-safe skeleton selection and corrupt-atlas protection after WebP-first archive acceptance.
 # Release verified in-memory archive pagination (all cards embedded, WebP-first, WebM only on viewport).
 # Release source with refreshed public preview cache and CI media recovery.
