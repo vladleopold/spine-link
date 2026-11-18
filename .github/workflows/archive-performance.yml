@@ -5,6 +5,10 @@ on:
     paths:
       - api/github-archive.js
       - tests/archive-speed.test.mjs
+      - tests/spine-runtime-file-selection.test.mjs
+      - lib/spine-runtime-file-selection.js
+      - api/github-preview.js
+      - src/main.tsx
       - .github/workflows/archive-performance.yml
   workflow_dispatch:
 permissions:
@@ -21,4 +25,5 @@ jobs:
       - name: Check API and client syntax, WebP-first and pagination contracts
         run: |
           node --check api/github-archive.js
-          node --test tests/archive-speed.test.mjs
+          node --check api/github-preview.js
+          node --test tests/archive-speed.test.mjs tests/spine-runtime-file-selection.test.mjs
