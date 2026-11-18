@@ -8,6 +8,8 @@ on:
       - src/atlas-inference-import.ts
       - src/SpineApp.tsx
       - scripts/reconstruct-missing-atlas-for-export.mjs
+      - scripts/preserve-inferred-atlas.mjs
+      - scripts/test-preserve-inferred-atlas.mjs
       - scripts/test-atlas-inference*
       - .github/workflows/missing-atlas-recovery.yml
   pull_request:
@@ -32,6 +34,8 @@ jobs:
       - run: npm ci
       - name: Synthetic atlas assignment, rotated part and mesh tests
         run: node scripts/test-atlas-inference.mjs
+      - name: Inferred atlas survives clean-branch reset
+        run: node scripts/test-preserve-inferred-atlas.mjs
       - name: TypeScript + production build
         run: npm run build
       - name: Install Chromium
