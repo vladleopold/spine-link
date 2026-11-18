@@ -1,5 +1,6 @@
 name: Vercel deploy and alias
 
+# Release source with refreshed public preview cache and CI media recovery.
 # Batch automatic releases to avoid exhausting Vercel Hobby's
 # 100-deployments/24h quota on frequent pushes. Manual releases remain available.
 on:
