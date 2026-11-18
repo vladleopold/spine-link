@@ -1,7 +1,12 @@
 name: Spine archive WebP-first performance regression
 on:
   push:
-    branches: [main]
+    branches: [main, 'fix/archive-*']
+  pull_request:
+    paths:
+      - api/github-archive.js
+      - tests/archive-speed.test.mjs
+      - .github/workflows/archive-performance.yml
     paths:
       - api/github-archive.js
       - tests/archive-speed.test.mjs
