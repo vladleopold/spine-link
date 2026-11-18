@@ -19,6 +19,8 @@ on:
       - src/atlas-inference-import.ts
       - src/SpineApp.tsx
       - scripts/reconstruct-missing-atlas-for-export.mjs
+      - scripts/preserve-inferred-atlas.mjs
+      - scripts/test-preserve-inferred-atlas.mjs
       - scripts/test-atlas-inference*
       - .github/workflows/missing-atlas-recovery.yml
 permissions:
