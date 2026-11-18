@@ -104,7 +104,9 @@ try{
   const head=await get("library/synthetic/hero.dds","HEAD");
   assert.equal(head.statusCode,200);
   assert.equal(head.getHeader("content-type"),"image/png");
-  assert.equal(head.getHeader("content-length"),undefined);
+  // A warm memory cache can serve accurate transcoded PNG byte length on HEAD.
+  const headLength=head.getHeader("content-length");
+  assert.ok(headLength===undefined || Number(headLength)===dds.body.length);
   const atlas=await get("library/synthetic/hero.atlas");
   assert.equal(atlas.statusCode,200);
   assert.match(atlas.body.toString("utf8"),/hero\.dds\?v=synthetic-v1&dds=png-v1/);
