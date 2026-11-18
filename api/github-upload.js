@@ -1,4 +1,5 @@
 import agentAnimationHandler from '../lib/agent-animation.js';
+import { validateSpineRuntimeFiles } from '../lib/spine-asset-graph.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -1451,6 +1452,16 @@ export default async function handler(request, response) {
       const relativeFiles = prepared.receipts.map(item =>
         item.path.startsWith(workPath + '/') ? item.path.slice(workPath.length + 1) : '');
       const isEditorProject = body?.entry?.sourceKind === 'spine-project';
+      if (!isEditorProject) {
+        const accepted = validateSpineRuntimeFiles(relativeFiles);
+        if (!accepted.ok) {
+          return response.status(422).json({
+            error: 'Incomplete Spine source: ' + accepted.missing.join(', '),
+            code: accepted.code,
+            missing: accepted.missing,
+          });
+        }
+      }
       // Do not report an export as queued unless an authorized cloud Spine
       // Editor runner has been installed and explicitly enabled by the owner.
       // A trusted scheduled queue in 3Spine-core now processes all eligible
@@ -1525,6 +1536,28 @@ export default async function handler(request, response) {
       const uploadPathBg = resolveUploadPath(body?.uploadPath, settings.basePath, uploadId);
       const uploadedAt = String(body?.uploadedAt || '').trim();
       if (!uploadId) return response.status(400).json({ error: 'Missing uploadId' });
+      // A late index write must not mark a PNG+JSON pair as a finished Spine
+      // animation. Resolve the complete file triad before committing metadata.
+      if (body?.entry?.sourceKind !== 'spine-project') {
+        const recordedFiles = Array.isArray(body?.entry?.files) ? body.entry.files : [];
+        const acceptance = validateSpineRuntimeFiles(recordedFiles);
+        if (!acceptance.ok) {
+          return response.status(422).json({
+            error: 'Incomplete Spine source: ' + acceptance.missing.join(', '),
+            code: acceptance.code, missing: acceptance.missing,
+          });
+        }
+        const workRoot = uploadPathBg;
+        const receipts = await Promise.all(recordedFiles.filter(f =>
+          /\.(?:json|skel|atlas|atlas\.txt|atlas\.docx|png|jpe?g|webp|dds)$/i.test(String(f))
+        ).map(f => getGitHubContent(settings, joinRepoPath(workRoot, String(f)))));
+        if (receipts.some(item => !item)) {
+          return response.status(422).json({
+            error: 'Incomplete Spine source: one or more promised files are missing',
+            code: 'UNVERIFIED_SPINE_FILES',
+          });
+        }
+      }
       const indexPath = joinRepoPath(settings.basePath, 'index.json');
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const currentIndex = await getGitHubContent(settings, indexPath);
