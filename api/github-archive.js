@@ -1460,139 +1460,210 @@ function archiveHtml({ origin, entries, metrics }) {
     </main>
     <script>
       (() => {
-        const feed = document.getElementById('feed');
-        const sentinel = document.getElementById('sentinel');
-        let offset = ${initialItems.length};
-        let loading = false;
-        let finished = offset >= ${entries.length};
-
-        function stopVideo(video) {
-          if (!video) return;
-          video.pause();
-          try { video.currentTime = 0; } catch {}
+        const feed=document.getElementById('feed');
+        const sentinel=document.getElementById('sentinel');
+        const pageSize=${archivePageSize};
+        let offset=${initialItems.length}, finished=offset>=${entries.length}, loading=false;
+        let nextRequest=null,prefetched=null;
+        const visible=new Set(),active=new Set();
+        const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let queued=false;
+        const queueUpdate=()=>{
+          if(queued)return;
+          queued=true;
+          requestAnimationFrame(()=>{queued=false;updateAutoplay();});
+        };
+        function stopVideo(card){
+          const video=card.querySelector('video');
+          if(video){
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            video.remove();
+          }
+          active.delete(card);
         }
-
-        function playVideo(video) {
-          if (!video.currentSrc && !video.src) return;
-          video.muted = true;
-          video.loop = true;
-          video.playsInline = true;
-          try { video.currentTime = 0; } catch {}
-          void video.load();
-          void video.play().catch(() => undefined);
-        }
-
-        function updateAutoplay() {
-          const cards = Array.from(feed.querySelectorAll('.feed-card'));
-          if (!cards.length) return;
-
-          const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-          cards.forEach((card) => {
-            const video = card.querySelector('video');
-            if (!video || !video.isConnected || (!video.currentSrc && !video.src)) return;
-            const media = card.querySelector('.feed-media');
-            if (!media) return;
-            const rect = media.getBoundingClientRect();
-            const visible = rect.bottom > -40 && rect.top < viewportHeight + 40 && rect.width > 0 && rect.height > 0;
-            if (visible) {
-              if (video.paused) playVideo(video);
-            } else {
-              stopVideo(video);
-            }
+        function startVideo(card){
+          if(active.has(card)||!card.dataset.videoSrc||reducedMotion)return;
+          const poster=card.querySelector('img');
+          if(poster&&!poster.complete)return;
+          const host=card.querySelector('.feed-media');
+          if(!host)return;
+          const video=document.createElement('video');
+          video.muted=true;video.loop=true;video.playsInline=true;
+          video.preload='none';
+          video.setAttribute('aria-hidden','true');
+          video.addEventListener('playing',()=>video.classList.add('is-playing'));
+          video.addEventListener('error',()=>{
+            const fallback=card.dataset.videoFallback;
+            if(!video.dataset.retried&&fallback&&fallback!==video.src){
+              video.dataset.retried='1';
+              video.src=fallback;
+              void video.play().catch(()=>stopVideo(card));
+            }else stopVideo(card);
           });
+          active.add(card);
+          host.append(video);
+          video.src=card.dataset.videoSrc;
+          void video.play().catch(()=>stopVideo(card));
         }
-
-        function makeCard(item) {
-          const card = document.createElement('article');
-          card.className = 'feed-card';
-          card.dataset.entryId = item.id;
-          const ratio = item.width && item.height ? Math.min(1.8, Math.max(.62, item.width / item.height)) : 1;
-          card.style.setProperty('--media-ratio', ratio);
-          const media = document.createElement('div');
-          media.className = 'feed-media';
-          if (item.video) {
-            const video = document.createElement('video');
-            video.src = item.video;
-            video.poster = item.poster || item.posterFallback || '';
-            video.muted = true;
-            video.loop = true;
-            video.playsInline = true;
-            video.preload = 'metadata';
-            video.setAttribute('data-video-src', item.video);
-            if (item.videoFallback) video.setAttribute('data-video-fallback', item.videoFallback);
-            media.append(video);
-          } else if (item.poster) {
-            const img = document.createElement('img');
-            img.src = item.poster;
-            img.alt = item.title + ' Spine animation preview';
-            img.loading = 'lazy';
-            img.decoding = 'async';
-            img.addEventListener('error', () => {
-              if (item.posterFallback && !img.dataset.fallbackTried && img.getAttribute('src') !== item.posterFallback) {
-                img.dataset.fallbackTried = '1';
-                img.src = item.posterFallback;
-                return;
-              }
-              img.style.display = 'none';
+        function updateAutoplay(){
+          if(document.hidden||reducedMotion){
+            for(const card of Array.from(active))stopVideo(card);
+            return;
+          }
+          const limit=matchMedia('(max-width:1024px), (pointer:coarse)').matches?1:2;
+          const cards=Array.from(visible).filter(c=>c.isConnected&&c.dataset.videoSrc)
+            .sort((a,b)=>a.getBoundingClientRect().top-b.getBoundingClientRect().top);
+          const target=new Set(cards.slice(0,limit));
+          for(const card of Array.from(active))if(!target.has(card))stopVideo(card);
+          for(const card of target)startVideo(card);
+        }
+        const observer='IntersectionObserver' in window
+          ?new IntersectionObserver(records=>{
+             for(const record of records){
+               if(record.isIntersecting&&record.intersectionRatio>=.1)visible.add(record.target);
+               else{visible.delete(record.target);stopVideo(record.target);}
+             }
+             queueUpdate();
+           },{threshold:[0,.1,.35,.7]})
+          :null;
+        function attach(card){
+          if(observer)observer.observe(card);
+          const poster=card.querySelector('img');
+          if(poster){
+            poster.addEventListener('load',queueUpdate);
+            poster.addEventListener('error',queueUpdate);
+          }
+        }
+        feed.querySelectorAll('.feed-card').forEach(attach);
+        if(!observer){
+          const scan=()=>{
+            visible.clear();
+            feed.querySelectorAll('.feed-card').forEach(c=>{
+              const rect=c.getBoundingClientRect();
+              if(rect.bottom>0&&rect.top<innerHeight)visible.add(c);
             });
-            media.append(img);
-          } else {
-            const placeholder = document.createElement('span');
-            placeholder.className = 'feed-placeholder';
-            placeholder.setAttribute('aria-hidden', 'true');
-            placeholder.textContent = 'SPINE';
+            queueUpdate();
+          };
+          addEventListener('scroll',scan,{passive:true});
+          addEventListener('resize',scan,{passive:true});
+          scan();
+        }
+        function makeCard(item,index){
+          const card=document.createElement('article');
+          card.className='feed-card';
+          card.dataset.entryId=item.id;
+          if(item.video)card.dataset.videoSrc=item.video;
+          if(item.videoFallback)card.dataset.videoFallback=item.videoFallback;
+          card.style.setProperty('--media-ratio',item.width&&item.height
+            ?Math.min(1.8,Math.max(.62,item.width/item.height)):1);
+          const media=document.createElement('div');media.className='feed-media';
+          if(item.poster||item.posterFallback){
+            const image=document.createElement('img');
+            image.src=item.poster||item.posterFallback;
+            image.alt=item.title+' Spine animation preview';
+            image.loading=index<6?'eager':'lazy';
+            image.fetchPriority=index<4?'high':'low';
+            image.decoding='async';
+            image.addEventListener('error',()=>{
+              if(item.posterFallback&&!image.dataset.retried&&image.src!==item.posterFallback){
+                image.dataset.retried='1';image.src=item.posterFallback;
+              }else image.style.display='none';
+            });
+            media.append(image);
+          }else{
+            const placeholder=document.createElement('span');
+            placeholder.className='feed-placeholder';placeholder.textContent='SPINE';
             media.append(placeholder);
           }
-          const info = document.createElement('div'); info.className = 'feed-info';
-          const heading = document.createElement('div');
-          const title = document.createElement('span'); title.className = 'feed-title'; title.textContent = item.title;
-          const mode = document.createElement('span'); mode.className = 'feed-mode'; mode.textContent = item.mode;
-          heading.append(title, mode);
-          const meta = document.createElement('div'); meta.className = 'feed-meta';
-          const values = [item.ownerName, item.animations + ' animations', item.metrics.likes + ' likes', item.metrics.views + ' views'];
-          values.forEach((value) => { const node = document.createElement('span'); node.textContent = value; meta.append(node); });
-           info.append(heading, meta);
-          card.append(media, info);
-          card.style.cursor = 'pointer';
-          card.addEventListener('click', () => { if (item.playerUrl) window.location.href = item.playerUrl; });
+          const info=document.createElement('div');info.className='feed-info';
+          const heading=document.createElement('div');
+          const title=document.createElement('span');title.className='feed-title';title.textContent=item.title;
+          const mode=document.createElement('span');mode.className='feed-mode';mode.textContent=item.mode;
+          heading.append(title,mode);
+          const meta=document.createElement('div');meta.className='feed-meta';
+          const metrics=item.metrics||{likes:0,views:0};
+          [item.ownerName,item.animations+' animations',metrics.likes+' likes',metrics.views+' views'].forEach(value=>{
+            const span=document.createElement('span');span.textContent=value;meta.append(span);
+          });
+          info.append(heading,meta);card.append(media,info);
+          card.style.cursor='pointer';
+          card.addEventListener('click',()=>{if(item.playerUrl)location.href=item.playerUrl;});
           return card;
         }
-
-        async function loadMore() {
-          if (loading || finished) return;
-          loading = true; sentinel.textContent = 'Loading works...';
-          try {
-            const response = await fetch('/api/github-archive?feed=archive&offset=' + offset + '&limit=${archivePageSize}', { credentials: 'same-origin' });
-            if (!response.ok) throw new Error('Archive request failed');
-            const payload = await response.json();
-            const fragment = document.createDocumentFragment();
-            for (const item of payload.entries || []) { const card = makeCard(item); fragment.append(card); }
-            feed.append(fragment); offset += (payload.entries || []).length; finished = !payload.hasMore;
-            sentinel.textContent = finished ? 'End of archive' : 'Scroll for more';
-            updateAutoplay();
-          } catch { sentinel.textContent = 'Tap to retry'; }
-          finally { loading = false; }
-        }
-
-        const handleScroll = () => {
-          window.cancelAnimationFrame(handleScroll.raf);
-          handleScroll.raf = window.requestAnimationFrame(updateAutoplay);
-        };
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        window.addEventListener('resize', updateAutoplay, { passive: true });
-
-        const initialTimer = window.setTimeout(updateAutoplay, 300);
-        document.addEventListener('visibilitychange', () => {
-          if (document.hidden) {
-            feed.querySelectorAll('video').forEach(stopVideo);
-          } else {
-            window.setTimeout(updateAutoplay, 200);
+        function warmPosters(data){
+          for(const item of (data.entries||[]).slice(0,6)){
+            if(item.poster){
+              const img=new Image();
+              img.decoding='async';
+              img.src=item.poster;
+            }
           }
-        });
-        window.addEventListener('pagehide', () => { feed.querySelectorAll('video').forEach(stopVideo); });
-
-        sentinel.addEventListener('click', loadMore);
-        if (!finished) new IntersectionObserver((records) => { if (records.some((record) => record.isIntersecting)) loadMore(); }, { rootMargin: '500px' }).observe(sentinel);
+        }
+        function fetchPage(start){
+          return fetch('/api/github-archive?feed=archive&offset='+start+'&limit='+pageSize,{
+            credentials:'same-origin'
+          }).then(response=>{
+            if(!response.ok)throw Error('Archive request failed');
+            return response.json();
+          });
+        }
+        function prefetchNext(){
+          if(finished||loading||prefetched||nextRequest)return;
+          const start=offset;
+          nextRequest=fetchPage(start).then(data=>{
+            if(offset===start){
+              prefetched={start,data};
+              warmPosters(data);
+            }
+            return data;
+          }).catch(()=>null).finally(()=>{nextRequest=null;});
+        }
+        async function loadMore(){
+          if(loading||finished)return;
+          loading=true;sentinel.textContent='Loading works...';
+          try{
+            let data;
+            if(prefetched&&prefetched.start===offset){
+              data=prefetched.data;prefetched=null;
+            }else if(nextRequest){
+              data=await nextRequest;
+              if(prefetched&&prefetched.start===offset){
+                data=prefetched.data;prefetched=null;
+              }
+            }
+            if(!data)data=await fetchPage(offset);
+            const entries=Array.isArray(data.entries)?data.entries:[];
+            const cards=entries.map(makeCard);
+            const fragment=document.createDocumentFragment();
+            cards.forEach(card=>fragment.append(card));
+            feed.append(fragment);
+            cards.forEach(attach);
+            offset+=entries.length;
+            finished=!data.hasMore||entries.length===0;
+            sentinel.textContent=finished?'End of archive':'Scroll for more';
+            queueUpdate();
+          }catch{
+            sentinel.textContent='Tap to retry';
+          }finally{
+            loading=false;
+            if(!finished)setTimeout(prefetchNext,70);
+          }
+        }
+        document.addEventListener('visibilitychange',queueUpdate);
+        window.addEventListener('pagehide',()=>{
+          for(const card of Array.from(active))stopVideo(card);
+        },{once:true});
+        window.addEventListener('resize',queueUpdate,{passive:true});
+        sentinel.addEventListener('click',loadMore);
+        if(!finished&&observer){
+          new IntersectionObserver(records=>{
+            if(records.some(r=>r.isIntersecting))void loadMore();
+          },{rootMargin:'2200px'}).observe(sentinel);
+        }
+        if(!finished)setTimeout(prefetchNext,120);
+        queueUpdate();
       })();
     </script>
     <script src="/drop-handoff.js" defer></script>
