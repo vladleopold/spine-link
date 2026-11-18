@@ -173,6 +173,55 @@ jobs:
               });
               assert.ok(info.sets > 0, 'Spine preview has no skeleton sets');
               assert.equal(info.notFound, false, 'Spine preview shows not found');
+              // Long animation lists scroll internally, while all subsequent
+              // sidebar cards stay below them; cover the >1000px breakpoint.
+              for (const width of [1200, 1001]) {
+                await page.setViewportSize({width, height:780});
+                const layout = await page.evaluate(() => {
+                  const menu = document.querySelector('#animation-menu');
+                  const playerFrame = document.querySelector('.player-frame');
+                  const nextCard = document.querySelector('#sidebar > .animation-download-block');
+                  if (!menu || !playerFrame || !nextCard) return null;
+                  const originalChildren = Array.from(menu.childNodes);
+                  const measure = (count) => {
+                    const fragment = document.createDocumentFragment();
+                    for (let i = 0; i < count; i++) {
+                      const button = document.createElement('button');
+                      button.type = 'button';
+                      button.setAttribute('role', 'menuitem');
+                      button.textContent = 'animation_' + i;
+                      fragment.appendChild(button);
+                    }
+                    menu.replaceChildren(fragment);
+                    const menuRect = menu.getBoundingClientRect();
+                    const playerRect = playerFrame.getBoundingClientRect();
+                    const nextRect = nextCard.getBoundingClientRect();
+                    return {
+                      height: menuRect.height,
+                      playerHeight: playerRect.height,
+                      scrollable: menu.scrollHeight > menu.clientHeight + 1,
+                      nextCardBelow: nextRect.top >= menuRect.bottom - 1,
+                    };
+                  };
+                  try {
+                    return {few: measure(3), many: measure(26)};
+                  } finally {
+                    menu.replaceChildren(...originalChildren);
+                  }
+                });
+                assert.ok(layout, 'Animation menu or following download card missing');
+                assert.ok(layout.few.height < layout.few.playerHeight,
+                  'Three animations must not fill the player at ' + width + 'px');
+                assert.equal(layout.few.scrollable, false,
+                  'Three animations must not scroll at ' + width + 'px');
+                assert.ok(layout.many.height <= layout.many.playerHeight + 1,
+                  'Long animation list exceeds player at ' + width + 'px: ' + JSON.stringify(layout.many));
+                assert.equal(layout.many.scrollable, true,
+                  'Long animation list must scroll at ' + width + 'px');
+                assert.ok(layout.few.nextCardBelow && layout.many.nextCardBelow,
+                  'Download card overlaps animation list at ' + width + 'px');
+                console.log('PASS LIVE ANIMATION MENU', width, JSON.stringify(layout));
+              }
               assert.deepEqual(missingAssets, [], 'Spine preview has missing assets');
               assert.deepEqual(pageErrors, [], 'Spine preview JavaScript errors');
               console.log('PASS LIVE PREVIEW', JSON.stringify(info));
