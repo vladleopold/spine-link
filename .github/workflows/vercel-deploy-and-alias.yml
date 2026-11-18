@@ -94,7 +94,7 @@ jobs:
 
       - name: Test preview lookup and cache freshness
         if: steps.quota_recovery.outputs.skip != 'true'
-        run: node --test tests/preview-cache.test.mjs tests/preview-metadata.test.mjs
+        run: node --test tests/preview-cache.test.mjs tests/preview-metadata.test.mjs tests/archive-speed.test.mjs
 
       - name: Verify full API suite and website build before release
         if: steps.quota_recovery.outputs.skip != 'true'
@@ -159,6 +159,33 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
+
+      - name: Verify poster-first archive on production
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 25 'https://spine-link.vercel.app/world-spine-archive' -o /tmp/spine-archive-live.html
+          grep -q 'data-video-src=' /tmp/spine-archive-live.html
+          grep -q 'prefetchNext()' /tmp/spine-archive-live.html
+          if grep -q '<video src=' /tmp/spine-archive-live.html; then
+            echo '::error::Archive is eagerly downloading WebM instead of serving WebP posters'
+            exit 1
+          fi
+          echo 'PASS WebP-first static HTML, deferred WebM and next-page prefetch on production'
+          for attempt in 1 2 3; do
+            seconds=$(curl -fsS --max-time 25 -o /tmp/spine-archive-feed.json -w '%{time_total}' \
+              'https://spine-link.vercel.app/api/github-archive?feed=archive&offset=12&limit=12')
+            echo "ARCHIVE_FEED_HTTP_SECONDS=$seconds"
+          done
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const data=JSON.parse(fs.readFileSync("/tmp/spine-archive-feed.json","utf8"));
+            if(!data.ok||!Array.isArray(data.entries)||data.entries.length<1)
+              throw Error("No lazy archive cards delivered");
+            if(data.entries.some(e=>!e.poster&&e.video))
+              console.log("Some historical entries lack posters; source generation remains independent");
+            console.log("PASS archive feed pagination entries="+data.entries.length);
+          '
 
       - name: Verify agent API route after publishing
         if: steps.quota_recovery.outputs.skip != 'true'
