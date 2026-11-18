@@ -204,11 +204,15 @@ function canonicalAtlasPageName(pageName = '') {
   return basename(String(pageName || '').replace(/\\/g, '/').trim());
 }
 
-function imageMatchesAtlasPage(imageName = '', pageName = '') {
+export function imageMatchesAtlasPage(imageName = '', pageName = '') {
   const imageBase = basename(String(imageName || '').replace(/\\/g, '/').trim()).toLowerCase();
   const pageBase = canonicalAtlasPageName(pageName).toLowerCase();
   if (!imageBase || !pageBase) return false;
   if (imageBase === pageBase) return true;
+  // Imported 3.8 DXT5 packs can have an atlas pointing at .dds and an
+  // identically named PNG as the only uploaded texture. No fuzzy substitution.
+  if (/\\.dds$/i.test(pageBase) && /\\.png$/i.test(imageBase) &&
+      pageBase.slice(0,-4) === imageBase.slice(0,-4)) return true;
   if (pageBase.endsWith(imageBase)) return true;
   if (imageBase.endsWith(pageBase)) return true;
   return false;
@@ -2470,7 +2474,10 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
   for (const directory of setDirectories) {
     const items = await githubList(settings, directory.path);
     const skeleton = items.find((item) => item.type === 'file' && isSkeleton(item.name));
-    const atlas = items.find((item) => item.type === 'file' && isAtlas(item.name));
+    const atlases = items.filter((item) => item.type === 'file' && isAtlas(item.name));
+    const skeletonStem = skeleton ? stem(skeleton.name).toLowerCase() : '';
+    const atlas = atlases.find((item) => stem(item.name).toLowerCase() === skeletonStem) ??
+      (atlases.length === 1 ? atlases[0] : null);
     const textures = items.filter((item) => item.type === 'file' && isImage(item.name));
     if (!skeleton || !atlas || textures.length === 0) continue;
 
