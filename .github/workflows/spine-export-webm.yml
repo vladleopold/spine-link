@@ -106,6 +106,9 @@ jobs:
             echo "anim_duration=${duration}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Reconstruct atlas for JSON+PNG uploads
+        run: node scripts/reconstruct-missing-atlas-for-export.mjs --upload-id="${{ github.event.client_payload.uploadId }}"
+
       - name: Export WebM preview
         id: export
         run: |
