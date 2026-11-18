@@ -12,6 +12,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-science.js';
 import { metricCountsForIds, parseMetricsJson, sanitizeMetricId, sanitizeMetricIds } from '../lib/spine-metrics.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
+import { inspectRuntimeAssetSet } from '../lib/runtime-acceptance.js';
 
 const CENSORSHIP_FILE = 'library/censorship.json';
 
@@ -428,13 +429,6 @@ async function dispatchSpineProjectExport(settings, entry, origin) {
   } catch (error) {
     return { status: 'failed', error: String(error) };
   }
-}
-
-function runtimeFileSetComplete(files) {
-  const names = Array.isArray(files) ? files.map((f) => String(f || '').toLowerCase()) : [];
-  return names.some((f) => /\.(?:json|skel)$/i.test(f)) &&
-    names.some((f) => /\.atlas(?:\.txt)?$/i.test(f)) &&
-    names.some((f) => /\.(?:png|jpe?g|webp|dds)$/i.test(f));
 }
 
 async function dispatchSpineExportWebm(settings, entry, origin) {
@@ -1460,10 +1454,12 @@ export default async function handler(request, response) {
       const isEditorProject = body?.entry?.sourceKind === 'spine-project';
       // Source import is NOT a playable project without all three required
       // asset classes. Never create a public entry for an isolated .skel.
-      if (!isEditorProject && !runtimeFileSetComplete(relativeFiles)) {
+      const assetAcceptance = isEditorProject ? null : inspectRuntimeAssetSet(relativeFiles);
+      if (assetAcceptance && !assetAcceptance.accepted) {
         return response.status(422).json({
-          error: 'Spine file acceptance failed: skeleton (.json/.skel), atlas and texture are all required',
+          error: 'Spine file acceptance failed: ' + assetAcceptance.missing.join(', '),
           acceptance: 'rejected-incomplete-runtime-bundle',
+          required: ['skeleton', 'atlas', 'texture'],
         });
       }
       // Do not report an export as queued unless an authorized cloud Spine
