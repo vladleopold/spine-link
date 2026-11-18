@@ -1,6 +1,7 @@
 import { uploadRequest } from "./upload-request";
 // Choose an actual Spine skeleton, not an adjacent application config.json.
 import { selectSpineRuntimeSkeleton } from "../lib/spine-runtime-file-selection.js";
+import { isValidSpineAtlasHeader } from "../lib/spine-atlas-integrity.js";
 import { isSpineProjectFile, isSpineImageFile, normalizeProjectPath, validateProjectSelection, readDroppedProjectEntries, rememberProjectFilePath, projectFilePath } from "./spine-project-import.js";
 import "./styles.css";
 import "./spine-project-import.css";
@@ -1255,6 +1256,15 @@ async function uploadBackgroundFilesFast(
   const CHUNK = 3_200_000; // Base64 chars, divisible by 4; < 4.5 MB request limit
   const settings = { owner: "vladleopold", repo: "spine", branch: "main", basePath: "", title };
   const isProject = files.some(isSpineProjectFile);
+  // Reject corrupt binary files mislabeled .atlas before writing any public
+  // archive entry. A malformed atlas otherwise yields bogus image URLs.
+  for(const file of files){
+    if(/\.atlas(?:\.txt|\.docx)?$/i.test(file.name)){
+      const text=await file.slice(0,8192).text();
+      if(!isValidSpineAtlasHeader(text))
+        throw new Error('Invalid Spine atlas: expected a text atlas with actual image pages');
+    }
+  }
   const contents = await Promise.all(files.map(file => fileToBase64(file)));
   const tasks: Array<{ fileIndex: number; path: string; contentBase64: string }> = [];
   const totals = new Array(files.length).fill(0);
