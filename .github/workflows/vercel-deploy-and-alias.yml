@@ -1,5 +1,6 @@
 name: Vercel deploy and alias
 
+# Release source-safe skeleton selection and corrupt-atlas protection after WebP-first archive acceptance.
 # Release verified in-memory archive pagination (all cards embedded, WebP-first, WebM only on viewport).
 # Release source with refreshed public preview cache and CI media recovery.
 # Batch automatic releases to avoid exhausting Vercel Hobby's
