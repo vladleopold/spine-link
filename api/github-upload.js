@@ -12,6 +12,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-science.js';
 import { metricCountsForIds, parseMetricsJson, sanitizeMetricId, sanitizeMetricIds } from '../lib/spine-metrics.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
+import { inspectRuntimeAssetSet } from '../lib/runtime-acceptance.js';
 
 const CENSORSHIP_FILE = 'library/censorship.json';
 
@@ -1451,6 +1452,16 @@ export default async function handler(request, response) {
       const relativeFiles = prepared.receipts.map(item =>
         item.path.startsWith(workPath + '/') ? item.path.slice(workPath.length + 1) : '');
       const isEditorProject = body?.entry?.sourceKind === 'spine-project';
+      // Source import is NOT a playable project without all three required
+      // asset classes. Never create a public entry for an isolated .skel.
+      const assetAcceptance = isEditorProject ? null : inspectRuntimeAssetSet(relativeFiles);
+      if (assetAcceptance && !assetAcceptance.accepted) {
+        return response.status(422).json({
+          error: 'Spine file acceptance failed: ' + assetAcceptance.missing.join(', '),
+          acceptance: 'rejected-incomplete-runtime-bundle',
+          required: ['skeleton', 'atlas', 'texture'],
+        });
+      }
       // Do not report an export as queued unless an authorized cloud Spine
       // Editor runner has been installed and explicitly enabled by the owner.
       // A trusted scheduled queue in 3Spine-core now processes all eligible
@@ -1506,13 +1517,21 @@ export default async function handler(request, response) {
           if (attempt === 2 || ![409, 422].includes(Number(error?.status))) throw error;
         }
       }
-      try {
-        if (isEditorProject) {
-          if (editorExportEnabled) dispatchSpineProjectExport(settings, nextEntry, origin).catch(() => {});
-        } else dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {});
-      } catch {}
+      // Serverless invocations do not guarantee fire-and-forget network calls
+      // survive the response. Await the GitHub dispatch and expose its actual
+      // outcome rather than falsely telling the user preview generation began.
+      const dispatch = isEditorProject
+        ? editorExportEnabled
+          ? await dispatchSpineProjectExport(settings, nextEntry, origin)
+          : { status: 'unavailable', error: 'Spine Editor export disabled' }
+        : await dispatchSpineExportWebm(settings, nextEntry, origin);
+      if (dispatch?.status === 'failed') {
+        console.error('[UPLOAD] Preview dispatch failed for committed upload', uploadId,
+          String(dispatch.error || '').slice(0, 300));
+      }
       return response.status(200).json({
         ok: true, path: workPath, indexed: true,
+        dispatch,
         requiresSpineExport: isEditorProject,
         files: prepared.receipts.map((item, i) => ({ ...item, name: relativeFiles[i] })),
         github: { commitSha: String(commit?.commit?.sha || commit?.sha || '') },
@@ -1550,8 +1569,8 @@ export default async function handler(request, response) {
           if (attempt < 2 && [409, 422].includes(Number(error?.status))) continue;
           throw error;
         }
-        try { dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {}); } catch {}
-        return response.status(200).json({ ok: true, indexed: nextEntries.length });
+        const dispatch = await dispatchSpineExportWebm(settings, nextEntry, origin);
+        return response.status(200).json({ ok: true, indexed: nextEntries.length, dispatch });
       }
     }
 

@@ -1,0 +1,46 @@
+name: Spine publish acceptance and preview dispatch gate
+on:
+  push:
+    branches: [fix/preview-dispatch-and-file-acceptance-20261118]
+    paths:
+      - api/github-upload.js
+      - lib/runtime-acceptance.js
+      - tests/runtime-acceptance.test.mjs
+      - .github/workflows/spine-acceptance-dispatch.yml
+  pull_request:
+    paths:
+      - api/github-upload.js
+      - lib/runtime-acceptance.js
+      - tests/runtime-acceptance.test.mjs
+      - .github/workflows/spine-acceptance-dispatch.yml
+permissions:
+  contents: read
+jobs:
+  acceptance-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm}
+      - name: Require real source triad, reject orphan skeleton and unsafe paths
+        run: |
+          node --check api/github-upload.js
+          node tests/runtime-acceptance.test.mjs
+      - name: Confirm preview dispatch cannot be orphaned after serverless exit
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          const s=fs.readFileSync('api/github-upload.js','utf8');
+          const route=s.slice(s.indexOf("if (action === 'background-finalize-fast')"),
+            s.indexOf("if (action === 'background-finalize-index')"));
+          assert.match(route,/await dispatchSpineExportWebm\(settings, nextEntry, origin\)/);
+          assert.match(route,/inspectRuntimeAssetSet\(relativeFiles\)/);
+          assert.doesNotMatch(route,/dispatchSpineExportWebm\(settings, nextEntry, origin\)\.catch/);
+          console.log('PASS no orphaned asynchronous preview dispatch on main upload route');
+          JS
+      - name: Build production client with TypeScript type checks
+        run: |
+          npm ci
+          npm run build
