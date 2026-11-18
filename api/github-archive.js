@@ -160,9 +160,9 @@ function allowRuleMatches(entry, allowRules) {
 
 // The admin page edits library/censorship.json directly. Its id lists are folded
 // into the exclusion rules here so the existing filter picks them up.
-async function withCensorshipLists(settings, exclusions) {
+async function withCensorshipLists(settings, exclusions, preloadedText = null) {
   try {
-    const text = await githubText(settings, 'library/censorship.json');
+    const text = preloadedText === null ? await githubText(settings, 'library/censorship.json') : preloadedText;
     const parsed = text ? JSON.parse(text) : null;
     const blocked = Array.isArray(parsed?.blocked) ? parsed.blocked : [];
     const allowed = Array.isArray(parsed?.allowed) ? parsed.allowed : [];
@@ -2199,9 +2199,14 @@ export default async function handler(request, response) {
     // Gallery pages read independent public indexes in parallel. Keep a brief
     // read cache: a scrolling user should not wait for multiple GitHub roundtrips
     // per page. The CDN also refreshes this snapshot after publication.
-    const indexTexts = await Promise.all(basePaths.map(basePath =>
-      githubText(settings, `${basePath}/index.json`, { ttlMs: 20000 }).catch(() => '')
-    ));
+    const [indexTexts, exclusionsText, metricsText, censorshipText] = await Promise.all([
+      Promise.all(basePaths.map(basePath =>
+        githubText(settings, `${basePath}/index.json`, { ttlMs: 20000 }).catch(() => '')
+      )),
+      githubText(settings, `${settings.basePath}/archive-exclusions.json`),
+      githubText(settings, `${settings.basePath}/metrics.json`),
+      githubText(settings, 'library/censorship.json'),
+    ]);
     const collectedEntries = [];
     for (const text of indexTexts) {
       if (!text) continue;
@@ -2211,9 +2216,7 @@ export default async function handler(request, response) {
       } catch (err) {}
     }
     const indexText = collectedEntries.length ? JSON.stringify(collectedEntries) : '';
-    const exclusionsText = await githubText(settings, `${settings.basePath}/archive-exclusions.json`);
-    const metricsText = await githubText(settings, `${settings.basePath}/metrics.json`);
-    const exclusions = await withCensorshipLists(settings, exclusionsText ? JSON.parse(exclusionsText) : { rules: [], allow: [] });
+    const exclusions = await withCensorshipLists(settings, exclusionsText ? JSON.parse(exclusionsText) : { rules: [], allow: [] }, censorshipText);
     const metrics = parseMetricsJson(metricsText);
     const allEntries = indexText ? JSON.parse(indexText) : [];
     const entries = Array.isArray(allEntries)
