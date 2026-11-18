@@ -596,6 +596,12 @@ function stem(name) {
     .replace(/\.atlas(?:\.txt|\.docx)?$/i, '')
     .replace(/\.(json|skel|png|jpe?g|webp|dds)$/i, '');
 }
+export function matchingAtlasForSkeleton(skeletonName, atlasNames) {
+  const candidates=atlasNames.filter(isAtlas);
+  const skeletonStem=stem(String(skeletonName || '')).toLowerCase();
+  return candidates.find((name)=>stem(name).toLowerCase() === skeletonStem) ??
+    (candidates.length === 1 ? candidates[0] : null);
+}
 
 function viewportFromJson(json) {
   const bounds = json?.skeleton;
@@ -2475,9 +2481,8 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     const items = await githubList(settings, directory.path);
     const skeleton = items.find((item) => item.type === 'file' && isSkeleton(item.name));
     const atlases = items.filter((item) => item.type === 'file' && isAtlas(item.name));
-    const skeletonStem = skeleton ? stem(skeleton.name).toLowerCase() : '';
-    const atlas = atlases.find((item) => stem(item.name).toLowerCase() === skeletonStem) ??
-      (atlases.length === 1 ? atlases[0] : null);
+    const selectedName = matchingAtlasForSkeleton(skeleton?.name, atlases.map((item)=>item.name));
+    const atlas = atlases.find((item)=>item.name===selectedName) || null;
     const textures = items.filter((item) => item.type === 'file' && isImage(item.name));
     if (!skeleton || !atlas || textures.length === 0) continue;
 
