@@ -1301,7 +1301,7 @@ function createHtml(config) {
       .stage { height: auto !important; max-height: none !important; min-height: calc(100svh - 104px); align-items: start; }
       #sidebar { height: auto !important; max-height: none !important; overflow: visible !important; padding-right: 0; }
       .player-frame { align-self: start; position: sticky; top: 12px; height: calc(100svh - 120px); min-height: 420px; }
-      .animation-menu, .animation-card.is-open .animation-menu { max-height: none !important; overflow: visible !important; }
+      /* Document scroll remains enabled; the desktop animation menu scrolls independently. */
       .dl-steps .dl-step span, .dl-status [data-dl-status-text] { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
       .dl-status { display: none !important; }
       #sidebar > #animation-card { order: 1 !important; }
@@ -1333,6 +1333,19 @@ function createHtml(config) {
         .video-watch-panel--below-list video { max-height: 60svh; }
         .owner-library.is-visible { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 100px; }
         .owner-library a { height: 100px; min-height: 100px; }
+      }
+      /* The animation picker grows with its content but scrolls before exceeding
+         the player. Following sidebar cards remain in normal document flow. */
+      @media (min-width: 1001px) {
+        #animation-card.is-open #animation-menu {
+          height: auto !important;
+          max-height: var(--animation-menu-player-height, max(420px, calc(100svh - 120px))) !important;
+          overflow-x: hidden !important;
+          overflow-y: auto !important;
+          overscroll-behavior: contain;
+          scrollbar-width: thin;
+        }
+        #sidebar > #animation-card { flex: 0 0 auto; }
       }
 </style>
   </head>
@@ -1442,6 +1455,24 @@ function createHtml(config) {
         }
       }
       const playerElement = document.getElementById("player");
+      const playerFrameElement = playerElement?.closest(".player-frame");
+      if (animationMenu && playerFrameElement) {
+        const syncAnimationMenuHeight = () => {
+          if (window.innerWidth <= 1000) {
+            animationMenu.style.removeProperty("--animation-menu-player-height");
+            return;
+          }
+          const playerHeight = playerFrameElement.getBoundingClientRect().height;
+          if (playerHeight > 0) {
+            animationMenu.style.setProperty("--animation-menu-player-height", Math.floor(playerHeight) + "px");
+          }
+        };
+        syncAnimationMenuHeight();
+        if (typeof ResizeObserver === "function") {
+          new ResizeObserver(syncAnimationMenuHeight).observe(playerFrameElement);
+        }
+        window.addEventListener("resize", syncAnimationMenuHeight, { passive: true });
+      }
 const pinchDistance = { value: null };
        const panPosition = { value: null };
        const swipeStart = { value: null };
