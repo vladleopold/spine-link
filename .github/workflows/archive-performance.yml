@@ -1,0 +1,24 @@
+name: Spine archive WebP-first performance regression
+on:
+  push:
+    branches: [main]
+    paths:
+      - api/github-archive.js
+      - tests/archive-speed.test.mjs
+      - .github/workflows/archive-performance.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  archive-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check API and client syntax, WebP-first and pagination contracts
+        run: |
+          node --check api/github-archive.js
+          node --test tests/archive-speed.test.mjs
