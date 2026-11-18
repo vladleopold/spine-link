@@ -167,6 +167,7 @@ jobs:
           curl -fsSL --max-time 25 'https://spine-link.vercel.app/world-spine-archive' -o /tmp/spine-archive-live.html
           grep -q 'data-video-src=' /tmp/spine-archive-live.html
           grep -q 'prefetchNext()' /tmp/spine-archive-live.html
+          grep -q 'id="archive-next-page"' /tmp/spine-archive-live.html
           if grep -q '<video src=' /tmp/spine-archive-live.html; then
             echo '::error::Archive is eagerly downloading WebM instead of serving WebP posters'
             exit 1
