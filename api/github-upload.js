@@ -13,6 +13,7 @@ import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-s
 import { metricCountsForIds, parseMetricsJson, sanitizeMetricId, sanitizeMetricIds } from '../lib/spine-metrics.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 import { inspectRuntimeAssetSet } from '../lib/runtime-acceptance.js';
+import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
 
 const CENSORSHIP_FILE = 'library/censorship.json';
 
@@ -1213,7 +1214,7 @@ async function prepareStagedAssets(settings, uploadId, workPath, singles = [], a
       const fetched = await Promise.all(slice.map(item =>
         githubApi(settings, 'GET', '/repos/' + settings.owner + '/' + settings.repo + '/git/blobs/' + item.sha)));
       for (let k = 0; k < fetched.length; k++) {
-        const raw = String(fetched[k]?.content || '').replace(/\\s/g, '');
+        const raw = String(fetched[k]?.content || '').replace(/\s/g, '');
         if (fetched[k]?.encoding !== 'base64') throw new Error('Staged Git blob has wrong encoding');
         const bytes = Buffer.from(raw, 'base64');
         if (bytes.length !== slice[k].bytes ||
@@ -1449,6 +1450,32 @@ export default async function handler(request, response) {
         Array.isArray(body?.stagedBlobs) ? body.stagedBlobs : [],
         Array.isArray(body?.stagedAssemblies) ? body.stagedAssemblies : []);
       if (!prepared.committed.length) return response.status(400).json({ error: 'No staged Spine files' });
+      // Validate server-side as well as in the browser: remote clients and
+      // agents can stage arbitrary blobs without running the drag/drop checks.
+      // A binary payload named .atlas otherwise becomes control-character
+      // texture URLs in the public Web Player.
+      if (body?.entry?.sourceKind !== 'spine-project') {
+        for (const asset of prepared.committed) {
+          if (!/\.atlas(?:\.txt|\.docx)?$/i.test(asset.path)) continue;
+          if (asset.bytes < 24 || asset.bytes > 2_000_000) {
+            return response.status(422).json({ error: 'Invalid Spine atlas size or format' });
+          }
+          const blob = await githubApi(settings, 'GET',
+            '/repos/' + settings.owner + '/' + settings.repo + '/git/blobs/' + asset.sha);
+          if (blob?.encoding !== 'base64' || !blob.content) {
+            return response.status(422).json({ error: 'Staged Spine atlas could not be validated' });
+          }
+          const bytes = Buffer.from(String(blob.content).replace(/\\s/g, ''), 'base64');
+          if (bytes.byteLength !== asset.bytes ||
+              createHash('sha256').update(bytes).digest('hex') !== asset.sha256 ||
+              !isValidSpineAtlasHeader(bytes.toString('utf8'))) {
+            return response.status(422).json({
+              error: 'Invalid Spine atlas: expected text page declarations and image filenames',
+              acceptance: 'rejected-corrupt-atlas',
+            });
+          }
+        }
+      }
       const relativeFiles = prepared.receipts.map(item =>
         item.path.startsWith(workPath + '/') ? item.path.slice(workPath.length + 1) : '');
       const isEditorProject = body?.entry?.sourceKind === 'spine-project';
