@@ -1454,6 +1454,7 @@ const pinchDistance = { value: null };
         // было "\\." — регулярка искала буквальную "\." и никогда не срабатывала.
         if (/^3\.7(?:\.|$)/.test(version)) return "3.7";
         if (/^3\.8(?:\.|$)/.test(version)) return "3.8";
+        if (/^4\.[012](?:\.|$)/.test(version)) return version.slice(0,3);
         return "";
       }
       function setPlayerStylesheet(href) {
@@ -1502,7 +1503,11 @@ const pinchDistance = { value: null };
         const key = runtime || "4.3.13";
         if (!runtimeLoaders.has(key)) {
           runtimeLoaders.set(key, (async () => {
-            if (runtime) {
+            if (runtime && runtime.startsWith("4.")) {
+              const base = "https://unpkg.com/@esotericsoftware/spine-player@" + runtime + ".*/dist/";
+              setPlayerStylesheet(base + "spine-player.css");
+              await loadScriptOnce(base + "iife/spine-player.js");
+            } else if (runtime) {
               setPlayerStylesheet("/vendor-spine-player-" + runtime + ".css");
               await loadScriptOnce("/vendor-spine-player-" + runtime + ".js");
             } else {
