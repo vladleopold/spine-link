@@ -1,4 +1,5 @@
 import { uploadRequest } from "./upload-request";
+// Choose an actual Spine skeleton, not an adjacent application config.json.
 import { selectSpineRuntimeSkeleton } from "../lib/spine-runtime-file-selection.js";
 import { isSpineProjectFile, isSpineImageFile, normalizeProjectPath, validateProjectSelection, readDroppedProjectEntries, rememberProjectFilePath, projectFilePath } from "./spine-project-import.js";
 import "./styles.css";
