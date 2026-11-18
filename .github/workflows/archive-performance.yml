@@ -12,11 +12,15 @@ on:
       - api/github-preview.js
       - src/main.tsx
       - .github/workflows/archive-performance.yml
+      - .github/workflows/vercel-deploy-and-alias.yml
+      - .github/workflows/archive-live-speed.yml
   pull_request:
     paths:
       - api/github-archive.js
       - tests/archive-speed.test.mjs
       - .github/workflows/archive-performance.yml
+      - .github/workflows/vercel-deploy-and-alias.yml
+      - .github/workflows/archive-live-speed.yml
   workflow_dispatch:
 permissions:
   contents: read

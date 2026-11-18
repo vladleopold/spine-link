@@ -13,10 +13,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/vercel-deploy-and-alias.yml'
-  # Source changes deploy automatically only after the full Agent API CI workflow,
-  # including Chromium session-persistence tests, has completed successfully.
+  # Agent changes deploy after Agent API CI; archive-only changes deploy after
+  # dedicated archive regression. Both gates must be successful on main.
   workflow_run:
-    workflows: ["Spine-Link Agent API CI"]
+    workflows: ["Spine-Link Agent API CI", "Spine archive WebP-first performance regression"]
     types: [completed]
   schedule:
     - cron: '11 0,6,12,18 * * *'
