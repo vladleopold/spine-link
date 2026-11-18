@@ -1,0 +1,79 @@
+name: DDS/DXT5 player and file-acceptance regression
+on:
+  push:
+    branches: [fix/dds-dxt5-atlas-preview-20261118, main]
+    paths:
+      - lib/dds-*
+      - src/dds-import.ts
+      - src/SpineApp.tsx
+      - src/main.tsx
+      - api/github-asset.js
+      - api/github-preview.js
+      - api/github-upload.js
+      - scripts/test-dds-*
+      - .github/workflows/dds-preview-acceptance.yml
+  pull_request:
+    paths:
+      - lib/dds-*
+      - src/dds-import.ts
+      - src/SpineApp.tsx
+      - src/main.tsx
+      - api/github-asset.js
+      - api/github-preview.js
+      - api/github-upload.js
+      - scripts/test-dds-*
+      - .github/workflows/dds-preview-acceptance.yml
+permissions:
+  contents: read
+jobs:
+  dds-pixel-and-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm}
+      - name: Install application dependencies
+        run: npm ci
+      - name: Verify DXT5 pixels, PNG output, malformed source and asset API
+        run: node scripts/test-dds-texture.mjs
+      - name: Build full site with strict TypeScript checks
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Launch Vite dev server and await readiness
+        run: |
+          npm run dev -- --port 4173 > /tmp/dds-preview-vite.log 2>&1 &
+          for n in $(seq 1 80); do
+            curl -fsS http://127.0.0.1:4173/ > /dev/null && exit 0
+            sleep 0.25
+          done
+          cat /tmp/dds-preview-vite.log
+          exit 1
+      - name: Run Chromium DDS drag-drop import regression (synthetic pixels only)
+        run: node scripts/test-dds-browser.mjs
+  production-dxt5:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - name: Verify exact reported legacy DXT5 texture decodes in production
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=https://spine-link.vercel.app/assets/library_02/Spine-animation-2026-11-18T03-38-09-932Z
+          DDS=$BASE/basic_titan_time_3_HD_spine-3-8-59_dxt5.dds
+          ATLAS=$BASE/basic_titan_time_3_HD_spine-3-8-59_dxt5.atlas
+          for n in $(seq 1 15); do
+            code=$(curl -sSL --max-time 30 -w '%{http_code}' -D /tmp/dds-head \
+              "$DDS?dds=png-v1&verify=$n" -o /tmp/titan-texture.png || true)
+            if [ "$code" = 200 ] && grep -qi 'content-type: image/png' /tmp/dds-head &&
+              python3 -c 'assert open("/tmp/titan-texture.png","rb").read(8)==bytes([137,80,78,71,13,10,26,10])'; then
+              echo "LIVE_LEGACY_DXT5_PNG_PASS"; break
+            fi
+            if [ "$n" -eq 15 ]; then echo "::error::Live DXT5 texture did not decode"; exit 1; fi
+            sleep 8
+          done
+          curl -fsSL --max-time 35 "$ATLAS?v=dds-png-v1" -o /tmp/titan-atlas.txt
+          grep -q 'basic_titan_time_3_HD_spine-3-8-59_dxt5.dds?v=dds-png-v1&dds=png-v1' /tmp/titan-atlas.txt
+          echo "LIVE_LEGACY_ATLAS_PAGES_PASS"

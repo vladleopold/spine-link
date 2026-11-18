@@ -188,7 +188,7 @@ function renderHomeShell(isDragging = false) {
          <div class="stage">
            <div class="home-drop-panel">
              <label class="drop-zone main-drop-zone ${isDragging ? "is-dragging" : ""}" id="home-drop-zone">
-               <input name="spine-files" type="file" multiple accept=".spine,.json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp" aria-label="Select Spine project, export files or textures" data-file-input>
+               <input name="spine-files" type="file" multiple accept=".spine,.json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp,.dds" aria-label="Select Spine project, export files or textures" data-file-input>
                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13m0-13 5 5m-5-5-5 5M5 15v4h14v-4"/></svg>
                <strong>Drop Spine files to preview</strong>
                <span>JSON/SKEL + atlas + textures or .spine + images/</span>
@@ -1313,7 +1313,7 @@ async function uploadBackgroundFilesFast(
         files: files.map(file => isProject ? normalizeProjectPath(file) : file.name),
         skeleton: files.find(file => /\.(json|skel|bytes)$/i.test(file.name))?.name || "",
         atlas: files.find(file => /\.atlas$/i.test(file.name))?.name || "",
-        textures: files.filter(file => /\.(png|jpe?g|webp)$/i.test(file.name)).map(file => isProject ? normalizeProjectPath(file) : file.name),
+        textures: files.filter(file => /\.(png|jpe?g|webp|dds)$/i.test(file.name)).map(file => isProject ? normalizeProjectPath(file) : file.name),
         ...(isProject ? { sourceKind: "spine-project", projectFile: files.find(isSpineProjectFile)?.name || "",
           imagesRoot: "images", conversionStatus: "pending" } : {}),
       },

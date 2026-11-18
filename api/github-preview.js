@@ -197,7 +197,7 @@ function extractAtlasPages(atlasText = '') {
   return String(atlasText)
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => /\.(png|jpe?g|webp)$/i.test(line));
+    .filter((line) => /\.(png|jpe?g|webp|dds)$/i.test(line));
 }
 
 function canonicalAtlasPageName(pageName = '') {
@@ -584,13 +584,13 @@ function isAtlas(name) {
 }
 
 function isImage(name) {
-  return /\.(png|jpe?g|webp)$/i.test(name);
+  return /\.(png|jpe?g|webp|dds)$/i.test(name);
 }
 
 function stem(name) {
   return name
     .replace(/\.atlas(?:\.txt|\.docx)?$/i, '')
-    .replace(/\.(json|skel|png|jpe?g|webp)$/i, '');
+    .replace(/\.(json|skel|png|jpe?g|webp|dds)$/i, '');
 }
 
 function viewportFromJson(json) {
@@ -2491,6 +2491,9 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     const animations = animationNamesFromJson(skeletonJson);
     const skinNames = skinNamesFromSkeletonJson(skeletonJson);
     const atlasPages = extractAtlasPages(atlasText);
+    // Historical Spine 3.8 exports can reference DXT5 .dds page files.
+    // Those original assets remain immutable; /assets/...dds decodes them
+    // on demand to PNG for the web player.
     const textureUrls = atlasPages.map((pageName) => {
       const matchedTexture =
         textures.find((texture) => imageMatchesAtlasPage(texture.name, pageName)) ??
@@ -2503,7 +2506,8 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       animations[0] ??
       '';
 
-    const assetVersion = [skeleton.sha, atlas.sha, ...textures.map((texture) => texture.sha)].filter(Boolean).join('-');
+    const assetVersion = [skeleton.sha, atlas.sha, ...textures.map((texture) => texture.sha),
+      ...(atlasPages.some((page) => /\.dds$/i.test(page)) ? ['dds-png-v1'] : [])].filter(Boolean).join('-');
 
     const skeletonUrl = `${origin}/assets/${encodeRepoPath(skeleton.path)}`;
     const atlasUrl = versionedAssetUrl(origin, atlas, assetVersion);

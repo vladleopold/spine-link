@@ -1460,7 +1460,7 @@ export default async function handler(request, response) {
       const projectFile = String(body?.entry?.projectFile || '');
       if (isEditorProject && (!/^[^/\\]+\.spine$/i.test(projectFile) ||
           !relativeFiles.includes(projectFile) ||
-          !relativeFiles.some(path => /^images\/.+\.(png|jpe?g|webp)$/i.test(path)) ||
+          !relativeFiles.some(path => /^images\/.+\.(png|jpe?g|webp|dds)$/i.test(path)) ||
           relativeFiles.some(path => !path || path.split('/').some(part => !part || part === '.' || part === '..')))) {
         return response.status(400).json({ error: 'Spine Editor import requires a .spine project and images/ textures' });
       }
