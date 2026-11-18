@@ -229,7 +229,12 @@ function githubHeaders(token) {
 // Works are spread across library_01, library_02, ... folders, each capped at the
 // GitHub limit. They are listed at runtime so a folder added by a rotation shows up
 // without a code change or a deploy.
+const archiveCollectionCache = { key: '', expiresAt: 0, value: null };
 async function libraryCollectionPaths(settings) {
+  const cacheKey = [settings.owner,settings.repo,settings.branch,settings.basePath].join('/');
+  if (archiveCollectionCache.key === cacheKey && archiveCollectionCache.expiresAt > Date.now()) {
+    return archiveCollectionCache.value;
+  }
   const paths = [cleanRepoPath(settings.basePath || defaultBasePath)];
   try {
     const response = await fetch(
@@ -244,6 +249,9 @@ async function libraryCollectionPaths(settings) {
       .map((item) => item.name)
       .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
     for (const name of folders) if (!paths.includes(name)) paths.push(name);
+    archiveCollectionCache.key = cacheKey;
+    archiveCollectionCache.value = paths;
+    archiveCollectionCache.expiresAt = Date.now() + 60000;
   } catch (e) {
     // Listing failed: the configured folder alone still beats an empty site.
   }
@@ -2118,9 +2126,14 @@ export default async function handler(request, response) {
     // Постоянные сборки library_NN перечисляются автоматически, чтобы новые
     // папки после ротации были видны без правки кода.
     const basePaths = await libraryCollectionPaths(settings);
+    // Gallery pages read independent public indexes in parallel. Keep a brief
+    // read cache: a scrolling user should not wait for multiple GitHub roundtrips
+    // per page. The CDN also refreshes this snapshot after publication.
+    const indexTexts = await Promise.all(basePaths.map(basePath =>
+      githubText(settings, `${basePath}/index.json`, { ttlMs: 20000 }).catch(() => '')
+    ));
     const collectedEntries = [];
-    for (const basePath of basePaths) {
-      const text = await githubText(settings, `${basePath}/index.json`, { ttlMs: 0 });
+    for (const text of indexTexts) {
       if (!text) continue;
       try {
         const parsed = JSON.parse(text);
@@ -2155,9 +2168,14 @@ export default async function handler(request, response) {
       });
     }
 
-    const layoutEntries = await enrichArchiveLayout(settings, origin, entries);
-
     const feed = String(request.query?.feed || '').trim();
+    const archiveId = String(request.query?.id || '').trim();
+    // Full layout enrichment probes image assets for every archive work.
+    // A poster-first feed needs only indexed metadata, not hundreds of
+    // GitHub asset HEAD/GET requests. Enrich only the requested detail page.
+    const layoutEntries = archiveId
+      ? await enrichArchiveLayout(settings, origin, entries.filter(item => String(item?.id || '') === archiveId))
+      : entries;
     if (feed === 'home') {
       response.setHeader('Content-Type', 'application/json; charset=utf-8');
       setNoStoreHeaders(response);
@@ -2171,7 +2189,6 @@ export default async function handler(request, response) {
       });
     }
 
-    const archiveId = String(request.query?.id || '').trim();
     response.setHeader('Content-Type', 'text/html; charset=utf-8');
     response.setHeader('X-Robots-Tag', 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1');
     if (archiveId) {
@@ -2194,11 +2211,11 @@ export default async function handler(request, response) {
     }
 
     if (feed === 'archive') {
-      const offset = Math.max(0, Number(request.query?.offset) || 0);
-      const limit = Math.min(48, Math.max(1, Number(request.query?.limit) || archivePageSize));
+      const offset = Math.max(0, Math.floor(Number(request.query?.offset) || 0));
+      const limit = Math.min(48, Math.max(1, Math.floor(Number(request.query?.limit) || archivePageSize)));
       const sliced = layoutEntries.slice(offset, offset + limit);
       response.setHeader('Content-Type', 'application/json; charset=utf-8');
-      setNoStoreHeaders(response);
+      setCacheHeaders(response, 'public, max-age=5, stale-while-revalidate=30', 'public, s-maxage=20, stale-while-revalidate=40');
       if (request.method === 'HEAD') {
         return response.status(200).send('');
       }
@@ -2212,7 +2229,7 @@ export default async function handler(request, response) {
       });
     }
 
-    setNoStoreHeaders(response);
+    setCacheHeaders(response, 'public, max-age=10, stale-while-revalidate=30', 'public, s-maxage=20, stale-while-revalidate=40');
     if (request.method === 'HEAD') {
       return response.status(200).send('');
     }
