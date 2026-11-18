@@ -707,9 +707,11 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3) {
     const hasSkeleton = items.some((item) => item.type === 'file' && isSkeleton(item.name));
     const hasAtlas = items.some((item) => item.type === 'file' && isAtlas(item.name));
     const hasTexture = items.some((item) => item.type === 'file' && isImage(item.name));
-    if (hasSkeleton && hasAtlas && hasTexture) {
+    if (hasSkeleton) {
+      // Include incomplete historical uploads so the preview can display
+      // their real saved image and a truthful missing-atlas diagnosis.
       found.push({ name: cleanPath.split('/').pop() || cleanPath, path: cleanPath });
-      return;
+      if (hasAtlas && hasTexture) return;
     }
     const directories = items.filter((item) => item.type === 'dir');
     for (const directory of directories) await visit(directory.path, depth + 1);
