@@ -211,7 +211,7 @@ export function imageMatchesAtlasPage(imageName = '', pageName = '') {
   if (imageBase === pageBase) return true;
   // Imported 3.8 DXT5 packs can have an atlas pointing at .dds and an
   // identically named PNG as the only uploaded texture. No fuzzy substitution.
-  if (/\\.dds$/i.test(pageBase) && /\\.png$/i.test(imageBase) &&
+  if (/\.dds$/i.test(pageBase) && /\.png$/i.test(imageBase) &&
       pageBase.slice(0,-4) === imageBase.slice(0,-4)) return true;
   if (pageBase.endsWith(imageBase)) return true;
   if (imageBase.endsWith(pageBase)) return true;
