@@ -188,6 +188,11 @@ function entryExcludedFromArchive(entry, exclusions) {
   return !allowRuleMatches(entry, allow);
 }
 
+function isWebpPosterUrl(value = '') {
+  const url = String(value || '').trim();
+  return /^data:image\/webp;base64,/i.test(url) || /\.webp(?:[?#]|$)/i.test(url);
+}
+
 function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
   const poster = String(entry?.webpPosterLow || entry?.webpPosterMedium || entry?.webpPoster || entry?.thumbnailPoster || '');
@@ -495,10 +500,10 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 
 function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
-  const image = entryImageUrl(origin, entry);
   const video = entryVideoSrc(origin, entry);
-  // preview-low.webp is deliberately 404 in the asset API; medium is the
-  // smallest supported WebP. Fallbacks remain restricted to this same work.
+  // A source texture/PNG is not an animation poster. Keep only actual WebP
+  // outputs (including same-work WebP fallbacks); otherwise render a neutral
+  // blocked placeholder and do not attach a WebM source.
   const posterCandidates = [
     entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
     entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
@@ -506,8 +511,8 @@ function archiveFeedEntry(origin, entry, metrics) {
     generatedThumbnailUrl(origin, entry),
     entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'),
     fallbackPosterAssetUrl(origin, entry),
-  ].filter(Boolean);
-  const lowPoster = posterCandidates[0] || image;
+  ].filter(isWebpPosterUrl);
+  const lowPoster = posterCandidates[0] || '';
   const alternatePoster = posterCandidates.find(url => url !== lowPoster) || '';
   const lowVideo = video
     ? entryVideoSrc(origin, { ...entry, webmPreview: entry?.webmPreviewLow || entry?.webmPreviewMedium || '' }) || video
@@ -519,9 +524,9 @@ function archiveFeedEntry(origin, entry, metrics) {
     ownerUrl: entry?.publicOwnerId ? `/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
     playerUrl: previewUrl(entry),
     archiveUrl: archiveItemUrl(entry),
-    poster: lowPoster || image,
+    poster: lowPoster,
     posterFallback: alternatePoster,
-    video: lowVideo,
+    video: lowPoster ? lowVideo : '',
     videoFallback: video,
     width: positiveInteger(entry?.previewWidth),
     height: positiveInteger(entry?.previewHeight),
@@ -541,13 +546,14 @@ function lightweightCardHtml(item, index = 0) {
   const posterOnError = 'onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried=\'1\';this.src=this.dataset.fallbackSrc;}else{this.style.display=\'none\';}"';
   const media = item.poster
     ? `<img src="${poster}"${posterFallback && posterFallback !== poster ? ` data-fallback-src="${posterFallback}"` : ''} ${posterOnError} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'low'}" />`
-    : '<span class="feed-placeholder" aria-hidden="true">SPINE</span>';
+    : '<span class="feed-placeholder" aria-label="Preview unavailable">Preview unavailable</span>';
   // Render poster first. No video source exists until a visible poster is ready.
   const videoAttrs = video ? ` data-video-src="${video}" data-video-fallback="${videoFallback}"` : '';
   const mediaInner = media;
   const playerUrlAttr = item.playerUrl ? ` data-player-url="${escapeHtml(item.playerUrl)}"` : '';
   const clickHandler = item.playerUrl ? ` onclick="if(this.dataset.playerUrl)window.location.href=this.dataset.playerUrl"` : '';
-  return `<article class="feed-card"${playerUrlAttr}${videoAttrs}${clickHandler} data-entry-id="${escapeHtml(item.id)}" style="--media-ratio:${ratio}">
+  const previewStatus = item.poster ? (item.video ? 'ready-poster-lazy-video' : 'poster-only') : 'blocked-no-webp-poster';
+  return `<article class="feed-card"${playerUrlAttr}${videoAttrs}${clickHandler} data-entry-id="${escapeHtml(item.id)}" data-preview-status="${previewStatus}" style="--media-ratio:${ratio}">
     <div class="feed-media">${mediaInner}</div>
     <div class="feed-info">
       <div><span class="feed-title">${title}</span><span class="feed-mode">${escapeHtml(item.mode)}</span></div>
@@ -1513,7 +1519,9 @@ function archiveHtml({ origin, entries, metrics }) {
         function startVideo(card){
           if(active.has(card)||!card.dataset.videoSrc||reducedMotion)return;
           const poster=card.querySelector('img');
-          if(poster&&!poster.complete)return;
+          if(!poster||!poster.complete||poster.naturalWidth<=0)return;
+          const posterUrl=poster.currentSrc||poster.src;
+          if(!/^data:image\/webp;base64,/i.test(posterUrl)&&! /\.webp(?:[?#]|$)/i.test(posterUrl))return;
           const host=card.querySelector('.feed-media');
           if(!host)return;
           const video=document.createElement('video');
@@ -1581,6 +1589,7 @@ function archiveHtml({ origin, entries, metrics }) {
           const card=document.createElement('article');
           card.className='feed-card';
           card.dataset.entryId=item.id;
+          card.dataset.previewStatus=item.poster?(item.video?'ready-poster-lazy-video':'poster-only'):'blocked-no-webp-poster';
           if(item.video)card.dataset.videoSrc=item.video;
           if(item.videoFallback)card.dataset.videoFallback=item.videoFallback;
           card.style.setProperty('--media-ratio',item.width&&item.height
