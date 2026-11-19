@@ -214,6 +214,7 @@ jobs:
                     return {
                       height: menuRect.height,
                       playerHeight: playerRect.height,
+                      maxHeight: getComputedStyle(menu).maxHeight,
                       scrollable: menu.scrollHeight > menu.clientHeight + 1,
                       following,
                     };
@@ -229,8 +230,10 @@ jobs:
                   'Three animations must not fill the player at ' + width + 'px');
                 assert.equal(layout.few.scrollable, false,
                   'Three animations must not scroll at ' + width + 'px');
-                assert.ok(layout.many.height <= layout.many.playerHeight + 1,
-                  'Long animation list exceeds player at ' + width + 'px: ' + JSON.stringify(layout.many));
+                assert.equal(layout.many.maxHeight, Math.floor(layout.many.playerHeight) + 'px',
+                  'Long animation menu max-height must track the actual player at ' + width + 'px: ' + JSON.stringify(layout.many));
+                assert.ok(Math.abs(layout.many.height - layout.many.playerHeight) <= 1,
+                  'Long animation menu must reach the actual player height at ' + width + 'px: ' + JSON.stringify(layout.many));
                 assert.equal(layout.many.scrollable, true,
                   'Long animation list must scroll at ' + width + 'px');
                 for (const state of [layout.few, layout.many]) {
@@ -295,7 +298,13 @@ jobs:
                   activeAnimation.name = 'menu_test_58';
                   renderAnimationList();
                   const after = menu.scrollTop;
-                  return {firstSelectionVisible, before, after, scrollRange, items:menu.childElementCount, scrollHeight:menu.scrollHeight, clientHeight:menu.clientHeight};
+                  const activeAfter = menu.querySelector('button.active');
+                  const menuAfterBox = menu.getBoundingClientRect();
+                  const activeAfterBox = activeAfter?.getBoundingClientRect();
+                  const activeVisibleAfter = Boolean(activeAfterBox &&
+                    activeAfterBox.top >= menuAfterBox.top - 1 &&
+                    activeAfterBox.bottom <= menuAfterBox.bottom + 1);
+                  return {firstSelectionVisible, activeVisibleAfter, before, after, scrollRange, items:menu.childElementCount, scrollHeight:menu.scrollHeight, clientHeight:menu.clientHeight};
                 } finally {
                   animationNames.value = namesBefore;
                   activeAnimation.name = activeBefore;
@@ -304,6 +313,8 @@ jobs:
               });
               assert.equal(selectionScroll.firstSelectionVisible, true,
                 'Initial selected animation must be visible');
+              assert.equal(selectionScroll.activeVisibleAfter, true,
+                'Selected animation must remain visible after a selection change: ' + JSON.stringify(selectionScroll));
               assert.ok(selectionScroll.before > 30 && Math.abs(selectionScroll.before - selectionScroll.after) < 2,
                 'Animation selection reset scroll: ' + JSON.stringify(selectionScroll));
               console.log('PASS LIVE ANIMATION SCROLL RETENTION', JSON.stringify(selectionScroll));

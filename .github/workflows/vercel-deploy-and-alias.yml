@@ -4,22 +4,17 @@ name: Vercel deploy and alias
 # Release source-safe skeleton selection and corrupt-atlas protection after WebP-first archive acceptance.
 # Release verified in-memory archive pagination (all cards embedded, WebP-first, WebM only on viewport).
 # Release source with refreshed public preview cache and CI media recovery.
-# Batch automatic releases to avoid exhausting Vercel Hobby's
-# 100-deployments/24h quota on frequent pushes. Manual releases remain available.
+# Production deployments are event-driven only. Do not spend Vercel quota on
+# periodic no-op releases or on edits to this workflow itself.
 on:
   workflow_dispatch:
-  # Updating this release procedure triggers one immediate, fully tested deploy.
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/vercel-deploy-and-alias.yml'
-  # Agent changes deploy after Agent API CI; archive-only changes deploy after
-  # dedicated archive regression. Both gates must be successful on main.
+  # Deploy only after a relevant CI workflow has completed successfully.
   workflow_run:
     workflows: ["Spine-Link Agent API CI", "Spine archive WebP-first performance regression"]
     types: [completed]
+  # One controlled recovery attempt after Vercel's rolling daily quota resets.
   schedule:
-    - cron: '11 0,6,12,18 * * *'
+    - cron: '15 16 * * *'
 
 # Queue releases rather than cancelling an in-flight validated deploy when
 # another workflow_run event arrives. The source-SHA guard rejects stale queued
@@ -44,8 +39,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # After a failed automatic deployment, do not hammer Vercel while its
+          # rolling 24-hour deployment quota is still exhausted. Manual dispatch
+          # intentionally bypasses this cooldown.
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-deploy-and-alias.yml/runs?status=completed&per_page=1")
+          latest_conclusion=$(printf '%s' "$latest" | jq -r '.workflow_runs[0].conclusion // ""')
+          latest_updated=$(printf '%s' "$latest" | jq -r '.workflow_runs[0].updated_at // ""')
+          if [ "$latest_conclusion" = "failure" ] && [ -n "$latest_updated" ]; then
+            failed_at=$(date -u -d "$latest_updated" +%s)
+            now=$(date -u +%s)
+            age=$((now - failed_at))
+            if [ "$age" -ge 0 ] && [ "$age" -lt 86400 ]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "Previous automatic deployment failed less than 24h ago; waiting for quota recovery."
+              exit 0
+            fi
+          fi
+          deploy_sha="${{ github.event.workflow_run.head_sha || github.sha }}"
           last_success=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-deploy-and-alias.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].head_sha // ""' || true)
-          if [ "$last_success" = "$GITHUB_SHA" ]; then
+          if [ "$last_success" = "$deploy_sha" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "No new commit since the previous successful deployment."
           else
@@ -165,6 +177,7 @@ jobs:
           VERCEL_SCOPE: ${{ secrets.VERCEL_SCOPE }}
 
       - name: Verify poster-first archive on production
+        if: steps.quota_recovery.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
