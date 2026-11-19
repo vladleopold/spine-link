@@ -92,9 +92,9 @@ test('PR live proof uses only the successful Vercel preview for the exact head S
     'read the Vercel status for that exact commit');
   assert.ok(workflow.includes('inspector') && workflow.includes('target'),
     'reject stale preview comments whose deployment inspector does not match the commit status');
-  assert.ok(workflow.includes('deployment_status') && workflow.includes('vercel_state'),
+  assert.ok(workflow.includes("deploymentStatus === 'DEPLOYED'") && workflow.includes("vercelStatus.state === 'success'"),
     'require both Vercel deployment payload and commit status to be successful');
-  assert.ok(workflow.includes('echo "SITE=https://$preview" >> "$GITHUB_ENV"'),
+  assert.ok(workflow.includes("appendFileSync(process.env.GITHUB_ENV, 'SITE=' + previewUrl.origin"),
     'run Playwright against the verified preview URL, not production');
   assert.ok(workflow.includes("const site=(process.env.SITE||'https://spine-link.vercel.app').replace(/\\/+$/,'')"));
   assert.ok(workflow.includes("page.goto(site+'/world-spine-archive'"));
