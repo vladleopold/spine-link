@@ -58,3 +58,11 @@ test('preview data-source probe reports counts without exposing archive records'
   assert.ok(workflow.includes('entries:Array.isArray(payload?.entries)?payload.entries.length:null'));
   assert.ok(!workflow.includes('console.log(body'));
 });
+
+const browserSmoke = readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml', import.meta.url), 'utf8');
+test('live Spine preview layout smoke runs hourly without a deployment', () => {
+  assert.match(browserSmoke, /schedule:\s*\n\s*- cron: '29 \* \* \* \*'/);
+  assert.match(browserSmoke, /github\.event_name != 'workflow_run'/);
+  assert.ok(browserSmoke.includes('SITE: https://spine-link.vercel.app'));
+  assert.ok(browserSmoke.includes('#animation-menu'));
+});
