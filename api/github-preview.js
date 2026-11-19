@@ -1889,8 +1889,8 @@ const pinchDistance = { value: null };
         const p = targetPlayer || player;
         if (!p?.skeleton?.data) return false;
         const names = p.skeleton.data.animations.map((a) => a.name);
-        const active = activeAnimation.name && names.includes(activeAnimation.name) ? activeAnimation.name : names[0];
-        if (!active) return false;
+        const active = String(activeAnimation.name || '').trim();
+        if (!active || !names.includes(active)) return false;
         try {
           p.setViewport(active);
         } catch (e) {
@@ -1910,7 +1910,8 @@ const pinchDistance = { value: null };
         const p = targetPlayer || player;
         const skeleton = p?.skeleton;
         if (!skeleton?.data) return null;
-        const animation = skeleton.data.findAnimation(activeAnimation.name) || skeleton.data.animations[0];
+        const animation = skeleton.data.findAnimation(activeAnimation.name);
+        if (!animation) return null;
         if (!animation) return null;
         const ns = window.spine || {};
         const MixFrom = ns.MixFrom || p.constructor?.MixFrom;
