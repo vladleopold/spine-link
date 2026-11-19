@@ -159,7 +159,8 @@ test('a generated WebP URL from another work is rejected without a card fallback
     webpPosterLow:'',
     webpPoster:'https://spine-link.vercel.app/assets/library_02/other-work/preview.webp',
     thumbnailPoster:'',
-    thumbnail:'',
+    // A source texture keeps the work in the archive index, but is never a preview.
+    thumbnail:'https://spine-link.vercel.app/assets/library_02/card-000/texture.png',
     webmPreview:'',
     webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webm',
     webmPreviewLow:'',
@@ -171,11 +172,15 @@ test('a generated WebP URL from another work is rejected without a card fallback
   process.env.GITHUB_BRANCH='test-webp-poster-cross-work';
   try{
     const res=response();
-    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'12'}},res);
     assert.equal(res.code,200);
-    const html=String(res.body);
-    assert.doesNotMatch(html,/other-work|data-video-src=|<img|<video|feed-placeholder|Preview unavailable|SPINE/,
-      'cross-work posters must not be shown and no fallback may render anywhere in the archive HTML');
+    assert.equal(res.body.total,1,'the source-texture-backed work must remain in the archive index');
+    assert.equal(res.body.entries.length,1);
+    assert.equal(res.body.entries[0].poster,'','a poster from a different work must be rejected');
+    assert.equal(res.body.entries[0].video,'','the matching WebM cannot play without its own generated poster');
+    assert.equal(res.body.entries[0].quality,'');
+    assert.doesNotMatch(JSON.stringify(res.body.entries[0]),/other-work|preview-medium\\.(?:webp|webm)/,
+      'cross-work poster and unpaired video URLs must never be serialized into the feed');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
