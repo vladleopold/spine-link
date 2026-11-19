@@ -8,6 +8,8 @@ on:
   workflow_run:
     workflows: ["Vercel deploy and alias"]
     types: [completed]
+  schedule:
+    - cron: '7 * * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -58,10 +60,28 @@ jobs:
                 assert.match(firstHtml,/data-video-src=/,'No deferred video data on gallery cards');
                 assert.ok(!firstHtml.includes('<video src="'),'Initial cards must never eagerly load WebM');
                 await page.waitForFunction(()=>{
-                  const imgs=Array.from(document.querySelectorAll('.feed-card img'));
-                  return imgs.some(img=>img.complete&&img.naturalWidth>0);
+                  const img=document.querySelector('.feed-card img');
+                  return img&&img.complete&&img.naturalWidth>0;
                 },{timeout:20000});
+                await page.locator('.feed-card img').first().evaluate(img=>img.decode());
                 const initialPosterMs=Date.now()-started;
+                const initialTiming=await page.evaluate(()=>{
+                  const nav=performance.getEntriesByType('navigation')[0];
+                  const img=document.querySelector('.feed-card img');
+                  const resource=img?performance.getEntriesByName(img.currentSrc||img.src).filter(x=>x.entryType==='resource').at(-1):null;
+                  return {
+                    responseStartMs:Math.round(nav?.responseStart||0),
+                    domContentLoadedMs:Math.round(nav?.domContentLoadedEventEnd||0),
+                    posterStartMs:Math.round(resource?.startTime||0),
+                    posterEndMs:Math.round(resource?.responseEnd||0),
+                    posterTransferBytes:Math.round(resource?.transferSize||0),
+                  };
+                });
+                console.log('ARCHIVE_INITIAL_POSTER_EVIDENCE '+JSON.stringify({
+                  viewport:viewport.width,initialMs:initialPosterMs,...initialTiming
+                }));
+                assert.ok(initialPosterMs<=1000,
+                  'First archive card WebP did not decode within one second: '+initialPosterMs+'ms');
                 // Capture initial visibility BEFORE the deliberate 1.9s warm-up.
                 // The old initialMs included this sleep and misreported page latency.
                 const firstWebp=mediaRequests.find(r=>r.type==='webp');
@@ -139,7 +159,6 @@ jobs:
                 ]);
                 const [posterBytes,videoBytes]=await Promise.all([posterResponse.body(),videoResponse.body()]);
                 return {
-                  id:item.id,
                   posterStatus:posterResponse.status(),
                   videoStatus:videoResponse.status(),
                   webp:posterBytes.length>=12&&posterBytes.subarray(0,4).toString('ascii')==='RIFF'&&
@@ -150,14 +169,14 @@ jobs:
               const broken=checks.filter(x=>![200,206].includes(x.posterStatus)||
                 ![200,206].includes(x.videoStatus)||!x.webp||!x.webm);
               console.log('ARCHIVE_FIRST40_EVIDENCE '+JSON.stringify({
-                viewport:viewport.width,initialMs:initialPosterMs,appendMs:latency,posterMs,
+                viewport:viewport.width,initialMs:initialPosterMs,initialTiming,appendMs:latency,posterMs,
                 before,after,checked:checks.length,newest20Ready:20-newest20Missing.length,
-                older20Ready:20-older20Missing.length,older20Missing:older20Missing.map(x=>x.id),
+                older20Ready:20-older20Missing.length,older20Missing:older20Missing.length,
                 blockedApiRequests,webpRequests:mediaRequests.filter(x=>x.type==='webp').length,
                 webmRequests:mediaRequests.filter(x=>x.type==='webm').length,
                 brokenAssets:broken,
               }));
-              assert.deepEqual(newest20Missing,[],'Newest 20 missing original WebM/WebP pairs: '+JSON.stringify(newest20Missing.map(x=>x.id)));
+              assert.equal(newest20Missing.length,0,'Newest 20 missing original WebM/WebP pairs: '+newest20Missing.length);
               assert.deepEqual(broken,[],'One of the first 40 cards has a missing/non-WebP/non-WebM asset');
               assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
               assert.ok(posterMs<=1000,'Three new WebP posters took over one second: '+posterMs+'ms');
