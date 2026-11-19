@@ -400,12 +400,10 @@ export default async function handler(request, response) {
 
   const path = normalizeRepoPath(request.query?.path || '');
   if (!path) return response.status(400).send('Invalid asset path');
-  // preview-low.webp is answered with 404, but plenty of stored poster URLs still
-  // point at it, so those cards render black. Serve the canonical poster of the
-  // same work instead of failing the request.
-  const assetPath = /\bpreview-low\.webp$/i.test(path)
-    ? path.replace(/\bpreview-low\.webp$/i, 'preview.webp')
-    : path;
+  // Keep the requested media path exact. Low quality is permitted only
+  // when its matching low-quality WebM is installed; never rewrite a poster
+  // to a different tier or substitute another image.
+  const assetPath = path;
   const assetVersion = typeof request.query?.v === 'string' ? request.query.v : '';
 
   const owner = process.env.GITHUB_OWNER || defaultOwner;
