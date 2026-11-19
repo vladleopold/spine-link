@@ -1383,7 +1383,8 @@ function createHtml(config) {
       function initialSet() {
         const querySet = queryValue("set");
         const queryAnimation = queryValue("animation");
-        return sets.find((set) => set.label === querySet) || sets.find((set) => setHasAnimation(set, queryAnimation)) || sets.find((set) => set.label === config.activeLabel) || sets[0];
+        if (querySet) return sets.find((set) => set.label === querySet) || null;
+        return sets.find((set) => setHasAnimation(set, queryAnimation)) || sets.find((set) => set.label === config.activeLabel) || sets[0] || null;
       }
       function initialAnimation(set) {
         const queryAnimation = queryValue("animation");
@@ -2201,7 +2202,7 @@ playerElement.addEventListener("touchstart", (event) => {
        }, true);
        window.addEventListener("mousemove", (event) => { if (!panPosition.value) return; event.preventDefault(); event.stopImmediatePropagation(); const deltaX = event.clientX - panPosition.value.x, deltaY = event.clientY - panPosition.value.y; panPosition.value = { x: event.clientX, y: event.clientY }; panByPixels(deltaX, deltaY); }, { passive: false, capture: true });
        window.addEventListener("mouseup", (event) => { if (event.button !== 0) return; event.preventDefault(); event.stopImmediatePropagation(); panPosition.value = null; }, true);
-      setSelect.onchange = () => { activeSet.value = sets.find((set) => set.label === setSelect.value) || sets[0]; activeAnimation.name = activeSet.value?.animation || ""; syncSetInfo(); renderAnimationList(); syncUrl(); createPlayer(); };
+      setSelect.onchange = () => { activeSet.value = sets.find((set) => set.label === setSelect.value) || null; activeAnimation.name = activeSet.value?.animation || ""; animationNames.value = activeSet.value?.animations || []; syncSetInfo(); renderAnimationList(); syncUrl(); createPlayer(); };
       window.addEventListener("popstate", applySelectionFromUrl);
       // Compact download picker: Format -> Size -> Files, each step sliding
       // the track sideways. The user picks a format and a size, then either
@@ -2383,10 +2384,9 @@ function jsonScript(value) {
 
 function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo, robots, playerUrl, archiveUrl }) {
   const title = cleanPublicText(entry?.title || entryId || 'Spine preview');
-  const poster = entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
-  const video = String(entry?.defaultAnimation || '').trim()
-    ? entryVideoAsset(entry?.webmPreview || '', entry, 'webm')
-    : '';
+  const target = resolvePreviewTarget(entry, origin);
+  const poster = entryImageAsset(target.poster || entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
+  const video = target.url ? entryVideoAsset(target.url, entry, 'webm') : '';
   const ownerUrl = ownerProfile?.url || (entry?.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '/');
   const metricId = String(entryId || title);
   const metric = metricCountsForId(metrics, metricId);
