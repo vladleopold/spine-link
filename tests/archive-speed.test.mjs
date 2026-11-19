@@ -172,11 +172,10 @@ test('a generated WebP URL from another work is rejected without a card fallback
   try{
     const res=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    assert.equal(res.code,200);
     const html=String(res.body);
-    const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
-    assert.match(card,/data-preview-status="blocked-no-webm-poster"/);
-    assert.doesNotMatch(card,/other-work|data-video-src=|<img|<video|feed-placeholder|Preview unavailable|SPINE/,
-      'cross-work posters must not be shown and no fallback may render');
+    assert.doesNotMatch(html,/other-work|data-video-src=|<img|<video|feed-placeholder|Preview unavailable|SPINE/,
+      'cross-work posters must not be shown and no fallback may render anywhere in the archive HTML');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
@@ -184,7 +183,7 @@ test('a generated WebP URL from another work is rejected without a card fallback
   }
 });
 
-test('low quality is used only when an already-installed low WebM/WebP pair exists',async()=>{
+test('low poster is not advertised while the production asset route blocks it',async()=>{
   const source=[{
     ...entries[0],
     previewPath:'library_02/card-000',
@@ -197,15 +196,16 @@ test('low quality is used only when an already-installed low WebM/WebP pair exis
   const log=[];
   globalThis.fetch=stubFetch(log,source);
   process.env.GITHUB_TOKEN='test-only-placeholder';
-  process.env.GITHUB_BRANCH='test-low-pair-only';
+  process.env.GITHUB_BRANCH='test-low-poster-blocked';
   try{
     const res=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    assert.equal(res.code,200);
     const html=String(res.body);
     const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
-    assert.match(card,/preview-low\.webp/);
-    assert.match(card,/preview-low\.webm/);
-    assert.doesNotMatch(card,/preview-medium\.(?:webp|webm)|preview\.webp|data-fallback-src=|data-video-fallback=/);
+    assert.match(card,/data-preview-status="blocked-no-webm-poster"/);
+    assert.doesNotMatch(card,/<img|<video|preview-low\.webp|preview-low\.webm|data-fallback-src=|data-video-fallback=|feed-placeholder|Preview unavailable|SPINE/,
+      'a blocked low poster cannot be used as a fallback or shown as an image');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
