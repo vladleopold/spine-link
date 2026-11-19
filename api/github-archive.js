@@ -500,7 +500,8 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 
 function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
-  const video = entryVideoSrc(origin, entry);
+  const hasDefaultAnimation = Boolean(String(entry?.defaultAnimation || '').trim());
+  const video = hasDefaultAnimation ? entryVideoSrc(origin, entry) : '';
   // A source texture/PNG is not an animation poster. Keep only actual WebP
   // outputs (including same-work WebP fallbacks); otherwise render a neutral
   // blocked placeholder and do not attach a WebM source.
