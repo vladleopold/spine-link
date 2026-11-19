@@ -24,6 +24,7 @@ const entries=Array.from({length:80},(_,i)=>({
   webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-medium.webp',
   thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webp',
   animations:['walk'],
+  defaultAnimation:'walk',
   previewWidth:960,previewHeight:720,
 }));
 const originalFetch=globalThis.fetch;
@@ -142,6 +143,27 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     const section=html.slice(html.indexOf('<script>\n      (() => {')+8,html.indexOf('</script>',html.indexOf('<script>\n      (() => {')));
     assert.doesNotThrow(()=>new Function(section),'gallery client code must parse');
     assert.ok(log.length<=6,'unexpected excessive index calls');
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN=originalToken;
+  }
+});
+
+test('archive cards stay poster-only when the index has no defaultAnimation',async()=>{
+  const source=[{...entries[0],defaultAnimation:''}];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    assert.equal(res.code,200);
+    const html=String(res.body);
+    const card=html.match(/<article class="feed-card"[\\s\\S]*?<\\/article>/)?.[0]||'';
+    assert.ok(card,'initial card must be rendered');
+    assert.match(card,/data-preview-status="blocked-no-default-animation"/);
+    assert.doesNotMatch(card,/data-video-src=/,'an unindexed animation must not receive a WebM source');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
