@@ -42,6 +42,8 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
     timeout-minutes: 12
+    env:
+      SITE: https://spine-link.vercel.app
     steps:
       - uses: actions/checkout@v4
       - name: Resolve the ready Vercel preview for this exact PR commit
@@ -56,13 +58,14 @@ jobs:
             comments="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100")"
             statuses="$(gh api "repos/$GITHUB_REPOSITORY/statuses/$EXPECTED_SHA")"
             target="$(printf '%s' "$statuses" | jq -r '[.[] | select(.context == "Vercel")][0].target_url // empty')"
+            vercel_state="$(printf '%s' "$statuses" | jq -r '[.[] | select(.context == "Vercel")][0].state // empty')"
             body="$(printf '%s' "$comments" | jq -r '[.[] | select(.user.login == "vercel[bot]") | .body] | last // empty')"
             encoded="$(printf '%s\\n' "$body" | head -n1 | sed 's/.*://')"
             payload="$(printf '%s' "$encoded" | base64 -d 2>/dev/null || true)"
             inspector="$(printf '%s' "$payload" | jq -r '.projects[]? | select(.name == "spine-link") | .inspectorUrl // empty' | head -n1)"
             preview="$(printf '%s' "$payload" | jq -r '.projects[]? | select(.name == "spine-link") | .previewUrl // empty' | head -n1)"
             deployment_status="$(printf '%s' "$payload" | jq -r '.projects[]? | select(.name == "spine-link") | .nextCommitStatus // empty' | head -n1)"
-            if [ -n "$preview" ] && [ "$inspector" = "$target" ] && [ "$deployment_status" = "DEPLOYED" ]; then
+            if [ -n "$preview" ] && [ "$inspector" = "$target" ] && [ "$deployment_status" = "DEPLOYED" ] && [ "$vercel_state" = "success" ]; then
               preview="${preview#https://}"
               preview="${preview#http://}"
               case "$preview" in
