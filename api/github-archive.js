@@ -1521,7 +1521,7 @@ function archiveHtml({ origin, entries, metrics }) {
           const poster=card.querySelector('img');
           if(!poster||!poster.complete||poster.naturalWidth<=0)return;
           const posterUrl=poster.currentSrc||poster.src;
-          if(!/^data:image\/webp;base64,/i.test(posterUrl)&&! /\.webp(?:[?#]|$)/i.test(posterUrl))return;
+          if(!/^data:image\\/webp;base64,/i.test(posterUrl)&&! /\.webp(?:[?#]|$)/i.test(posterUrl))return;
           const host=card.querySelector('.feed-media');
           if(!host)return;
           const video=document.createElement('video');
