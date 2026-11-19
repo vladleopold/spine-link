@@ -22,6 +22,7 @@ on:
 permissions:
   contents: read
   actions: read
+  statuses: write
 
 concurrency:
   group: spine-link-production
@@ -58,10 +59,10 @@ jobs:
             fi
           fi
           deploy_sha="${{ github.event.workflow_run.head_sha || github.sha }}"
-          last_success=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-deploy-and-alias.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].head_sha // ""' || true)
-          if [ "$last_success" = "$deploy_sha" ]; then
+          already_deployed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$deploy_sha/status" --jq '[.statuses[]? | select(.context == "vercel/production" and .state == "success")][0] // empty' || true)
+          if [ -n "$already_deployed" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "No new commit since the previous successful deployment."
+            echo "This exact commit already passed the production deployment and smoke checks."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
@@ -251,3 +252,16 @@ jobs:
           echo "::error::Freshly uploaded Spine preview is missing or incomplete"
           sed -n '1,8p' /tmp/spine-preview-smoke.html || true
           exit 1
+- name: Record verified production deployment on commit
+        if: steps.quota_recovery.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.deploy_url }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$DEPLOY_SHA" \
+            -f state=success \
+            -f context="vercel/production" \
+            -f description="Production deployment and smoke checks passed" \
+            -f target="$DEPLOY_URL"
