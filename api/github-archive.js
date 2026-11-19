@@ -222,7 +222,8 @@ function isGeneratedWebpPosterUrl(value = '', entry = {}) {
   try { pathname = decodeURIComponent(new URL(url).pathname); }
   catch { return false; }
   const filename = pathname.split('/').pop()?.toLowerCase() || '';
-  return ['preview-medium.webp', 'preview-low.webp'].includes(filename);
+  return filename === 'preview-medium.webp' || filename === 'preview-low.webp' ||
+    /-anim-[a-z0-9_-]+-preview-(?:medium|low)\\.webp$/i.test(filename);
 }
 
 function isGeneratedWebmUrl(value = '', entry = {}) {
@@ -231,7 +232,8 @@ function isGeneratedWebmUrl(value = '', entry = {}) {
   let pathname = '';
   try { pathname = decodeURIComponent(new URL(url).pathname); }
   catch { return false; }
-  return /\/(?:preview|preview-medium|preview-low)\.webm$/i.test(pathname);
+  return /\\/(?:preview|preview-medium|preview-low)\\.webm$/i.test(pathname) ||
+    /-anim-[a-z0-9_-]+-preview-(?:medium|low)\\.webm$/i.test(pathname);
 }
 
 
@@ -543,6 +545,17 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
   return fallback;
 }
 
+function hasPreviewQualityFilename(value = '', quality = '', extension = '') {
+  try {
+    const pathname = decodeURIComponent(new URL(String(value || '')).pathname);
+    const filename = pathname.split('/').pop()?.toLowerCase() || '';
+    return filename === `preview-${quality}.${extension}` ||
+      new RegExp(`-anim-[a-z0-9_-]+-preview-${quality}\\\\.${extension}$`, 'i').test(filename);
+  } catch {
+    return false;
+  }
+}
+
 function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
   const hasDefaultAnimation = typeof entry?.defaultAnimation === 'string' && entry.defaultAnimation.trim().length > 0;
@@ -568,8 +581,8 @@ function archiveFeedEntry(origin, entry, metrics) {
     candidate.video && candidate.poster &&
     isGeneratedWebmUrl(candidate.video, entry) &&
     isGeneratedWebpPosterUrl(candidate.poster, entry) &&
-    new URL(candidate.video).pathname.toLowerCase().endsWith('/' + candidate.videoName) &&
-    new URL(candidate.poster).pathname.toLowerCase().endsWith('/' + candidate.posterName) &&
+    hasPreviewQualityFilename(candidate.video, candidate.quality, 'webm') &&
+    hasPreviewQualityFilename(candidate.poster, candidate.quality, 'webp') &&
     new URL(candidate.video).pathname.replace(/\.webm$/i, '').toLowerCase() ===
       new URL(candidate.poster).pathname.replace(/\.webp$/i, '').toLowerCase()
   ) || null;
