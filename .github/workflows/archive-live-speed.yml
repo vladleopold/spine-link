@@ -92,6 +92,7 @@ jobs:
                   webpRequests:mediaRequests.filter(x=>x.type==='webp').length,
                   webmRequests:mediaRequests.filter(x=>x.type==='webm').length,
                 }));
+                assert.ok(initialPosterMs<=1000,'Initial visible WebP poster took over one second: '+initialPosterMs+'ms');
                 assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
                 assert.ok(posterMs<=1000,'Three new WebP posters took over one second: '+posterMs+'ms');
               } finally {
