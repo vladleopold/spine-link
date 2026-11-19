@@ -160,6 +160,42 @@ try {
     assert.deepEqual(recovered.body, webpBytes);
   }
 
+  // Contents metadata can succeed even when its download_url is rate-limited.
+  // The asset route must retry the same exact raw path without the rejected token.
+  const downloadUrl = "https://raw.githubusercontent.com/vladleopold/spine/main/library/synthetic/download-url-403/preview-medium.webp";
+  const downloadAttempts = [];
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url).includes("/contents/")) {
+      return Response.json({
+        sha: "synthetic-download-403",
+        size: webpBytes.length,
+        content: "",
+        encoding: "none",
+        download_url: downloadUrl,
+      });
+    }
+    assert.equal(String(url), downloadUrl);
+    downloadAttempts.push(Boolean(options.headers?.Authorization));
+    if (options.headers?.Authorization) {
+      return new Response("synthetic download_url forbidden", { status: 403 });
+    }
+    return new Response(webpBytes, {
+      status: 200,
+      headers: { etag: '"raw-download-403"', "content-length": String(webpBytes.length) },
+    });
+  };
+  const recoveredFromDownload403 = await get(
+    "library/synthetic/download-url-403/preview-medium.webp",
+    "GET", {}, "download-url-403", true,
+  );
+  assert.equal(recoveredFromDownload403.statusCode, 200);
+  assert.equal(recoveredFromDownload403.getHeader("content-type"), "image/webp");
+  assert.equal(recoveredFromDownload403.getHeader("x-spine-link-asset-source"), "raw-public");
+  assert.equal(recoveredFromDownload403.getHeader("x-spine-link-asset-cache"), "raw-fallback");
+  assert.deepEqual(recoveredFromDownload403.body, webpBytes);
+  assert.deepEqual(downloadAttempts, [true, false],
+    "retry the identical raw URL without the rejected GitHub API token");
+
   globalThis.fetch = async (url, options = {}) => {
     if (String(url).includes("/contents/")) {
       return new Response(JSON.stringify({ message: "synthetic API forbidden" }), { status: 403 });
