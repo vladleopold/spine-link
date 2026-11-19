@@ -63,15 +63,19 @@ const bomb=fixture("DXT5");bomb.writeUInt32LE(20000,16);
 assert.throws(()=>decodeDds(bomb),/dimensions exceed safe preview limits/);
 console.log("PASS invalid files, truncated mip data, DX10, unsafe dimensions fail closed");
 
-function response() {
+function response(strictHeaders = false) {
   const headers=new Map();
+  let sent=false;
   return {
     statusCode:200,headers,body:null,
-    setHeader(k,v){headers.set(k.toLowerCase(),String(v));return this},
+    setHeader(k,v){
+      if(strictHeaders) assert.equal(sent,false,"Response headers must be set before send");
+      headers.set(k.toLowerCase(),String(v));return this;
+    },
     getHeader(k){return headers.get(k.toLowerCase())},
     status(n){this.statusCode=n;return this},
-    send(v){this.body=v;return this},
-    end(){this.body=Buffer.alloc(0);return this},
+    send(v){this.body=v;sent=true;return this},
+    end(){this.body=Buffer.alloc(0);sent=true;return this},
   };
 }
 const origFetch=globalThis.fetch;
@@ -90,8 +94,8 @@ globalThis.fetch=async (url)=>{
   }
   throw Error("Unexpected external request");
 };
-const get=async(path,method="GET",headers={},version="synthetic-v1")=>{
-  const res=response();
+const get=async(path,method="GET",headers={},version="synthetic-v1",strictHeaders=false)=>{
+  const res=response(strictHeaders);
   await assetHandler({method,headers,query:{path,v:version}},res);
   return res;
 };
@@ -148,10 +152,11 @@ try {
         headers: { etag: `"raw-${version}"`, "content-length": String(webpBytes.length) },
       });
     };
-    const recovered = await get(assetPath, "GET", {}, version);
+    const recovered = await get(assetPath, "GET", {}, version, true);
     assert.equal(recovered.statusCode, 200);
     assert.equal(recovered.getHeader("content-type"), "image/webp");
     assert.equal(recovered.getHeader("x-spine-link-asset-source"), "raw-public");
+    assert.equal(recovered.getHeader("x-spine-link-asset-cache"), "raw-fallback");
     assert.deepEqual(recovered.body, webpBytes);
   }
 
@@ -166,7 +171,7 @@ try {
       headers: { etag: '"raw-head"', "content-length": "37" },
     });
   };
-  const headFallback = await get("library/synthetic/preview-medium.webp", "HEAD", {}, "raw-head");
+  const headFallback = await get("library/synthetic/preview-medium.webp", "HEAD", {}, "raw-head", true);
   assert.equal(headFallback.statusCode, 200);
   assert.equal(headFallback.getHeader("content-length"), "37");
   assert.equal(headFallback.getHeader("x-spine-link-asset-source"), "raw-public");
@@ -188,7 +193,7 @@ try {
       },
     });
   };
-  const ranged = await get("library/synthetic/preview.webm", "GET", { range: "bytes=0-3" }, "raw-range");
+  const ranged = await get("library/synthetic/preview.webm", "GET", { range: "bytes=0-3" }, "raw-range", true);
   assert.equal(ranged.statusCode, 206);
   assert.equal(ranged.getHeader("content-range"), "bytes 0-3/100");
   assert.deepEqual(ranged.body, rangeBytes);
