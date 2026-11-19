@@ -570,7 +570,7 @@ function lightweightCardHtml(item, index = 0) {
   const video = escapeHtml(item.video);
   const videoFallback = escapeHtml(item.videoFallback);
   const ratio = item.width && item.height ? Math.min(1.8, Math.max(0.62, item.width / item.height)) : 1;
-  const posterOnError = 'onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried=\\'1\\';this.src=this.dataset.fallbackSrc;}else{const c=this.closest(\\'.feed-card\\');if(c){c.dataset.previewStatus=\\'blocked-poster-load-failed\\';delete c.dataset.videoSrc;}this.style.display=\\'none\\';}"';
+  const posterOnError = `onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried='1';this.src=this.dataset.fallbackSrc;}else{const c=this.closest('.feed-card');if(c){c.dataset.previewStatus='blocked-poster-load-failed';delete c.dataset.videoSrc;}this.style.display='none';}"`;
   const media = item.poster
     ? `<img src="${poster}"${posterFallback && posterFallback !== poster ? ` data-fallback-src="${posterFallback}"` : ''} ${posterOnError} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'low'}" />`
     : '<span class="feed-placeholder" aria-label="Preview unavailable">Preview unavailable</span>';
