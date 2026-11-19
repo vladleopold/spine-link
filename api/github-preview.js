@@ -422,9 +422,7 @@ function videoMetadataForEntry(origin, entry, entryId, note = '', canonicalUrl =
   // panel and the SEO metadata would otherwise surface a zero-length video.
   const target = resolvePreviewTarget(entry, origin);
   const contentUrl = target.url ? entryVideoAsset(target.url, entry, 'webm') : '';
-  const poster =
-    entryImageAsset(target.poster || repairEntryAssetUrl(entry, entry?.thumbnailPoster || '', origin), entry, 'poster') ||
-    generatedThumbnailUrl(origin, entry) ||
+  const poster = entryImageAsset(target.poster || '', entry, 'poster') ||
     entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
   if (!id || !contentUrl || !poster) return null;
   const name = cleanPublicText(entry?.title || id || 'Spine animation preview', 110);
@@ -747,9 +745,9 @@ function resolvePreviewTarget(entry, origin = '') {
     name: chosen,
     url: shortClip ? '' : selectedUrl,
     lowUrl: shortClip ? '' : (selectedLowUrl || selectedUrl),
-    poster: typeof selected?.webpPoster === 'string' && selected.webpPoster.trim()
-      ? selected.webpPoster.trim()
-      : (typeof entry?.thumbnailPoster === 'string' ? entry.thumbnailPoster.trim() : ''),
+    poster: typeof selected?.webpPosterMedium === 'string' && selected.webpPosterMedium.trim()
+      ? selected.webpPosterMedium.trim()
+      : (typeof selected?.webpPoster === 'string' ? selected.webpPoster.trim() : ''),
     duration,
     isFallback: false,
   };
@@ -2391,7 +2389,7 @@ function jsonScript(value) {
 function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo, robots, playerUrl, archiveUrl }) {
   const title = cleanPublicText(entry?.title || entryId || 'Spine preview');
   const target = resolvePreviewTarget(entry, origin);
-  const poster = entryImageAsset(target.poster || entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
+  const poster = entryImageAsset(target.poster || '', entry, 'poster');
   const video = target.url ? entryVideoAsset(target.url, entry, 'webm') : '';
   const ownerUrl = ownerProfile?.url || (entry?.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '/');
   const metricId = String(entryId || title);
@@ -2695,7 +2693,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
           title: cleanPublicText(item?.title || item?.id || 'Spine preview'),
           url: `${origin}/p/${encodeURIComponent(String(item?.id || '').trim())}`,
           thumbnail: item?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(item?.thumbnail || '')) ? '' : entryImageAsset(item?.thumbnail || '', item, 'thumbnail'),
-          thumbnailPoster: entryImageAsset(target.poster || item?.thumbnailPoster || '', item, 'poster') || generatedThumbnailUrl(origin, item),
+          thumbnailPoster: entryImageAsset(target.poster || '', item, 'poster'),
           webmPreview: lowWebm,
           webmPreviewFull: target.url ? entryVideoAsset(target.url, item, 'webm') : '',
           previewDuration: target.url && Number.isFinite(target.duration) && target.duration > 0 ? target.duration : undefined,
