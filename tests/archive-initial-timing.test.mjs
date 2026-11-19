@@ -98,4 +98,9 @@ test('PR live proof uses only the successful Vercel preview for the exact head S
     'run Playwright against the verified preview URL, not production');
   assert.ok(workflow.includes("const site=(process.env.SITE||'https://spine-link.vercel.app').replace(/\\/+$/,'')"));
   assert.ok(workflow.includes("page.goto(site+'/world-spine-archive'"));
+  const resolverStart = workflow.indexOf('name: Resolve the ready Vercel preview for this exact PR commit');
+  const resolverEnd = workflow.indexOf('name: Install Playwright', resolverStart);
+  const resolverStep = workflow.slice(resolverStart, resolverEnd);
+  assert.match(resolverStep, /^\\s+shell: bash\\s*$/m,
+    'the PR preview resolver uses pipefail and must run under Bash inside the Playwright container');
 });
