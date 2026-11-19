@@ -56,7 +56,7 @@ jobs:
                 await page.waitForFunction(()=>{
                   const imgs=Array.from(document.querySelectorAll('.feed-card img'));
                   return imgs.some(img=>img.complete&&img.naturalWidth>0&&img.getClientRects().length>0&&/\.webp(?:[?#]|$)/i.test(img.currentSrc||img.src));
-                },{timeout:20000});
+                },null,{timeout:20000});
                 const initialPosterMs=Date.now()-started;
                 // Only decoded, visible WebP counts; PNG placeholders do not satisfy the gate.
                 // Capture initial visibility BEFORE the deliberate 1.9s warm-up.
