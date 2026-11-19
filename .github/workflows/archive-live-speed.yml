@@ -132,7 +132,6 @@ jobs:
               // silently replaced by unrelated images or text.
               assert.deepEqual(badPairs,[],'Mismatched video/poster quality or work path in first 40 cards');
               assert.deepEqual(fallbacks,[],'Archive card contains a forbidden image/text fallback');
-              assert.deepEqual(newest20Missing,[],'One of the newest 20 visible cards has no original WebM/WebP pair');
               const checks=await Promise.all(paired.map(async item=>{
                 const [posterResponse,videoResponse]=await Promise.all([
                   page.request.get(item.poster,{headers:{Range:'bytes=0-63'},timeout:20000}),
@@ -158,6 +157,7 @@ jobs:
                 webmRequests:mediaRequests.filter(x=>x.type==='webm').length,
                 brokenAssets:broken,
               }));
+              assert.deepEqual(newest20Missing,[],'Newest 20 missing original WebM/WebP pairs: '+JSON.stringify(newest20Missing.map(x=>x.id)));
               assert.deepEqual(broken,[],'One of the first 40 cards has a missing/non-WebP/non-WebM asset');
               assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
               assert.ok(posterMs<=1000,'Three new WebP posters took over one second: '+posterMs+'ms');
