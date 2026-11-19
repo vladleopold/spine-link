@@ -223,7 +223,8 @@ function isGeneratedWebpPosterUrl(value = '', entry = {}) {
   catch { return false; }
   const filename = pathname.split('/').pop()?.toLowerCase() || '';
   return filename === 'preview-medium.webp' || filename === 'preview-low.webp' ||
-    /-anim-[a-z0-9_-]+-preview-(?:medium|low)\\.webp$/i.test(filename);
+    (filename.includes('-anim-') &&
+      (filename.endsWith('-preview-medium.webp') || filename.endsWith('-preview-low.webp')));
 }
 
 function isGeneratedWebmUrl(value = '', entry = {}) {
@@ -232,8 +233,10 @@ function isGeneratedWebmUrl(value = '', entry = {}) {
   let pathname = '';
   try { pathname = decodeURIComponent(new URL(url).pathname); }
   catch { return false; }
-  return /\\/(?:preview|preview-medium|preview-low)\\.webm$/i.test(pathname) ||
-    /-anim-[a-z0-9_-]+-preview-(?:medium|low)\\.webm$/i.test(pathname);
+  const filename = pathname.split('/').pop()?.toLowerCase() || '';
+  return ['preview.webm', 'preview-medium.webm', 'preview-low.webm'].includes(filename) ||
+    (filename.includes('-anim-') &&
+      (filename.endsWith('-preview-medium.webm') || filename.endsWith('-preview-low.webm')));
 }
 
 
@@ -550,7 +553,7 @@ function hasPreviewQualityFilename(value = '', quality = '', extension = '') {
     const pathname = decodeURIComponent(new URL(String(value || '')).pathname);
     const filename = pathname.split('/').pop()?.toLowerCase() || '';
     return filename === `preview-${quality}.${extension}` ||
-      new RegExp(`-anim-[a-z0-9_-]+-preview-${quality}\\\\.${extension}$`, 'i').test(filename);
+      (filename.includes('-anim-') && filename.endsWith(`-preview-${quality}.${extension}`));
   } catch {
     return false;
   }
