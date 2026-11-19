@@ -57,9 +57,6 @@ jobs:
                   waitUntil:'commit',timeout:45000,
                 });
                 assert.equal(response?.status(),200);
-                const firstHtml=await page.content();
-                assert.match(firstHtml,/data-video-src=/,'No deferred video data on gallery cards');
-                assert.ok(!firstHtml.includes('<video src="'),'Initial cards must never eagerly load WebM');
                 await page.waitForFunction(()=>{
                   const imgs=Array.from(document.querySelectorAll('.feed-card img'));
                   return imgs.some(img=>img.complete&&img.naturalWidth>0&&img.getClientRects().length>0&&/\.webp(?:[?#]|$)/i.test(img.currentSrc||img.src));
@@ -67,6 +64,9 @@ jobs:
                 const initialPosterMs=Date.now()-started;
                 // Only decoded, visible WebP counts; PNG placeholders do not satisfy the gate.
                 await page.waitForLoadState('domcontentloaded',{timeout:45000});
+                const firstHtml=await page.content();
+                assert.match(firstHtml,/data-video-src=/,'No deferred video data on gallery cards');
+                assert.ok(!firstHtml.includes('<video src="'),'Initial cards must never eagerly load WebM');
                 // Capture initial visibility BEFORE the deliberate 1.9s warm-up.
                 // The old initialMs included this sleep and misreported page latency.
                 const firstWebp=mediaRequests.find(r=>r.type==='webp');
