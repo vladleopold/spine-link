@@ -65,6 +65,8 @@ jobs:
       - name: Use production after a successful deployment
         if: github.event_name != 'pull_request'
         run: echo "ARCHIVE_BASE_URL=https://spine-link.vercel.app" >> "$GITHUB_ENV"
+      - name: Prime the CDN HTML cache like the production release smoke
+        run: curl -fsS --max-time 25 "$ARCHIVE_BASE_URL/world-spine-archive" -o /dev/null
       - uses: actions/checkout@v4
       - name: Install Playwright
         run: npm ci --ignore-scripts --no-audit --no-fund
