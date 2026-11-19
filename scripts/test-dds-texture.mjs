@@ -90,9 +90,9 @@ globalThis.fetch=async (url)=>{
   }
   throw Error("Unexpected external request");
 };
-const get=async(path,method="GET")=>{
+const get=async(path,method="GET",headers={},version="synthetic-v1")=>{
   const res=response();
-  await assetHandler({method,headers:{},query:{path,v:"synthetic-v1"}},res);
+  await assetHandler({method,headers,query:{path,v:version}},res);
   return res;
 };
 try{
@@ -117,4 +117,89 @@ try{
   globalThis.fetch=origFetch;
   if(origToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=origToken;
 }
+
+const originalAssetEnv = {
+  owner: process.env.GITHUB_OWNER,
+  repo: process.env.GITHUB_REPO,
+  branch: process.env.GITHUB_BRANCH,
+};
+process.env.GITHUB_OWNER = "vladleopold";
+process.env.GITHUB_REPO = "spine";
+process.env.GITHUB_BRANCH = "main";
+process.env.GITHUB_TOKEN = "synthetic-test-token";
+const webpBytes = Buffer.from([0x52,0x49,0x46,0x46,0x08,0x00,0x00,0x00,0x57,0x45,0x42,0x50]);
+try {
+  for (const [status, assetPath, version] of [
+    [403, "library/synthetic/preview-medium.webp", "raw-403"],
+    [429, "library/synthetic/preview-low.webp", "raw-429"],
+  ]) {
+    const expectedPath = assetPath.split("/").map(encodeURIComponent).join("/");
+    globalThis.fetch = async (url, options = {}) => {
+      if (String(url).includes("/contents/")) {
+        return new Response(JSON.stringify({ message: "synthetic API rate limit" }), { status });
+      }
+      assert.equal(
+        String(url),
+        `https://raw.githubusercontent.com/vladleopold/spine/main/${expectedPath}`,
+      );
+      assert.equal(options.method || "GET", "GET");
+      return new Response(webpBytes, {
+        status: 200,
+        headers: { etag: `"raw-${version}"`, "content-length": String(webpBytes.length) },
+      });
+    };
+    const recovered = await get(assetPath, "GET", {}, version);
+    assert.equal(recovered.statusCode, 200);
+    assert.equal(recovered.getHeader("content-type"), "image/webp");
+    assert.equal(recovered.getHeader("x-spine-link-asset-source"), "raw-public");
+    assert.deepEqual(recovered.body, webpBytes);
+  }
+
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url).includes("/contents/")) {
+      return new Response(JSON.stringify({ message: "synthetic API forbidden" }), { status: 403 });
+    }
+    assert.ok(String(url).startsWith("https://raw.githubusercontent.com/"));
+    assert.equal(options.method, "HEAD");
+    return new Response(null, {
+      status: 200,
+      headers: { etag: '"raw-head"', "content-length": "37" },
+    });
+  };
+  const headFallback = await get("library/synthetic/preview-medium.webp", "HEAD", {}, "raw-head");
+  assert.equal(headFallback.statusCode, 200);
+  assert.equal(headFallback.getHeader("content-length"), "37");
+  assert.equal(headFallback.getHeader("x-spine-link-asset-source"), "raw-public");
+  assert.equal(headFallback.body.length, 0);
+
+  const rangeBytes = Buffer.from([0x1a, 0x45, 0xdf, 0xa3]);
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url).includes("/contents/")) {
+      return new Response(JSON.stringify({ message: "synthetic API rate limit" }), { status: 429 });
+    }
+    assert.ok(String(url).startsWith("https://raw.githubusercontent.com/"));
+    assert.equal(options.headers.Range, "bytes=0-3");
+    return new Response(rangeBytes, {
+      status: 206,
+      headers: {
+        etag: '"raw-range"',
+        "content-range": "bytes 0-3/100",
+        "content-length": "4",
+      },
+    });
+  };
+  const ranged = await get("library/synthetic/preview.webm", "GET", { range: "bytes=0-3" }, "raw-range");
+  assert.equal(ranged.statusCode, 206);
+  assert.equal(ranged.getHeader("content-range"), "bytes 0-3/100");
+  assert.deepEqual(ranged.body, rangeBytes);
+  console.log("PASS exact-path raw asset recovery after GitHub API 403/429, including HEAD and byte ranges");
+} finally {
+  globalThis.fetch = origFetch;
+  for (const [key, value] of Object.entries(originalAssetEnv)) {
+    const envKey = key === "owner" ? "GITHUB_OWNER" : key === "repo" ? "GITHUB_REPO" : "GITHUB_BRANCH";
+    if (value === undefined) delete process.env[envKey]; else process.env[envKey] = value;
+  }
+  if (origToken === undefined) delete process.env.GITHUB_TOKEN; else process.env.GITHUB_TOKEN = origToken;
+}
+
 console.log("ALL DDS PIXEL + API ACCEPTANCE TESTS PASSED");
