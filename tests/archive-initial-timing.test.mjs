@@ -103,4 +103,10 @@ test('PR live proof uses only the successful Vercel preview for the exact head S
   const resolverStep = workflow.slice(resolverStart, resolverEnd);
   assert.match(resolverStep, /^\\s+shell: bash\\s*$/m,
     'the PR preview resolver uses pipefail and must run under Bash inside the Playwright container');
+  assert.match(resolverStep, /node --input-type=module/,
+    'resolve preview metadata with the Node runtime already present in the Playwright image');
+  assert.doesNotMatch(resolverStep, /\\bgh api\\b/,
+    'the Playwright container does not include the GitHub CLI');
+  assert.match(resolverStep, /api\\.github\\.com/,
+    'the resolver must read Vercel status and comments through the GitHub API');
 });
