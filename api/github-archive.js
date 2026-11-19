@@ -36,15 +36,10 @@ function cleanPublicText(value = '', maxLength = 240) {
   return String(value).replace(/\s+/g, ' ').trim().slice(0, maxLength);
 }
 
-// api/github-asset.js answers 404 for preview-low.webp on purpose, so the 360px
-// poster must never be handed to a client. Rejecting it here makes every
-// consumer (feed JSON, server-rendered markup, sitemap) fall through to the
-// next candidate instead of shipping a URL that cannot load.
+// Low-quality posters are permitted only as the matching pair selected by
+// archiveFeedEntry. Do not rewrite or suppress a real installed low rendition.
 function isBlockedPosterUrl(value = '') {
-  const url = String(value).trim();
-  if (!url) return false;
-  const bare = url.split(/[?#]/, 1)[0];
-  return /\bpreview-low\.webp$/i.test(bare);
+  return false;
 }
 
 function safeImage(value = '') {
