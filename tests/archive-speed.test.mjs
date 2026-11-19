@@ -1,4 +1,5 @@
 import test from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import handler from '../api/github-archive.js';
 
@@ -230,4 +231,17 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
     else process.env.GITHUB_TOKEN=originalToken;
   }
+});
+
+
+test('production deploys are queued instead of cancelled by later workflow_run completions',()=>{
+  const workflow=fs.readFileSync(new URL('../.github/workflows/vercel-deploy-and-alias.yml',import.meta.url),'utf8');
+  assert.match(workflow,/concurrency:\s*\n\s+group:\s*spine-link-production\s*\n\s+cancel-in-progress:\s*false/,
+    'a later skipped/failed workflow_run must not cancel an already validated deployment');
+  assert.match(workflow,/github\.event\.workflow_run\.conclusion == 'success' && github\.event\.workflow_run\.head_branch == 'main'/,
+    'only successful main-branch CI may deploy');
+  assert.match(workflow,/Ensure source has not changed since the successful CI run/,
+    'queued deploys must still reject stale tested source');
+  assert.match(workflow,/last_success=.*status=success/,
+    'repeated successful workflow_run events for one SHA must be deduplicated');
 });
