@@ -197,7 +197,57 @@ try {
   assert.equal(ranged.statusCode, 206);
   assert.equal(ranged.getHeader("content-range"), "bytes 0-3/100");
   assert.deepEqual(ranged.body, rangeBytes);
-  console.log("PASS exact-path raw asset recovery after GitHub API 403/429, including HEAD and byte ranges");
+
+  // The raw-public retry must preserve the same transformations as the
+  // Contents API path: DDS becomes a real PNG, atlas page URLs are versioned,
+  // and embedded data URLs are stripped from the public library index.
+  const rawDds = fixture("DXT5");
+  const rawAtlas = Buffer.from("hero.dds\\nsize: 4,4\\nformat: RGBA8888\\nfilter: Linear,Linear\\n", "utf8");
+  const rawIndex = Buffer.from(JSON.stringify([{
+    id: "synthetic-public-entry",
+    thumbnail: "data:image/webp;base64,AA==",
+    thumbnailPoster: "data:image/webp;base64,BB==",
+    webmPreview: "data:video/webm;base64,CC==",
+  }]), "utf8");
+  const rawObjects = new Map([
+    ["library/synthetic/raw/hero.dds", rawDds],
+    ["library/synthetic/raw/hero.atlas", rawAtlas],
+    ["library/index.json", rawIndex],
+  ]);
+  globalThis.fetch = async (url, options = {}) => {
+    const requested = String(url);
+    if (requested.includes("/contents/")) {
+      return new Response(JSON.stringify({ message: "synthetic API forbidden" }), { status: 403 });
+    }
+    const match = [...rawObjects.entries()].find(([assetPath]) =>
+      requested === "https://raw.githubusercontent.com/vladleopold/spine/main/" +
+        assetPath.split("/").map(encodeURIComponent).join("/"));
+    assert.ok(match, "raw recovery must request the exact original asset path");
+    assert.equal(options.method || "GET", "GET");
+    return new Response(match[1], {
+      status: 200,
+      headers: { etag: '"raw-transformed"', "content-length": String(match[1].length) },
+    });
+  };
+
+  const recoveredDds = await get("library/synthetic/raw/hero.dds", "GET", {}, "raw-dds", true);
+  assert.equal(recoveredDds.statusCode, 200);
+  assert.equal(recoveredDds.getHeader("content-type"), "image/png");
+  assert.equal(recoveredDds.getHeader("x-spine-link-texture-transcoded"), "DXT-to-PNG-v1");
+  assert.deepEqual([...recoveredDds.body.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.deepEqual(recoveredDds.body, ddsToPng(rawDds));
+
+  const recoveredAtlas = await get("library/synthetic/raw/hero.atlas", "GET", {}, "raw-atlas", true);
+  assert.equal(recoveredAtlas.statusCode, 200);
+  assert.match(recoveredAtlas.body.toString("utf8"), /hero\\.dds\\?v=raw-atlas&dds=png-v1/);
+
+  const recoveredIndex = await get("library/index.json", "GET", {}, "raw-index", true);
+  assert.equal(recoveredIndex.statusCode, 200);
+  const sanitizedEntries = JSON.parse(recoveredIndex.body.toString("utf8"));
+  assert.equal(sanitizedEntries[0].thumbnail, "");
+  assert.equal(sanitizedEntries[0].thumbnailPoster, "");
+  assert.equal(sanitizedEntries[0].webmPreview, "");
+  console.log("PASS exact-path raw recovery preserves DDS conversion, atlas versioning and index sanitization");
 } finally {
   globalThis.fetch = origFetch;
   for (const [key, value] of Object.entries(originalAssetEnv)) {
