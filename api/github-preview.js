@@ -274,8 +274,8 @@ function pageUrlForEntry(origin, entryId) {
 
 function playerUrlForEntry(origin, entry, entryId) {
   const id = encodeURIComponent(String(entry?.id || entryId || '').trim());
-  const animation = String(entry?.defaultAnimation || '').trim();
-  return animation ? `${origin}/p/${id}?animation=${encodeURIComponent(animation)}` : `${origin}/p/${id}`;
+  const animation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+  return animation.trim() ? `${origin}/p/${id}?animation=${encodeURIComponent(animation)}` : `${origin}/p/${id}`;
 }
 
 function archiveUrlForEntry(origin, entry, entryId) {
@@ -724,11 +724,11 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3) {
 // Resolve media only from the exact indexed defaultAnimation. A missing or short
 // selected preview remains blocked; another animation is never substituted.
 function resolvePreviewTarget(entry, origin = '') {
-  const chosen = String(entry?.defaultAnimation || '').trim();
+  const chosen = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
   const previews = entry && entry.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
     ? entry.allAnimationPreviews
     : null;
-  const selected = chosen && previews ? previews[chosen] : null;
+  const selected = chosen.trim() && previews ? previews[chosen] : null;
   const fix = origin ? (value) => repairAnimationAssetUrl(entry, value, origin) : (value) => value;
   const selectedFullValue = selected?.webmPreview || selected?.webmPreviewMedium || selected?.webmPreviewLow || '';
   const selectedLowValue = selected?.webmPreviewLow || selected?.webmPreviewMedium || selected?.webmPreview || '';
@@ -1889,7 +1889,7 @@ const pinchDistance = { value: null };
         const p = targetPlayer || player;
         if (!p?.skeleton?.data) return false;
         const names = p.skeleton.data.animations.map((a) => a.name);
-        const active = String(activeAnimation.name || '').trim();
+        const active = typeof activeAnimation.name === 'string' ? activeAnimation.name : '';
         if (!active || !names.includes(active)) return false;
         try {
           p.setViewport(active);
@@ -2624,7 +2624,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
         (textures.length === 1 ? textures[0] : null);
       return matchedTexture ? versionedAssetUrl(origin, matchedTexture, matchedTexture.sha) : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5U9WcAAAAASUVORK5CYII=';
     });
-    const defaultAnimation = String(entry?.defaultAnimation || '').trim();
+    const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
 
     const assetVersion = [skeleton.sha, atlas.sha, ...textures.map((texture) => texture.sha),
       ...(atlasPages.some((page) => /\.dds$/i.test(page)) ? ['dds-png-v1'] : [])].filter(Boolean).join('-');

@@ -64,11 +64,11 @@ function entryVideoAsset(value = '', entry = {}, fallback = '') {
 }
 
 function selectedAnimationVideo(entry = {}) {
-  const name = String(entry?.defaultAnimation || '').trim();
+  const name = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
   const previews = entry?.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
     ? entry.allAnimationPreviews
     : null;
-  const selected = name && previews ? previews[name] : null;
+  const selected = name.trim() && previews ? previews[name] : null;
   return {
     name,
     poster: entryImageAsset(selected?.webpPoster || '', entry, 'poster'),
@@ -379,8 +379,8 @@ function dedupeArchiveEntries(entries) {
 
 function previewUrl(entry) {
   const id = encodeURIComponent(String(entry?.id || ''));
-  const animation = String(entry?.defaultAnimation || '').trim();
-  return animation ? `/p/${id}?animation=${encodeURIComponent(animation)}` : `/p/${id}`;
+  const animation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+  return animation.trim() ? `/p/${id}?animation=${encodeURIComponent(animation)}` : `/p/${id}`;
 }
 
 function archiveItemUrl(entry) {
@@ -545,7 +545,7 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 
 function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
-  const hasDefaultAnimation = Boolean(String(entry?.defaultAnimation || '').trim());
+  const hasDefaultAnimation = typeof entry?.defaultAnimation === 'string' && entry.defaultAnimation.trim().length > 0;
   const selectedPreview = hasDefaultAnimation ? selectedAnimationVideo(entry) : null;
   const mediaReady = entry?.webmStatus === 'ready' && entry?.previewStatus === 'ready' && Boolean(selectedPreview?.name);
   const candidates = mediaReady ? [
