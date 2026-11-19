@@ -89,7 +89,7 @@ function entryVideoLowSrc(origin, entry = {}) {
   const selected = selectedAnimationVideo(entry);
   return selected.low || selected.medium || selected.full;
 }
-nction safeAsset(value = '') {
+function safeAsset(value = '') {
   const url = String(value).trim();
   return /^https:\/\/[^\s"'<>]+$/i.test(url) ? url : '';
 }
@@ -570,8 +570,8 @@ function archiveFeedEntry(origin, entry, metrics) {
     isGeneratedWebpPosterUrl(candidate.poster, entry) &&
     new URL(candidate.video).pathname.toLowerCase().endsWith('/' + candidate.videoName) &&
     new URL(candidate.poster).pathname.toLowerCase().endsWith('/' + candidate.posterName) &&
-    new URL(candidate.video).pathname.replace(/\\.webm$/i, '').toLowerCase() ===
-      new URL(candidate.poster).pathname.replace(/\\.webp$/i, '').toLowerCase()
+    new URL(candidate.video).pathname.replace(/\.webm$/i, '').toLowerCase() ===
+      new URL(candidate.poster).pathname.replace(/\.webp$/i, '').toLowerCase()
   ) || null;
   return {
     id,
@@ -589,7 +589,9 @@ function archiveFeedEntry(origin, entry, metrics) {
     animations: Array.isArray(entry?.animations) ? entry.animations.length : 0,
     metrics: metricCountsForId(metrics, id),
   };
-}nction lightweightCardHtml(item, index = 0) {
+}
+
+function lightweightCardHtml(item, index = 0) {
   const title = escapeHtml(item.title);
   const poster = escapeHtml(item.poster);
   const video = escapeHtml(item.video);
