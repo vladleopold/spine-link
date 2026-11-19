@@ -88,7 +88,7 @@ test('PR live proof uses only the successful Vercel preview for the exact head S
   assert.ok(workflow.includes('pull_request:'), 'archive changes must receive a live preview browser check');
   assert.ok(workflow.includes('EXPECTED_SHA: $' + '{{ github.event.pull_request.head.sha }}'),
     'the preview lookup must be tied to the PR head SHA');
-  assert.ok(workflow.includes('statuses/$EXPECTED_SHA'),
+  assert.ok(workflow.includes("'/statuses/' + expectedSha"),
     'read the Vercel status for that exact commit');
   assert.ok(workflow.includes('inspector') && workflow.includes('target'),
     'reject stale preview comments whose deployment inspector does not match the commit status');
