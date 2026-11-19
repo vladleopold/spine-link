@@ -200,7 +200,8 @@ function sameWorkAssetPath(value = '', entry = {}) {
 
 function isGeneratedWebpPosterUrl(value = '', entry = {}) {
   const url = String(value || '').trim();
-  if (/^data:image\/webp;base64,/i.test(url)) return true;
+  // Data URIs and generic thumbnails do not prove that the image is a generated
+  // same-work animation poster. Require an explicit stored preview asset path.
   if (!sameWorkAssetPath(url, entry)) return false;
   let pathname = '';
   try { pathname = decodeURIComponent(new URL(url).pathname); }
@@ -535,8 +536,6 @@ function archiveFeedEntry(origin, entry, metrics) {
     entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
     entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
     entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster'),
-    generatedThumbnailUrl(origin, entry),
-    entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'),
   ].filter(url => isGeneratedWebpPosterUrl(url, entry));
   const poster = posterCandidates[0] || '';
   const posterFallback = posterCandidates.find(url => url !== poster) || '';

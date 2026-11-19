@@ -74,10 +74,10 @@ test('source PNG/WebP textures and guessed poster URLs never unlock archive WebM
     previewPath:'library_02/card-000',
     files:['texture.png','texture.webp'],
     webpPosterLow:'',
-    webpPosterMedium:'',
+    webpPosterMedium:'data:image/webp;base64,VEVYVFVSRQ==',
     webpPoster:'https://spine-link.vercel.app/assets/library_02/card-000/texture.webp',
     thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-000/texture.png',
-    thumbnail:'https://spine-link.vercel.app/assets/library_02/card-000/texture.webp',
+    thumbnail:'data:image/webp;base64,VEVYVFVSRQ==',
     webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
     webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
     webmStatus:'ready',
@@ -96,8 +96,8 @@ test('source PNG/WebP textures and guessed poster URLs never unlock archive WebM
     assert.ok(card,'initial card must be rendered');
     assert.match(card,/data-preview-status="blocked-no-webp-poster"/);
     assert.match(card,/Preview unavailable/);
-    assert.doesNotMatch(card,/texture\.(?:png|webp)|preview\.webp|data-video-src=/,
-      'source textures and guessed same-work preview paths are not generated posters');
+    assert.doesNotMatch(card,/texture\.(?:png|webp)|preview\.webp|data:image\/webp|data-video-src=/,
+      'source textures, data-URI thumbnails, and guessed same-work paths are not generated posters');
     assert.ok(html.includes("if(!poster||!poster.complete||poster.naturalWidth<=0)"),
       'WebM must wait for a decoded, non-empty poster');
     assert.ok(html.includes('isGeneratedPosterUrl')&&html.includes('preview-medium|generated-preview'),
