@@ -84,6 +84,7 @@ test('PNG source textures never masquerade as archive posters or unlock WebM',as
     thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-000/texture.png',
     thumbnail:'https://spine-link.vercel.app/assets/library_02/card-000/texture.png',
     webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
+    allAnimationPreviews:{},
   }];
   const log=[];
   globalThis.fetch=stubFetch(log,source);

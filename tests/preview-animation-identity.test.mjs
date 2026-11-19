@@ -84,7 +84,8 @@ test('loading video is hidden and can play only when it names the selected anima
 test('archive cards do not attach WebM without an indexed default animation', () => {
   const feed = section(archive, 'function archiveFeedEntry(', 'function lightweightCardHtml(');
   assert.match(feed, /hasDefaultAnimation = Boolean\(String\(entry\?\.defaultAnimation \|\| ''\)\.trim\(\)\)/);
-  assert.match(feed, /video = hasDefaultAnimation \? entryVideoSrc\(origin, entry\) : ''/);
+  assert.match(feed, /selectedPreview = hasDefaultAnimation \? selectedAnimationVideo\(entry\) : null/);
+  assert.match(feed, /video = selectedPreview\?\.full \|\| ''/);
   const selected = section(archive, 'function selectedAnimationVideo(', 'function safeAsset(');
   assert.match(selected, /allAnimationPreviews/);
   assert.match(selected, /defaultAnimation/);

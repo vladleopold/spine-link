@@ -533,8 +533,8 @@ function archiveFeedEntry(origin, entry, metrics) {
   // Prefer the poster belonging to the exact indexed default animation.
   // Other same-work WebP tiers remain secondary still-image fallbacks only.
   const posterCandidates = [
-    selectedPreview?.poster || '',
     entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
+    selectedPreview?.poster || '',
     entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
     entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster'),
     generatedThumbnailUrl(origin, entry),
