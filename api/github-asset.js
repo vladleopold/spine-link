@@ -216,6 +216,29 @@ function sanitizeLibraryIndex(buffer) {
   }
 }
 
+function transformAssetBuffer(path, buffer, assetVersion, response) {
+  if (/\.dds$/i.test(path)) {
+    const alreadyPng = buffer.length >= 8 && buffer.subarray(0, 8)
+      .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    if (!alreadyPng) {
+      buffer = ddsToPng(buffer);
+      response.setHeader('X-Spine-Link-Texture-Transcoded', 'DXT-to-PNG-v1');
+    }
+  }
+  if (isAtlasPath(path)) buffer = withAtlasPageCacheBuster(buffer, assetVersion);
+  if (path === 'library/index.json') buffer = sanitizeLibraryIndex(buffer);
+  return buffer;
+}
+
+function rawAssetEtag(rawEtag, path, assetVersion) {
+  if (!rawEtag) return '';
+  const suffix = (assetVersion ? '-' + assetVersion : '') + (/\.dds$/i.test(path) ? '-dds-rgba-png-v1' : '');
+  if (!suffix) return rawEtag;
+  return rawEtag.endsWith('"')
+    ? rawEtag.slice(0, -1) + suffix + '"'
+    : rawEtag + suffix;
+}
+
 function withAtlasPageCacheBuster(buffer, version) {
   const text = buffer.toString('utf8');
   if (!version && !/\.dds(?:\?|\r|\n|$)/im.test(text)) return buffer;
@@ -393,28 +416,22 @@ async function serveRawPublicAssetFallback(request, response, {
   const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${encodedBranch}/${encodedPath}`;
   const headers = {};
   if (request.headers.range) headers.Range = request.headers.range;
-  if (request.headers['if-none-match']) headers['If-None-Match'] = request.headers['if-none-match'];
-  if (request.headers['if-modified-since']) headers['If-Modified-Since'] = request.headers['if-modified-since'];
-
   let rawResponse;
   try {
+    // Conditional requests are evaluated against this route's transformed
+    // representation, not the untransformed upstream bytes.
     rawResponse = await fetch(rawUrl, { method: request.method, headers });
   } catch {
     return null;
   }
-  if (rawResponse.status === 304) {
-    response.setHeader('X-Spine-Link-Asset-Source', 'raw-public');
-    setAssetResponseHeaders(request, response, {
-      path, assetVersion, etag: rawResponse.headers.get('etag') || '',
-    });
-    return response.status(304).end();
-  }
-  if (!rawResponse.ok) return null;
+  if (!rawResponse.ok && rawResponse.status !== 304) return null;
 
-  const etag = rawResponse.headers.get('etag') || '';
+  const etag = rawAssetEtag(rawResponse.headers.get('etag') || '', path, assetVersion);
   response.setHeader('X-Spine-Link-Asset-Source', 'raw-public');
   const earlyResponse = setAssetResponseHeaders(request, response, { path, assetVersion, etag });
   if (earlyResponse) return earlyResponse;
+
+  if (rawResponse.status === 304) return null;
 
   if (rawResponse.status === 206) {
     setNoStoreHeaders(response);
@@ -430,12 +447,18 @@ async function serveRawPublicAssetFallback(request, response, {
 
   if (request.method === 'HEAD') {
     const contentLength = rawResponse.headers.get('content-length');
-    if (contentLength) response.setHeader('Content-Length', contentLength);
+    if (contentLength && !/\.dds$/i.test(path)) response.setHeader('Content-Length', contentLength);
     return response.status(200).end();
   }
 
-  const buffer = Buffer.from(await rawResponse.arrayBuffer());
+  let buffer = Buffer.from(await rawResponse.arrayBuffer());
   if (!buffer.length) return response.status(404).send('Asset is empty');
+  try {
+    buffer = transformAssetBuffer(path, buffer, assetVersion, response);
+  } catch (error) {
+    setNoStoreHeaders(response);
+    return response.status(415).send(error instanceof Error ? error.message : 'Unsupported asset');
+  }
   putMemoryCacheEntry(cacheKey, { buffer, etag });
   return sendAssetBuffer(request, response, {
     path, assetVersion, buffer, etag,
@@ -537,24 +560,11 @@ export default async function handler(request, response) {
     if (rangeResponse) return rangeResponse;
     let buffer = await contentBufferFromGitHubContent(data, token);
     if (!buffer.length) return response.status(404).send('Asset is empty');
-    if (/\.dds$/i.test(assetPath)) {
-      try {
-        const alreadyPng = buffer.length >= 8 && buffer.subarray(0,8)
-          .equals(Buffer.from([137,80,78,71,13,10,26,10]));
-        if (!alreadyPng) {
-          buffer = ddsToPng(buffer);
-          response.setHeader('X-Spine-Link-Texture-Transcoded', 'DXT-to-PNG-v1');
-        }
-      } catch (error) {
-        setNoStoreHeaders(response);
-        return response.status(415).send(error instanceof Error ? error.message : 'Unsupported DDS texture');
-      }
-    }
-    if (isAtlasPath(assetPath)) {
-      buffer = withAtlasPageCacheBuster(buffer, assetVersion);
-    }
-    if (assetPath === 'library/index.json') {
-      buffer = sanitizeLibraryIndex(buffer);
+    try {
+      buffer = transformAssetBuffer(assetPath, buffer, assetVersion, response);
+    } catch (error) {
+      setNoStoreHeaders(response);
+      return response.status(415).send(error instanceof Error ? error.message : 'Unsupported asset');
     }
     putMemoryCacheEntry(cacheKey, { buffer, etag });
     response.setHeader('X-Spine-Link-Asset-Memory', 'miss');
