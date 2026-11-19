@@ -69,6 +69,28 @@ jobs:
         run: echo "ARCHIVE_BASE_URL=https://spine-link.vercel.app" >> "$GITHUB_ENV"
       - name: Prime the CDN HTML cache like the production release smoke
         run: curl -fsS --max-time 25 "$ARCHIVE_BASE_URL/world-spine-archive" -o /dev/null
+      - name: Probe preview archive data without exposing work identifiers
+        if: github.event_name == 'pull_request'
+        run: |
+          node --input-type=module <<'NODE'
+          const base=process.env.ARCHIVE_BASE_URL;
+          const response=await fetch(base+'/api/github-archive?feed=archive&offset=0&limit=12',{
+            headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(20000)
+          });
+          const contentType=response.headers.get('content-type')||'';
+          const body=await response.text();
+          let payload=null;
+          if(contentType.includes('application/json')){
+            try{payload=JSON.parse(body);}catch{}
+          }
+          console.log('ARCHIVE_PREVIEW_API_PROBE '+JSON.stringify({
+            status:response.status,contentType:contentType.split(';')[0],
+            entries:Array.isArray(payload?.entries)?payload.entries.length:null,
+            total:Number.isFinite(payload?.total)?payload.total:null,
+            ok:payload?.ok===true,bodyBytes:Buffer.byteLength(body),
+            html:/^\\s*</.test(body),errorPresent:Boolean(payload?.error)
+          }));
+          NODE
       - uses: actions/checkout@v4
       - name: Install Playwright
         run: npm ci --ignore-scripts --no-audit --no-fund
