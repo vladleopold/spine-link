@@ -1,21 +1,34 @@
 # Live benchmark after deploying all-page embedded archive metadata.
 name: Spine archive live one-second lazy-card browser proof
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/archive-live-speed.yml
   workflow_run:
     workflows: ["Vercel deploy and alias"]
     types: [completed]
-  schedule:
-    - cron: '7 * * * *'
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
+  release_gate:
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      deployed: ${{ steps.inspect.outputs.deployed }}
+    steps:
+      - name: Confirm upstream run performed a real production deployment
+        id: inspect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")"
+          deployed="$(printf '%s' "$jobs" | jq -r '[.jobs[].steps[]? | select(.name == "Deploy to Vercel" and .conclusion == "success")] | length > 0')"
+          echo "deployed=$deployed" >> "$GITHUB_OUTPUT"
+          echo "REAL_PRODUCTION_DEPLOY=$deployed"
   chromium:
-    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
+    needs: release_gate
+    if: ${{ always() && (github.event_name != 'workflow_run' || needs.release_gate.outputs.deployed == 'true') }}
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
@@ -123,6 +136,8 @@ jobs:
                 return {
                   id:card.dataset.entryId||'',
                   status:card.dataset.previewStatus||'',
+                  sourceWebmStatus:card.dataset.sourceWebmStatus||'',
+                  sourcePreviewStatus:card.dataset.sourcePreviewStatus||'',
                   video,poster,
                   imageCount:card.querySelectorAll('.feed-media img').length,
                   fallback:!!card.querySelector('[data-fallback-src],[data-video-fallback],.feed-placeholder,.media-fallback'),
@@ -145,11 +160,19 @@ jobs:
                 }catch{return true;}
               });
               const fallbacks=first40.filter(item=>item.fallback||item.mediaText);
-              const newest20Missing=first40.slice(0,20).filter(item=>!item.video||!item.poster);
+              const newest20=first40.slice(0,20);
+              const newest20Missing=newest20.filter(item=>!item.video||!item.poster);
+              const newest20Blocked=newest20.filter(item=>
+                item.sourceWebmStatus.startsWith('blocked-')&&
+                item.sourcePreviewStatus==='blocked'&&!item.video&&!item.poster);
+              const newest20UnexpectedMissing=newest20Missing.filter(item=>!newest20Blocked.includes(item));
+              const newest20InvalidBlocked=newest20.filter(item=>
+                item.sourceWebmStatus.startsWith('blocked-')&&
+                item.sourcePreviewStatus==='blocked'&&(item.video||item.poster));
               const older20Missing=first40.slice(20,40).filter(item=>!item.video||!item.poster);
-              // The newest 20 visible archive cards must have original motion
-              // previews. Older cards are audited and reported without being
-              // silently replaced by unrelated images or text.
+              // Every eligible newest card must have its own WebM/WebP pair.
+              // Explicitly blocked source records remain blank; never guess an
+              // animation or substitute an unrelated texture as a fake preview.
               assert.deepEqual(badPairs,[],'Mismatched video/poster quality or work path in first 40 cards');
               assert.deepEqual(fallbacks,[],'Archive card contains a forbidden image/text fallback');
               const checks=await Promise.all(paired.map(async item=>{
@@ -170,13 +193,18 @@ jobs:
                 ![200,206].includes(x.videoStatus)||!x.webp||!x.webm);
               console.log('ARCHIVE_FIRST40_EVIDENCE '+JSON.stringify({
                 viewport:viewport.width,initialMs:initialPosterMs,initialTiming,appendMs:latency,posterMs,
-                before,after,checked:checks.length,newest20Ready:20-newest20Missing.length,
+                before,after,checked:checks.length,newest20Ready:20-newest20Blocked.length,newest20Blocked:newest20Blocked.length,
                 older20Ready:20-older20Missing.length,older20Missing:older20Missing.length,
                 blockedApiRequests,webpRequests:mediaRequests.filter(x=>x.type==='webp').length,
                 webmRequests:mediaRequests.filter(x=>x.type==='webm').length,
                 brokenAssets:broken,
               }));
-              assert.equal(newest20Missing.length,0,'Newest 20 missing original WebM/WebP pairs: '+newest20Missing.length);
+              assert.deepEqual(newest20UnexpectedMissing,[],
+                'An eligible newest-20 card is missing its original WebM/WebP pair');
+              assert.deepEqual(newest20InvalidBlocked,[],
+                'A blocked card must not expose partial or fabricated preview media');
+              assert.equal(newest20Missing.length,newest20Blocked.length,
+                'Every newest-20 missing preview must have an explicit blocked status');
               assert.deepEqual(broken,[],'One of the first 40 cards has a missing/non-WebP/non-WebM asset');
               assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
               assert.ok(posterMs<=1000,'Three new WebP posters took over one second: '+posterMs+'ms');

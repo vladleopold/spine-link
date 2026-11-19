@@ -14,17 +14,27 @@ test('initial archive poster timing excludes intentional prefetch warm-up', () =
   assert.ok(!workflow.includes('initialMs:Date.now()-started'), 'old inflated metric must not return');
 });
 
-test('first visible archive card decodes its WebP within one second and runs hourly', () => {
-  assert.match(workflow,/schedule:\s*\n\s+- cron: '7 \* \* \* \*'/,
-    'archive live proof must run hourly');
+test('first available archive poster decodes within one second after a real deployment', () => {
+  assert.match(workflow,/release_gate:/,
+    'live proof must have a deployment gate');
+  assert.match(workflow,/Deploy to Vercel/);
+  assert.match(workflow,/needs\.release_gate\.outputs\.deployed == 'true'/,
+    'a cooldown skip must not count as a production release');
+  assert.doesNotMatch(workflow,/^\s+schedule:/m,
+    'live proof must not repeatedly benchmark stale production during quota cooldown');
+  assert.doesNotMatch(workflow,/^\s+push:/m,
+    'live proof must not race the production deploy on main push');
   assert.match(workflow,/const img=document\.querySelector\('\.feed-card img'\)/,
-    'measure the first card, not any later image');
+    'measure the first available poster, not an arbitrary later image');
   assert.match(workflow,/await page\.locator\('\.feed-card img'\)\.first\(\)\.evaluate\(img=>img\.decode\(\)\)/,
     'wait for actual browser image decoding');
   assert.match(workflow,/assert\.ok\(initialPosterMs<=1000/,
-    'the one-second first-card requirement must be a hard gate');
+    'the one-second first-poster requirement must be a hard gate');
   assert.match(workflow,/responseStartMs:[\s\S]*posterEndMs:[\s\S]*posterTransferBytes:/,
     'capture navigation and poster network timings to isolate a regression');
+  assert.match(workflow,/newest20Blocked/);
+  assert.match(workflow,/newest20UnexpectedMissing/);
+  assert.match(workflow,/Every newest-20 missing preview must have an explicit blocked status/);
   assert.doesNotMatch(workflow,/older20Missing\.map\(x=>x\.id\)|JSON\.stringify\(newest20Missing\.map\(x=>x\.id\)\)/,
     'public CI logs must not disclose private work identifiers');
 });
@@ -32,7 +42,7 @@ test('first visible archive card decodes its WebP within one second and runs hou
 const lifecycleWorkflow = readFileSync(new URL('../.github/workflows/keep-pull-requests-empty.yml', import.meta.url), 'utf8');
 test('repository lifecycle workflow cannot close or mutate pull requests', () => {
   assert.match(lifecycleWorkflow, /workflow_dispatch:/);
-  assert.doesNotMatch(lifecycleWorkflow, /pull_request_target:|schedule:|pull-requests:\\s*write|issues:\\s*write|pulls\\.update/,
+  assert.doesNotMatch(lifecycleWorkflow, /pull_request_target:|schedule:|pull-requests:\s*write|issues:\s*write|pulls\.update/,
     'automatic PR closure and write permissions must remain disabled');
 });
 
@@ -55,4 +65,14 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   assert.match(archive, /firstPoster\.addEventListener\('error',schedule/);
   assert.match(archive, /requestIdleCallback\(loadOptionalEnhancements/);
   assert.match(archive, /deferOptionalEnhancementsUntilPoster\(\);/);
+});
+
+test('archive cards expose source-level blocked status without exposing preview error text', () => {
+  const source = readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
+  assert.match(source, /sourceWebmStatus: String\(entry\?\.webmStatus \|\| ''\)\.trim\(\)/);
+  assert.match(source, /sourcePreviewStatus: String\(entry\?\.previewStatus \|\| ''\)\.trim\(\)/);
+  assert.match(source, /data-source-webm-status=/);
+  assert.match(source, /data-source-preview-status=/);
+  assert.doesNotMatch(source, /data-preview-error=/,
+    'private source error details must not be copied into public card markup');
 });
