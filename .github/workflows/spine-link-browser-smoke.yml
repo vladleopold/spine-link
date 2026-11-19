@@ -270,6 +270,8 @@ jobs:
                 'Mobile supporting sections overlap the animation menu: ' + JSON.stringify(mobileFlow));
               console.log('PASS LIVE MOBILE PREVIEW FLOW', JSON.stringify(mobileFlow));
 
+              // Scroll retention is a desktop contract; restore desktop after the mobile-flow check.
+              await page.setViewportSize({width:1200,height:780});
               // Select a late animation on first render, then change selections
               // without losing the user's current scroll position.
               const selectionScroll = await page.evaluate(() => {
