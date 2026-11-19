@@ -66,3 +66,13 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   assert.match(archive, /requestIdleCallback\(loadOptionalEnhancements/);
   assert.match(archive, /deferOptionalEnhancementsUntilPoster\(\);/);
 });
+
+test('archive cards expose source-level blocked status without exposing preview error text', () => {
+  const source = readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
+  assert.match(source, /sourceWebmStatus: String\(entry\?\.webmStatus \|\| ''\)\.trim\(\)/);
+  assert.match(source, /sourcePreviewStatus: String\(entry\?\.previewStatus \|\| ''\)\.trim\(\)/);
+  assert.match(source, /data-source-webm-status=/);
+  assert.match(source, /data-source-preview-status=/);
+  assert.doesNotMatch(source, /data-preview-error=/,
+    'private source error details must not be copied into public card markup');
+});
