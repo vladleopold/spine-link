@@ -368,11 +368,11 @@ test('legacy per-animation WebM and its same-name WebP first frame unlock a card
     const res=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
     assert.equal(res.code,200);
-    const card=String(res.body).match(/<article class="feed-card"[\\s\\S]*?<\\/article>/)?.[0]||'';
+    const card=String(res.body).match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
     assert.match(card,/data-preview-status="poster-pending"/);
     assert.ok(card.includes(base+'medium.webp'),'the exact animation-specific WebP poster must be selected');
     assert.ok(card.includes(base+'medium.webm'),'the same animation-specific WebM must be paired');
-    assert.doesNotMatch(card,/preview-low\\.(?:webp|webm)/,'medium poster and video remain the same quality tier');
+    assert.doesNotMatch(card,/preview-low\.(?:webp|webm)/,'medium poster and video remain the same quality tier');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
