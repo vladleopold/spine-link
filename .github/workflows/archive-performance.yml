@@ -1,11 +1,12 @@
 name: Spine archive WebP-first performance regression
 on:
   push:
-    branches: [main, 'fix/archive-*']
+    branches: [main, 'fix/archive-*', 'fix/no-alternate-*']
     paths:
       - api/github-archive.js
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
+      - tests/preview-animation-identity.test.mjs
       - tests/spine-runtime-file-selection.test.mjs
       - tests/spine-atlas-integrity.test.mjs
       - lib/spine-atlas-integrity.js
@@ -18,6 +19,8 @@ on:
   pull_request:
     paths:
       - api/github-archive.js
+      - api/github-preview.js
+      - tests/preview-animation-identity.test.mjs
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
       - .github/workflows/archive-performance.yml
@@ -39,4 +42,4 @@ jobs:
         run: |
           node --check api/github-archive.js
           node --check api/github-preview.js
-          node --test tests/archive-speed.test.mjs tests/archive-initial-timing.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs
+          node --test tests/archive-speed.test.mjs tests/archive-initial-timing.test.mjs tests/preview-animation-identity.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs
