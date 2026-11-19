@@ -69,7 +69,8 @@ test('player startup never replaces the requested track with the first runtime t
 test('viewport healing measures only the selected animation', () => {
   const refit = section(preview, 'function refitToContent(', 'function measuredAnimationBounds(');
   const measured = section(preview, 'function measuredAnimationBounds(', 'let healAttempts');
-  assert.match(refit, /const active = activeAnimation\.name/);
+  assert.match(refit, /const active = String\(activeAnimation\.name \|\| ''\)\.trim\(\)/);
+  assert.match(refit, /if \(!active \|\| !names\.includes\(active\)\) return false/);
   assert.doesNotMatch(refit, /names\[0\]/);
   assert.match(measured, /findAnimation\(activeAnimation\.name\)/);
   assert.doesNotMatch(measured, /animations\[0\]/);
