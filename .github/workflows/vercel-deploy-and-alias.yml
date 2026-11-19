@@ -12,9 +12,9 @@ on:
   workflow_run:
     workflows: ["Spine-Link Agent API CI", "Spine archive WebP-first performance regression"]
     types: [completed]
-  # One controlled recovery attempt after Vercel's rolling daily quota resets.
+  # Vercel rejected deployments at 20:42 UTC; retry only after the rolling 24h window.
   schedule:
-    - cron: '15 16 * * *'
+    - cron: '15 21 * * *'
 
 # Queue releases rather than cancelling an in-flight validated deploy when
 # another workflow_run event arrives. The source-SHA guard rejects stale queued
