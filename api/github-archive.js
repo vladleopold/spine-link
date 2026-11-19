@@ -207,7 +207,7 @@ function isGeneratedWebpPosterUrl(value = '', entry = {}) {
   try { pathname = decodeURIComponent(new URL(url).pathname); }
   catch { return false; }
   const filename = pathname.split('/').pop()?.toLowerCase() || '';
-  return ['preview.webp', 'preview-medium.webp', 'generated-preview.webp'].includes(filename);
+  return ['preview-medium.webp', 'preview-low.webp'].includes(filename);
 }
 
 function isGeneratedWebmUrl(value = '', entry = {}) {
@@ -528,21 +528,32 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
   const mediaReady = entry?.webmStatus === 'ready' && entry?.previewStatus === 'ready';
-  const rawVideo = mediaReady ? entryVideoSrc(origin, entry) : '';
-  const video = rawVideo && isGeneratedWebmUrl(rawVideo, entry) ? rawVideo : '';
-  // Only generated, same-work WebP outputs are posters. Source textures,
-  // arbitrary .webp atlas pages, and guessed preview.webp URLs are not previews.
-  const posterCandidates = [
-    entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
-    entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
-    entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster'),
-  ].filter(url => isGeneratedWebpPosterUrl(url, entry));
-  const poster = posterCandidates[0] || '';
-  const posterFallback = posterCandidates.find(url => url !== poster) || '';
-  const lowVideo = video
-    ? entryVideoSrc(origin, { ...entry, webmPreview: entry?.webmPreviewLow || entry?.webmPreviewMedium || '' }) || video
-    : '';
-  const safeLowVideo = lowVideo && isGeneratedWebmUrl(lowVideo, entry) ? lowVideo : video;
+  // Feed cards may use only a matching medium-quality pair. Low quality is
+  // permitted only when the medium pair is not installed; never mix tiers.
+  // No source texture, thumbnail, high-quality poster, or guessed URL is a card fallback.
+  const candidates = mediaReady ? [
+    {
+      quality: 'medium',
+      video: entryVideoAsset(entry?.webmPreviewMedium || '', entry, 'preview-medium'),
+      poster: entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
+      videoName: 'preview-medium.webm',
+      posterName: 'preview-medium.webp',
+    },
+    {
+      quality: 'low',
+      video: entryVideoAsset(entry?.webmPreviewLow || '', entry, 'preview-low'),
+      poster: entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low'),
+      videoName: 'preview-low.webm',
+      posterName: 'preview-low.webp',
+    },
+  ] : [];
+  const selected = candidates.find(candidate =>
+    candidate.video && candidate.poster &&
+    isGeneratedWebmUrl(candidate.video, entry) &&
+    isGeneratedWebpPosterUrl(candidate.poster, entry) &&
+    new URL(candidate.video).pathname.toLowerCase().endsWith('/' + candidate.videoName) &&
+    new URL(candidate.poster).pathname.toLowerCase().endsWith('/' + candidate.posterName)
+  ) || null;
   return {
     id,
     title: cleanPublicText(entry?.title || id || 'Spine animation', 120),
@@ -550,10 +561,9 @@ function archiveFeedEntry(origin, entry, metrics) {
     ownerUrl: entry?.publicOwnerId ? `/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
     playerUrl: previewUrl(entry),
     archiveUrl: archiveItemUrl(entry),
-    poster,
-    posterFallback,
-    video: poster ? safeLowVideo : '',
-    videoFallback: poster ? video : '',
+    poster: selected?.poster || '',
+    video: selected?.video || '',
+    quality: selected?.quality || '',
     width: positiveInteger(entry?.previewWidth),
     height: positiveInteger(entry?.previewHeight),
     mode: entry?.portfolioMode === true ? 'Portfolio' : 'Library',
@@ -565,20 +575,20 @@ function archiveFeedEntry(origin, entry, metrics) {
 function lightweightCardHtml(item, index = 0) {
   const title = escapeHtml(item.title);
   const poster = escapeHtml(item.poster);
-  const posterFallback = escapeHtml(item.posterFallback);
   const video = escapeHtml(item.video);
-  const videoFallback = escapeHtml(item.videoFallback);
   const ratio = item.width && item.height ? Math.min(1.8, Math.max(0.62, item.width / item.height)) : 1;
-  const posterOnError = `onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried='1';this.src=this.dataset.fallbackSrc;}else{const c=this.closest('.feed-card');if(c){c.dataset.previewStatus='blocked-poster-load-failed';delete c.dataset.videoSrc;}this.style.display='none';}"`;
-  const media = item.poster
-    ? `<img src="${poster}"${posterFallback && posterFallback !== poster ? ` data-fallback-src="${posterFallback}"` : ''} ${posterOnError} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'low'}" />`
-    : '<span class="feed-placeholder" aria-label="Preview unavailable">Preview unavailable</span>';
-  // Render poster first. No video source exists until a visible poster is ready.
-  const videoAttrs = video ? ` data-video-src="${video}" data-video-fallback="${videoFallback}"` : '';
+  const posterOnError = `onerror="const c=this.closest('.feed-card');if(c){c.dataset.previewStatus='blocked-poster-load-failed';delete c.dataset.videoSrc;}this.remove();"`;
+  // A card has no visual substitute: only the first-frame WebP paired with
+  // its own medium/low WebM may be displayed.
+  const media = item.poster && item.video
+    ? `<img src="${poster}" ${posterOnError} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'low'}" />`
+    : '';
+  // The WebM is deferred until the exact paired poster has decoded.
+  const videoAttrs = video && item.poster ? ` data-video-src="${video}"` : '';
   const mediaInner = media;
   const playerUrlAttr = item.playerUrl ? ` data-player-url="${escapeHtml(item.playerUrl)}"` : '';
   const clickHandler = item.playerUrl ? ` onclick="if(this.dataset.playerUrl)window.location.href=this.dataset.playerUrl"` : '';
-  const previewStatus = item.poster ? 'poster-pending' : 'blocked-no-webp-poster';
+  const previewStatus = item.poster && item.video ? 'poster-pending' : 'blocked-no-webm-poster';
   return `<article class="feed-card"${playerUrlAttr}${videoAttrs}${clickHandler} data-entry-id="${escapeHtml(item.id)}" data-preview-status="${previewStatus}" style="--media-ratio:${ratio}">
     <div class="feed-media">${mediaInner}</div>
     <div class="feed-info">
@@ -1493,7 +1503,7 @@ function archiveHtml({ origin, entries, metrics }) {
     <script src="/spine-embers.js?v=2026-09-30" defer></script>
     <script src="/page-transitions.js" defer></script>
     <style>
-      *{box-sizing:border-box}html{color-scheme:dark;background:#080a0c}body{margin:0;color:#f4f7fa;background:#080a0c;font:14px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit}.shell{width:min(100%,1120px);margin:auto;padding:12px}.top{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0 12px;background:rgba(8,10,12,.96)}.logo{font-size:18px;font-weight:900;letter-spacing:.13em;text-decoration:none;transition:color 160ms ease}.logo b{color:#ff6a2a;transition:color 160ms ease}.logo:hover,.logo:focus-visible{color:#fff}.logo:hover b,.logo:focus-visible b{color:#fff}.create{padding:9px 12px;border:1px solid #9adc45;border-radius:999px;color:#dfffb5;text-decoration:none;font-weight:800}.intro{padding:18px 0 16px}.intro h1{max-width:720px;margin:0;font-size:clamp(27px,7vw,52px);line-height:.95;letter-spacing:-.045em}.intro p{max-width:680px;margin:12px 0 0;color:#9aa4ad}.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}.legend span{padding:5px 8px;border:1px solid #293139;border-radius:999px;color:#bdc6ce;font-size:12px}.feed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.feed-card{content-visibility:auto;contain-intrinsic-size:320px;overflow:hidden;border:1px solid #20262c;border-radius:12px;background:#101419}.feed-media{position:relative;display:grid;width:100%;aspect-ratio:var(--media-ratio);min-height:160px;padding:0;overflow:hidden;border:0;color:#fff;background:#050607}.feed-media img,.feed-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#050607}.feed-media video{opacity:0;pointer-events:none}.feed-media video.is-playing{opacity:1}.feed-placeholder{display:grid;place-items:center;color:#59636d;font-weight:900}.feed-info{display:grid;gap:6px;padding:10px}.feed-info>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:8px}.feed-title{overflow:hidden;font-weight:850;text-overflow:ellipsis;white-space:nowrap}.feed-mode{flex:none;color:#9adc45;font-size:11px}.feed-meta{display:flex;gap:8px;overflow:hidden;color:#8d98a2;font-size:11px;white-space:nowrap}.sentinel{min-height:70px;display:grid;place-items:center;color:#7d8790}.footer{padding:28px 0;color:#737e87;font-size:12px;text-align:center}@media(max-width:620px){.shell{padding:8px}.top{padding-top:max(8px,env(safe-area-inset-top))}.feed{grid-template-columns:1fr;gap:8px}.feed-card{contain-intrinsic-size:420px}.feed-media{min-height:230px}.intro{padding-top:12px}.feed-meta{gap:7px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+      *{box-sizing:border-box}html{color-scheme:dark;background:#080a0c}body{margin:0;color:#f4f7fa;background:#080a0c;font:14px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit}.shell{width:min(100%,1120px);margin:auto;padding:12px}.top{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0 12px;background:rgba(8,10,12,.96)}.logo{font-size:18px;font-weight:900;letter-spacing:.13em;text-decoration:none;transition:color 160ms ease}.logo b{color:#ff6a2a;transition:color 160ms ease}.logo:hover,.logo:focus-visible{color:#fff}.logo:hover b,.logo:focus-visible b{color:#fff}.create{padding:9px 12px;border:1px solid #9adc45;border-radius:999px;color:#dfffb5;text-decoration:none;font-weight:800}.intro{padding:18px 0 16px}.intro h1{max-width:720px;margin:0;font-size:clamp(27px,7vw,52px);line-height:.95;letter-spacing:-.045em}.intro p{max-width:680px;margin:12px 0 0;color:#9aa4ad}.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}.legend span{padding:5px 8px;border:1px solid #293139;border-radius:999px;color:#bdc6ce;font-size:12px}.feed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.feed-card{content-visibility:auto;contain-intrinsic-size:320px;overflow:hidden;border:1px solid #20262c;border-radius:12px;background:#101419}.feed-media{position:relative;display:grid;width:100%;aspect-ratio:var(--media-ratio);min-height:160px;padding:0;overflow:hidden;border:0;color:#fff;background:#050607}.feed-media img,.feed-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#050607}.feed-media video{opacity:0;pointer-events:none}.feed-media video.is-playing{opacity:1}.feed-info{display:grid;gap:6px;padding:10px}.feed-info>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:8px}.feed-title{overflow:hidden;font-weight:850;text-overflow:ellipsis;white-space:nowrap}.feed-mode{flex:none;color:#9adc45;font-size:11px}.feed-meta{display:flex;gap:8px;overflow:hidden;color:#8d98a2;font-size:11px;white-space:nowrap}.sentinel{min-height:70px;display:grid;place-items:center;color:#7d8790}.footer{padding:28px 0;color:#737e87;font-size:12px;text-align:center}@media(max-width:620px){.shell{padding:8px}.top{padding-top:max(8px,env(safe-area-inset-top))}.feed{grid-template-columns:1fr;gap:8px}.feed-card{contain-intrinsic-size:420px}.feed-media{min-height:230px}.intro{padding-top:12px}.feed-meta{gap:7px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
     </style>
   </head>
   <body>
@@ -1543,8 +1553,7 @@ function archiveHtml({ origin, entries, metrics }) {
           active.delete(card);
         }
         function isGeneratedPosterUrl(url){
-          return /^data:image\\/webp;base64,/i.test(String(url||''))||
-            /\\/(?:preview|preview-medium|generated-preview)\\.webp(?:[?#]|$)/i.test(String(url||''));
+          return /\\/(?:preview-medium|preview-low)\\.webp(?:[?#]|$)/i.test(String(url||''));
         }
         function startVideo(card){
           if(active.has(card)||!card.dataset.videoSrc||reducedMotion)return;
@@ -1560,12 +1569,9 @@ function archiveHtml({ origin, entries, metrics }) {
           video.setAttribute('aria-hidden','true');
           video.addEventListener('playing',()=>video.classList.add('is-playing'));
           video.addEventListener('error',()=>{
-            const fallback=card.dataset.videoFallback;
-            if(!video.dataset.retried&&fallback&&fallback!==video.src){
-              video.dataset.retried='1';
-              video.src=fallback;
-              void video.play().catch(()=>stopVideo(card));
-            }else stopVideo(card);
+            card.dataset.previewStatus='blocked-video-load-failed';
+            delete card.dataset.videoSrc;
+            stopVideo(card);
           });
           active.add(card);
           host.append(video);
@@ -1632,18 +1638,15 @@ function archiveHtml({ origin, entries, metrics }) {
           const card=document.createElement('article');
           card.className='feed-card';
           card.dataset.entryId=item.id;
-          card.dataset.previewStatus=item.poster?'poster-pending':'blocked-no-webp-poster';
-          if(item.video)card.dataset.videoSrc=item.video;
-          if(item.videoFallback)card.dataset.videoFallback=item.videoFallback;
+          card.dataset.previewStatus=item.poster&&item.video?'poster-pending':'blocked-no-webm-poster';
+          if(item.poster&&item.video)card.dataset.videoSrc=item.video;
           card.style.setProperty('--media-ratio',item.width&&item.height
             ?Math.min(1.8,Math.max(.62,item.width/item.height)):1);
           const media=document.createElement('div');media.className='feed-media';
-          if(item.poster||item.posterFallback){
+          if(item.poster&&item.video){
             const image=document.createElement('img');
-            image.src=item.poster||item.posterFallback;
+            image.src=item.poster;
             image.alt=item.title+' Spine animation preview';
-            // Demand-load each card; the upcoming 12 valid WebP files are
-            // prewarmed independently before the user reaches this batch.
             image.loading=index<6?'eager':'lazy';
             image.fetchPriority=index<4?'high':'low';
             image.decoding='async';
@@ -1651,26 +1654,18 @@ function archiveHtml({ origin, entries, metrics }) {
               if(!image.complete)return;
               const url=image.currentSrc||image.src;
               if(image.naturalWidth>0&&isGeneratedPosterUrl(url)){
-                card.dataset.previewStatus=card.dataset.videoSrc?'ready-poster-lazy-video':'poster-only';
+                card.dataset.previewStatus='ready-poster-lazy-video';
               }else{
                 card.dataset.previewStatus='blocked-poster-load-failed';
                 delete card.dataset.videoSrc;
-                image.style.display='none';
+                image.remove();
               }
               queueUpdate();
             };
             image.addEventListener('load',settlePoster);
-            image.addEventListener('error',()=>{
-              if(item.posterFallback&&!image.dataset.retried&&image.src!==item.posterFallback){
-                image.dataset.retried='1';image.src=item.posterFallback;
-              }else settlePoster();
-            });
+            image.addEventListener('error',settlePoster);
             if(image.complete)settlePoster();
             media.append(image);
-          }else{
-            const placeholder=document.createElement('span');
-            placeholder.className='feed-placeholder';placeholder.textContent='SPINE';
-            media.append(placeholder);
           }
           const info=document.createElement('div');info.className='feed-info';
           const heading=document.createElement('div');
