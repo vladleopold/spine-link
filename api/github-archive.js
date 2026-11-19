@@ -63,12 +63,46 @@ function entryVideoAsset(value = '', entry = {}, fallback = '') {
   return appendAssetVersion(safeVideo(value), assetVersionForEntry(entry, fallback));
 }
 
+function selectedAnimationVideo(entry = {}) {
+  const name = String(entry?.defaultAnimation || '').trim();
+  const previews = entry?.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
+    ? entry.allAnimationPreviews
+    : null;
+  const selected = name && previews ? previews[name] : null;
+  return {
+    name,
+    poster: entryImageAsset(
+      selected?.webpPosterMedium || selected?.webpPoster || '',
+      entry,
+      'poster',
+    ),
+    full: entryVideoAsset(
+      selected?.webmPreview || selected?.webmPreviewMedium || selected?.webmPreviewLow || '',
+      entry,
+      'webm',
+    ),
+    low: entryVideoAsset(
+      selected?.webmPreviewLow || selected?.webmPreviewMedium || selected?.webmPreview || '',
+      entry,
+      'webm',
+    ),
+  };
+}
+
 function entryVideoSrc(origin, entry = {}) {
-  const direct = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
-  if (direct) return direct;
-  const medium = entryVideoAsset(entry?.webmPreviewMedium || '', entry, 'preview-medium');
-  if (medium) return medium;
-  return '';
+  return selectedAnimationVideo(entry).full;
+}
+
+function entryVideoLowSrc(origin, entry = {}) {
+  return selectedAnimationVideo(entry).low;
+}
+
+function entryVideoSrc(origin, entry = {}) {
+  return selectedAnimationVideo(entry).full;
+}
+
+function entryVideoLowSrc(origin, entry = {}) {
+  return selectedAnimationVideo(entry).low;
 }
 
 function safeAsset(value = '') {
@@ -214,6 +248,11 @@ function isGeneratedWebmUrl(value = '', entry = {}) {
   try { pathname = decodeURIComponent(new URL(url).pathname); }
   catch { return false; }
   return /\/(?:preview|preview-medium|preview-low)\.webm$/i.test(pathname);
+}
+
+function isWebpPosterUrl(value = '') {
+  const url = String(value || '').trim();
+  return /^data:image\/webp;base64,/i.test(url) || /\.webp(?:[?#]|$)/i.test(url);
 }
 
 function generatedThumbnailUrl(origin, entry) {
@@ -488,7 +527,8 @@ function homepageFeedEntries(origin, entries, metrics) {
       ownerName: String(entry?.ownerName || 'Spine creator'),
       ownerUrl: entry?.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
       previewUrl: `${origin}${previewUrl(entry)}`,
-      webmPreview: entryVideoAsset(entry?.webmPreview || '', entry, 'webm'),
+      webmPreview: entryVideoLowSrc(origin, entry),
+      previewAnimation: String(entry?.defaultAnimation || '').trim(),
       thumbnailPoster: poster,
       thumbnail,
       thumbnailType: isGifThumbnail ? 'gif' : 'image',
@@ -524,33 +564,23 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 
 function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
-  const mediaReady = entry?.webmStatus === 'ready' && entry?.previewStatus === 'ready';
-  // Feed cards may use only a matching medium-quality pair. Low quality is
-  // permitted only when the medium pair is not installed; never mix tiers.
-  // No source texture, thumbnail, high-quality poster, or guessed URL is a card fallback.
-  const candidates = mediaReady ? [
-    {
-      quality: 'medium',
-      video: entryVideoAsset(entry?.webmPreviewMedium || '', entry, 'preview-medium'),
-      poster: entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
-      videoName: 'preview-medium.webm',
-      posterName: 'preview-medium.webp',
-    },
-    {
-      quality: 'low',
-      video: entryVideoAsset(entry?.webmPreviewLow || '', entry, 'preview-low'),
-      poster: entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low'),
-      videoName: 'preview-low.webm',
-      posterName: 'preview-low.webp',
-    },
-  ] : [];
-  const selected = candidates.find(candidate =>
-    candidate.video && candidate.poster &&
-    isGeneratedWebmUrl(candidate.video, entry) &&
-    isGeneratedWebpPosterUrl(candidate.poster, entry) &&
-    new URL(candidate.video).pathname.toLowerCase().endsWith('/' + candidate.videoName) &&
-    new URL(candidate.poster).pathname.toLowerCase().endsWith('/' + candidate.posterName)
-  ) || null;
+  const hasDefaultAnimation = Boolean(String(entry?.defaultAnimation || '').trim());
+  const selectedPreview = hasDefaultAnimation ? selectedAnimationVideo(entry) : null;
+  const video = selectedPreview?.full || '';
+  // Prefer the poster belonging to the exact indexed default animation.
+  // Other same-work WebP tiers remain secondary still-image fallbacks only.
+  const posterCandidates = [
+    entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
+    selectedPreview?.poster || '',
+    entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
+    entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster'),
+    generatedThumbnailUrl(origin, entry),
+    entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'),
+    fallbackPosterAssetUrl(origin, entry),
+  ].filter(isWebpPosterUrl);
+  const lowPoster = posterCandidates[0] || '';
+  const alternatePoster = posterCandidates.find(url => url !== lowPoster) || '';
+  const lowVideo = video ? selectedPreview?.low || video : '';
   return {
     id,
     title: cleanPublicText(entry?.title || id || 'Spine animation', 120),
@@ -558,15 +588,17 @@ function archiveFeedEntry(origin, entry, metrics) {
     ownerUrl: entry?.publicOwnerId ? `/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
     playerUrl: previewUrl(entry),
     archiveUrl: archiveItemUrl(entry),
-    poster: selected?.poster || '',
-    video: selected?.video || '',
-    quality: selected?.quality || '',
+    poster: lowPoster,
+    posterFallback: alternatePoster,
+    video: lowPoster ? lowVideo : '',
+    videoFallback: video,
     width: positiveInteger(entry?.previewWidth),
     height: positiveInteger(entry?.previewHeight),
     mode: entry?.portfolioMode === true ? 'Portfolio' : 'Library',
     animations: Array.isArray(entry?.animations) ? entry.animations.length : 0,
     metrics: metricCountsForId(metrics, id),
   };
+}
 }
 
 function lightweightCardHtml(item, index = 0) {
