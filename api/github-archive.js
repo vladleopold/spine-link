@@ -1490,9 +1490,9 @@ function archiveHtml({ origin, entries, metrics }) {
     hasMore: entries.length > embeddedEnd,
   };
   const firstPoster = initialItems.find((item) => item.poster)?.poster || '';
-  const archiveImage = firstPoster || \`\${origin}/spine-link-video-thumbnail.png\`;
+  const archiveImage = firstPoster || `\${origin}/spine-link-video-thumbnail.png`;
   const firstPosterPreload = firstPoster
-    ? \`<link rel="preload" as="image" href="\${escapeHtml(firstPoster)}" fetchpriority="high" />\`
+    ? `<link rel="preload" as="image" href="\${escapeHtml(firstPoster)}" fetchpriority="high" />`
     : '';
   const structuredData = {
     '@context': 'https://schema.org',
