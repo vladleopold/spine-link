@@ -42,3 +42,10 @@ test('live archive browser audit runs hourly even when deploy is skipped', () =>
   assert.match(workflow, /github\.event_name != 'pull_request'[\s\S]*ARCHIVE_BASE_URL=https:\/\/spine-link\.vercel\.app/,
     'non-PR scheduled runs must audit the production alias');
 });
+
+test('first-poster timeout records only sanitized browser evidence', () => {
+  assert.match(workflow, /ARCHIVE_FIRST_POSTER_FAILURE/);
+  assert.match(workflow, /imageResponses\\.map\\(x=>\\(\\{status:x\\.status,contentType:x\\.contentType\\}\\)\\)/);
+  assert.match(workflow, /requestFailureCount/);
+  assert.doesNotMatch(workflow, /console\\.error\\([^\\n]*img\\.src/);
+});
