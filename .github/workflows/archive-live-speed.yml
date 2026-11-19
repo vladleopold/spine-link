@@ -54,7 +54,7 @@ jobs:
               try {
                 const started=Date.now();
                 const response=await page.goto('https://spine-link.vercel.app/world-spine-archive',{
-                  waitUntil:'domcontentloaded',timeout:45000,
+                  waitUntil:'commit',timeout:45000,
                 });
                 assert.equal(response?.status(),200);
                 const firstHtml=await page.content();
