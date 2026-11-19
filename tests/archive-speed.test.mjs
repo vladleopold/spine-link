@@ -188,7 +188,7 @@ test('a generated WebP URL from another work is rejected without a card fallback
   }
 });
 
-test('low poster is not advertised while the production asset route blocks it',async()=>{
+test('low quality is allowed only as its exact installed WebM/WebP pair',async()=>{
   const source=[{
     ...entries[0],
     previewPath:'library_02/card-000',
@@ -201,16 +201,21 @@ test('low poster is not advertised while the production asset route blocks it',a
   const log=[];
   globalThis.fetch=stubFetch(log,source);
   process.env.GITHUB_TOKEN='test-only-placeholder';
-  process.env.GITHUB_BRANCH='test-low-poster-blocked';
+  process.env.GITHUB_BRANCH='test-low-poster-paired';
   try{
     const res=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
     assert.equal(res.code,200);
     const html=String(res.body);
     const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
-    assert.match(card,/data-preview-status="blocked-no-webm-poster"/);
-    assert.doesNotMatch(card,/<img|<video|preview-low\.webp|preview-low\.webm|data-fallback-src=|data-video-fallback=|feed-placeholder|Preview unavailable|SPINE/,
-      'a blocked low poster cannot be used as a fallback or shown as an image');
+    assert.match(card,/data-preview-status="poster-pending"/);
+    assert.match(card,/src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview-low\.webp/);
+    assert.match(card,/data-video-src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview-low\.webm/);
+    assert.doesNotMatch(card,/preview-medium\.(?:webp|webm)|preview\.webp|data-fallback-src=|data-video-fallback=|feed-placeholder|Preview unavailable|SPINE/,
+      'low quality is allowed only as the exact paired original media; no substitute');
+    const assetRoute=fs.readFileSync(new URL('../api/github-asset.js',import.meta.url),'utf8');
+    assert.match(assetRoute,/const assetPath = path;/,'asset proxy must preserve the exact requested low poster path');
+    assert.doesNotMatch(assetRoute,/path\.replace\([^;]*preview\.webp/,'low poster must never be rewritten to another quality');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
