@@ -202,7 +202,7 @@ try {
   // Contents API path: DDS becomes a real PNG, atlas page URLs are versioned,
   // and embedded data URLs are stripped from the public library index.
   const rawDds = fixture("DXT5");
-  const rawAtlas = Buffer.from("hero.dds\\nsize: 4,4\\nformat: RGBA8888\\nfilter: Linear,Linear\\n", "utf8");
+  const rawAtlas = Buffer.from("hero.dds\nsize: 4,4\nformat: RGBA8888\nfilter: Linear,Linear\n", "utf8");
   const rawIndex = Buffer.from(JSON.stringify([{
     id: "synthetic-public-entry",
     thumbnail: "data:image/webp;base64,AA==",
@@ -239,7 +239,7 @@ try {
 
   const recoveredAtlas = await get("library/synthetic/raw/hero.atlas", "GET", {}, "raw-atlas", true);
   assert.equal(recoveredAtlas.statusCode, 200);
-  assert.match(recoveredAtlas.body.toString("utf8"), /hero\\.dds\\?v=raw-atlas&dds=png-v1/);
+  assert.match(recoveredAtlas.body.toString("utf8"), /hero\.dds\?v=raw-atlas&dds=png-v1/);
 
   const recoveredIndex = await get("library/index.json", "GET", {}, "raw-index", true);
   assert.equal(recoveredIndex.statusCode, 200);
