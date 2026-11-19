@@ -112,17 +112,17 @@ test('video watch and owner-library previews use only the selected default clip'
 
 test('indexed animation names remain byte-for-byte exact in URLs, media lookup and viewport refit', () => {
   const playerUrl = section(preview, 'function playerUrlForEntry(', 'function archiveUrlForEntry(');
-  assert.match(playerUrl, /const animation = typeof entry\\?\\.defaultAnimation === 'string' \\? entry\\.defaultAnimation : ''/);
-  assert.match(playerUrl, /animation\\.trim\\(\\) \\?/);
-  assert.match(playerUrl, /encodeURIComponent\\(animation\\)/);
+  assert.match(playerUrl, /const animation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+  assert.match(playerUrl, /animation\.trim\(\) \?/);
+  assert.match(playerUrl, /encodeURIComponent\(animation\)/);
 
   const archiveUrl = section(archive, 'function previewUrl(', 'function archiveItemUrl(');
-  assert.match(archiveUrl, /const animation = typeof entry\\?\\.defaultAnimation === 'string' \\? entry\\.defaultAnimation : ''/);
-  assert.match(archiveUrl, /animation\\.trim\\(\\) \\?/);
-  assert.match(archiveUrl, /encodeURIComponent\\(animation\\)/);
+  assert.match(archiveUrl, /const animation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+  assert.match(archiveUrl, /animation\.trim\(\) \?/);
+  assert.match(archiveUrl, /encodeURIComponent\(animation\)/);
 
   const selected = section(archive, 'function selectedAnimationVideo(', 'function safeAsset(');
-  assert.match(selected, /const name = typeof entry\\?\\.defaultAnimation === 'string' \\? entry\\.defaultAnimation : ''/);
-  assert.match(selected, /previews\\[name\\]/);
-  assert.doesNotMatch(selected, /String\\(entry\\?\\.defaultAnimation \\|\\| ''\\)\\.trim\\(\\)/);
+  assert.match(selected, /const name = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+  assert.match(selected, /previews\[name\]/);
+  assert.doesNotMatch(selected, /String\(entry\?\.defaultAnimation \|\| ''\)\.trim\(\)/);
 });
