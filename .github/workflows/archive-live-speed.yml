@@ -136,6 +136,8 @@ jobs:
                 return {
                   id:card.dataset.entryId||'',
                   status:card.dataset.previewStatus||'',
+                  sourceWebmStatus:card.dataset.sourceWebmStatus||'',
+                  sourcePreviewStatus:card.dataset.sourcePreviewStatus||'',
                   video,poster,
                   imageCount:card.querySelectorAll('.feed-media img').length,
                   fallback:!!card.querySelector('[data-fallback-src],[data-video-fallback],.feed-placeholder,.media-fallback'),
@@ -161,10 +163,12 @@ jobs:
               const newest20=first40.slice(0,20);
               const newest20Missing=newest20.filter(item=>!item.video||!item.poster);
               const newest20Blocked=newest20.filter(item=>
-                item.status==='blocked'&&!item.video&&!item.poster);
-              const newest20UnexpectedMissing=newest20Missing.filter(item=>item.status!=='blocked');
+                item.sourceWebmStatus.startsWith('blocked-')&&
+                item.sourcePreviewStatus==='blocked'&&!item.video&&!item.poster);
+              const newest20UnexpectedMissing=newest20Missing.filter(item=>!newest20Blocked.includes(item));
               const newest20InvalidBlocked=newest20.filter(item=>
-                item.status==='blocked'&&(item.video||item.poster));
+                item.sourceWebmStatus.startsWith('blocked-')&&
+                item.sourcePreviewStatus==='blocked'&&(item.video||item.poster));
               const older20Missing=first40.slice(20,40).filter(item=>!item.video||!item.poster);
               // Every eligible newest card must have its own WebM/WebP pair.
               // Explicitly blocked source records remain blank; never guess an
