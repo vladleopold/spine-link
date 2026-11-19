@@ -51,3 +51,10 @@ test('first-poster timeout records only sanitized browser evidence', () => {
   const diagnostic = workflow.slice(workflow.indexOf('ARCHIVE_FIRST_POSTER_FAILURE'), workflow.indexOf('throw error;', workflow.indexOf('ARCHIVE_FIRST_POSTER_FAILURE')));
   assert.ok(!diagnostic.includes('url:'), 'failure diagnostic must not expose asset URLs');
 });
+
+test('preview data-source probe reports counts without exposing archive records', () => {
+  assert.ok(workflow.includes('ARCHIVE_PREVIEW_API_PROBE'));
+  assert.ok(workflow.includes('feed=archive&offset=0&limit=12'));
+  assert.ok(workflow.includes('entries:Array.isArray(payload?.entries)?payload.entries.length:null'));
+  assert.ok(!workflow.includes('console.log(body'));
+});
