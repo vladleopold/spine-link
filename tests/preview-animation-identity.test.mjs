@@ -63,7 +63,7 @@ test('player startup never replaces the requested track with the first runtime t
   const playback = startup.indexOf('playActiveAnimationFromStart()');
   assert.ok(missingTrackGuard >= 0 && blocked > missingTrackGuard && blockedReturn > blocked && playback > blockedReturn,
     'missing requested tracks must be blocked before playback starts');
-  assert.doesNotMatch(startup, /activeAnimation\.name\s*=\s*(?:names|animations|filteredNames)\s*\[\s*0\s*\]/);
+  assert.doesNotMatch(startup, /(?:names|animations|filteredNames)\s*\[\s*0\s*\]/);
 });
 
 test('viewport healing measures only the selected animation', () => {
