@@ -350,14 +350,15 @@ async function sendGitHubRangeAsset(request, response, { path, assetVersion, dat
   return response.status(206).send(chunk);
 }
 
-function sendAssetBuffer(request, response, { path, assetVersion, buffer, etag }) {
+function sendAssetBuffer(request, response, { path, assetVersion, buffer, etag, cacheSource = 'memory', source = null }) {
   const isVideo = isVideoPath(path);
   const rangeHeader = request.headers.range;
   const shouldServeRange = isVideo && rangeHeader && buffer.length > directRangeProxyMinBytes;
   const earlyResponse = setAssetResponseHeaders(request, response, { path, assetVersion, etag });
   if (earlyResponse) return earlyResponse;
   if (isVideo) response.setHeader('Accept-Ranges', shouldServeRange ? 'bytes' : 'none');
-  response.setHeader('X-Spine-Link-Asset-Cache', 'memory');
+  if (source) response.setHeader('X-Spine-Link-Asset-Source', source);
+  response.setHeader('X-Spine-Link-Asset-Cache', cacheSource);
 
   if (shouldServeRange) {
     setNoStoreHeaders(response);
@@ -436,10 +437,11 @@ async function serveRawPublicAssetFallback(request, response, {
   const buffer = Buffer.from(await rawResponse.arrayBuffer());
   if (!buffer.length) return response.status(404).send('Asset is empty');
   putMemoryCacheEntry(cacheKey, { buffer, etag });
-  const sent = sendAssetBuffer(request, response, { path, assetVersion, buffer, etag });
-  response.setHeader('X-Spine-Link-Asset-Source', 'raw-public');
-  response.setHeader('X-Spine-Link-Asset-Cache', 'raw-fallback');
-  return sent;
+  return sendAssetBuffer(request, response, {
+    path, assetVersion, buffer, etag,
+    source: 'raw-public',
+    cacheSource: 'raw-fallback',
+  });
 }
 
 export default async function handler(request, response) {
