@@ -2124,6 +2124,19 @@ const pinchDistance = { value: null };
         });
         if (previouslyRendered) {
           animationMenu.scrollTop = previousScrollTop;
+          // Keep the user's scroll position unless the newly selected animation
+          // would be clipped. In that case move only enough to reveal the active
+          // row; never scroll the surrounding page or substitute another track.
+          const selected = animationMenu.querySelector("button.active");
+          if (selected && window.innerWidth > 1000) {
+            const listBox = animationMenu.getBoundingClientRect();
+            const selectedBox = selected.getBoundingClientRect();
+            if (selectedBox.top < listBox.top) {
+              animationMenu.scrollTop -= listBox.top - selectedBox.top;
+            } else if (selectedBox.bottom > listBox.bottom) {
+              animationMenu.scrollTop += selectedBox.bottom - listBox.bottom;
+            }
+          }
         } else if (window.innerWidth > 1000 && animationMenu.scrollHeight > animationMenu.clientHeight) {
           // On first load reveal the animation from the URL (often near the
           // bottom), without scrolling the surrounding page or player.

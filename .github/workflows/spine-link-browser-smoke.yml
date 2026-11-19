@@ -233,17 +233,24 @@ jobs:
                   activeAnimation.name = 'menu_test_25';
                   menu.replaceChildren();
                   renderAnimationList();
-                  const button = menu.querySelector('button.active');
-                  const menuBox = menu.getBoundingClientRect();
-                  const buttonBox = button.getBoundingClientRect();
-                  const firstSelectionVisible =
-                    buttonBox.top >= menuBox.top - 1 && buttonBox.bottom <= menuBox.bottom + 1;
+                  const visible = () => {
+                    const button = menu.querySelector('button.active');
+                    const menuBox = menu.getBoundingClientRect();
+                    const buttonBox = button.getBoundingClientRect();
+                    return buttonBox.top >= menuBox.top - 1 && buttonBox.bottom <= menuBox.bottom + 1;
+                  };
+                  const firstSelectionVisible = visible();
                   menu.scrollTop = menu.scrollHeight;
-                  const before = menu.scrollTop;
+                  const nearBefore = menu.scrollTop;
                   activeAnimation.name = 'menu_test_24';
                   renderAnimationList();
-                  const after = menu.scrollTop;
-                  return {firstSelectionVisible, before, after};
+                  const nearAfter = menu.scrollTop;
+                  const nearSelectionVisible = visible();
+                  activeAnimation.name = 'menu_test_0';
+                  renderAnimationList();
+                  const farAfter = menu.scrollTop;
+                  const farSelectionVisible = visible();
+                  return {firstSelectionVisible, nearBefore, nearAfter, nearSelectionVisible, farAfter, farSelectionVisible};
                 } finally {
                   animationNames.value = namesBefore;
                   activeAnimation.name = activeBefore;
@@ -252,9 +259,36 @@ jobs:
               });
               assert.equal(selectionScroll.firstSelectionVisible, true,
                 'Initial selected animation must be visible');
-              assert.ok(selectionScroll.before > 30 && Math.abs(selectionScroll.before - selectionScroll.after) < 2,
-                'Animation selection reset scroll: ' + JSON.stringify(selectionScroll));
-              console.log('PASS LIVE ANIMATION SCROLL RETENTION', JSON.stringify(selectionScroll));
+              assert.equal(selectionScroll.nearSelectionVisible, true,
+                'Visible selected animation must remain visible');
+              assert.ok(selectionScroll.nearBefore > 30 &&
+                Math.abs(selectionScroll.nearBefore - selectionScroll.nearAfter) < 2,
+                'Visible selection must preserve exact scroll position: ' + JSON.stringify(selectionScroll));
+              assert.equal(selectionScroll.farSelectionVisible, true,
+                'A newly selected off-screen animation must be revealed');
+              assert.ok(selectionScroll.farAfter < selectionScroll.nearAfter - 30,
+                'Off-screen active row did not adjust the menu scroll: ' + JSON.stringify(selectionScroll));
+              console.log('PASS LIVE ANIMATION SCROLL AND ACTIVE VISIBILITY', JSON.stringify(selectionScroll));
+              await page.setViewportSize({width:390,height:844});
+              const mobileLayout = await page.evaluate(() => {
+                document.getElementById('animation-card')?.classList.add('is-open');
+                const menu = document.getElementById('animation-menu');
+                const card = document.getElementById('animation-card');
+                const download = document.querySelector('#sidebar > .animation-download-block');
+                if (!menu || !card || !download) return null;
+                const cardBox = card.getBoundingClientRect();
+                const downloadBox = download.getBoundingClientRect();
+                return {
+                  nestedScroll: menu.scrollHeight > menu.clientHeight + 1,
+                  downloadBelow: downloadBox.top >= cardBox.bottom - 1,
+                };
+              });
+              assert.ok(mobileLayout, 'Mobile animation menu or download block missing');
+              assert.equal(mobileLayout.nestedScroll, false,
+                'Mobile animation list must grow with content, not create an inner scroll area');
+              assert.equal(mobileLayout.downloadBelow, true,
+                'Mobile download block must remain below the animation menu');
+              console.log('PASS MOBILE ANIMATION MENU FLOW', JSON.stringify(mobileLayout));
               assert.deepEqual(missingAssets, [], 'Spine preview has missing assets');
               assert.deepEqual(pageErrors, [], 'Spine preview JavaScript errors');
               console.log('PASS LIVE PREVIEW', JSON.stringify(info));

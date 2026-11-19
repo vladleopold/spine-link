@@ -7,6 +7,7 @@ on:
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
       - tests/preview-animation-identity.test.mjs
+      - tests/animation-menu-scroll.test.mjs
       - tests/spine-runtime-file-selection.test.mjs
       - tests/spine-atlas-integrity.test.mjs
       - lib/spine-atlas-integrity.js
@@ -21,6 +22,7 @@ on:
       - api/github-archive.js
       - api/github-preview.js
       - tests/preview-animation-identity.test.mjs
+      - tests/animation-menu-scroll.test.mjs
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
       - .github/workflows/archive-performance.yml
@@ -42,4 +44,4 @@ jobs:
         run: |
           node --check api/github-archive.js
           node --check api/github-preview.js
-          node --test tests/archive-speed.test.mjs tests/archive-initial-timing.test.mjs tests/preview-animation-identity.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs
+          node --test tests/archive-speed.test.mjs tests/archive-initial-timing.test.mjs tests/preview-animation-identity.test.mjs tests/animation-menu-scroll.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs
