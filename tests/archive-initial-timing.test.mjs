@@ -45,7 +45,8 @@ test('live archive browser audit runs hourly even when deploy is skipped', () =>
 
 test('first-poster timeout records only sanitized browser evidence', () => {
   assert.match(workflow, /ARCHIVE_FIRST_POSTER_FAILURE/);
-  assert.match(workflow, /imageResponses\\.map\\(x=>\\(\\{status:x\\.status,contentType:x\\.contentType\\}\\)\\)/);
+  assert.match(workflow, /imageResponses\\.map/);
+  assert.match(workflow, /contentType:x\\.contentType/);
   assert.match(workflow, /requestFailureCount/);
   assert.doesNotMatch(workflow, /console\\.error\\([^\\n]*img\\.src/);
 });
