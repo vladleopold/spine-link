@@ -723,23 +723,8 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3) {
 
 // Download buttons for the work page sidebar — mirrors the editor block in
 // src/SpineApp.tsx so the server-rendered /p/<id> page offers the same files.
-// Each animation in `entry.allAnimationPreviews` carries its own set of URLs;
-// the "All" variants fall back to whichever animation actually has the file.
-// Resolves which preview a work should present as its moving thumbnail.
-//
-// A work is created from one Spine skeleton that can carry several animations
-// (idle, win, …). The exporter records one preview per animation, but the work
-// only has a single "main" preview — the one for its defaultAnimation. When
-// that animation is a 1–3 frame clip (e.g. an `idle` that is a single held
-// frame) the resulting WebM is effectively a still image: the owner-thumb and
-// the video-watch panel show a zero-length video and the user sees nothing
-// moving.
-//
-// This resolver checks the chosen animation's preview duration. If it is too
-// short (< 2 s) it walks the remaining animations in declaration order and
-// returns the first one whose preview is long enough. The returned object
-// carries the URL, the poster and the duration so every consumer (owner card,
-// video-watch panel, SEO metadata) renders the same moving clip.
+// Resolve media only from the exact indexed defaultAnimation. A missing or short
+// selected preview remains blocked; another animation is never substituted.
 function resolvePreviewTarget(entry, origin = '') {
   const chosen = String(entry?.defaultAnimation || '').trim();
   const previews = entry && entry.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
@@ -768,7 +753,6 @@ function resolvePreviewTarget(entry, origin = '') {
     duration,
     isFallback: false,
   };
-}
 }
 
 // Compact download picker for the sidebar.
