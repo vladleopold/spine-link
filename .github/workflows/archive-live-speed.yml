@@ -30,8 +30,8 @@ jobs:
           for attempt in $(seq 1 60); do
             summary="$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" \
               --jq '.check_runs[] | select(.name == "Vercel Preview Comments" and .conclusion == "success") | .output.summary' | tail -n 1 || true)"
-            host="$(printf '%s' "$summary" | sed -nE 's#.*https://vercel\\.live/open-feedback/([^? /]+).*#\\1#p')"
-            if [[ "$host" =~ ^[a-z0-9.-]+\\.vercel\\.app$ ]]; then
+            host="$(printf '%s' "$summary" | sed -nE 's#.*https://vercel\.live/open-feedback/([^? /]+).*#\1#p')"
+            if [[ "$host" =~ ^[a-z0-9.-]+\.vercel\.app$ ]]; then
               echo "ARCHIVE_BASE_URL=https://$host" >> "$GITHUB_ENV"
               echo "Resolved preview for exact HEAD: $host"
               exit 0
