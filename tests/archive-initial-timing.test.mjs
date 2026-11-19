@@ -10,7 +10,7 @@ test('initial archive poster timing excludes intentional prefetch warm-up', () =
   const evidence = workflow.indexOf('initialMs:initialPosterMs');
   assert.ok(firstPoster > 0, 'missing first-poster timing checkpoint');
   assert.ok(warmup > firstPoster, 'first-poster timing includes warm-up delay');
-  assert.ok(evidence > warmup, 'logged metric must use the captured checkpoint');
+  assert.ok(evidence > firstPoster && evidence < warmup, 'logged metric must use the captured checkpoint before warm-up');
   assert.ok(!workflow.includes('initialMs:Date.now()-started'), 'old inflated metric must not return');
 });
 
@@ -27,4 +27,11 @@ test('first visible archive card decodes its WebP within one second and runs hou
     'capture navigation and poster network timings to isolate a regression');
   assert.doesNotMatch(workflow,/older20Missing\.map\(x=>x\.id\)|JSON\.stringify\(newest20Missing\.map\(x=>x\.id\)\)/,
     'public CI logs must not disclose private work identifiers');
+});
+
+const lifecycleWorkflow = readFileSync(new URL('../.github/workflows/keep-pull-requests-empty.yml', import.meta.url), 'utf8');
+test('repository lifecycle workflow cannot close or mutate pull requests', () => {
+  assert.match(lifecycleWorkflow, /workflow_dispatch:/);
+  assert.doesNotMatch(lifecycleWorkflow, /pull_request_target:|schedule:|pull-requests:\\s*write|issues:\\s*write|pulls\\.update/,
+    'automatic PR closure and write permissions must remain disabled');
 });
