@@ -53,9 +53,15 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   assert.ok(start >= 0 && end > start, 'archive HTML renderer must exist');
   const archive = source.slice(start, end);
   assert.match(archive, /const firstPoster = initialItems\.find\(\(item\) => item\.poster\)\?\.poster \|\| ''/);
-  assert.match(archive, /const firstPosterPreload = firstPoster/);
-  assert.match(archive, /rel="preload" as="image" href="\$\{escapeHtml\(firstPoster\)\}" fetchpriority="high"/,
-    'the actual first generated WebP must be preloaded from the document head');
+  assert.match(archive, /let eligiblePosterIndex = 0/);
+  assert.match(archive, /item\.poster && item\.video \? eligiblePosterIndex\+\+ : -1/,
+    'poster priority must count eligible same-work pairs, not blocked card positions');
+  assert.match(archive, /posterIndex >= 0 && posterIndex < 4/);
+  assert.match(archive, /posterIndex >= 0 && posterIndex < 2/);
+  assert.match(archive, /const posterPreloads = initialItems[\s\S]*?\.slice\(0, 4\)/);
+  assert.match(archive, /href="\$\{escapeHtml\(item\.poster\)\}" fetchpriority="\$\{index < 2 \? 'high' : 'low'\}"/,
+    'the first four eligible WebP posters must be preloaded before client script execution');
+  assert.match(archive, /\$\{posterPreloads\}/);
   assert.doesNotMatch(archive, /<link rel="stylesheet" href="\/page-transitions\.css"/,
     'decorative transition CSS must not block the first poster');
   assert.doesNotMatch(archive, /<script src="\/(?:spine-embers\.js|page-transitions\.js)/,
