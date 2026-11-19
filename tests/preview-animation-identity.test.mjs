@@ -55,12 +55,15 @@ test('player keeps the exact requested animation and marks missing tracks blocke
 
 test('player startup never replaces the requested track with the first runtime track', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
-  assert.match(startup, /const requestedAnimation = activeAnimation\\.name/);
-  assert.match(startup, /animation: requestedAnimation/);
-  assert.match(startup, /if \\(!names\\.includes\\(requestedAnimation\\)\\) \\{[\\s\\S]*markPreviewBlocked\\("SELECTED_SPINE_ANIMATION_UNAVAILABLE"\\);[\\s\\S]*return;/);
-  assert.ok(startup.indexOf('if (!names.includes(requestedAnimation))') < startup.indexOf('playActiveAnimationFromStart()'),
+  assert.ok(startup.includes('const requestedAnimation = activeAnimation.name'));
+  assert.ok(startup.includes('animation: requestedAnimation'));
+  const missingTrackGuard = startup.indexOf('if (!names.includes(requestedAnimation))');
+  const blocked = startup.indexOf('markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE")', missingTrackGuard);
+  const blockedReturn = startup.indexOf('return;', blocked);
+  const playback = startup.indexOf('playActiveAnimationFromStart()');
+  assert.ok(missingTrackGuard >= 0 && blocked > missingTrackGuard && blockedReturn > blocked && playback > blockedReturn,
     'missing requested tracks must be blocked before playback starts');
-  assert.doesNotMatch(startup, /activeAnimation\\.name\\s*=\\s*(?:names|animations|filteredNames)\\s*\\[\\s*0\\s*\\]/);
+  assert.doesNotMatch(startup, /activeAnimation\.name\s*=\s*(?:names|animations|filteredNames)\s*\[\s*0\s*\]/);
 });
 
 test('viewport healing measures only the selected animation', () => {
