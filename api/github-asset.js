@@ -380,6 +380,68 @@ function sendAssetBuffer(request, response, { path, assetVersion, buffer, etag }
   return response.status(200).send(buffer);
 }
 
+
+async function serveRawPublicAssetFallback(request, response, {
+  owner, repo, branch, path, assetVersion, cacheKey,
+}) {
+  // The Contents API can rate-limit or reject the deployment token while
+  // the same public repository object remains available from raw.githubusercontent.com.
+  // Resolve the exact same path only; never substitute another work, tier or animation.
+  const encodedBranch = encodeURIComponent(branch).replace(/%2F/g, '/');
+  const encodedPath = String(path).split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${encodedBranch}/${encodedPath}`;
+  const headers = {};
+  if (request.headers.range) headers.Range = request.headers.range;
+  if (request.headers['if-none-match']) headers['If-None-Match'] = request.headers['if-none-match'];
+  if (request.headers['if-modified-since']) headers['If-Modified-Since'] = request.headers['if-modified-since'];
+
+  let rawResponse;
+  try {
+    rawResponse = await fetch(rawUrl, { method: request.method, headers });
+  } catch {
+    return null;
+  }
+  if (rawResponse.status === 304) {
+    response.setHeader('X-Spine-Link-Asset-Source', 'raw-public');
+    setAssetResponseHeaders(request, response, {
+      path, assetVersion, etag: rawResponse.headers.get('etag') || '',
+    });
+    return response.status(304).end();
+  }
+  if (!rawResponse.ok) return null;
+
+  const etag = rawResponse.headers.get('etag') || '';
+  response.setHeader('X-Spine-Link-Asset-Source', 'raw-public');
+  const earlyResponse = setAssetResponseHeaders(request, response, { path, assetVersion, etag });
+  if (earlyResponse) return earlyResponse;
+
+  if (rawResponse.status === 206) {
+    setNoStoreHeaders(response);
+    if (isVideoPath(path)) response.setHeader('Accept-Ranges', 'bytes');
+    const contentRange = rawResponse.headers.get('content-range');
+    const contentLength = rawResponse.headers.get('content-length');
+    if (contentRange) response.setHeader('Content-Range', contentRange);
+    if (contentLength) response.setHeader('Content-Length', contentLength);
+    if (request.method === 'HEAD') return response.status(206).end();
+    const chunk = Buffer.from(await rawResponse.arrayBuffer());
+    return response.status(206).send(chunk);
+  }
+
+  if (request.method === 'HEAD') {
+    const contentLength = rawResponse.headers.get('content-length');
+    if (contentLength) response.setHeader('Content-Length', contentLength);
+    return response.status(200).end();
+  }
+
+  const buffer = Buffer.from(await rawResponse.arrayBuffer());
+  if (!buffer.length) return response.status(404).send('Asset is empty');
+  putMemoryCacheEntry(cacheKey, { buffer, etag });
+  const sent = sendAssetBuffer(request, response, { path, assetVersion, buffer, etag });
+  response.setHeader('X-Spine-Link-Asset-Source', 'raw-public');
+  response.setHeader('X-Spine-Link-Asset-Cache', 'raw-fallback');
+  return sent;
+}
+
 export default async function handler(request, response) {
   // CORS headers for headless browser (origin: null)
   response.setHeader('Access-Control-Allow-Origin', '*');
@@ -441,6 +503,14 @@ export default async function handler(request, response) {
         githubResponse = sameFolderPng;
         response.setHeader('X-Spine-Link-DDS-PNG-Alias', 'same-stem');
       }
+    }
+
+    if (!githubResponse.ok && [401, 403, 429, 500, 502, 503, 504].includes(githubResponse.status)) {
+      const rawFallback = await serveRawPublicAssetFallback(request, response, {
+        owner, repo, branch, path: assetPath, assetVersion, cacheKey,
+      });
+      if (rawFallback) return rawFallback;
+      return response.status(githubResponse.status).send('Asset not found');
     }
 
     if (!githubResponse.ok) {
