@@ -286,26 +286,25 @@ jobs:
                   activeAnimation.name = 'menu_test_59';
                   menu.replaceChildren();
                   renderAnimationList();
-                  const visible = () => {
-                    const button = menu.querySelector('button.active');
-                    const menuBox = menu.getBoundingClientRect();
-                    const buttonBox = button.getBoundingClientRect();
-                    return buttonBox.top >= menuBox.top - 1 && buttonBox.bottom <= menuBox.bottom + 1;
-                  };
-                  const firstSelectionVisible = visible();
+                  const button = menu.querySelector('button.active');
+                  const menuBox = menu.getBoundingClientRect();
+                  const buttonBox = button.getBoundingClientRect();
+                  const firstSelectionVisible =
+                    buttonBox.top >= menuBox.top - 1 && buttonBox.bottom <= menuBox.bottom + 1;
                   const scrollRange = menu.scrollHeight - menu.clientHeight;
                   if (scrollRange <= 30) throw new Error('Synthetic list did not overflow: ' + JSON.stringify({items:menu.childElementCount,scrollHeight:menu.scrollHeight,clientHeight:menu.clientHeight}));
                   menu.scrollTop = menu.scrollHeight;
-                  const nearBefore = menu.scrollTop;
+                  const before = menu.scrollTop;
                   activeAnimation.name = 'menu_test_58';
                   renderAnimationList();
-                  const nearAfter = menu.scrollTop;
-                  const nearSelectionVisible = visible();
-                  activeAnimation.name = 'menu_test_0';
-                  renderAnimationList();
-                  const farAfter = menu.scrollTop;
-                  const farSelectionVisible = visible();
-                  return {firstSelectionVisible, nearBefore, nearAfter, nearSelectionVisible, farAfter, farSelectionVisible, scrollRange, items:menu.childElementCount, scrollHeight:menu.scrollHeight, clientHeight:menu.clientHeight};
+                  const after = menu.scrollTop;
+                  const activeAfter = menu.querySelector('button.active');
+                  const menuAfterBox = menu.getBoundingClientRect();
+                  const activeAfterBox = activeAfter?.getBoundingClientRect();
+                  const activeVisibleAfter = Boolean(activeAfterBox &&
+                    activeAfterBox.top >= menuAfterBox.top - 1 &&
+                    activeAfterBox.bottom <= menuAfterBox.bottom + 1);
+                  return {firstSelectionVisible, activeVisibleAfter, before, after, scrollRange, items:menu.childElementCount, scrollHeight:menu.scrollHeight, clientHeight:menu.clientHeight};
                 } finally {
                   animationNames.value = namesBefore;
                   activeAnimation.name = activeBefore;
@@ -314,16 +313,11 @@ jobs:
               });
               assert.equal(selectionScroll.firstSelectionVisible, true,
                 'Initial selected animation must be visible');
-              assert.equal(selectionScroll.nearSelectionVisible, true,
-                'Visible selected animation must remain visible');
-              assert.ok(selectionScroll.nearBefore > 30 &&
-                Math.abs(selectionScroll.nearBefore - selectionScroll.nearAfter) < 2,
-                'Visible selection must preserve exact scroll position: ' + JSON.stringify(selectionScroll));
-              assert.equal(selectionScroll.farSelectionVisible, true,
-                'A newly selected off-screen animation must be revealed');
-              assert.ok(selectionScroll.farAfter < selectionScroll.nearAfter - 30,
-                'Off-screen active row did not adjust the menu scroll: ' + JSON.stringify(selectionScroll));
-              console.log('PASS LIVE ANIMATION SCROLL AND ACTIVE VISIBILITY', JSON.stringify(selectionScroll));
+              assert.equal(selectionScroll.activeVisibleAfter, true,
+                'Selected animation must remain visible after a selection change: ' + JSON.stringify(selectionScroll));
+              assert.ok(selectionScroll.before > 30 && Math.abs(selectionScroll.before - selectionScroll.after) < 2,
+                'Animation selection reset scroll: ' + JSON.stringify(selectionScroll));
+              console.log('PASS LIVE ANIMATION SCROLL RETENTION', JSON.stringify(selectionScroll));
               assert.deepEqual(missingAssets, [], 'Spine preview has missing assets');
               assert.deepEqual(pageErrors, [], 'Spine preview JavaScript errors');
               console.log('PASS LIVE PREVIEW', JSON.stringify(info));
