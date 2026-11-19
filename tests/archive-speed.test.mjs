@@ -20,6 +20,7 @@ const entries=Array.from({length:80},(_,i)=>({
   previewPath:'library_02/card-'+i,
   skeleton:'skeleton-'+i+'.skel',
   webmPreview:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webm',
+  webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-medium.webm',
   webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-low.webm',
   webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-low.webp',
   webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-medium.webp',
@@ -69,7 +70,7 @@ test('archive feed paginates without probing every media card, caches public res
   }
 });
 
-test('source PNG/WebP textures and guessed poster URLs never unlock archive WebM',async()=>{
+test('source textures and guessed posters never unlock archive WebM or render a fallback',async()=>{
   const source=[{
     ...entries[0],
     previewPath:'library_02/card-000',
@@ -80,9 +81,9 @@ test('source PNG/WebP textures and guessed poster URLs never unlock archive WebM
     thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-000/texture.png',
     thumbnail:'data:image/webp;base64,VEVYVFVSRQ==',
     webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
+    webmPreviewMedium:'',
     webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
-    webmStatus:'ready',
-    previewStatus:'ready',
+    webmStatus:'ready',previewStatus:'ready',
   }];
   const log=[];
   globalThis.fetch=stubFetch(log,source);
@@ -95,40 +96,34 @@ test('source PNG/WebP textures and guessed poster URLs never unlock archive WebM
     const html=String(res.body);
     const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
     assert.ok(card,'initial card must be rendered');
-    assert.match(card,/data-preview-status="blocked-no-webp-poster"/);
-    assert.match(card,/Preview unavailable/);
-    assert.doesNotMatch(card,/texture\.(?:png|webp)|preview\.webp|data:image\/webp|data-video-src=/,
-      'source textures, data-URI thumbnails, and guessed same-work paths are not generated posters');
+    assert.match(card,/data-preview-status="blocked-no-webm-poster"/);
+    assert.doesNotMatch(card,/<img|<video|feed-placeholder|Preview unavailable|SPINE|texture\.(?:png|webp)|preview\.webp|data:image\/webp|data-video-src=|data-fallback-src=/,
+      'without a matching video/poster pair the card must render no visual substitute');
     assert.ok(html.includes("if(!poster||!poster.complete||poster.naturalWidth<=0)"),
-      'WebM must wait for a decoded, non-empty poster');
-    assert.ok(html.includes('isGeneratedPosterUrl')&&html.includes('preview-medium|generated-preview'),
-      'lazy playback must require a generated WebP poster');
-    const embedded=html.match(/<script type="application\/json" id="archive-next-page">([^<]+)<\/script>/);
-    assert.ok(embedded);
-    const batch=JSON.parse(embedded[1]);
-    assert.equal(batch.entries.length,0);
+      'WebM must wait for a decoded first-frame poster');
+    assert.ok(html.includes('preview-medium|preview-low'),
+      'only medium/low generated WebP posters may unlock playback');
     assert.ok(log.length<=6);
   }finally{
     globalThis.fetch=originalFetch;
-    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
-    else process.env.GITHUB_TOKEN=originalToken;
-    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;
-    else process.env.GITHUB_BRANCH=originalBranch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
 
-test('only an explicit same-work generated WebP poster unlocks a lazy WebM',async()=>{
+test('only a matching medium WebM and its own medium first-frame WebP unlock a card',async()=>{
   const source=[{
     ...entries[0],
     previewPath:'library_02/card-000',
     webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webp',
+    webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp',
     webpPoster:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webp',
     thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-000/texture.webp',
     thumbnail:'https://spine-link.vercel.app/assets/library_02/card-000/texture.webp',
     webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
+    webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webm',
     webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
-    webmStatus:'ready',
-    previewStatus:'ready',
+    webmStatus:'ready',previewStatus:'ready',
   }];
   const log=[];
   globalThis.fetch=stubFetch(log,source);
@@ -140,39 +135,35 @@ test('only an explicit same-work generated WebP poster unlocks a lazy WebM',asyn
     assert.equal(res.code,200);
     const html=String(res.body);
     const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
-    assert.match(card,/data-preview-status="poster-pending"/,
-      'a URL is pending until the browser decodes the actual image bytes');
+    assert.match(card,/data-preview-status="poster-pending"/);
     assert.match(card,/src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview-medium\.webp/,
-      'the primary poster must be the generated medium WebP for this work');
-    assert.match(card,/data-fallback-src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview\.webp/,
-      'fallback must be a second generated still from the same work');
-    assert.match(card,/data-video-src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview-low\.webm/,
-      'WebM is only attached after a generated poster is present');
-    assert.doesNotMatch(card,/texture\.webp/,
-      'a WebP texture page must never be selected as a poster');
-    assert.ok(html.includes("card.dataset.previewStatus!=='ready-poster-lazy-video'"),
-      'client playback must wait for a decoded poster');
+      'poster is the medium WebP extracted from the medium video');
+    assert.match(card,/data-video-src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview-medium\.webm/,
+      'video and poster must be the same quality tier');
+    assert.doesNotMatch(card,/data-fallback-src=|data-video-fallback=|preview-low\.webm|preview\.webm/,
+      'no image/video fallback and no quality mismatch');
+    assert.ok(html.includes("card.dataset.previewStatus!=='ready-poster-lazy-video'"));
     assert.ok(log.length<=6);
   }finally{
     globalThis.fetch=originalFetch;
-    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
-    else process.env.GITHUB_TOKEN=originalToken;
-    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;
-    else process.env.GITHUB_BRANCH=originalBranch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
 
-test('a generated WebP URL from another work is rejected',async()=>{
+test('a generated WebP URL from another work is rejected without a card fallback',async()=>{
   const source=[{
     ...entries[0],
     previewPath:'library_02/card-000',
     webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/other-work/preview-medium.webp',
+    webpPosterLow:'',
     webpPoster:'https://spine-link.vercel.app/assets/library_02/other-work/preview.webp',
     thumbnailPoster:'',
     thumbnail:'',
-    webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
-    webmStatus:'ready',
-    previewStatus:'ready',
+    webmPreview:'',
+    webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webm',
+    webmPreviewLow:'',
+    webmStatus:'ready',previewStatus:'ready',
   }];
   const log=[];
   globalThis.fetch=stubFetch(log,source);
@@ -183,15 +174,42 @@ test('a generated WebP URL from another work is rejected',async()=>{
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
     const html=String(res.body);
     const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
-    assert.match(card,/data-preview-status="blocked-no-webp-poster"/);
-    assert.doesNotMatch(card,/other-work|data-video-src=/,
-      'poster and video must belong to the same archive work');
+    assert.match(card,/data-preview-status="blocked-no-webm-poster"/);
+    assert.doesNotMatch(card,/other-work|data-video-src=|<img|<video|feed-placeholder|Preview unavailable|SPINE/,
+      'cross-work posters must not be shown and no fallback may render');
   }finally{
     globalThis.fetch=originalFetch;
-    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
-    else process.env.GITHUB_TOKEN=originalToken;
-    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;
-    else process.env.GITHUB_BRANCH=originalBranch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
+
+test('low quality is used only when an already-installed low WebM/WebP pair exists',async()=>{
+  const source=[{
+    ...entries[0],
+    previewPath:'library_02/card-000',
+    webmPreview:'',webmPreviewMedium:'',
+    webpPoster:'',webpPosterMedium:'',
+    webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
+    webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp',
+    webmStatus:'ready',previewStatus:'ready',
+  }];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-low-pair-only';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    const html=String(res.body);
+    const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
+    assert.match(card,/preview-low\.webp/);
+    assert.match(card,/preview-low\.webm/);
+    assert.doesNotMatch(card,/preview-medium\.(?:webp|webm)|preview\.webp|data-fallback-src=|data-video-fallback=/);
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
 
@@ -216,10 +234,12 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     assert.ok(html.includes('const batch=embeddedEntries.slice(start,start+pageSize)'),
       'client must paginate in-memory rather than waiting for a feed API request');
     assert.ok(batch.entries.every(e=>e.poster&&e.video),'Next batch has WebP poster metadata');
-    assert.match(batch.entries[0].poster,/preview-medium\.webp/,'Prefer the supported medium WebP poster');
-    assert.match(batch.entries[0].posterFallback,/preview\.webp/,'Fallback to another still for the same work');
-    assert.doesNotMatch(batch.entries[0].poster,/preview-low\.webp/,'Never request the intentionally disabled low poster');
-    assert.notEqual(batch.entries[0].poster,batch.entries[0].posterFallback,'Poster fallback must not repeat broken URL');
+    assert.match(batch.entries[0].poster,/preview-medium\.webp/,'Prefer the medium WebP first-frame poster');
+    assert.match(batch.entries[0].video,/preview-medium\.webm/,'Pair the poster with its medium WebM');
+    assert.equal(batch.entries[0].posterFallback,undefined,'No image fallback is permitted');
+    assert.equal(batch.entries[0].videoFallback,undefined,'No video fallback is permitted');
+    assert.ok(batch.entries.every(e=>e.quality==='medium'),'Use medium quality when installed');
+    assert.doesNotMatch(html,/data-video-fallback|data-fallback-src|feed-placeholder|Preview unavailable/,'No feed fallback may be emitted');
     assert.ok(html.includes('const warmedPosters=new Map()'),'Keep warmed images alive through pagination');
     assert.ok(html.includes('slice(0,pageSize)'),'Warm all next-page WebP cards before scroll');
     assert.ok(html.includes("video.preload='none'"),'dynamic video should never preload offscreen');
