@@ -34,3 +34,11 @@ test('archive HTML and lazy feed retain the CDN snapshot across cold visitors', 
   assert.equal(archiveSource.split(cachePolicy).length - 1, 2,
     'both archive HTML and JSON feed must use the five-minute CDN cache');
 });
+
+test('live archive browser audit runs hourly even when deploy is skipped', () => {
+  assert.match(workflow, /schedule:\\s*\\n\\s*- cron: '17 \\* \\* \\* \\*'/);
+  assert.match(workflow, /github\\.event_name != 'workflow_run'/,
+    'scheduled runs must not inherit the deployment-only success gate');
+  assert.match(workflow, /github\\.event_name != 'pull_request'[\\s\\S]*ARCHIVE_BASE_URL=https:\\/\\/spine-link\\.vercel\\.app/,
+    'non-PR scheduled runs must audit the production alias');
+});
