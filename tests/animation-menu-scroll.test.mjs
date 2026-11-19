@@ -33,6 +33,9 @@ test('live animation-menu scroll gate stays strict and runs only after productio
     'a PR must not run production browser checks against the old production deployment');
   assert.ok(!browserWorkflow.includes('  push:'),
     'the smoke must wait for the deployment workflow, not race it on main push');
+  assert.ok(browserWorkflow.includes('release_gate:'));
+  assert.ok(browserWorkflow.includes('Deploy to Vercel'));
+  assert.ok(browserWorkflow.includes("needs.release_gate.outputs.deployed == 'true'"));
   assert.ok(browserWorkflow.includes('farSelectionVisible'));
   assert.ok(browserWorkflow.includes('A newly selected off-screen animation must be revealed'));
 });
