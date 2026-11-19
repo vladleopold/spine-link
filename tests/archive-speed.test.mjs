@@ -160,9 +160,11 @@ test('archive cards stay poster-only when the index has no defaultAnimation',asy
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
     assert.equal(res.code,200);
     const html=String(res.body);
-    const card=html.match(/<article class="feed-card"[\\s\\S]*?<\\/article>/)?.[0]||'';
+    const cardStart=html.indexOf('<article class="feed-card"');
+    const cardEnd=html.indexOf('</article>',cardStart);
+    const card=cardStart>=0&&cardEnd>=0?html.slice(cardStart,cardEnd+10):'';
     assert.ok(card,'initial card must be rendered');
-    assert.match(card,/data-preview-status="blocked-no-default-animation"/);
+    assert.match(card,/data-preview-status="poster-only"/);
     assert.doesNotMatch(card,/data-video-src=/,'an unindexed animation must not receive a WebM source');
   }finally{
     globalThis.fetch=originalFetch;
