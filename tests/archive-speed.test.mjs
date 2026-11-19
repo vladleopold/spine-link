@@ -27,6 +27,16 @@ const entries=Array.from({length:80},(_,i)=>({
   thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webp',
   webmStatus:'ready',previewStatus:'ready',
   animations:['walk'],
+  defaultAnimation:'walk',
+  allAnimationPreviews:{walk:{
+    webmPreview:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webm',
+    webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-medium.webm',
+    webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-low.webm',
+    webpPoster:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webp',
+    webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-medium.webp',
+    webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-low.webp',
+    previewDuration:2.5,
+  }},
   previewWidth:960,previewHeight:720,
 }));
 const originalFetch=globalThis.fetch;
@@ -84,6 +94,7 @@ test('source textures and guessed posters never unlock archive WebM or render a 
     webmPreviewMedium:'',
     webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
     webmStatus:'ready',previewStatus:'ready',
+    allAnimationPreviews:{},
   }];
   const log=[];
   globalThis.fetch=stubFetch(log,source);
@@ -124,6 +135,12 @@ test('only a matching medium WebM and its own medium first-frame WebP unlock a c
     webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webm',
     webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
     webmStatus:'ready',previewStatus:'ready',
+    allAnimationPreviews:{walk:{
+      webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webm',
+      webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
+      webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webp',
+      webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp',
+    }},
   }];
   const log=[];
   globalThis.fetch=stubFetch(log,source);
@@ -165,6 +182,10 @@ test('a generated WebP URL from another work is rejected without a card fallback
     webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webm',
     webmPreviewLow:'',
     webmStatus:'ready',previewStatus:'ready',
+    allAnimationPreviews:{walk:{
+      webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webm',
+      webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/other-work/preview-medium.webp',
+    }},
   }];
   const log=[];
   globalThis.fetch=stubFetch(log,source);
@@ -197,6 +218,10 @@ test('low quality is allowed only as its exact installed WebM/WebP pair',async()
     webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
     webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp',
     webmStatus:'ready',previewStatus:'ready',
+    allAnimationPreviews:{walk:{
+      webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
+      webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp',
+    }},
   }];
   const log=[];
   globalThis.fetch=stubFetch(log,source);
@@ -291,4 +316,31 @@ test('preview sidebar keeps all supporting panels below the animation picker on 
   assert.match(preview,/#sidebar > #set-card,\s*#sidebar > \.note-card\s*\{\s*order:\s*6;\s*\}/);
   assert.match(preview,/@media \(min-width: 1001px\)[\s\S]*#sidebar > #animation-card\s*\{\s*flex:\s*0 0 auto;\s*\}/,
     'the long animation picker must not flex-shrink below the player height');
+});
+
+
+test('archive never substitutes another animation when defaultAnimation is absent or unavailable',async()=>{
+  const source=[
+    {...entries[0],defaultAnimation:'',allAnimationPreviews:entries[0].allAnimationPreviews},
+    {...entries[1],id:'missing-default',previewPath:'library_02/missing-default',defaultAnimation:'missing',allAnimationPreviews:entries[1].allAnimationPreviews},
+  ];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-no-animation-substitution';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'12'}},res);
+    assert.equal(res.code,200);
+    assert.equal(res.body.entries.length,2);
+    for(const item of res.body.entries){
+      assert.equal(item.poster,'','no other animation may supply a poster');
+      assert.equal(item.video,'','no other animation may supply WebM');
+      assert.equal(item.quality,'','unselected animation must remain blocked');
+    }
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
 });
