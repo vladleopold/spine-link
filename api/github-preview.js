@@ -746,20 +746,21 @@ function resolvePreviewTarget(entry, origin = '') {
     : null;
   const selected = chosen && previews ? previews[chosen] : null;
   const fix = origin ? (value) => repairAnimationAssetUrl(entry, value, origin) : (value) => value;
-  const selectedUrl = typeof selected?.webmPreview === 'string' && selected.webmPreview.trim()
-    ? fix(selected.webmPreview.trim())
+  const selectedFullValue = selected?.webmPreview || selected?.webmPreviewMedium || selected?.webmPreviewLow || '';
+  const selectedLowValue = selected?.webmPreviewLow || selected?.webmPreviewMedium || selected?.webmPreview || '';
+  const selectedUrl = typeof selectedFullValue === 'string' && selectedFullValue.trim()
+    ? fix(selectedFullValue.trim())
     : '';
-  // The work-level WebM is the indexed defaultAnimation's export. Never walk
-  // another animation when this clip is missing or too short.
-  const indexedDefaultUrl = chosen && typeof entry?.webmPreview === 'string' && entry.webmPreview.trim()
-    ? fix(entry.webmPreview.trim())
+  const selectedLowUrl = typeof selectedLowValue === 'string' && selectedLowValue.trim()
+    ? fix(selectedLowValue.trim())
     : '';
-  const durationValue = Number(selected?.previewDuration ?? entry?.previewDuration ?? 0);
+  const durationValue = Number(selected?.previewDuration ?? 0);
   const duration = Number.isFinite(durationValue) && durationValue > 0 ? durationValue : 0;
   const shortClip = duration > 0 && duration < 2;
   return {
     name: chosen,
-    url: shortClip ? '' : (selectedUrl || indexedDefaultUrl),
+    url: shortClip ? '' : selectedUrl,
+    lowUrl: shortClip ? '' : (selectedLowUrl || selectedUrl),
     poster: typeof selected?.webpPoster === 'string' && selected.webpPoster.trim()
       ? selected.webpPoster.trim()
       : (typeof entry?.thumbnailPoster === 'string' ? entry.thumbnailPoster.trim() : ''),
@@ -2684,11 +2685,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
         // The owner library is a dense strip of thumbnails that autoplays several
         // clips at once, so the cards use the LOW (360p) WebM. The full-quality
         // clip stays on the page's big video preview below the player.
-        const lowWebm = target.url ? entryVideoAsset(
-          repairEntryAssetUrl(item, item?.webmPreviewLow || item?.webmPreviewMedium || item?.webmPreview || '', origin),
-          item,
-          'webm',
-        ) : '';
+        const lowWebm = target.lowUrl ? entryVideoAsset(target.lowUrl, item, 'webm') : '';
         return {
           title: cleanPublicText(item?.title || item?.id || 'Spine preview'),
           url: `${origin}/p/${encodeURIComponent(String(item?.id || '').trim())}`,

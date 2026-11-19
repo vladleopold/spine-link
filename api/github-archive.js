@@ -66,12 +66,33 @@ function entryVideoAsset(value = '', entry = {}, fallback = '') {
   return appendAssetVersion(safeVideo(value), assetVersionForEntry(entry, fallback));
 }
 
+function selectedAnimationVideo(entry = {}) {
+  const name = String(entry?.defaultAnimation || '').trim();
+  const previews = entry?.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
+    ? entry.allAnimationPreviews
+    : null;
+  const selected = name && previews ? previews[name] : null;
+  return {
+    name,
+    full: entryVideoAsset(
+      selected?.webmPreview || selected?.webmPreviewMedium || selected?.webmPreviewLow || '',
+      entry,
+      'webm',
+    ),
+    low: entryVideoAsset(
+      selected?.webmPreviewLow || selected?.webmPreviewMedium || selected?.webmPreview || '',
+      entry,
+      'webm',
+    ),
+  };
+}
+
 function entryVideoSrc(origin, entry = {}) {
-  const direct = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
-  if (direct) return direct;
-  const medium = entryVideoAsset(entry?.webmPreviewMedium || '', entry, 'preview-medium');
-  if (medium) return medium;
-  return '';
+  return selectedAnimationVideo(entry).full;
+}
+
+function entryVideoLowSrc(origin, entry = {}) {
+  return selectedAnimationVideo(entry).low;
 }
 
 function safeAsset(value = '') {
@@ -464,7 +485,8 @@ function homepageFeedEntries(origin, entries, metrics) {
       ownerName: String(entry?.ownerName || 'Spine creator'),
       ownerUrl: entry?.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
       previewUrl: `${origin}${previewUrl(entry)}`,
-      webmPreview: entryVideoAsset(entry?.webmPreview || '', entry, 'webm'),
+      webmPreview: entryVideoLowSrc(origin, entry),
+      previewAnimation: String(entry?.defaultAnimation || '').trim(),
       thumbnailPoster: poster,
       thumbnail,
       thumbnailType: isGifThumbnail ? 'gif' : 'image',
@@ -515,9 +537,7 @@ function archiveFeedEntry(origin, entry, metrics) {
   ].filter(isWebpPosterUrl);
   const lowPoster = posterCandidates[0] || '';
   const alternatePoster = posterCandidates.find(url => url !== lowPoster) || '';
-  const lowVideo = video
-    ? entryVideoSrc(origin, { ...entry, webmPreview: entry?.webmPreviewLow || entry?.webmPreviewMedium || '' }) || video
-    : '';
+  const lowVideo = video ? entryVideoLowSrc(origin, entry) || video : '';
   return {
     id,
     title: cleanPublicText(entry?.title || id || 'Spine animation', 120),
@@ -812,7 +832,7 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
     const itemUrl = `${origin}/world-spine-archive/${encodeURIComponent(id)}`;
     const title = cleanPublicText(entry?.title || id || 'Spine animation work', 120);
     const image = entryImageUrl(origin, entry);
-    const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+    const video = entryVideoSrc(origin, entry);
     const work = {
       '@type': video ? 'VideoObject' : 'CreativeWork',
       '@id': `${itemUrl}${video ? '#video' : '#work'}`,
@@ -1760,7 +1780,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
   const videoPageUrl = `${origin}${videoWatchUrl(entry)}`;
   const playerPageUrl = absoluteSpineUrl;
   const mediaImage = entryImageUrl(origin, entry) || `${origin}/spine-link-video-thumbnail.png`;
-  const mediaVideo = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const mediaVideo = entryVideoSrc(origin, entry);
   const ownerName = cleanPublicText(entry?.ownerName || 'Spine creator', 100);
   const description = cleanPublicText(
     entry?.note ||
@@ -2005,7 +2025,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
   const archivePageUrl = `${origin}${archiveItemUrl(entry)}`;
   const playerPageUrl = `${origin}${previewUrl(entry)}`;
   const mediaImage = entryImageUrl(origin, entry) || `${origin}/spine-link-video-thumbnail.png`;
-  const mediaVideo = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const mediaVideo = entryVideoSrc(origin, entry);
   const ownerName = cleanPublicText(entry?.ownerName || 'Spine creator', 100);
   const description = cleanPublicText(
     entry?.note ||
@@ -2326,7 +2346,7 @@ export default async function handler(request, response) {
         return response.status(entry ? 200 : 404).send('');
       }
       const isVideoWatchPage = request.query?.view === 'video' || request.query?.video === '1';
-      if (isVideoWatchPage && (!entry || !entryVideoAsset(entry?.webmPreview || '', entry, 'webm'))) {
+      if (isVideoWatchPage && (!entry || !entryVideoSrc(origin, entry))) {
         response.setHeader('X-Robots-Tag', 'noindex, follow');
       }
       return response.status(entry ? 200 : 404).send(

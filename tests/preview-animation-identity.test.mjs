@@ -31,6 +31,8 @@ test('default animation comes only from the index, never idle or the first runti
 test('video target is restricted to the indexed defaultAnimation', () => {
   const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
   assert.match(resolver, /const chosen = String\(entry\?\.defaultAnimation \|\| ''\)\.trim\(\);/);
+  assert.doesNotMatch(resolver, /entry\?\.webmPreview/);
+  assert.match(resolver, /lowUrl: shortClip/);
   assert.doesNotMatch(resolver, /for \(const a of animations\)/);
   assert.doesNotMatch(resolver, /candidates\.find|animations\.find/);
   assert.match(resolver, /isFallback: false/);
@@ -70,6 +72,16 @@ test('archive cards do not attach WebM without an indexed default animation', ()
   const feed = section(archive, 'function archiveFeedEntry(', 'function lightweightCardHtml(');
   assert.match(feed, /hasDefaultAnimation = Boolean\(String\(entry\?\.defaultAnimation \|\| ''\)\.trim\(\)\)/);
   assert.match(feed, /video = hasDefaultAnimation \? entryVideoSrc\(origin, entry\) : ''/);
+  const selected = section(archive, 'function selectedAnimationVideo(', 'function safeAsset(');
+  assert.match(selected, /allAnimationPreviews/);
+  assert.match(selected, /defaultAnimation/);
+  assert.doesNotMatch(selected, /entry\?\.webmPreview/);
+  const home = section(archive, 'function homepageFeedEntries(', 'function archiveFeedEntry(');
+  assert.match(home, /entryVideoLowSrc\(origin, entry\)/);
+  assert.match(home, /previewAnimation: String\(entry\?\.defaultAnimation/);
+  assert.doesNotMatch(home, /entryVideoAsset\(entry\?\.webmPreview/);
+  const low = section(archive, 'const lowVideo = video', 'return {');
+  assert.match(low, /entryVideoLowSrc\(origin, entry\)/);
 });
 
 test('video watch and owner-library previews use only the selected default clip', () => {
@@ -77,5 +89,8 @@ test('video watch and owner-library previews use only the selected default clip'
   assert.match(videoPage, /const target = resolvePreviewTarget\(entry, origin\)/);
   assert.match(videoPage, /const video = target\.url \? entryVideoAsset\(target\.url, entry, 'webm'\) : ''/);
   assert.match(preview, /webmPreviewFull: target\.url \? entryVideoAsset\(target\.url, item, 'webm'\) : ''/);
+  const owner = section(preview, 'const lowWebm = target.lowUrl', 'return {');
+  assert.match(owner, /target\.lowUrl/);
+  assert.doesNotMatch(owner, /item\?\.webmPreviewLow/);
   assert.match(preview, /previewAnimation: target\.name \|\| ''/);
 });
