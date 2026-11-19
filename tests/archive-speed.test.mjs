@@ -28,7 +28,7 @@ const entries=Array.from({length:80},(_,i)=>({
 }));
 const originalFetch=globalThis.fetch;
 const originalToken=process.env.GITHUB_TOKEN;
-function stubFetch(log){
+function stubFetch(log, sourceEntries=entries){
   return async input=>{
     const url=String(input);log.push(url);
     const json=value=>({ok:true,status:200,json:async()=>value});
@@ -38,7 +38,7 @@ function stubFetch(log){
       {type:'dir',name:'library_02'},
     ]);
     if(url.includes('/contents/library_02/index.json?'))return json({
-      encoding:'base64',content:Buffer.from(JSON.stringify(entries)).toString('base64'),
+      encoding:'base64',content:Buffer.from(JSON.stringify(sourceEntries)).toString('base64'),
     });
     if(url.includes('/contents/library/index.json?'))return {ok:false,status:404};
     if(url.includes('/contents/library/'))return {ok:false,status:404};
@@ -65,6 +65,47 @@ test('archive feed paginates without probing every media card, caches public res
     else process.env.GITHUB_TOKEN=originalToken;
   }
 });
+
+test('PNG source textures never masquerade as archive posters or unlock WebM',async()=>{
+  const source=[{
+    ...entries[0],
+    webpPosterLow:'',
+    webpPosterMedium:'',
+    webpPoster:'',
+    thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-000/texture.png',
+    thumbnail:'https://spine-link.vercel.app/assets/library_02/card-000/texture.png',
+    webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
+  }];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    assert.equal(res.code,200);
+    const html=String(res.body);
+    const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
+    assert.ok(card,'initial card must be rendered');
+    assert.match(card,/data-preview-status="blocked-no-webp-poster"/);
+    assert.match(card,/Preview unavailable/);
+    assert.doesNotMatch(card,/texture\.png|data-video-src=/,
+      'a source texture is not a preview poster and must not unlock WebM');
+    assert.ok(html.includes("if(!poster||!poster.complete||poster.naturalWidth<=0)"),
+      'WebM must wait for a decoded, non-empty poster');
+    assert.ok(html.includes("data:image\\/webp")&&html.includes("\\.webp(?:[?#]|$)"),
+      'lazy playback must require an actual WebP URL');
+    const embedded=html.match(/<script type="application\/json" id="archive-next-page">([^<]+)<\/script>/);
+    assert.ok(embedded);
+    const batch=JSON.parse(embedded[1]);
+    assert.equal(batch.entries.length,0);
+    assert.ok(log.length<=6);
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN=originalToken;
+  }
+});
+
 test('gallery server-HTML puts WebP before any WebM network request',async()=>{
   const log=[];
   globalThis.fetch=stubFetch(log);
