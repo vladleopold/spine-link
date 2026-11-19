@@ -18,3 +18,11 @@ test('first poster timing starts at document commit, not after deferred scripts'
   assert.match(workflow,/waitUntil:'commit',timeout:45000/);
   assert.doesNotMatch(workflow,/waitUntil:'domcontentloaded',timeout:45000/);
 });
+
+test('first poster is measured before waiting for deferred document scripts', () => {
+  const firstPoster = workflow.indexOf('const initialPosterMs=Date.now()-started;');
+  const domReady = workflow.indexOf("await page.waitForLoadState('domcontentloaded'");
+  const htmlRead = workflow.indexOf('const firstHtml=await page.content();');
+  assert.ok(firstPoster > 0 && domReady > firstPoster && htmlRead > domReady,
+    'measure the poster as soon as decoded, then wait for full DOM before inspecting all cards');
+});
