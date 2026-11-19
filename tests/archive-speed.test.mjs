@@ -270,3 +270,18 @@ test('production deploys are queued instead of cancelled by later workflow_run c
   assert.match(workflow,/last_success=.*status=success/,
     'repeated successful workflow_run events for one SHA must be deduplicated');
 });
+
+test('preview sidebar keeps all supporting panels below the animation picker on desktop',()=>{
+  const preview=fs.readFileSync(new URL('../api/github-preview.js',import.meta.url),'utf8');
+  assert.equal((preview.match(/@media\s*\(max-width:\s*1024px\)/g)||[]).length,0,
+    'responsive layout must switch at 1000px, not hide desktop behavior at 1024px');
+  assert.match(preview,/@media \(max-width: 1000px\)/);
+  assert.match(preview,/#sidebar > #animation-card\s*\{\s*order:\s*1;\s*\}/);
+  assert.match(preview,/#sidebar > \.animation-download-block\s*\{\s*order:\s*2;\s*\}/);
+  assert.match(preview,/#sidebar > \.video-watch-panel--below-list\s*\{\s*order:\s*3;\s*\}/);
+  assert.match(preview,/#sidebar > \.proof-card\s*\{\s*order:\s*4;\s*\}/);
+  assert.match(preview,/#sidebar > #owner-library\s*\{\s*order:\s*5;\s*\}/);
+  assert.match(preview,/#sidebar > #set-card,\s*#sidebar > \.note-card\s*\{\s*order:\s*6;\s*\}/);
+  assert.match(preview,/@media \(min-width: 1001px\)[\s\S]*#sidebar > #animation-card\s*\{\s*flex:\s*0 0 auto;\s*\}/,
+    'the long animation picker must not flex-shrink below the player height');
+});

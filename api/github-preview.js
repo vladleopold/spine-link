@@ -1045,6 +1045,13 @@ function createHtml(config) {
       .library-nav-button--prev { left: 14px; }
       .library-nav-button--next { right: 14px; }
       #sidebar { min-height: 0; max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(74,78,84,.72) transparent; }
+      /* Supporting panels follow the animation picker at every desktop width. */
+      #sidebar > #animation-card { order: 1; }
+      #sidebar > .animation-download-block { order: 2; }
+      #sidebar > .video-watch-panel--below-list { order: 3; }
+      #sidebar > .proof-card { order: 4; }
+      #sidebar > #owner-library { order: 5; }
+      #sidebar > #set-card, #sidebar > .note-card { order: 6; }
       .animation-card.is-open .animation-menu { max-height: 240px; }
 
       /* Большое видео-превью остаётся на странице: это главная видео-поверхность
@@ -1186,7 +1193,7 @@ function createHtml(config) {
       .owner-library strong, .owner-library span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .owner-library strong { color: #fff; font-size: 13px; text-shadow: 0 2px 12px rgba(0,0,0,.75); }
       .owner-library span { color: rgba(231,237,244,.7); font-size: 11px; }
-      @media (max-width: 1024px) {
+      @media (max-width: 1000px) {
         * { scrollbar-width: none; }
         *::-webkit-scrollbar { width: 0; height: 0; display: none; }
         html, body, #app { min-height: 100%; }
@@ -1316,7 +1323,7 @@ function createHtml(config) {
       .owner-library.is-visible { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 96px; }
       .owner-library a { height: 96px; min-height: 96px; }
       .owner-library-more { display: grid !important; place-items: end start; padding: 10px; color: #fff; background: linear-gradient(135deg, rgba(255,106,40,.9), rgba(26,31,38,.96)); font-size: 12px; font-weight: 900; text-decoration: none; }
-      @media (max-width: 1024px) {
+      @media (max-width: 1000px) {
         html, body { height: auto !important; min-height: 100%; overflow-x: hidden !important; overflow-y: auto !important; }
         #app { display: flex; flex-direction: column; height: auto !important; min-height: 100svh; max-height: none !important; overflow: visible !important; padding: 10px 12px 24px; }
         .stage { display: flex !important; flex-direction: column; gap: 14px; height: auto !important; max-height: none !important; min-height: 0; }

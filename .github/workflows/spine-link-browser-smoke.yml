@@ -180,8 +180,15 @@ jobs:
                 const layout = await page.evaluate(() => {
                   const menu = document.querySelector('#animation-menu');
                   const playerFrame = document.querySelector('.player-frame');
-                  const nextCard = document.querySelector('#sidebar > .animation-download-block');
-                  if (!menu || !playerFrame || !nextCard) return null;
+                  const followingSelectors = [
+                    ['download', '#sidebar > .animation-download-block'],
+                    ['video', '#sidebar > .video-watch-panel--below-list'],
+                    ['proof', '#sidebar > .proof-card'],
+                    ['owner-library', '#sidebar > #owner-library'],
+                    ['set', '#sidebar > #set-card'],
+                    ['notes', '#sidebar > .note-card'],
+                  ];
+                  if (!menu || !playerFrame || !document.querySelector('#sidebar > .animation-download-block')) return null;
                   const originalChildren = Array.from(menu.childNodes);
                   const measure = (count) => {
                     const fragment = document.createDocumentFragment();
@@ -195,12 +202,21 @@ jobs:
                     menu.replaceChildren(fragment);
                     const menuRect = menu.getBoundingClientRect();
                     const playerRect = playerFrame.getBoundingClientRect();
-                    const nextRect = nextCard.getBoundingClientRect();
+                    const following = followingSelectors.map(([name, selector]) => {
+                      const element = document.querySelector(selector);
+                      if (!element) return {name, present:false, visible:false, below:true};
+                      const style = getComputedStyle(element);
+                      const visible = style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
+                      if (!visible) return {name, present:true, visible:false, below:true};
+                      const rect = element.getBoundingClientRect();
+                      return {name, present:true, visible:true, top:Math.round(rect.top), below:rect.top >= menuRect.bottom - 1};
+                    });
                     return {
                       height: menuRect.height,
                       playerHeight: playerRect.height,
+                      maxHeight: getComputedStyle(menu).maxHeight,
                       scrollable: menu.scrollHeight > menu.clientHeight + 1,
-                      nextCardBelow: nextRect.top >= menuRect.bottom - 1,
+                      following,
                     };
                   };
                   try {
@@ -214,14 +230,51 @@ jobs:
                   'Three animations must not fill the player at ' + width + 'px');
                 assert.equal(layout.few.scrollable, false,
                   'Three animations must not scroll at ' + width + 'px');
-                assert.ok(layout.many.height <= layout.many.playerHeight + 1,
-                  'Long animation list exceeds player at ' + width + 'px: ' + JSON.stringify(layout.many));
+                assert.equal(layout.many.maxHeight, Math.floor(layout.many.playerHeight) + 'px',
+                  'Long animation menu max-height must track the actual player at ' + width + 'px: ' + JSON.stringify(layout.many));
+                assert.ok(Math.abs(layout.many.height - layout.many.playerHeight) <= 1,
+                  'Long animation menu must reach the actual player height at ' + width + 'px: ' + JSON.stringify(layout.many));
                 assert.equal(layout.many.scrollable, true,
                   'Long animation list must scroll at ' + width + 'px');
-                assert.ok(layout.few.nextCardBelow && layout.many.nextCardBelow,
-                  'Download card overlaps animation list at ' + width + 'px');
+                for (const state of [layout.few, layout.many]) {
+                  const above = state.following.filter(item => item.visible && !item.below);
+                  assert.deepEqual(above.map(item => item.name), [],
+                    'Supporting sidebar sections overlap animation list at ' + width + 'px: ' + JSON.stringify(above));
+                }
                 console.log('PASS LIVE ANIMATION MENU', width, JSON.stringify(layout));
               }
+              await page.setViewportSize({width:390,height:844});
+              const mobileFlow = await page.evaluate(() => {
+                const menu = document.querySelector('#animation-menu');
+                if (!menu) return null;
+                const menuRect = menu.getBoundingClientRect();
+                const selectors = [
+                  ['download', '#sidebar > .animation-download-block'],
+                  ['video', '#sidebar > .video-watch-panel--below-list'],
+                  ['proof', '#sidebar > .proof-card'],
+                  ['owner-library', '#sidebar > #owner-library'],
+                  ['set', '#sidebar > #set-card'],
+                  ['notes', '#sidebar > .note-card'],
+                ];
+                const following = selectors.map(([name, selector]) => {
+                  const element = document.querySelector(selector);
+                  if (!element) return {name, visible:false, below:true};
+                  const style = getComputedStyle(element);
+                  const visible = style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
+                  if (!visible) return {name, visible:false, below:true};
+                  return {name, visible:true, below:element.getBoundingClientRect().top >= menuRect.bottom - 1};
+                });
+                return {viewportWidth:innerWidth,scrollWidth:document.documentElement.scrollWidth,following};
+              });
+              assert.ok(mobileFlow, 'Mobile preview sidebar is missing');
+              assert.ok(mobileFlow.scrollWidth <= mobileFlow.viewportWidth + 1,
+                'Mobile preview has horizontal overflow: ' + JSON.stringify(mobileFlow));
+              assert.deepEqual(mobileFlow.following.filter(item => item.visible && !item.below).map(item => item.name), [],
+                'Mobile supporting sections overlap the animation menu: ' + JSON.stringify(mobileFlow));
+              console.log('PASS LIVE MOBILE PREVIEW FLOW', JSON.stringify(mobileFlow));
+
+              // Scroll retention is a desktop contract; restore desktop after the mobile-flow check.
+              await page.setViewportSize({width:1200,height:780});
               // Select a late animation on first render, then change selections
               // without losing the user's current scroll position.
               const selectionScroll = await page.evaluate(() => {
@@ -229,8 +282,8 @@ jobs:
                 const namesBefore = animationNames.value.slice();
                 const activeBefore = activeAnimation.name;
                 try {
-                  animationNames.value = Array.from({length:26}, (_, index) => 'menu_test_' + index);
-                  activeAnimation.name = 'menu_test_25';
+                  animationNames.value = Array.from({length:60}, (_, index) => 'menu_test_' + index);
+                  activeAnimation.name = 'menu_test_59';
                   menu.replaceChildren();
                   renderAnimationList();
                   const button = menu.querySelector('button.active');
@@ -238,12 +291,20 @@ jobs:
                   const buttonBox = button.getBoundingClientRect();
                   const firstSelectionVisible =
                     buttonBox.top >= menuBox.top - 1 && buttonBox.bottom <= menuBox.bottom + 1;
+                  const scrollRange = menu.scrollHeight - menu.clientHeight;
+                  if (scrollRange <= 30) throw new Error('Synthetic list did not overflow: ' + JSON.stringify({items:menu.childElementCount,scrollHeight:menu.scrollHeight,clientHeight:menu.clientHeight}));
                   menu.scrollTop = menu.scrollHeight;
                   const before = menu.scrollTop;
-                  activeAnimation.name = 'menu_test_24';
+                  activeAnimation.name = 'menu_test_58';
                   renderAnimationList();
                   const after = menu.scrollTop;
-                  return {firstSelectionVisible, before, after};
+                  const activeAfter = menu.querySelector('button.active');
+                  const menuAfterBox = menu.getBoundingClientRect();
+                  const activeAfterBox = activeAfter?.getBoundingClientRect();
+                  const activeVisibleAfter = Boolean(activeAfterBox &&
+                    activeAfterBox.top >= menuAfterBox.top - 1 &&
+                    activeAfterBox.bottom <= menuAfterBox.bottom + 1);
+                  return {firstSelectionVisible, activeVisibleAfter, before, after, scrollRange, items:menu.childElementCount, scrollHeight:menu.scrollHeight, clientHeight:menu.clientHeight};
                 } finally {
                   animationNames.value = namesBefore;
                   activeAnimation.name = activeBefore;
@@ -252,6 +313,8 @@ jobs:
               });
               assert.equal(selectionScroll.firstSelectionVisible, true,
                 'Initial selected animation must be visible');
+              assert.equal(selectionScroll.activeVisibleAfter, true,
+                'Selected animation must remain visible after a selection change: ' + JSON.stringify(selectionScroll));
               assert.ok(selectionScroll.before > 30 && Math.abs(selectionScroll.before - selectionScroll.after) < 2,
                 'Animation selection reset scroll: ' + JSON.stringify(selectionScroll));
               console.log('PASS LIVE ANIMATION SCROLL RETENTION', JSON.stringify(selectionScroll));
