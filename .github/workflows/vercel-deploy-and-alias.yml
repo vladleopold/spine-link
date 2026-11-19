@@ -21,15 +21,16 @@ on:
   schedule:
     - cron: '11 0,6,12,18 * * *'
 
-# Many rapid commits can otherwise race to point the production alias at an
-# older deployment after a newer one has completed.
+# Queue releases rather than cancelling an in-flight validated deploy when
+# another workflow_run event arrives. The source-SHA guard rejects stale queued
+# releases, and the last-success check deduplicates multiple events for one SHA.
 permissions:
   contents: read
   actions: read
 
 concurrency:
   group: spine-link-production
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
