@@ -48,6 +48,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Resolve the ready Vercel preview for this exact PR commit
         if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
