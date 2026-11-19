@@ -95,7 +95,7 @@ test('archive cards do not attach WebM without an indexed default animation', ()
   assert.match(home, /previewAnimation: String\(entry\?\.defaultAnimation/);
   assert.doesNotMatch(home, /entryVideoAsset\(entry\?\.webmPreview/);
   const low = section(archive, 'const lowVideo = video', 'return {');
-  assert.match(low, /entryVideoLowSrc\(origin, entry\)/);
+  assert.match(low, /lowVideo = video \? selectedPreview\?\.low \|\| video : ''/);
 });
 
 test('video watch and owner-library previews use only the selected default clip', () => {
