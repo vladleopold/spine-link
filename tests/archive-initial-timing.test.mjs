@@ -13,3 +13,8 @@ test('initial archive poster timing excludes intentional prefetch warm-up', () =
   assert.ok(evidence > warmup, 'logged metric must use the captured checkpoint');
   assert.ok(!workflow.includes('initialMs:Date.now()-started'), 'old inflated metric must not return');
 });
+
+test('first poster timing starts at document commit, not after deferred scripts', () => {
+  assert.match(workflow,/waitUntil:'commit',timeout:45000/);
+  assert.doesNotMatch(workflow,/waitUntil:'domcontentloaded',timeout:45000/);
+});
