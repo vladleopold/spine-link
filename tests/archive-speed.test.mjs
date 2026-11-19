@@ -399,13 +399,13 @@ test('first eligible archive posters stay eager when earlier cards are explicitl
     }
     for(let i=0;i<4;i++){
       const card=cardFor('ready-'+i);
-      const image=card.match(/<img\\b[^>]*>/)?.[0]||'';
+      const image=card.match(/<img\b[^>]*>/)?.[0]||'';
       assert.ok(image,'eligible card must have its own poster');
       assert.match(image,/loading="eager"/,
         'the first four eligible posters must be eager regardless of their card positions');
       assert.match(image,i<2?/fetchpriority="high"/:/fetchpriority="low"/);
     }
-    const fifthImage=cardFor('ready-4').match(/<img\\b[^>]*>/)?.[0]||'';
+    const fifthImage=cardFor('ready-4').match(/<img\b[^>]*>/)?.[0]||'';
     assert.match(fifthImage,/loading="lazy"/,
       'later eligible posters must remain lazy');
     const preloads=[...html.matchAll(/<link rel="preload" as="image" href="([^"]+)" fetchpriority="([^"]+)"/g)];
