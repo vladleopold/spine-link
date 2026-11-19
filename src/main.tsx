@@ -318,6 +318,22 @@ function wirePublishProgressMirror() {
 let pendingProjectFile: File | null = null;
 let pendingProjectImages: File[] = [];
 
+// Keep the homepage as a single drop zone. After selecting a .spine source
+// with the file chooser, the SAME chooser becomes an images/ folder picker.
+// Switching back after a complete selection also keeps runtime export uploads
+// working without a separate button.
+function syncHomeProjectPicker() {
+  const input = root?.querySelector<HTMLInputElement>("[data-file-input]");
+  if (!input) return;
+  const selectingFolder = Boolean(pendingProjectFile && !pendingProjectImages.length);
+  input.toggleAttribute("webkitdirectory", selectingFolder);
+  input.toggleAttribute("directory", selectingFolder);
+  input.accept = selectingFolder ? "" : ".spine,.json,.skel,.atlas,.txt,.docx,.png,.jpg,.jpeg,.webp";
+  input.setAttribute("aria-label", selectingFolder
+    ? "Select the images folder for the Spine project"
+    : "Select Spine project, export files or textures");
+}
+
 function projectSelectionStatus(message: string) {
   const status = root?.querySelector<HTMLElement>("#spine-project-status");
   if (status) status.textContent = message;
@@ -333,7 +349,10 @@ function addProjectSelection(files: File[]) {
   if (projects.length) pendingProjectFile = projects[0];
   if (images.length) pendingProjectImages = images;
   if (!pendingProjectFile || !pendingProjectImages.length) {
-    projectSelectionStatus(pendingProjectFile ? "Drop the images/ folder to continue" : "Drop a .spine project to continue");
+    projectSelectionStatus(pendingProjectFile
+      ? "Select or drop the images/ folder to continue"
+      : "Select or drop a .spine project to continue");
+    syncHomeProjectPicker();
     return;
   }
   try {
@@ -344,6 +363,8 @@ function addProjectSelection(files: File[]) {
     startBackgroundUpload(selected);
   } catch (error) {
     projectSelectionStatus(error instanceof Error ? error.message : "Invalid images folder");
+  } finally {
+    syncHomeProjectPicker();
   }
 }
 
