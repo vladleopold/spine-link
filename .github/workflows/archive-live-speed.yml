@@ -8,6 +8,8 @@ on:
     paths:
       - '.github/workflows/archive-live-speed.yml'
   workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
 permissions:
   contents: read
   checks: read
