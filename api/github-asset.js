@@ -46,7 +46,11 @@ async function contentBufferFromGitHubContent(data, token) {
     const rawResponse = await fetch(data.download_url, {
       headers: githubHeaders(token),
     });
-    if (!rawResponse.ok) throw new Error(`Raw asset did not load: ${rawResponse.status}`);
+    if (!rawResponse.ok) {
+      const error = new Error(`Raw asset did not load: ${rawResponse.status}`);
+      error.status = rawResponse.status;
+      throw error;
+    }
     return Buffer.from(await rawResponse.arrayBuffer());
   }
 
@@ -558,7 +562,23 @@ export default async function handler(request, response) {
     if (headResponse) return headResponse;
     const rangeResponse = await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag });
     if (rangeResponse) return rangeResponse;
-    let buffer = await contentBufferFromGitHubContent(data, token);
+    let buffer;
+    try {
+      buffer = await contentBufferFromGitHubContent(data, token);
+    } catch (error) {
+      const upstreamStatus = Number(error?.status);
+      if ([401, 403, 429, 500, 502, 503, 504].includes(upstreamStatus)) {
+        // The Contents API metadata may succeed while its download_url is
+        // rate-limited. Retry the exact same public repository path without
+        // the rejected API token; never resolve a different work or tier.
+        const rawFallback = await serveRawPublicAssetFallback(request, response, {
+          owner, repo, branch, path: assetPath, assetVersion, cacheKey,
+        });
+        if (rawFallback) return rawFallback;
+        return response.status(upstreamStatus).send('Asset not found');
+      }
+      throw error;
+    }
     if (!buffer.length) return response.status(404).send('Asset is empty');
     try {
       buffer = transformAssetBuffer(assetPath, buffer, assetVersion, response);
