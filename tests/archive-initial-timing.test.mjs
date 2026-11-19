@@ -66,3 +66,11 @@ test('live Spine preview layout smoke runs hourly without a deployment', () => {
   assert.ok(browserSmoke.includes('SITE: https://spine-link.vercel.app'));
   assert.ok(browserSmoke.includes('#animation-menu'));
 });
+
+test('PR browser audit resolves a successful preview deployment for the exact SHA', () => {
+  assert.ok(workflow.includes('/deployments?sha='));
+  assert.ok(workflow.includes('deployment.sha !== sha'));
+  assert.ok(workflow.includes("status.state === 'success'"));
+  assert.ok(workflow.includes('status.environment_url'));
+  assert.ok(!workflow.includes('Vercel Preview Comments'));
+});
