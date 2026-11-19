@@ -35,3 +35,22 @@ test('repository lifecycle workflow cannot close or mutate pull requests', () =>
   assert.doesNotMatch(lifecycleWorkflow, /pull_request_target:|schedule:|pull-requests:\\s*write|issues:\\s*write|pulls\\.update/,
     'automatic PR closure and write permissions must remain disabled');
 });
+
+test('first archive poster is preloaded before noncritical visual enhancements', () => {
+  const source = readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
+  const start = source.indexOf('function archiveHtml(');
+  const end = source.indexOf('function humanizeEntryTitle(', start);
+  assert.ok(start >= 0 && end > start, 'archive HTML renderer must exist');
+  const archive = source.slice(start, end);
+  assert.match(archive, /rel="preload" as="image" href="\$\{escapeHtml\(archiveImage\)\}" fetchpriority="high"/,
+    'the actual first generated WebP must be preloaded from the document head');
+  assert.doesNotMatch(archive, /<link rel="stylesheet" href="\/page-transitions\.css"/,
+    'decorative transition CSS must not block the first poster');
+  assert.doesNotMatch(archive, /<script src="\/(?:spine-embers\.js|page-transitions\.js)/,
+    'decorative scripts must not delay initial DOMContentLoaded');
+  assert.match(archive, /function deferOptionalEnhancementsUntilPoster\(\)/);
+  assert.match(archive, /firstPoster\.addEventListener\('load',schedule/);
+  assert.match(archive, /firstPoster\.addEventListener\('error',schedule/);
+  assert.match(archive, /requestIdleCallback\(loadOptionalEnhancements/);
+  assert.match(archive, /deferOptionalEnhancementsUntilPoster\(\);/);
+});

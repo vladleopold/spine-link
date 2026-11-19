@@ -1518,10 +1518,8 @@ function archiveHtml({ origin, entries, metrics }) {
     <meta name="theme-color" content="#080a0c" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-video-preview:-1" />
     <link rel="canonical" href="${origin}/world-spine-archive" />
+    <link rel="preload" as="image" href="${escapeHtml(archiveImage)}" fetchpriority="high" />
     <script type="application/ld+json">${jsonScript(structuredData)}</script>
-    <link rel="stylesheet" href="/page-transitions.css" />
-    <script src="/spine-embers.js?v=2026-09-30" defer></script>
-    <script src="/page-transitions.js" defer></script>
     <style>
       *{box-sizing:border-box}html{color-scheme:dark;background:#080a0c}body{margin:0;color:#f4f7fa;background:#080a0c;font:14px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit}.shell{width:min(100%,1120px);margin:auto;padding:12px}.top{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0 12px;background:rgba(8,10,12,.96)}.logo{font-size:18px;font-weight:900;letter-spacing:.13em;text-decoration:none;transition:color 160ms ease}.logo b{color:#ff6a2a;transition:color 160ms ease}.logo:hover,.logo:focus-visible{color:#fff}.logo:hover b,.logo:focus-visible b{color:#fff}.create{padding:9px 12px;border:1px solid #9adc45;border-radius:999px;color:#dfffb5;text-decoration:none;font-weight:800}.intro{padding:18px 0 16px}.intro h1{max-width:720px;margin:0;font-size:clamp(27px,7vw,52px);line-height:.95;letter-spacing:-.045em}.intro p{max-width:680px;margin:12px 0 0;color:#9aa4ad}.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}.legend span{padding:5px 8px;border:1px solid #293139;border-radius:999px;color:#bdc6ce;font-size:12px}.feed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.feed-card{content-visibility:auto;contain-intrinsic-size:320px;overflow:hidden;border:1px solid #20262c;border-radius:12px;background:#101419}.feed-media{position:relative;display:grid;width:100%;aspect-ratio:var(--media-ratio);min-height:160px;padding:0;overflow:hidden;border:0;color:#fff;background:#050607}.feed-media img,.feed-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#050607}.feed-media video{opacity:0;pointer-events:none}.feed-media video.is-playing{opacity:1}.feed-info{display:grid;gap:6px;padding:10px}.feed-info>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:8px}.feed-title{overflow:hidden;font-weight:850;text-overflow:ellipsis;white-space:nowrap}.feed-mode{flex:none;color:#9adc45;font-size:11px}.feed-meta{display:flex;gap:8px;overflow:hidden;color:#8d98a2;font-size:11px;white-space:nowrap}.sentinel{min-height:70px;display:grid;place-items:center;color:#7d8790}.footer{padding:28px 0;color:#737e87;font-size:12px;text-align:center}@media(max-width:620px){.shell{padding:8px}.top{padding-top:max(8px,env(safe-area-inset-top))}.feed{grid-template-columns:1fr;gap:8px}.feed-card{contain-intrinsic-size:420px}.feed-media{min-height:230px}.intro{padding-top:12px}.feed-meta{gap:7px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
     </style>
@@ -1543,6 +1541,42 @@ function archiveHtml({ origin, entries, metrics }) {
       (() => {
         const feed=document.getElementById('feed');
         const sentinel=document.getElementById('sentinel');
+        function loadOptionalEnhancements(){
+          if(window.__archiveOptionalEnhancements)return;
+          window.__archiveOptionalEnhancements=true;
+          let scriptsStarted=false;
+          const startScripts=()=>{
+            if(scriptsStarted)return;
+            scriptsStarted=true;
+            for(const src of ['/spine-embers.js?v=2026-09-30','/page-transitions.js']){
+              const script=document.createElement('script');
+              script.src=src;
+              script.async=true;
+              document.head.append(script);
+            }
+          };
+          const style=document.createElement('link');
+          style.rel='stylesheet';
+          style.href='/page-transitions.css';
+          style.onload=startScripts;
+          style.onerror=startScripts;
+          document.head.append(style);
+          setTimeout(startScripts,1200);
+        }
+        function deferOptionalEnhancementsUntilPoster(){
+          const firstPoster=feed.querySelector('.feed-card img');
+          if(!firstPoster){loadOptionalEnhancements();return;}
+          let scheduled=false;
+          const schedule=()=>{
+            if(scheduled)return;
+            scheduled=true;
+            if('requestIdleCallback' in window)requestIdleCallback(loadOptionalEnhancements,{timeout:1500});
+            else setTimeout(loadOptionalEnhancements,250);
+          };
+          firstPoster.addEventListener('load',schedule,{once:true});
+          firstPoster.addEventListener('error',schedule,{once:true});
+          if(firstPoster.complete)schedule();
+        }
         const pageSize=${archivePageSize};
         const totalEntries=${entries.length};
         const embeddedEnd=${nextOffset + preloadedBatch.entries.length};
@@ -1643,6 +1677,7 @@ function archiveHtml({ origin, entries, metrics }) {
           }
         }
         feed.querySelectorAll('.feed-card').forEach(attach);
+        deferOptionalEnhancementsUntilPoster();
         if(!observer){
           const scan=()=>{
             visible.clear();
