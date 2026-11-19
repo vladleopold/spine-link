@@ -28,6 +28,7 @@ const entries=Array.from({length:80},(_,i)=>({
 }));
 const originalFetch=globalThis.fetch;
 const originalToken=process.env.GITHUB_TOKEN;
+const originalBranch=process.env.GITHUB_BRANCH;
 function stubFetch(log, sourceEntries=entries){
   return async input=>{
     const url=String(input);log.push(url);
@@ -79,6 +80,7 @@ test('PNG source textures never masquerade as archive posters or unlock WebM',as
   const log=[];
   globalThis.fetch=stubFetch(log,source);
   process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-webp-poster-isolation';
   try{
     const res=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
@@ -103,6 +105,8 @@ test('PNG source textures never masquerade as archive posters or unlock WebM',as
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
     else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;
+    else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
 
