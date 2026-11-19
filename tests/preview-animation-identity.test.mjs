@@ -53,6 +53,16 @@ test('player keeps the exact requested animation and marks missing tracks blocke
   assert.doesNotMatch(preview, /syncScenario|scenarioState|playNextScenarioStep|isScenarioStep/);
 });
 
+test('player startup never replaces the requested track with the first runtime track', () => {
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /const requestedAnimation = activeAnimation\\.name/);
+  assert.match(startup, /animation: requestedAnimation/);
+  assert.match(startup, /if \\(!names\\.includes\\(requestedAnimation\\)\\) \\{[\\s\\S]*markPreviewBlocked\\("SELECTED_SPINE_ANIMATION_UNAVAILABLE"\\);[\\s\\S]*return;/);
+  assert.ok(startup.indexOf('if (!names.includes(requestedAnimation))') < startup.indexOf('playActiveAnimationFromStart()'),
+    'missing requested tracks must be blocked before playback starts');
+  assert.doesNotMatch(startup, /activeAnimation\\.name\\s*=\\s*(?:names|animations|filteredNames)\\s*\\[\\s*0\\s*\\]/);
+});
+
 test('viewport healing measures only the selected animation', () => {
   const refit = section(preview, 'function refitToContent(', 'function measuredAnimationBounds(');
   const measured = section(preview, 'function measuredAnimationBounds(', 'let healAttempts');
