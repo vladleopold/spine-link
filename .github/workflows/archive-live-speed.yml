@@ -25,6 +25,10 @@ jobs:
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { chromium } from 'playwright';
+          // Regression: a decoded WebP URL qualifies, a PNG placeholder never does.
+          const posterUrlPattern=/\.webp(?:[?#]|$)/i;
+          assert.ok(posterUrlPattern.test('https://example.invalid/poster.webp?x=1'));
+          assert.ok(!posterUrlPattern.test('https://example.invalid/placeholder.png'));
           const browser=await chromium.launch({headless:true});
           try {
             for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
@@ -80,7 +84,7 @@ jobs:
                     const image=card.querySelector('img');
                     return image && image.complete && image.naturalWidth>0 &&
                       image.getClientRects().length>0 &&
-                      /\\.webp(?:[?#]|$)/i.test(image.currentSrc||image.src);
+                      /\.webp(?:[?#]|$)/i.test(image.currentSrc||image.src);
                   }).length>=3;
                 },before,{timeout:9000});
                 const posterMs=Date.now()-scrollStart;
