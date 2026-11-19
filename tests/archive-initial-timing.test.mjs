@@ -42,7 +42,9 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   const end = source.indexOf('function humanizeEntryTitle(', start);
   assert.ok(start >= 0 && end > start, 'archive HTML renderer must exist');
   const archive = source.slice(start, end);
-  assert.match(archive, /rel="preload" as="image" href="\$\{escapeHtml\(archiveImage\)\}" fetchpriority="high"/,
+  assert.match(archive, /const firstPoster = initialItems\.find\(\(item\) => item\.poster\)\?\.poster \|\| ''/);
+  assert.match(archive, /const firstPosterPreload = firstPoster/);
+  assert.match(archive, /rel="preload" as="image" href="\$\{escapeHtml\(firstPoster\)\}" fetchpriority="high"/,
     'the actual first generated WebP must be preloaded from the document head');
   assert.doesNotMatch(archive, /<link rel="stylesheet" href="\/page-transitions\.css"/,
     'decorative transition CSS must not block the first poster');
