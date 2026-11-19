@@ -78,7 +78,9 @@ jobs:
                   const newCards=Array.from(document.querySelectorAll('.feed-card')).slice(n,n+6);
                   return newCards.filter(card=>{
                     const image=card.querySelector('img');
-                    return image && image.complete && image.naturalWidth>0;
+                    return image && image.complete && image.naturalWidth>0 &&
+                      image.getClientRects().length>0 &&
+                      /\\.webp(?:[?#]|$)/i.test(image.currentSrc||image.src);
                   }).length>=3;
                 },before,{timeout:9000});
                 const posterMs=Date.now()-scrollStart;
