@@ -48,5 +48,6 @@ test('first-poster timeout records only sanitized browser evidence', () => {
   assert.ok(workflow.includes('imageResponses.map'));
   assert.ok(workflow.includes('contentType:x.contentType'));
   assert.ok(workflow.includes('requestFailureCount'));
-  assert.ok(!workflow.includes('console.error(JSON.stringify({url:')));
+  const diagnostic = workflow.slice(workflow.indexOf('ARCHIVE_FIRST_POSTER_FAILURE'), workflow.indexOf('throw error;', workflow.indexOf('ARCHIVE_FIRST_POSTER_FAILURE')));
+  assert.ok(!diagnostic.includes('url:'), 'failure diagnostic must not expose asset URLs');
 });
