@@ -24,3 +24,15 @@ test('first render still centers the URL-selected animation without scrolling th
   assert.match(render, /else if \(window\.innerWidth > 1000 && animationMenu\.scrollHeight > animationMenu\.clientHeight\)/);
   assert.match(render, /animationMenu\.scrollTop \+= selectedBox\.top - listBox\.top/);
 });
+
+const browserWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml', import.meta.url), 'utf8');
+test('live animation-menu scroll gate stays strict and runs only after production deploy', () => {
+  assert.ok(browserWorkflow.includes('  workflow_run:'));
+  assert.ok(browserWorkflow.includes('workflows: ["Vercel deploy and alias"]'));
+  assert.ok(!browserWorkflow.includes('  pull_request:'),
+    'a PR must not run production browser checks against the old production deployment');
+  assert.ok(!browserWorkflow.includes('  push:'),
+    'the smoke must wait for the deployment workflow, not race it on main push');
+  assert.ok(browserWorkflow.includes('farSelectionVisible'));
+  assert.ok(browserWorkflow.includes('A newly selected off-screen animation must be revealed'));
+});
