@@ -70,6 +70,7 @@ test('archive feed paginates without probing every media card, caches public res
 test('PNG source textures never masquerade as archive posters or unlock WebM',async()=>{
   const source=[{
     ...entries[0],
+    previewPath:'invalid/unsafe',
     webpPosterLow:'',
     webpPosterMedium:'',
     webpPoster:'',
