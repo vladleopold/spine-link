@@ -82,3 +82,20 @@ test('archive cards expose source-level blocked status without exposing preview 
   assert.doesNotMatch(source, /data-preview-error=/,
     'private source error details must not be copied into public card markup');
 });
+
+
+test('PR live proof uses only the successful Vercel preview for the exact head SHA', () => {
+  assert.ok(workflow.includes('pull_request:'), 'archive changes must receive a live preview browser check');
+  assert.ok(workflow.includes('EXPECTED_SHA: $' + '{{ github.event.pull_request.head.sha }}'),
+    'the preview lookup must be tied to the PR head SHA');
+  assert.ok(workflow.includes('statuses/$EXPECTED_SHA'),
+    'read the Vercel status for that exact commit');
+  assert.ok(workflow.includes('inspector') && workflow.includes('target'),
+    'reject stale preview comments whose deployment inspector does not match the commit status');
+  assert.ok(workflow.includes('deployment_status') && workflow.includes('vercel_state'),
+    'require both Vercel deployment payload and commit status to be successful');
+  assert.ok(workflow.includes('echo "SITE=https://$preview" >> "$GITHUB_ENV"'),
+    'run Playwright against the verified preview URL, not production');
+  assert.ok(workflow.includes("const site=(process.env.SITE||'https://spine-link.vercel.app').replace(/\\/+$/,'')"));
+  assert.ok(workflow.includes("page.goto(site+'/world-spine-archive'"));
+});
