@@ -26,3 +26,11 @@ test('first poster is measured before waiting for deferred document scripts', ()
   assert.ok(firstPoster > 0 && domReady > firstPoster && htmlRead > domReady,
     'measure the poster as soon as decoded, then wait for full DOM before inspecting all cards');
 });
+
+const archiveSource = readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
+
+test('archive HTML and lazy feed retain the CDN snapshot across cold visitors', () => {
+  const cachePolicy = 'public, s-maxage=300, stale-while-revalidate=900';
+  assert.equal(archiveSource.split(cachePolicy).length - 1, 2,
+    'both archive HTML and JSON feed must use the five-minute CDN cache');
+});
