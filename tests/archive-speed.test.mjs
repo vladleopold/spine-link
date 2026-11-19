@@ -212,13 +212,15 @@ test('archive uses the WebP poster and WebM belonging to the indexed default ani
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
     assert.equal(res.code,200);
     const html=String(res.body);
-    const card=html.match(/<article class="feed-card"[\\s\\S]*?<\\/article>/)?.[0]||'';
+    const cardStart=html.indexOf('<article class="feed-card"');
+    const cardEnd=html.indexOf('</article>',cardStart);
+    const card=cardStart>=0&&cardEnd>=0?html.slice(cardStart,cardEnd+10):'';
     assert.ok(card,'initial card must be rendered');
-    assert.match(card,/src="https:\\/\\/spine-link\\.vercel\\.app\\/assets\\/library_02\\/card-000\\/walk\\.webp/,
+    assert.ok(card.includes('src="https://spine-link.vercel.app/assets/library_02/card-000/walk.webp'),
       'the selected animation WebP must be the primary poster');
-    assert.match(card,/data-video-src="https:\\/\\/spine-link\\.vercel\\.app\\/assets\\/library_02\\/card-000\\/walk-low\\.webm/,
+    assert.ok(card.includes('data-video-src="https://spine-link.vercel.app/assets/library_02/card-000/walk-low.webm'),
       'lazy WebM must belong to the same selected animation');
-    assert.doesNotMatch(card,/idle\\.(?:webp|webm)/,
+    assert.ok(!card.includes('idle.webp')&&!card.includes('idle.webm'),
       'another animation must never be used as a poster or video fallback');
   }finally{
     globalThis.fetch=originalFetch;
