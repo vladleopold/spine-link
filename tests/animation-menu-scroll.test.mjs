@@ -39,3 +39,10 @@ test('live animation-menu scroll gate stays strict and runs only after productio
   assert.ok(browserWorkflow.includes('farSelectionVisible'));
   assert.ok(browserWorkflow.includes('A newly selected off-screen animation must be revealed'));
 });
+
+const uploadWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-link-upload-e2e.yml', import.meta.url), 'utf8');
+test('production upload/delete e2e requires a real successful Chromium job', () => {
+  assert.ok(uploadWorkflow.includes('release_gate:'));
+  assert.ok(uploadWorkflow.includes('select(.name == "chromium" and .conclusion == "success")'));
+  assert.ok(uploadWorkflow.includes("needs.release_gate.outputs.verified == 'true'"));
+});
