@@ -181,3 +181,50 @@ test('archive cards stay poster-only when the index has no defaultAnimation',asy
     else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
+
+
+test('archive uses the WebP poster and WebM belonging to the indexed default animation',async()=>{
+  const source=[{
+    ...entries[0],
+    defaultAnimation:'walk',
+    webpPosterLow:'',webpPosterMedium:'',webpPoster:'',thumbnailPoster:'',thumbnail:'',
+    allAnimationPreviews:{
+      walk:{
+        webpPoster:'https://spine-link.vercel.app/assets/library_02/card-000/walk.webp',
+        webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/walk.webm',
+        webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/walk-low.webm',
+        previewDuration:2.5,
+      },
+      idle:{
+        webpPoster:'https://spine-link.vercel.app/assets/library_02/card-000/idle.webp',
+        webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/idle.webm',
+        webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/idle-low.webm',
+        previewDuration:2.5,
+      },
+    },
+  }];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-selected-animation-poster';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    assert.equal(res.code,200);
+    const html=String(res.body);
+    const card=html.match(/<article class="feed-card"[\\s\\S]*?<\\/article>/)?.[0]||'';
+    assert.ok(card,'initial card must be rendered');
+    assert.match(card,/src="https:\\/\\/spine-link\\.vercel\\.app\\/assets\\/library_02\\/card-000\\/walk\\.webp/,
+      'the selected animation WebP must be the primary poster');
+    assert.match(card,/data-video-src="https:\\/\\/spine-link\\.vercel\\.app\\/assets\\/library_02\\/card-000\\/walk-low\\.webm/,
+      'lazy WebM must belong to the same selected animation');
+    assert.doesNotMatch(card,/idle\\.(?:webp|webm)/,
+      'another animation must never be used as a poster or video fallback');
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;
+    else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});

@@ -74,6 +74,11 @@ function selectedAnimationVideo(entry = {}) {
   const selected = name && previews ? previews[name] : null;
   return {
     name,
+    poster: entryImageAsset(
+      selected?.webpPosterMedium || selected?.webpPoster || '',
+      entry,
+      'poster',
+    ),
     full: entryVideoAsset(
       selected?.webmPreview || selected?.webmPreviewMedium || selected?.webmPreviewLow || '',
       entry,
@@ -523,11 +528,12 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
   const hasDefaultAnimation = Boolean(String(entry?.defaultAnimation || '').trim());
-  const video = hasDefaultAnimation ? entryVideoSrc(origin, entry) : '';
-  // A source texture/PNG is not an animation poster. Keep only actual WebP
-  // outputs (including same-work WebP fallbacks); otherwise render a neutral
-  // blocked placeholder and do not attach a WebM source.
+  const selectedPreview = hasDefaultAnimation ? selectedAnimationVideo(entry) : null;
+  const video = selectedPreview?.full || '';
+  // Prefer the poster belonging to the exact indexed default animation.
+  // Other same-work WebP tiers remain secondary still-image fallbacks only.
   const posterCandidates = [
+    selectedPreview?.poster || '',
     entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
     entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
     entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster'),
@@ -537,7 +543,7 @@ function archiveFeedEntry(origin, entry, metrics) {
   ].filter(isWebpPosterUrl);
   const lowPoster = posterCandidates[0] || '';
   const alternatePoster = posterCandidates.find(url => url !== lowPoster) || '';
-  const lowVideo = video ? entryVideoLowSrc(origin, entry) || video : '';
+  const lowVideo = video ? selectedPreview?.low || video : '';
   return {
     id,
     title: cleanPublicText(entry?.title || id || 'Spine animation', 120),
