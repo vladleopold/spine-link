@@ -23,6 +23,7 @@ const entries=Array.from({length:80},(_,i)=>({
   webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-low.webp',
   webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-medium.webp',
   thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webp',
+  webmStatus:'ready',previewStatus:'ready',
   animations:['walk'],
   previewWidth:960,previewHeight:720,
 }));
@@ -67,16 +68,20 @@ test('archive feed paginates without probing every media card, caches public res
   }
 });
 
-test('PNG source textures never masquerade as archive posters or unlock WebM',async()=>{
+test('source PNG/WebP textures and guessed poster URLs never unlock archive WebM',async()=>{
   const source=[{
     ...entries[0],
-    previewPath:'invalid/unsafe',
+    previewPath:'library_02/card-000',
+    files:['texture.png','texture.webp'],
     webpPosterLow:'',
-    webpPosterMedium:'',
-    webpPoster:'',
+    webpPosterMedium:'data:image/webp;base64,VEVYVFVSRQ==',
+    webpPoster:'https://spine-link.vercel.app/assets/library_02/card-000/texture.webp',
     thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-000/texture.png',
-    thumbnail:'https://spine-link.vercel.app/assets/library_02/card-000/texture.png',
+    thumbnail:'data:image/webp;base64,VEVYVFVSRQ==',
     webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
+    webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
+    webmStatus:'ready',
+    previewStatus:'ready',
   }];
   const log=[];
   globalThis.fetch=stubFetch(log,source);
@@ -91,17 +96,95 @@ test('PNG source textures never masquerade as archive posters or unlock WebM',as
     assert.ok(card,'initial card must be rendered');
     assert.match(card,/data-preview-status="blocked-no-webp-poster"/);
     assert.match(card,/Preview unavailable/);
-    assert.doesNotMatch(card,/texture\.png|data-video-src=/,
-      'a source texture is not a preview poster and must not unlock WebM');
+    assert.doesNotMatch(card,/texture\.(?:png|webp)|preview\.webp|data:image\/webp|data-video-src=/,
+      'source textures, data-URI thumbnails, and guessed same-work paths are not generated posters');
     assert.ok(html.includes("if(!poster||!poster.complete||poster.naturalWidth<=0)"),
       'WebM must wait for a decoded, non-empty poster');
-    assert.ok(html.includes("data:image\\/webp")&&html.includes("\\.webp(?:[?#]|$)"),
-      'lazy playback must require an actual WebP URL');
+    assert.ok(html.includes('isGeneratedPosterUrl')&&html.includes('preview-medium|generated-preview'),
+      'lazy playback must require a generated WebP poster');
     const embedded=html.match(/<script type="application\/json" id="archive-next-page">([^<]+)<\/script>/);
     assert.ok(embedded);
     const batch=JSON.parse(embedded[1]);
     assert.equal(batch.entries.length,0);
     assert.ok(log.length<=6);
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;
+    else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
+
+test('only an explicit same-work generated WebP poster unlocks a lazy WebM',async()=>{
+  const source=[{
+    ...entries[0],
+    previewPath:'library_02/card-000',
+    webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webp',
+    webpPoster:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webp',
+    thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-000/texture.webp',
+    thumbnail:'https://spine-link.vercel.app/assets/library_02/card-000/texture.webp',
+    webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
+    webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
+    webmStatus:'ready',
+    previewStatus:'ready',
+  }];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-webp-poster-ready';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    assert.equal(res.code,200);
+    const html=String(res.body);
+    const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
+    assert.match(card,/data-preview-status="poster-pending"/,
+      'a URL is pending until the browser decodes the actual image bytes');
+    assert.match(card,/src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview-medium\.webp/,
+      'the primary poster must be the generated medium WebP for this work');
+    assert.match(card,/data-fallback-src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview\.webp/,
+      'fallback must be a second generated still from the same work');
+    assert.match(card,/data-video-src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview-low\.webm/,
+      'WebM is only attached after a generated poster is present');
+    assert.doesNotMatch(card,/texture\.webp/,
+      'a WebP texture page must never be selected as a poster');
+    assert.ok(html.includes("card.dataset.previewStatus!=='ready-poster-lazy-video'"),
+      'client playback must wait for a decoded poster');
+    assert.ok(log.length<=6);
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;
+    else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
+
+test('a generated WebP URL from another work is rejected',async()=>{
+  const source=[{
+    ...entries[0],
+    previewPath:'library_02/card-000',
+    webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/other-work/preview-medium.webp',
+    webpPoster:'https://spine-link.vercel.app/assets/library_02/other-work/preview.webp',
+    thumbnailPoster:'',
+    thumbnail:'',
+    webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
+    webmStatus:'ready',
+    previewStatus:'ready',
+  }];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-webp-poster-cross-work';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    const html=String(res.body);
+    const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
+    assert.match(card,/data-preview-status="blocked-no-webp-poster"/);
+    assert.doesNotMatch(card,/other-work|data-video-src=/,
+      'poster and video must belong to the same archive work');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
