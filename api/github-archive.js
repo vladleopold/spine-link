@@ -10,6 +10,8 @@ const defaultBasePath = 'library';
 // Second library folder that receives new uploads; read alongside the first.
 const recoveredArchiveRef = 'f4e51c6c420d4ff1f4d2028c12492b04153cc862';
 const archivePageSize = 12;
+// Keep the first 40 compact card records in HTML; the rest arrive via prefetched API pages.
+const archiveEmbeddedCardCount = 40;
 
 function cleanRepoPath(value = '') {
   return String(value).trim().replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
@@ -1460,9 +1462,10 @@ function archiveHtml({ origin, entries, metrics }) {
   // Embed the compact metadata of all remaining cards. Scroll pagination
   // requires zero API round trips; assets are separately demand-loaded.
   const nextOffset = initialItems.length;
+  const embeddedEnd = Math.min(entries.length, archiveEmbeddedCardCount);
   const preloadedBatch = {
-    entries: entries.slice(nextOffset).map(entry => archiveFeedEntry(origin, entry, metrics)),
-    hasMore: false,
+    entries: entries.slice(nextOffset, embeddedEnd).map(entry => archiveFeedEntry(origin, entry, metrics)),
+    hasMore: entries.length > embeddedEnd,
   };
   const archiveImage = initialItems.find((item) => item.poster)?.poster || `${origin}/spine-link-video-thumbnail.png`;
   const structuredData = {
@@ -1519,7 +1522,9 @@ function archiveHtml({ origin, entries, metrics }) {
         const feed=document.getElementById('feed');
         const sentinel=document.getElementById('sentinel');
         const pageSize=${archivePageSize};
-        let offset=${initialItems.length}, finished=offset>=${entries.length}, loading=false;
+        const totalEntries=${entries.length};
+        const embeddedEnd=${nextOffset + preloadedBatch.entries.length};
+        let offset=${initialItems.length}, finished=offset>=totalEntries, loading=false;
         let nextRequest=null,prefetched=null,embeddedEntries=[];
         const nextPageData=document.getElementById('archive-next-page');
         if(nextPageData){
@@ -1701,8 +1706,9 @@ function archiveHtml({ origin, entries, metrics }) {
           });
         }
         function prefetchNext(){
-          if(embeddedEntries.length){
-            warmPosters({entries:embeddedEntries.slice(Math.max(0,offset-${initialItems.length}),Math.max(0,offset-${initialItems.length})+pageSize)});
+          if(embeddedEntries.length && offset<embeddedEnd){
+            const start=offset-${initialItems.length};
+            warmPosters({entries:embeddedEntries.slice(start,start+pageSize)});
             return;
           }
           if(finished||loading||prefetched||nextRequest)return;
@@ -1720,10 +1726,10 @@ function archiveHtml({ origin, entries, metrics }) {
           loading=true;sentinel.textContent='Loading works...';
           try{
             let data;
-            if(embeddedEntries.length){
+            if(embeddedEntries.length && offset<embeddedEnd){
               const start=offset-${initialItems.length};
               const batch=embeddedEntries.slice(start,start+pageSize);
-              data={entries:batch,hasMore:start+batch.length<embeddedEntries.length};
+              data={entries:batch,hasMore:offset+batch.length<totalEntries};
             }else if(prefetched&&prefetched.start===offset){
               data=prefetched.data;prefetched=null;
             }else if(nextRequest){
