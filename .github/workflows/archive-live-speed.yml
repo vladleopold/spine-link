@@ -63,23 +63,23 @@ jobs:
           const expectedSha = process.env.EXPECTED_SHA;
           const headers = {
             Accept: 'application/vnd.github+json',
-            Authorization: `Bearer ${token}`,
+            Authorization: 'Bearer ' + token,
             'X-GitHub-Api-Version': '2022-11-28',
           };
           async function githubJson(path) {
-            const response = await fetch(`https://api.github.com${path}`, { headers });
-            if (!response.ok) throw new Error(`GitHub API returned ${response.status} for ${path}`);
+            const response = await fetch('https://api.github.com' + path, { headers });
+            if (!response.ok) throw new Error('GitHub API returned ' + response.status + ' for ' + path);
             return response.json();
           }
 
           for (let attempt = 0; attempt < 30; attempt += 1) {
             const [comments, statuses] = await Promise.all([
-              githubJson(`/repos/${repository}/issues/${pullNumber}/comments?per_page=100`),
-              githubJson(`/repos/${repository}/statuses/${expectedSha}`),
+              githubJson('/repos/' + repository + '/issues/' + pullNumber + '/comments?per_page=100'),
+              githubJson('/repos/' + repository + '/statuses/' + expectedSha),
             ]);
             const vercelStatus = statuses.find((item) => item.context === 'Vercel');
             const comment = comments.filter((item) => item.user?.login === 'vercel[bot]').at(-1)?.body || '';
-            const firstLine = comment.split(/\\r?\\n/, 1)[0] || '';
+            const firstLine = comment.split(/\r?\n/, 1)[0] || '';
             const encoded = firstLine.slice(firstLine.lastIndexOf(':') + 1).trim();
             let payload = {};
             try {
@@ -95,11 +95,11 @@ jobs:
             if (preview && vercelStatus?.target_url && inspector === vercelStatus.target_url &&
                 deploymentStatus === 'DEPLOYED' && vercelStatus.state === 'success') {
               const previewUrl = new URL(preview);
-              if (!/^spine-link-git-.*-leopoldus-projects\\.vercel\\.app$/.test(previewUrl.hostname)) {
+              if (!/^spine-link-git-.*-leopoldus-projects\.vercel\.app$/.test(previewUrl.hostname)) {
                 throw new Error('Unexpected Vercel preview host');
               }
-              appendFileSync(process.env.GITHUB_ENV, `SITE=${previewUrl.origin}\\n`);
-              console.log(`VERCEL_PREVIEW_READY=${previewUrl.origin}`);
+              appendFileSync(process.env.GITHUB_ENV, 'SITE=' + previewUrl.origin + '\n');
+              console.log('VERCEL_PREVIEW_READY=' + previewUrl.origin);
               process.exit(0);
             }
             if (vercelStatus?.target_url && inspector === vercelStatus.target_url && deploymentStatus === 'ERROR') {
@@ -107,7 +107,7 @@ jobs:
             }
             await new Promise((resolve) => setTimeout(resolve, 10000));
           }
-          throw new Error(`Timed out waiting for a Vercel preview for ${expectedSha}`);
+          throw new Error('Timed out waiting for a Vercel preview for ' + expectedSha);
           NODE
       - name: Install Playwright
         run: npm ci --ignore-scripts --no-audit --no-fund
