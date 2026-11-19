@@ -63,7 +63,7 @@ jobs:
               if (!success) continue;
               try {
                 const candidate = new URL(success.environment_url);
-                if (candidate.protocol === 'https:' && /(^|\\.)vercel\\.app$/i.test(candidate.hostname)) {
+                if (candidate.protocol === 'https:' && /(^|\.)vercel\.app$/i.test(candidate.hostname)) {
                   preview = candidate.origin;
                   break;
                 }
@@ -72,7 +72,7 @@ jobs:
             if (!preview) await new Promise(resolve => setTimeout(resolve, 5000));
           }
           if (!preview) throw new Error('No successful Vercel Preview deployment for the exact PR HEAD SHA');
-          appendFileSync(process.env.GITHUB_ENV, `ARCHIVE_BASE_URL=${preview}\\n`);
+          appendFileSync(process.env.GITHUB_ENV, `ARCHIVE_BASE_URL=${preview}\n`);
           console.log(`Resolved exact-HEAD Vercel deployment host: ${new URL(preview).hostname}`);
           NODE
       - name: Use production after a successful deployment
