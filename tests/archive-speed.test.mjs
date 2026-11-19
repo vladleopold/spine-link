@@ -25,6 +25,12 @@ const entries=Array.from({length:80},(_,i)=>({
   thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webp',
   animations:['walk'],
   defaultAnimation:'walk',
+  allAnimationPreviews:{walk:{
+    webmPreview:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webm',
+    webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview-low.webm',
+    webpPoster:'https://spine-link.vercel.app/assets/library_02/card-'+i+'/preview.webp',
+    previewDuration:2.5,
+  }},
   previewWidth:960,previewHeight:720,
 }));
 const originalFetch=globalThis.fetch;
