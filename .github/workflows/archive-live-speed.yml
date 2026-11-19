@@ -60,7 +60,7 @@ jobs:
             target="$(printf '%s' "$statuses" | jq -r '[.[] | select(.context == "Vercel")][0].target_url // empty')"
             vercel_state="$(printf '%s' "$statuses" | jq -r '[.[] | select(.context == "Vercel")][0].state // empty')"
             body="$(printf '%s' "$comments" | jq -r '[.[] | select(.user.login == "vercel[bot]") | .body] | last // empty')"
-            encoded="$(printf '%s\\n' "$body" | head -n1 | sed 's/.*://')"
+            encoded="$(printf '%s\n' "$body" | head -n1 | sed 's/.*://')"
             payload="$(printf '%s' "$encoded" | base64 -d 2>/dev/null || true)"
             inspector="$(printf '%s' "$payload" | jq -r '.projects[]? | select(.name == "spine-link") | .inspectorUrl // empty' | head -n1)"
             preview="$(printf '%s' "$payload" | jq -r '.projects[]? | select(.name == "spine-link") | .previewUrl // empty' | head -n1)"
@@ -113,7 +113,7 @@ jobs:
                 });
               });
               try {
-                const site=(process.env.SITE||'https://spine-link.vercel.app').replace(/\\/+$/,'');
+                const site=(process.env.SITE||'https://spine-link.vercel.app').replace(/\/+$/,'');
                 const started=Date.now();
                 const response=await page.goto(site+'/world-spine-archive',{
                   waitUntil:'domcontentloaded',timeout:45000,
