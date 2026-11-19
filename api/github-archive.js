@@ -188,17 +188,43 @@ function entryExcludedFromArchive(entry, exclusions) {
   return !allowRuleMatches(entry, allow);
 }
 
-function isWebpPosterUrl(value = '') {
+function sameWorkAssetPath(value = '', entry = {}) {
+  const id = String(entry?.id || '').trim();
+  const previewPath = cleanRepoPath(entry?.previewPath || (id ? `library/${id}` : ''));
+  if (!id || !previewPath) return false;
+  let pathname = '';
+  try { pathname = decodeURIComponent(new URL(String(value || '')).pathname); }
+  catch { return false; }
+  return pathname.includes(`/${previewPath}/`) || pathname.includes(`/library/${id}/`);
+}
+
+function isGeneratedWebpPosterUrl(value = '', entry = {}) {
   const url = String(value || '').trim();
-  return /^data:image\/webp;base64,/i.test(url) || /\.webp(?:[?#]|$)/i.test(url);
+  if (/^data:image\/webp;base64,/i.test(url)) return true;
+  if (!sameWorkAssetPath(url, entry)) return false;
+  let pathname = '';
+  try { pathname = decodeURIComponent(new URL(url).pathname); }
+  catch { return false; }
+  const filename = pathname.split('/').pop()?.toLowerCase() || '';
+  return ['preview.webp', 'preview-medium.webp', 'generated-preview.webp'].includes(filename);
+}
+
+function isGeneratedWebmUrl(value = '', entry = {}) {
+  const url = String(value || '').trim();
+  if (!sameWorkAssetPath(url, entry)) return false;
+  let pathname = '';
+  try { pathname = decodeURIComponent(new URL(url).pathname); }
+  catch { return false; }
+  return /\/(?:preview|preview-medium|preview-low)\.webm$/i.test(pathname);
 }
 
 function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
+  const previewPath = cleanRepoPath(entry?.previewPath || (id ? `library/${id}` : ''));
   const poster = String(entry?.webpPosterLow || entry?.webpPosterMedium || entry?.webpPoster || entry?.thumbnailPoster || '');
-  return origin && id && /^data:image\/webp;base64,/i.test(poster)
-    ? appendAssetVersion(`${origin}/assets/library/${encodeURIComponent(id)}/generated-preview.webp`, assetVersionForEntry(entry, 'generated-preview'))
-    : '';
+  if (!origin || !id || !/^data:image\/webp;base64,/i.test(poster)) return '';
+  if (!/^library(?:_\d+)?\/[a-z0-9][a-z0-9._-]{0,180}$/i.test(previewPath)) return '';
+  return appendAssetVersion(`${origin}/assets/${encodeRepoPath(`${previewPath}/generated-preview.webp`)}`, assetVersionForEntry(entry, 'generated-preview'));
 }
 
 function isoDate(value) {
@@ -500,23 +526,24 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 
 function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
-  const video = entryVideoSrc(origin, entry);
-  // A source texture/PNG is not an animation poster. Keep only actual WebP
-  // outputs (including same-work WebP fallbacks); otherwise render a neutral
-  // blocked placeholder and do not attach a WebM source.
+  const mediaReady = entry?.webmStatus === 'ready' && entry?.previewStatus === 'ready';
+  const rawVideo = mediaReady ? entryVideoSrc(origin, entry) : '';
+  const video = rawVideo && isGeneratedWebmUrl(rawVideo, entry) ? rawVideo : '';
+  // Only generated, same-work WebP outputs are posters. Source textures,
+  // arbitrary .webp atlas pages, and guessed preview.webp URLs are not previews.
   const posterCandidates = [
     entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
     entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
     entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster'),
     generatedThumbnailUrl(origin, entry),
     entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail'),
-    fallbackPosterAssetUrl(origin, entry),
-  ].filter(isWebpPosterUrl);
-  const lowPoster = posterCandidates[0] || '';
-  const alternatePoster = posterCandidates.find(url => url !== lowPoster) || '';
+  ].filter(url => isGeneratedWebpPosterUrl(url, entry));
+  const poster = posterCandidates[0] || '';
+  const posterFallback = posterCandidates.find(url => url !== poster) || '';
   const lowVideo = video
     ? entryVideoSrc(origin, { ...entry, webmPreview: entry?.webmPreviewLow || entry?.webmPreviewMedium || '' }) || video
     : '';
+  const safeLowVideo = lowVideo && isGeneratedWebmUrl(lowVideo, entry) ? lowVideo : video;
   return {
     id,
     title: cleanPublicText(entry?.title || id || 'Spine animation', 120),
@@ -524,10 +551,10 @@ function archiveFeedEntry(origin, entry, metrics) {
     ownerUrl: entry?.publicOwnerId ? `/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
     playerUrl: previewUrl(entry),
     archiveUrl: archiveItemUrl(entry),
-    poster: lowPoster,
-    posterFallback: alternatePoster,
-    video: lowPoster ? lowVideo : '',
-    videoFallback: video,
+    poster,
+    posterFallback,
+    video: poster ? safeLowVideo : '',
+    videoFallback: poster ? video : '',
     width: positiveInteger(entry?.previewWidth),
     height: positiveInteger(entry?.previewHeight),
     mode: entry?.portfolioMode === true ? 'Portfolio' : 'Library',
@@ -543,7 +570,7 @@ function lightweightCardHtml(item, index = 0) {
   const video = escapeHtml(item.video);
   const videoFallback = escapeHtml(item.videoFallback);
   const ratio = item.width && item.height ? Math.min(1.8, Math.max(0.62, item.width / item.height)) : 1;
-  const posterOnError = 'onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried=\'1\';this.src=this.dataset.fallbackSrc;}else{this.style.display=\'none\';}"';
+  const posterOnError = 'onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried=\\'1\\';this.src=this.dataset.fallbackSrc;}else{const c=this.closest(\\'.feed-card\\');if(c){c.dataset.previewStatus=\\'blocked-poster-load-failed\\';delete c.dataset.videoSrc;}this.style.display=\\'none\\';}"';
   const media = item.poster
     ? `<img src="${poster}"${posterFallback && posterFallback !== poster ? ` data-fallback-src="${posterFallback}"` : ''} ${posterOnError} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'low'}" />`
     : '<span class="feed-placeholder" aria-label="Preview unavailable">Preview unavailable</span>';
@@ -552,7 +579,7 @@ function lightweightCardHtml(item, index = 0) {
   const mediaInner = media;
   const playerUrlAttr = item.playerUrl ? ` data-player-url="${escapeHtml(item.playerUrl)}"` : '';
   const clickHandler = item.playerUrl ? ` onclick="if(this.dataset.playerUrl)window.location.href=this.dataset.playerUrl"` : '';
-  const previewStatus = item.poster ? (item.video ? 'ready-poster-lazy-video' : 'poster-only') : 'blocked-no-webp-poster';
+  const previewStatus = item.poster ? 'poster-pending' : 'blocked-no-webp-poster';
   return `<article class="feed-card"${playerUrlAttr}${videoAttrs}${clickHandler} data-entry-id="${escapeHtml(item.id)}" data-preview-status="${previewStatus}" style="--media-ratio:${ratio}">
     <div class="feed-media">${mediaInner}</div>
     <div class="feed-info">
@@ -1516,12 +1543,16 @@ function archiveHtml({ origin, entries, metrics }) {
           }
           active.delete(card);
         }
+        function isGeneratedPosterUrl(url){
+          return /^data:image\\/webp;base64,/i.test(String(url||''))||
+            /\\/(?:preview|preview-medium|generated-preview)\\.webp(?:[?#]|$)/i.test(String(url||''));
+        }
         function startVideo(card){
           if(active.has(card)||!card.dataset.videoSrc||reducedMotion)return;
           const poster=card.querySelector('img');
           if(!poster||!poster.complete||poster.naturalWidth<=0)return;
           const posterUrl=poster.currentSrc||poster.src;
-          if(!/^data:image\\/webp;base64,/i.test(posterUrl)&&! /\.webp(?:[?#]|$)/i.test(posterUrl))return;
+          if(!isGeneratedPosterUrl(posterUrl)||card.dataset.previewStatus!=='ready-poster-lazy-video')return;
           const host=card.querySelector('.feed-media');
           if(!host)return;
           const video=document.createElement('video');
@@ -1567,8 +1598,21 @@ function archiveHtml({ origin, entries, metrics }) {
           if(observer)observer.observe(card);
           const poster=card.querySelector('img');
           if(poster){
-            poster.addEventListener('load',queueUpdate);
-            poster.addEventListener('error',queueUpdate);
+            const settle=()=>{
+              if(!poster.complete)return;
+              const url=poster.currentSrc||poster.src;
+              const valid=poster.naturalWidth>0&&isGeneratedPosterUrl(url);
+              if(valid)card.dataset.previewStatus=card.dataset.videoSrc?'ready-poster-lazy-video':'poster-only';
+              else{
+                card.dataset.previewStatus='blocked-poster-load-failed';
+                delete card.dataset.videoSrc;
+                stopVideo(card);
+              }
+              queueUpdate();
+            };
+            poster.addEventListener('load',settle);
+            poster.addEventListener('error',settle);
+            if(poster.complete)settle();
           }
         }
         feed.querySelectorAll('.feed-card').forEach(attach);
@@ -1589,7 +1633,7 @@ function archiveHtml({ origin, entries, metrics }) {
           const card=document.createElement('article');
           card.className='feed-card';
           card.dataset.entryId=item.id;
-          card.dataset.previewStatus=item.poster?(item.video?'ready-poster-lazy-video':'poster-only'):'blocked-no-webp-poster';
+          card.dataset.previewStatus=item.poster?'poster-pending':'blocked-no-webp-poster';
           if(item.video)card.dataset.videoSrc=item.video;
           if(item.videoFallback)card.dataset.videoFallback=item.videoFallback;
           card.style.setProperty('--media-ratio',item.width&&item.height
@@ -1604,11 +1648,25 @@ function archiveHtml({ origin, entries, metrics }) {
             image.loading=index<6?'eager':'lazy';
             image.fetchPriority=index<4?'high':'low';
             image.decoding='async';
+            const settlePoster=()=>{
+              if(!image.complete)return;
+              const url=image.currentSrc||image.src;
+              if(image.naturalWidth>0&&isGeneratedPosterUrl(url)){
+                card.dataset.previewStatus=card.dataset.videoSrc?'ready-poster-lazy-video':'poster-only';
+              }else{
+                card.dataset.previewStatus='blocked-poster-load-failed';
+                delete card.dataset.videoSrc;
+                image.style.display='none';
+              }
+              queueUpdate();
+            };
+            image.addEventListener('load',settlePoster);
             image.addEventListener('error',()=>{
               if(item.posterFallback&&!image.dataset.retried&&image.src!==item.posterFallback){
                 image.dataset.retried='1';image.src=item.posterFallback;
-              }else image.style.display='none';
+              }else settlePoster();
             });
+            if(image.complete)settlePoster();
             media.append(image);
           }else{
             const placeholder=document.createElement('span');
