@@ -277,8 +277,8 @@ jobs:
                 const namesBefore = animationNames.value.slice();
                 const activeBefore = activeAnimation.name;
                 try {
-                  animationNames.value = Array.from({length:26}, (_, index) => 'menu_test_' + index);
-                  activeAnimation.name = 'menu_test_25';
+                  animationNames.value = Array.from({length:60}, (_, index) => 'menu_test_' + index);
+                  activeAnimation.name = 'menu_test_59';
                   menu.replaceChildren();
                   renderAnimationList();
                   const button = menu.querySelector('button.active');
@@ -286,12 +286,14 @@ jobs:
                   const buttonBox = button.getBoundingClientRect();
                   const firstSelectionVisible =
                     buttonBox.top >= menuBox.top - 1 && buttonBox.bottom <= menuBox.bottom + 1;
+                  const scrollRange = menu.scrollHeight - menu.clientHeight;
+                  if (scrollRange <= 30) throw new Error('Synthetic list did not overflow: ' + JSON.stringify({items:menu.childElementCount,scrollHeight:menu.scrollHeight,clientHeight:menu.clientHeight}));
                   menu.scrollTop = menu.scrollHeight;
                   const before = menu.scrollTop;
-                  activeAnimation.name = 'menu_test_24';
+                  activeAnimation.name = 'menu_test_58';
                   renderAnimationList();
                   const after = menu.scrollTop;
-                  return {firstSelectionVisible, before, after};
+                  return {firstSelectionVisible, before, after, scrollRange, items:menu.childElementCount, scrollHeight:menu.scrollHeight, clientHeight:menu.clientHeight};
                 } finally {
                   animationNames.value = namesBefore;
                   activeAnimation.name = activeBefore;
