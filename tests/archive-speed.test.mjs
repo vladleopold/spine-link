@@ -344,3 +344,80 @@ test('archive never substitutes another animation when defaultAnimation is absen
     if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
+
+
+test('first eligible archive posters stay eager when earlier cards are explicitly blocked',async()=>{
+  const blocked=Array.from({length:5},(_,i)=>({
+    ...entries[0],
+    id:'blocked-'+i,
+    uploadedAt:new Date(Date.UTC(2026,10,19,0,i)).toISOString(),
+    skeleton:'blocked-'+i+'.skel',
+    previewPath:'library_02/blocked-'+i,
+    defaultAnimation:'',
+    webmStatus:'blocked-missing',
+    previewStatus:'blocked',
+    allAnimationPreviews:{},
+  }));
+  const ready=Array.from({length:7},(_,i)=>{
+    const id='ready-'+i;
+    const base='https://spine-link.vercel.app/assets/library_02/'+id+'/';
+    return {
+      ...entries[0],
+      id,
+      uploadedAt:new Date(Date.UTC(2026,10,18,0,7-i)).toISOString(),
+      skeleton:id+'.skel',
+      previewPath:'library_02/'+id,
+      defaultAnimation:'walk',
+      webmStatus:'ready',
+      previewStatus:'ready',
+      allAnimationPreviews:{walk:{
+        webmPreview:base+'preview.webm',
+        webmPreviewMedium:base+'preview-medium.webm',
+        webmPreviewLow:base+'preview-low.webm',
+        webpPoster:base+'preview.webp',
+        webpPosterMedium:base+'preview-medium.webp',
+        webpPosterLow:base+'preview-low.webp',
+        previewDuration:2.5,
+      }},
+    };
+  });
+  const log=[];
+  globalThis.fetch=stubFetch(log,[...blocked,...ready]);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-first-eligible-poster-priority';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    assert.equal(res.code,200);
+    const html=String(res.body);
+    const cardFor=id=>html.match(new RegExp('<article class="feed-card"[^>]*data-entry-id="'+id+'"[\\s\\S]*?<\\/article>'))?.[0]||'';
+    for(let i=0;i<5;i++){
+      const card=cardFor('blocked-'+i);
+      assert.ok(card,'blocked source card must remain in the archive');
+      assert.doesNotMatch(card,/<img|<video|data-video-src=/,
+        'a blocked card must not gain a fabricated poster or video');
+    }
+    for(let i=0;i<4;i++){
+      const card=cardFor('ready-'+i);
+      const image=card.match(/<img\\b[^>]*>/)?.[0]||'';
+      assert.ok(image,'eligible card must have its own poster');
+      assert.match(image,/loading="eager"/,
+        'the first four eligible posters must be eager regardless of their card positions');
+      assert.match(image,i<2?/fetchpriority="high"/:/fetchpriority="low"/);
+    }
+    const fifthImage=cardFor('ready-4').match(/<img\\b[^>]*>/)?.[0]||'';
+    assert.match(fifthImage,/loading="lazy"/,
+      'later eligible posters must remain lazy');
+    const preloads=[...html.matchAll(/<link rel="preload" as="image" href="([^"]+)" fetchpriority="([^"]+)"/g)];
+    assert.equal(preloads.length,4,'preload only the first four eligible WebP posters');
+    assert.deepEqual(preloads.map(match=>new URL(match[1]).pathname.split('/').at(-2)),
+      ['ready-0','ready-1','ready-2','ready-3']);
+    assert.deepEqual(preloads.map(match=>match[2]),['high','high','low','low']);
+    assert.ok(!html.includes('<video src='),'initial archive HTML must not request WebM');
+    assert.ok(log.length<=6,'poster priority must not add per-card GitHub requests');
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
