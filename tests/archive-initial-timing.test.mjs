@@ -56,8 +56,8 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   assert.match(archive, /let eligiblePosterIndex = 0/);
   assert.match(archive, /item\.poster && item\.video \? eligiblePosterIndex\+\+ : -1/,
     'poster priority must count eligible same-work pairs, not blocked card positions');
-  assert.match(archive, /posterIndex >= 0 && posterIndex < 4/);
-  assert.match(archive, /posterIndex >= 0 && posterIndex < 2/);
+  assert.match(source, /posterIndex >= 0 && posterIndex < 4/);
+  assert.match(source, /posterIndex >= 0 && posterIndex < 2/);
   assert.match(archive, /const posterPreloads = initialItems[\s\S]*?\.slice\(0, 4\)/);
   assert.match(archive, /href="\$\{escapeHtml\(item\.poster\)\}" fetchpriority="\$\{index < 2 \? 'high' : 'low'\}"/,
     'the first four eligible WebP posters must be preloaded before client script execution');
