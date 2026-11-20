@@ -100,17 +100,29 @@ jobs:
                 throw new Error('Unexpected Vercel preview host');
               }
               let previewReady = false;
+              let previewBlocker = 'PREVIEW_FETCH_FAILED';
+              let previewHttpStatus = 0;
               try {
                 const response = await fetch(previewUrl.origin + '/world-spine-archive', {
                   signal: AbortSignal.timeout(20000),
                 });
+                previewHttpStatus = response.status;
                 const html = await response.text();
                 previewReady = response.ok && html.includes('data-video-src=') &&
                   html.includes('id="archive-next-page"');
+                if (!previewReady) {
+                  previewBlocker = response.status === 401 || response.status === 403
+                    ? 'PREVIEW_PROTECTED'
+                    : response.ok
+                      ? 'PREVIEW_MISSING_ARCHIVE_MARKERS'
+                      : 'PREVIEW_HTTP_' + response.status;
+                }
               } catch {}
               if (!previewReady) {
-                appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=PREVIEW_NOT_PUBLIC\n');
-                console.warn('VERCEL_PREVIEW_BLOCKED=PREVIEW_NOT_PUBLIC; continuing with production archive audit.');
+                appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=' + previewBlocker + '\n');
+                console.warn('VERCEL_PREVIEW_BLOCKED=' + previewBlocker +
+                  '; httpStatus=' + previewHttpStatus +
+                  '; continuing with production archive audit.');
                 process.exit(0);
               }
               appendFileSync(process.env.GITHUB_ENV, 'SITE=' + previewUrl.origin + '\n');
