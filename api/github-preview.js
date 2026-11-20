@@ -5,6 +5,7 @@ import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
+import { previewMediaStatusAllowsPlayback } from '../lib/preview-media-status.js';
 
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -728,7 +729,9 @@ function resolvePreviewTarget(entry, origin = '') {
   const previews = entry && entry.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
     ? entry.allAnimationPreviews
     : null;
-  const selected = chosen.trim() && previews ? previews[chosen] : null;
+  // Explicit failed, blocked or pending media states must not leak stale WebM/WebP URLs.
+  // Missing status fields remain compatible with legacy index records.
+  const selected = previewMediaStatusAllowsPlayback(entry) && chosen.trim() && previews ? previews[chosen] : null;
   const fix = origin ? (value) => repairAnimationAssetUrl(entry, value, origin) : (value) => value;
   const selectedFullValue = selected?.webmPreview || selected?.webmPreviewMedium || selected?.webmPreviewLow || '';
   const selectedLowValue = selected?.webmPreviewLow || selected?.webmPreviewMedium || selected?.webmPreview || '';
