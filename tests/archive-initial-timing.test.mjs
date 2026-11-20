@@ -22,6 +22,10 @@ test('initial archive poster timing excludes intentional prefetch warm-up', () =
   assert.ok(workflow.includes('expectedRequestAborts'),'expected abort count must remain visible in evidence');
 });
 
+test('PR preview audit never exposes a Vercel bypass secret to PR-controlled code', () => {
+  assert.doesNotMatch(workflow, /VERCEL_AUTOMATION_BYPASS_SECRET|x-vercel-protection-bypass/);
+});
+
 test('hourly production archive audit stays read-only during deployment cooldown', () => {
   assert.match(workflow,/release_gate:/,
     'post-deploy live proof must retain its deployment gate');
