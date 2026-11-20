@@ -102,26 +102,36 @@ jobs:
               let previewReady = false;
               let previewBlocker = 'PREVIEW_FETCH_FAILED';
               let previewHttpStatus = 0;
+              let previewRedirected = false;
+              let previewFinalOriginMatches = true;
               try {
                 const response = await fetch(previewUrl.origin + '/world-spine-archive', {
                   signal: AbortSignal.timeout(20000),
                 });
                 previewHttpStatus = response.status;
+                previewRedirected = response.redirected;
+                previewFinalOriginMatches = new URL(response.url).origin === previewUrl.origin;
                 const html = await response.text();
-                previewReady = response.ok && html.includes('data-video-src=') &&
-                  html.includes('id="archive-next-page"');
+                previewReady = response.ok && previewFinalOriginMatches && !previewRedirected &&
+                  html.includes('data-video-src=') && html.includes('id="archive-next-page"');
                 if (!previewReady) {
                   previewBlocker = response.status === 401 || response.status === 403
                     ? 'PREVIEW_PROTECTED'
-                    : response.ok
-                      ? 'PREVIEW_MISSING_ARCHIVE_MARKERS'
-                      : 'PREVIEW_HTTP_' + response.status;
+                    : previewRedirected && !previewFinalOriginMatches
+                      ? 'PREVIEW_REDIRECTED_AWAY'
+                      : previewRedirected
+                        ? 'PREVIEW_REDIRECTED'
+                        : response.ok
+                          ? 'PREVIEW_MISSING_ARCHIVE_MARKERS'
+                          : 'PREVIEW_HTTP_' + response.status;
                 }
               } catch {}
               if (!previewReady) {
                 appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=' + previewBlocker + '\n');
                 console.warn('VERCEL_PREVIEW_BLOCKED=' + previewBlocker +
                   '; httpStatus=' + previewHttpStatus +
+                  '; redirected=' + previewRedirected +
+                  '; sameOrigin=' + previewFinalOriginMatches +
                   '; continuing with production archive audit.');
                 process.exit(0);
               }
