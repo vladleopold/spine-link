@@ -8,6 +8,7 @@ on:
       - tests/preview-animation-identity.test.mjs
       - tests/animation-menu-scroll.test.mjs
       - tests/archive-speed.test.mjs
+      - lib/generated-poster-url.js
       - tests/archive-initial-timing.test.mjs
       - scripts/resolve-vercel-preview-comment.mjs
       - scripts/archive-request-failure.mjs
@@ -30,6 +31,7 @@ on:
       - tests/preview-animation-identity.test.mjs
       - tests/animation-menu-scroll.test.mjs
       - tests/archive-speed.test.mjs
+      - lib/generated-poster-url.js
       - tests/archive-initial-timing.test.mjs
       - scripts/resolve-vercel-preview-comment.mjs
       - scripts/archive-request-failure.mjs

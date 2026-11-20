@@ -1,6 +1,7 @@
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
+import { isGeneratedPosterUrl } from '../lib/generated-poster-url.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
 
 const defaultOwner = 'vladleopold';
@@ -1672,9 +1673,7 @@ function archiveHtml({ origin, entries, metrics }) {
           }
           active.delete(card);
         }
-        function isGeneratedPosterUrl(url){
-          return /\\/(?:preview-medium|preview-low)\\.webp(?:[?#]|$)/i.test(String(url||''));
-        }
+        ${isGeneratedPosterUrl.toString()}
         function startVideo(card){
           if(active.has(card)||!card.dataset.videoSrc||reducedMotion)return;
           const poster=card.querySelector('img');

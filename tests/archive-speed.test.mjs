@@ -2,6 +2,7 @@ import test from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import handler from '../api/github-archive.js';
+import { isGeneratedPosterUrl } from '../lib/generated-poster-url.js';
 
 function response() {
   return {
@@ -629,4 +630,28 @@ test('visible lazy WebM retries one transient AbortError before failing closed',
   assert.ok(source.includes('delete card.dataset.videoSrc;'));
   assert.ok(source.includes('video.src=card.dataset.videoSrc;'),
     'retry must reuse the same card-bound WebM URL');
+});
+
+
+test('lazy video accepts every exact generated WebP poster tier and rejects unrelated thumbnails', () => {
+  for (const suffix of ['preview.webp', 'preview-medium.webp', 'preview-low.webp']) {
+    assert.equal(
+      isGeneratedPosterUrl('https://spine-link.vercel.app/assets/library_02/work/' + suffix + '?v=1'),
+      true,
+      'the matching poster tier must unlock only its paired lazy WebM',
+    );
+  }
+  for (const url of [
+    'https://spine-link.vercel.app/assets/library_02/work/thumbnail.webp',
+    'https://spine-link.vercel.app/assets/library_02/work/texture.webp',
+    'https://spine-link.vercel.app/assets/library_02/work/preview.webp.evil',
+    'data:image/webp;base64,VEVYVFVSRQ==',
+  ]) {
+    assert.equal(isGeneratedPosterUrl(url), false,
+      'a generic thumbnail or texture must never unlock video playback');
+  }
+  const archiveSource = fs.readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
+  const sharedMatcherInjection = String.fromCharCode(36) + '{isGeneratedPosterUrl.toString()}';
+  assert.ok(archiveSource.includes(sharedMatcherInjection),
+    'the browser lazy-video guard must use the same tested matcher');
 });

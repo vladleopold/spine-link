@@ -10,6 +10,7 @@ on:
   pull_request:
     paths:
       - api/github-archive.js
+      - lib/generated-poster-url.js
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
       - scripts/resolve-vercel-preview-comment.mjs
