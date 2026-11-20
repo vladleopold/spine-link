@@ -1,9 +1,11 @@
 name: Spine-Link Chromium production verification
 
-# Verify the actual public alias only after a successful production deployment.
-# Manual dispatch remains available for diagnostics; PRs must not test stale production.
+# Verify the actual public alias after production deploys and on an hourly read-only schedule.
+# PRs must not test stale production; scheduled runs always inspect the deployed public alias.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '53 * * * *'
   workflow_run:
     workflows: ["Vercel deploy and alias"]
     types: [completed]
@@ -186,6 +188,37 @@ jobs:
               // sidebar cards stay below them; cover the >1000px breakpoint.
               for (const width of [1200, 1001]) {
                 await page.setViewportSize({width, height:780});
+                const realMenu = await page.evaluate(() => {
+                  const menu = document.querySelector('#animation-menu');
+                  const playerFrame = document.querySelector('.player-frame');
+                  if (!menu || !playerFrame) return null;
+                  const menuRect = menu.getBoundingClientRect();
+                  const playerRect = playerFrame.getBoundingClientRect();
+                  const active = menu.querySelector('button.active');
+                  const activeRect = active?.getBoundingClientRect();
+                  return {
+                    itemCount: menu.querySelectorAll('button').length,
+                    height: menuRect.height,
+                    contentHeight: menu.scrollHeight,
+                    playerHeight: playerRect.height,
+                    scrollable: menu.scrollHeight > menu.clientHeight + 1,
+                    activeVisible: !!activeRect && activeRect.top >= menuRect.top - 1 &&
+                      activeRect.bottom <= menuRect.bottom + 1,
+                  };
+                });
+                assert.ok(realMenu && realMenu.itemCount > 0,
+                  'Real animation menu did not populate at ' + width + 'px');
+                assert.equal(realMenu.activeVisible, true,
+                  'Real selected animation must be visible at ' + width + 'px: ' + JSON.stringify(realMenu));
+                if (realMenu.itemCount <= 12) {
+                  assert.ok(realMenu.height < realMenu.playerHeight,
+                    'Real short animation list must not fill the player at ' + width + 'px: ' + JSON.stringify(realMenu));
+                  assert.equal(realMenu.scrollable, false,
+                    'Real short animation list must not scroll at ' + width + 'px: ' + JSON.stringify(realMenu));
+                  assert.ok(Math.abs(realMenu.height - realMenu.contentHeight) <= 2,
+                    'Real short animation list must size to its content at ' + width + 'px: ' + JSON.stringify(realMenu));
+                }
+                console.log('PASS LIVE REAL ANIMATION MENU', width, JSON.stringify(realMenu));
                 const layout = await page.evaluate(() => {
                   const menu = document.querySelector('#animation-menu');
                   const playerFrame = document.querySelector('.player-frame');
