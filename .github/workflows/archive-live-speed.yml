@@ -142,8 +142,8 @@ jobs:
               page.on('pageerror',e=>pageErrors.push(String(e)));
               page.on('response',response=>{
                 const url=response.url();
-                if(/\\.webp(?:\\?|$)/i.test(url))posterResponseStatuses.set(url,response.status());
-                if(response.status()>=400 && (/\\.(?:webm|webp)(?:\\?|$)/i.test(url)||url.includes('/api/github-archive')))
+                if(/\.webp(?:\?|$)/i.test(url))posterResponseStatuses.set(url,response.status());
+                if(response.status()>=400 && (/\.(?:webm|webp)(?:\?|$)/i.test(url)||url.includes('/api/github-archive')))
                   assetHttpErrors.push(response.status());
               });
               page.on('request',r=>{
