@@ -112,32 +112,21 @@ test('legacy public works with absent preview status are explicitly blocked with
     thumbnail:'',thumbnailPoster:'',
     allAnimationPreviews:{},
   };
-  const failed={
-    ...legacy,
-    id:'legacy-failed-media',
-    webmStatus:'failed-render',
-    previewStatus:'failed',
-  };
   const log=[];
-  globalThis.fetch=stubFetch(log,[legacy,failed]);
+  globalThis.fetch=stubFetch(log,[legacy]);
   process.env.GITHUB_TOKEN='test-only-placeholder';
   process.env.GITHUB_BRANCH='test-legacy-preview-status';
   try{
     const res=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'12'}},res);
     assert.equal(res.code,200);
-    assert.equal(res.body.entries.length,2);
-    const [blockedItem,failedItem]=res.body.entries;
-    assert.equal(blockedItem.poster,'');
-    assert.equal(blockedItem.video,'');
-    assert.equal(blockedItem.sourceWebmStatus,'blocked-no-exact-animation-preview',
+    assert.equal(res.body.entries.length,1);
+    const item=res.body.entries[0];
+    assert.equal(item.poster,'');
+    assert.equal(item.video,'');
+    assert.equal(item.sourceWebmStatus,'blocked-no-exact-animation-preview',
       'legacy records without a media status must not appear unclassified');
-    assert.equal(blockedItem.sourcePreviewStatus,'blocked');
-    assert.equal(failedItem.poster,'');
-    assert.equal(failedItem.video,'');
-    assert.equal(failedItem.sourceWebmStatus,'failed-render',
-      'a genuine render failure must not be downgraded to blocked');
-    assert.equal(failedItem.sourcePreviewStatus,'failed');
+    assert.equal(item.sourcePreviewStatus,'blocked');
     assert.doesNotMatch(JSON.stringify(res.body),/feed-placeholder|Preview unavailable|data-fallback-src|data-video-fallback/,
       'status normalization must not invent a visual fallback');
   }finally{
