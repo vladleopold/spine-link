@@ -264,10 +264,10 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     const embedded=html.match(/<script type="application\/json" id="archive-next-page">([^<]+)<\/script>/);
     assert.ok(embedded,'First lazy batch must be embedded in server HTML');
     const batch=JSON.parse(embedded[1]);
-    assert.equal(batch.entries.length,28,'only the next 28 cards should be embedded to bound initial HTML');
+    assert.equal(batch.entries.length,68,'the remaining 68 records stay embedded after the initial four eligible posters are mounted');
     assert.equal(batch.hasMore,true,'later archive pages must remain available through the paginated API');
     assert.ok(html.includes('const batch=embeddedEntries.slice(start,start+pageSize)'),
-      'the first 40 cards must paginate in-memory without waiting for a feed API request');
+      'the first 96 compact cards must paginate in-memory without waiting for a feed API request');
     assert.ok(html.includes('const embeddedEnd=')&&html.includes('offset<embeddedEnd'),
       'after the bounded embedded batch, later cards must continue through the API');
     assert.ok(batch.entries.every(e=>e.poster&&e.video),'Next batch has WebP poster metadata');
