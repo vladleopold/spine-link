@@ -95,7 +95,7 @@ jobs:
             if (preview && vercelStatus?.target_url && inspector === vercelStatus.target_url &&
                 deploymentStatus === 'DEPLOYED' && vercelStatus.state === 'success') {
               const previewUrl = new URL(preview);
-              if (!/^spine-link-git-.*-leopoldus-projects\\.vercel\\.app$/.test(previewUrl.hostname)) {
+              if (!/^spine-link-git-.*-leopoldus-projects\.vercel\.app$/.test(previewUrl.hostname)) {
                 throw new Error('Unexpected Vercel preview host');
               }
               let previewReady = false;
@@ -108,11 +108,11 @@ jobs:
                   html.includes('id="archive-next-page"');
               } catch {}
               if (!previewReady) {
-                appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=PREVIEW_NOT_PUBLIC\\n');
+                appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=PREVIEW_NOT_PUBLIC\n');
                 console.warn('VERCEL_PREVIEW_BLOCKED=PREVIEW_NOT_PUBLIC; continuing with production archive audit.');
                 process.exit(0);
               }
-              appendFileSync(process.env.GITHUB_ENV, 'SITE=' + previewUrl.origin + '\\n');
+              appendFileSync(process.env.GITHUB_ENV, 'SITE=' + previewUrl.origin + '\n');
               console.log('VERCEL_PREVIEW_READY=' + previewUrl.origin);
               process.exit(0);
             }
@@ -120,18 +120,18 @@ jobs:
               const failureCode = vercelStatus.target_url.includes('build-rate-limit')
                 ? 'BUILD_RATE_LIMIT'
                 : 'DEPLOYMENT_FAILED';
-              appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=' + failureCode + '\\n');
+              appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=' + failureCode + '\n');
               console.warn('VERCEL_PREVIEW_BLOCKED=' + failureCode + '; continuing with production archive audit.');
               process.exit(0);
             }
             if (vercelStatus?.target_url && inspector === vercelStatus.target_url && deploymentStatus === 'ERROR') {
-              appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=DEPLOYMENT_FAILED\\n');
+              appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=DEPLOYMENT_FAILED\n');
               console.warn('VERCEL_PREVIEW_BLOCKED=DEPLOYMENT_FAILED; continuing with production archive audit.');
               process.exit(0);
             }
             await new Promise((resolve) => setTimeout(resolve, 10000));
           }
-          appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=PREVIEW_NOT_READY\\n');
+          appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=PREVIEW_NOT_READY\n');
           console.warn('VERCEL_PREVIEW_BLOCKED=PREVIEW_NOT_READY; continuing with production archive audit.');
           NODE
       - name: Install Playwright
