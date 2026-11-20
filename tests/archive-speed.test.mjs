@@ -359,8 +359,8 @@ test('archive never substitutes another animation when defaultAnimation is absen
 });
 
 
-test('first eligible archive posters are preloaded across the embedded batch after twelve blocked cards',async()=>{
-  const blocked=Array.from({length:13},(_,i)=>({
+test('first four eligible archive posters reach the initial DOM after fifty-five blocked cards',async()=>{
+  const blocked=Array.from({length:55},(_,i)=>({
     ...entries[0],
     id:'blocked-'+i,
     uploadedAt:new Date(Date.UTC(2026,10,19,0,i)).toISOString(),
@@ -404,25 +404,25 @@ test('first eligible archive posters are preloaded across the embedded batch aft
     assert.equal(res.code,200);
     const html=String(res.body);
     const cards=[...html.matchAll(/<article class="feed-card"[\s\S]*?<\/article>/g)].map(match=>match[0]);
-    assert.equal(cards.length,12,'keep only twelve compact cards in the initial HTML');
-    for(const card of cards){
+    assert.equal(cards.length,59,'include the first four eligible cards after fifty-five blocked records');
+    for(const card of cards.slice(0,55)){
       assert.doesNotMatch(card,/<img|<video|data-video-src=/,
-        'blocked initial cards must not gain a fabricated poster or video');
+        'blocked cards must not gain a fabricated poster or video');
+    }
+    for(let i=0;i<4;i++){
+      assert.match(cards[55+i],/<img /,'the first eligible cards must be in the initial DOM');
+      assert.match(cards[55+i],/data-video-src=/,'each initial poster must retain its exact paired lazy WebM');
     }
     const embedded=html.match(/<script type="application\/json" id="archive-next-page">([^<]+)<\/script>/);
-    assert.ok(embedded,'the next compact card records must be embedded in HTML');
+    assert.ok(embedded,'the remaining compact card records must be embedded in HTML');
     const batch=JSON.parse(embedded[1]);
-    assert.equal(batch.entries.length,8,'thirteen blocked plus seven ready means eight records remain after the first twelve');
-    assert.equal(batch.entries[0].id,'blocked-0','archive HTML is ordered newest-first; the thirteenth blocked record follows the first twelve');
-    assert.equal(batch.entries[0].poster,'');
-    assert.equal(batch.entries[0].video,'');
-    assert.equal(batch.entries[0].sourceWebmStatus,'blocked-missing');
-    for(let i=0;i<7;i++){
-      assert.equal(batch.entries[i+1].id,'ready-'+i);
-      assert.ok(batch.entries[i+1].poster&&batch.entries[i+1].video);
+    assert.equal(batch.entries.length,3,'the remaining three ready works follow the initial four');
+    for(let i=0;i<3;i++){
+      assert.equal(batch.entries[i].id,'ready-'+(i+4));
+      assert.ok(batch.entries[i].poster&&batch.entries[i].video);
     }
     const preloads=[...html.matchAll(/<link rel="preload" as="image" href="([^"]+)" fetchpriority="([^"]+)"/g)];
-    assert.equal(preloads.length,4,'preload only the first four eligible WebP posters across the first forty records');
+    assert.equal(preloads.length,4,'preload the first four eligible WebP posters from the bounded embedded window');
     assert.deepEqual(preloads.map(match=>new URL(match[1]).pathname.split('/').at(-2)),
       ['ready-0','ready-1','ready-2','ready-3']);
     assert.deepEqual(preloads.map(match=>match[2]),['high','high','low','low']);
@@ -435,8 +435,8 @@ test('first eligible archive posters are preloaded across the embedded batch aft
     assert.ok(html.includes('const pageSize=48'));
     assert.ok(html.includes("rootMargin:'5200px'"));
     assert.ok(html.includes('new MutationObserver'),
-      'optional enhancements must wait for the first poster even when all initial cards are blocked');
-    assert.ok(!html.includes('<video src='),'initial archive HTML must not request WebM');
+      'optional enhancements must wait for a real poster without blocking card insertion');
+    assert.ok(!html.includes('<video src='),'initial archive HTML must never request WebM');
     assert.ok(log.length<=6,'poster priority must not add per-card GitHub requests');
   }finally{
     globalThis.fetch=originalFetch;
@@ -444,7 +444,6 @@ test('first eligible archive posters are preloaded across the embedded batch aft
     if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
-
 
 test('hourly archive proof traverses every public page and verifies media beyond the embedded batch',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');

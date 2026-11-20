@@ -11,8 +11,9 @@ const defaultBasePath = 'library';
 const recoveredArchiveRef = 'f4e51c6c420d4ff1f4d2028c12492b04153cc862';
 const archiveInitialCardCount = 12;
 const archivePageSize = 48;
-// Keep the first 40 compact card records in HTML; the rest arrive via prefetched API pages.
-const archiveEmbeddedCardCount = 40;
+// Embed up to 96 compact records so the first exact media pairs can reach the initial DOM
+// even when dozens of newest works are explicitly blocked and have no preview assets.
+const archiveEmbeddedCardCount = 96;
 
 function cleanRepoPath(value = '') {
   return String(value).trim().replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
@@ -1504,7 +1505,17 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
 function archiveHtml({ origin, entries, metrics }) {
   const embeddedEnd = Math.min(entries.length, archiveEmbeddedCardCount);
   const embeddedItems = entries.slice(0, embeddedEnd).map((entry) => archiveFeedEntry(origin, entry, metrics));
-  const initialItems = embeddedItems.slice(0, archiveInitialCardCount);
+  // Keep chronological order, but do not leave the first exact WebP/WebM pair
+  // stranded in embedded JSON behind dozens of blocked cards.
+  let initialEnd = Math.min(archiveInitialCardCount, embeddedItems.length);
+  let eligiblePosterCount = 0;
+  for (let index = 0; index < embeddedItems.length && eligiblePosterCount < 4; index += 1) {
+    if (embeddedItems[index].poster && embeddedItems[index].video) {
+      eligiblePosterCount += 1;
+      initialEnd = Math.max(initialEnd, index + 1);
+    }
+  }
+  const initialItems = embeddedItems.slice(0, initialEnd);
   let eligiblePosterIndex = 0;
   const cards = initialItems.map((item) => {
     const posterIndex = item.poster && item.video ? eligiblePosterIndex++ : -1;

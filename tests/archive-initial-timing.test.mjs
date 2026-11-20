@@ -78,9 +78,12 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   assert.ok(start >= 0 && end > start, 'archive HTML renderer must exist');
   const archive = source.slice(start, end);
   assert.match(source, /const archiveInitialCardCount = 12/);
+  assert.match(source, /const archiveEmbeddedCardCount = 96/);
   assert.match(source, /const archivePageSize = 48/);
   assert.match(archive, /const embeddedItems = entries\.slice\(0, embeddedEnd\)\.map/);
-  assert.match(archive, /const initialItems = embeddedItems\.slice\(0, archiveInitialCardCount\)/);
+  assert.match(archive, /let initialEnd = Math\.min\(archiveInitialCardCount, embeddedItems\.length\)/);
+  assert.match(archive, /eligiblePosterCount < 4/);
+  assert.match(archive, /const initialItems = embeddedItems\.slice\(0, initialEnd\)/);
   assert.match(archive, /const eligiblePosters = embeddedItems\.filter\(\(item\) => item\.poster && item\.video\)/);
   assert.match(archive, /const firstPoster = eligiblePosters\[0\]\?\.poster \|\| ''/);
   assert.match(archive, /let eligiblePosterIndex = 0/);
