@@ -334,18 +334,23 @@ test('archive never substitutes another animation when defaultAnimation is absen
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'12'}},res);
     assert.equal(res.code,200);
     assert.equal(res.body.entries.length,3);
-    for(const [index,item] of res.body.entries.entries()){
+    const byId=new Map(res.body.entries.map(item=>[item.id,item]));
+    for(const id of ['card-000','missing-default']){
+      const item=byId.get(id);
+      assert.ok(item,'expected source entry '+id);
       assert.equal(item.poster,'','no other animation may supply a poster');
       assert.equal(item.video,'','no other animation may supply WebM');
       assert.equal(item.quality,'','unselected animation must remain blocked');
-      if(index<2){
-        assert.equal(item.sourceWebmStatus,'blocked-no-exact-animation-preview');
-        assert.equal(item.sourcePreviewStatus,'blocked');
-      }else{
-        assert.equal(item.sourceWebmStatus,'failed','an explicit failure must remain failed');
-        assert.equal(item.sourcePreviewStatus,'failed');
-      }
+      assert.equal(item.sourceWebmStatus,'blocked-no-exact-animation-preview');
+      assert.equal(item.sourcePreviewStatus,'blocked');
     }
+    const failed=byId.get('failed-default');
+    assert.ok(failed,'explicit failed source entry must remain visible as failed');
+    assert.equal(failed.poster,'');
+    assert.equal(failed.video,'');
+    assert.equal(failed.quality,'');
+    assert.equal(failed.sourceWebmStatus,'failed','an explicit failure must remain failed');
+    assert.equal(failed.sourcePreviewStatus,'failed');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
@@ -408,7 +413,7 @@ test('first eligible archive posters are preloaded across the embedded batch aft
     assert.ok(embedded,'the next compact card records must be embedded in HTML');
     const batch=JSON.parse(embedded[1]);
     assert.equal(batch.entries.length,8,'thirteen blocked plus seven ready means eight records remain after the first twelve');
-    assert.equal(batch.entries[0].id,'blocked-12');
+    assert.equal(batch.entries[0].id,'blocked-0','archive HTML is ordered newest-first; the thirteenth blocked record follows the first twelve');
     assert.equal(batch.entries[0].poster,'');
     assert.equal(batch.entries[0].video,'');
     assert.equal(batch.entries[0].sourceWebmStatus,'blocked-missing');
