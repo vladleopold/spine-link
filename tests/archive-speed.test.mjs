@@ -273,6 +273,7 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
   const log=[];
   globalThis.fetch=stubFetch(log,sourceEntries);
   process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-archive-server-html-pagination';
   try{
     const res=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
@@ -308,6 +309,8 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
     else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;
+    else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
 
