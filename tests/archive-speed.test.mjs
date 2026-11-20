@@ -299,8 +299,16 @@ test('production deploys are queued instead of cancelled by later workflow_run c
     'only successful main-branch CI may deploy');
   assert.match(workflow,/Ensure source has not changed since the successful CI run/,
     'queued deploys must still reject stale tested source');
-  assert.match(workflow,/last_success=.*status=success/,
-    'repeated successful workflow_run events for one SHA must be deduplicated');
+  assert.match(workflow,/commits\/\$deploy_sha\/status/,
+    'deduplication must inspect the exact source commit, not a workflow conclusion');
+  assert.match(workflow,/context == "vercel\/production" and \.state == "success"/,
+    'only an explicit successful production deployment status may deduplicate a commit');
+  assert.match(workflow,/name: Record verified production deployment on commit/,
+    'a production status may be written only after deploy and production smoke steps pass');
+  assert.match(workflow,/statuses:\s*write/,
+    'the deploy workflow needs permission to record its verified production status');
+  assert.doesNotMatch(workflow,/last_success=.*status=success/,
+    'a skipped workflow run must never be mistaken for a production deployment');
 });
 
 test('preview sidebar keeps all supporting panels below the animation picker on desktop',()=>{
