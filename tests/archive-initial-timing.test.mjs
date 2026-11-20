@@ -92,7 +92,7 @@ test('Vercel resolver skips newer failed comments and matches the exact commit s
     name:'spine-link',inspectorUrl,previewUrl,nextCommitStatus:'DEPLOYED'
   }]})).toString('base64');
   const comments = [
-    {user:{login:'vercel[bot]'},body:'[vc]: #signature:'+payload+'\\nDeployment ready'},
+    {user:{login:'vercel[bot]'},body:'[vc]: #signature:'+payload+'\nDeployment ready'},
     {user:{login:'vercel[bot]'},body:'Deployment failed: build rate limit'},
     {user:{login:'unrelated-user'},body:'[vc]: #signature:'+payload},
   ];
