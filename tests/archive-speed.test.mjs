@@ -439,5 +439,12 @@ test('hourly archive proof traverses every public page and verifies media beyond
     'recorded full-library audit failures must fail the job');
   assert.match(workflow,/ARCHIVE_ALL_PAGES_EVIDENCE/);
   assert.match(workflow,/probeWebm/);
+  assert.match(workflow,/const decodeLimit=Number\.MAX_SAFE_INTEGER/);
+  assert.match(workflow,/const posterStatusTargets=allPairs/,
+    'desktop and mobile must validate HTTP status for every eligible poster');
+  assert.match(workflow,/const webmTargets=allPairs/,
+    'desktop and mobile must validate real WebM response headers for every eligible card');
+  assert.match(workflow,/const sampleCount=Math\.min\(8,allPairs\.length\)/,
+    'both viewports must play a representative set including archive boundaries');
   assert.match(workflow,/video\.readyState>=2/);
 });
