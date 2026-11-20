@@ -106,7 +106,7 @@ test('archive cards expose source-level blocked status without exposing preview 
 
 test('Vercel resolver skips newer failed comments and matches the exact commit status URL', () => {
   const inspectorUrl = 'https://vercel.example/deployment/exact-head';
-  const previewUrl = 'https://spine-link-git-test-leopoldus-projects.vercel.app';
+  const previewUrl = 'spine-link-git-test-leopoldus-projects.vercel.app';
   const payload = Buffer.from(JSON.stringify({projects:[{
     name:'spine-link',inspectorUrl,previewUrl,nextCommitStatus:'DEPLOYED'
   }]})).toString('base64');
@@ -116,9 +116,16 @@ test('Vercel resolver skips newer failed comments and matches the exact commit s
     {user:{login:'unrelated-user'},body:'[vc]: #signature:'+payload},
   ];
   const match = findMatchingVercelProject(comments, inspectorUrl);
-  assert.equal(match?.previewUrl, previewUrl);
+  assert.equal(match?.previewUrl, 'https://' + previewUrl,\n    'Vercel bot payloads may provide a hostname without a URL scheme');
   assert.equal(match?.nextCommitStatus, 'DEPLOYED');
   assert.equal(findMatchingVercelProject(comments, 'https://vercel.example/other-head'), null);
+  const unsafePayload = Buffer.from(JSON.stringify({projects:[{
+    name:'spine-link',inspectorUrl,previewUrl:'http://spine-link-git-test-leopoldus-projects.vercel.app',
+    nextCommitStatus:'DEPLOYED'
+  }]})).toString('base64');
+  assert.equal(findMatchingVercelProject([
+    {user:{login:'vercel[bot]'},body:'[vc]: #signature:'+unsafePayload}
+  ], inspectorUrl), null, 'non-HTTPS preview origins must be rejected');
 });
 
 test('PR live proof uses only the successful Vercel preview for the exact head SHA', () => {
