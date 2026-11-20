@@ -100,6 +100,53 @@ test('public works without media stay visible as blocked; test-only and hidden w
   }
 });
 
+test('legacy public works with absent preview status are explicitly blocked without a substitute',async()=>{
+  const legacy={
+    ...entries[0],
+    id:'legacy-no-media-status',
+    previewPath:'library_02/legacy-no-media-status',
+    webmStatus:undefined,
+    previewStatus:undefined,
+    webmPreview:'',webmPreviewMedium:'',webmPreviewLow:'',
+    webpPoster:'',webpPosterMedium:'',webpPosterLow:'',
+    thumbnail:'',thumbnailPoster:'',
+    allAnimationPreviews:{},
+  };
+  const failed={
+    ...legacy,
+    id:'legacy-failed-media',
+    webmStatus:'failed-render',
+    previewStatus:'failed',
+  };
+  const log=[];
+  globalThis.fetch=stubFetch(log,[legacy,failed]);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-legacy-preview-status';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'12'}},res);
+    assert.equal(res.code,200);
+    assert.equal(res.body.entries.length,2);
+    const [blockedItem,failedItem]=res.body.entries;
+    assert.equal(blockedItem.poster,'');
+    assert.equal(blockedItem.video,'');
+    assert.equal(blockedItem.sourceWebmStatus,'blocked-no-exact-animation-preview',
+      'legacy records without a media status must not appear unclassified');
+    assert.equal(blockedItem.sourcePreviewStatus,'blocked');
+    assert.equal(failedItem.poster,'');
+    assert.equal(failedItem.video,'');
+    assert.equal(failedItem.sourceWebmStatus,'failed-render',
+      'a genuine render failure must not be downgraded to blocked');
+    assert.equal(failedItem.sourcePreviewStatus,'failed');
+    assert.doesNotMatch(JSON.stringify(res.body),/feed-placeholder|Preview unavailable|data-fallback-src|data-video-fallback/,
+      'status normalization must not invent a visual fallback');
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
+
 test('exact PR preview probe supports Vercel protection bypass without logging the secret',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
   assert.ok(workflow.includes("VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}"));
