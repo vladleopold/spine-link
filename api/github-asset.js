@@ -410,7 +410,7 @@ function sendAssetBuffer(request, response, { path, assetVersion, buffer, etag, 
 
 
 async function serveRawPublicAssetFallback(request, response, {
-  owner, repo, branch, path, assetVersion, cacheKey,
+  owner, repo, branch, path, assetVersion, cacheKey, aliasHeader,
 }) {
   // The Contents API can rate-limit or reject the deployment token while
   // the same public repository object remains available from raw.githubusercontent.com.
@@ -429,6 +429,7 @@ async function serveRawPublicAssetFallback(request, response, {
     return null;
   }
   if (!rawResponse.ok && rawResponse.status !== 304) return null;
+  if (aliasHeader?.name && aliasHeader?.value) response.setHeader(aliasHeader.name, aliasHeader.value);
 
   const etag = rawAssetEtag(rawResponse.headers.get('etag') || '', path, assetVersion);
   response.setHeader('X-Spine-Link-Asset-Source', 'raw-public');
@@ -463,7 +464,7 @@ async function serveRawPublicAssetFallback(request, response, {
     setNoStoreHeaders(response);
     return response.status(415).send(error instanceof Error ? error.message : 'Unsupported asset');
   }
-  putMemoryCacheEntry(cacheKey, { buffer, etag });
+  if (cacheKey) putMemoryCacheEntry(cacheKey, { buffer, etag });
   return sendAssetBuffer(request, response, {
     path, assetVersion, buffer, etag,
     source: 'raw-public',
@@ -514,6 +515,7 @@ export default async function handler(request, response) {
   }
 
   try {
+    let ddsPngAliasPath = '';
     let githubResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`, {
       headers: githubHeaders(token),
     });
@@ -531,6 +533,11 @@ export default async function handler(request, response) {
       if (sameFolderPng.ok) {
         githubResponse = sameFolderPng;
         response.setHeader('X-Spine-Link-DDS-PNG-Alias', 'same-stem');
+      } else if ([401, 403, 429, 500, 502, 503, 504].includes(sameFolderPng.status)) {
+        // A rate-limited Contents API must not hide the exact same-stem PNG
+        // that remains publicly readable from raw.githubusercontent.com.
+        githubResponse = sameFolderPng;
+        ddsPngAliasPath = pngPath;
       }
     }
 
@@ -539,6 +546,13 @@ export default async function handler(request, response) {
         owner, repo, branch, path: assetPath, assetVersion, cacheKey,
       });
       if (rawFallback) return rawFallback;
+      if (ddsPngAliasPath) {
+        const rawPngFallback = await serveRawPublicAssetFallback(request, response, {
+          owner, repo, branch, path: ddsPngAliasPath, assetVersion, cacheKey: null,
+          aliasHeader: { name: 'X-Spine-Link-DDS-PNG-Alias', value: 'same-stem' },
+        });
+        if (rawPngFallback) return rawPngFallback;
+      }
       return response.status(githubResponse.status).send('Asset not found');
     }
 

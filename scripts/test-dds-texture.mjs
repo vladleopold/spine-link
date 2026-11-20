@@ -283,6 +283,38 @@ try {
   assert.equal(sanitizedEntries[0].thumbnail, "");
   assert.equal(sanitizedEntries[0].thumbnailPoster, "");
   assert.equal(sanitizedEntries[0].webmPreview, "");
+  // If the requested DDS page is absent but the same-stem PNG is public,
+  // a transient Contents API denial must still recover that exact PNG alias.
+  const aliasPng = ddsToPng(fixture("DXT5"));
+  const rawAliasAttempts = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const requested = String(url);
+    if (requested.includes("/contents/")) {
+      if (requested.includes("hero.dds")) return new Response("not found", { status: 404 });
+      if (requested.includes("hero.png")) return new Response("synthetic API forbidden", { status: 403 });
+    }
+    if (requested.endsWith("/library/synthetic/alias/hero.dds")) {
+      rawAliasAttempts.push("dds");
+      return new Response("not found", { status: 404 });
+    }
+    if (requested.endsWith("/library/synthetic/alias/hero.png")) {
+      rawAliasAttempts.push("png");
+      return new Response(aliasPng, {
+        status: 200,
+        headers: { etag: '"raw-same-stem-png"', "content-length": String(aliasPng.length) },
+      });
+    }
+    throw new Error("Unexpected synthetic alias request: " + requested);
+  };
+  const recoveredAlias = await get("library/synthetic/alias/hero.dds", "GET", {}, "raw-dds-alias", true);
+  assert.equal(recoveredAlias.statusCode, 200);
+  assert.equal(recoveredAlias.getHeader("content-type"), "image/png");
+  assert.equal(recoveredAlias.getHeader("x-spine-link-asset-source"), "raw-public");
+  assert.equal(recoveredAlias.getHeader("x-spine-link-dds-png-alias"), "same-stem");
+  assert.deepEqual(recoveredAlias.body, aliasPng);
+  assert.deepEqual(rawAliasAttempts, ["dds", "png"],
+    "recover only the requested DDS path or its exact same-stem PNG page");
+
   console.log("PASS exact-path raw recovery preserves DDS conversion, atlas versioning and index sanitization");
 } finally {
   globalThis.fetch = origFetch;
