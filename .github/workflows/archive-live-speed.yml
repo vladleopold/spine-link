@@ -487,9 +487,16 @@ jobs:
                     const diagnostic=await card.evaluate(element=>{
                       const image=element.querySelector('img');
                       const video=element.querySelector('video');
+                      const rect=element.getBoundingClientRect();
+                      const visibleWidth=Math.max(0,Math.min(rect.right,innerWidth)-Math.max(rect.left,0));
+                      const visibleHeight=Math.max(0,Math.min(rect.bottom,innerHeight)-Math.max(rect.top,0));
                       return {
                         previewStatus:element.dataset.previewStatus||'',
                         posterDecoded:!!image&&image.complete&&image.naturalWidth>0,
+                        deferredSourcePresent:!!element.dataset.videoSrc,
+                        cardVisible:visibleWidth>0&&visibleHeight>0,
+                        cardTop:Math.round(rect.top),
+                        documentVisible:document.visibilityState==='visible',
                         videoPresent:!!video,
                         readyState:video?.readyState||0,
                         networkState:video?.networkState||0,
