@@ -10,7 +10,6 @@ const science = read('../lib/spine-data-science.js');
 const exporter = read('../scripts/spine-export-webm.mjs');
 const cloudExport = read('../scripts/spine-project-cloud-export.mjs');
 const exportWorkflow = read('../.github/workflows/spine-export-webm.yml');
-const exportWorkflow = read('../.github/workflows/spine-export-webm.yml');
 
 function section(source, start, end) {
   const from = source.indexOf(start);
