@@ -108,7 +108,7 @@ jobs:
               let previewRedirected = false;
               let previewFinalOriginMatches = true;
               let previewFinalHost = '';
-                previewProtectionRedirect = /(^|\.)vercel\.com$/i.test(previewFinalHost);
+              let previewProtectionRedirect = false;
               let hasArchivePaginationMarker = false;
               let hasDeferredVideoMetadata = false;
               try {

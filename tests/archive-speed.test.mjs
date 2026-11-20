@@ -104,6 +104,8 @@ test('exact PR preview probe supports Vercel protection bypass without logging t
   const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
   assert.ok(workflow.includes("VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}"));
   assert.match(workflow,/x-vercel-protection-bypass/);
+  assert.match(workflow,/let previewProtectionRedirect = false;/,
+    'the preview protection redirect flag must be declared before its first assignment');
   assert.match(workflow,/previewProtectionRedirect = \/\(\^\|\\\.\)vercel\\\.com\$\/i/);
   assert.match(workflow,/finalHost=/);
   assert.match(workflow,/PREVIEW_PROTECTED/);
