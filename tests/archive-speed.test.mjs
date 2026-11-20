@@ -249,8 +249,29 @@ test('low quality is allowed only as its exact installed WebM/WebP pair',async()
 });
 
 test('gallery server-HTML puts WebP before any WebM network request',async()=>{
+  const sourceEntries=Array.from({length:120},(_,i)=>{
+    const id='server-card-'+i;
+    const base='https://spine-link.vercel.app/assets/library_02/'+id+'/';
+    return {
+      ...entries[0],
+      id,
+      title:'Server card '+i,
+      uploadedAt:new Date(Date.UTC(2026,0,1,0,i)).toISOString(),
+      previewPath:'library_02/'+id,
+      skeleton:id+'.skel',
+      allAnimationPreviews:{walk:{
+        webmPreview:base+'preview.webm',
+        webmPreviewMedium:base+'preview-medium.webm',
+        webmPreviewLow:base+'preview-low.webm',
+        webpPoster:base+'preview.webp',
+        webpPosterMedium:base+'preview-medium.webp',
+        webpPosterLow:base+'preview-low.webp',
+        previewDuration:2.5,
+      }},
+    };
+  });
   const log=[];
-  globalThis.fetch=stubFetch(log);
+  globalThis.fetch=stubFetch(log,sourceEntries);
   process.env.GITHUB_TOKEN='test-only-placeholder';
   try{
     const res=response();
@@ -264,7 +285,7 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     const embedded=html.match(/<script type="application\/json" id="archive-next-page">([^<]+)<\/script>/);
     assert.ok(embedded,'First lazy batch must be embedded in server HTML');
     const batch=JSON.parse(embedded[1]);
-    assert.equal(batch.entries.length,68,'the remaining 68 records stay embedded after the initial four eligible posters are mounted');
+    assert.equal(batch.entries.length,84,'the remaining 84 records stay embedded after the initial twelve cards');
     assert.equal(batch.hasMore,true,'later archive pages must remain available through the paginated API');
     assert.ok(html.includes('const batch=embeddedEntries.slice(start,start+pageSize)'),
       'the first 96 compact cards must paginate in-memory without waiting for a feed API request');
