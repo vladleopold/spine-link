@@ -153,6 +153,7 @@ jobs:
             for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
               const failureStart=failures.length;
               const page=await browser.newPage({viewport});
+              await page.emulateMedia({reducedMotion:'no-preference'});
               const pageErrors=[],consoleErrors=[],requestFailures=[],mediaRequests=[],assetHttpErrors=[];
               const posterResponseStatuses=new Map();
               const samplePlaybackDiagnostics=[];
@@ -247,7 +248,8 @@ jobs:
                 }
                 let allPageBatches=0,paginationComplete=false;
                 const appendLatencies=[],posterLatencies=[];
-                const batchLimit=Math.ceil(totalEntries/48)+4;
+                // Production may still append 12-card pages; the audit must not assume the PR's 48-card page size.
+                const batchLimit=Math.max(1,totalEntries);
                 while(allPageBatches<batchLimit){
                   const sentinel=page.locator('#sentinel');
                   const state=(await sentinel.innerText()).trim();
@@ -437,7 +439,7 @@ jobs:
                       image.loading='eager';
                       await image.decode();
                     });
-                    await card.scrollIntoViewIfNeeded();
+                    await card.evaluate(element=>element.scrollIntoView({block:'start',inline:'nearest',behavior:'instant'}));
                     await page.waitForFunction(index=>{
                       const target=document.querySelectorAll('.feed-card')[index];
                       const video=target?.querySelector('video');
@@ -458,7 +460,8 @@ jobs:
                         paused:video?.paused??true,
                         errorCode:video?.error?.code||0,
                         sourcePresent:!!(video?.currentSrc||video?.getAttribute('src')),
-                        canPlayWebm:video?.canPlayType('video/webm')||'',
+                        reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches,
+                        canPlayWebm:document.createElement('video').canPlayType('video/webm'),
                       };
                     }).catch(()=>({}));
                     samplePlaybackDiagnostics.push({sample:sampleOrdinal,...diagnostic});
