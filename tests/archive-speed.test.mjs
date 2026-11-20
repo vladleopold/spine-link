@@ -500,3 +500,16 @@ test('hourly archive proof traverses every public page and verifies media beyond
     'each playback sample must be the primary visible card before testing lazy video');
   assert.match(workflow,/video\.readyState>=2/);
 });
+
+
+test('visible lazy WebM retries one transient AbortError before failing closed',()=>{
+  const source=fs.readFileSync(new URL('../api/github-archive.js',import.meta.url),'utf8');
+  assert.match(source,/const playAbortRetries=new WeakMap\\(\\)/);
+  assert.match(source,/video\\.addEventListener\\('playing',\\(\\)=>/);
+  assert.match(source,/const transientAbort=error\\?\\.name==='AbortError'/);
+  assert.match(source,/const stillCurrent=video\\.isConnected&&card\\.contains\\(video\\)/);
+  assert.match(source,/const stillVisible=visible\\.has\\(card\\)&&card\\.isConnected&&!document\\.hidden&&!reducedMotion/);
+  assert.match(source,/if\\(transientAbort&&stillCurrent&&stillVisible&&attempts<1\\)\\{[\\s\\S]*?playAbortRetries\\.set\\(card,attempts\\+1\\);[\\s\\S]*?queueUpdate\\(\\);/);
+  assert.match(source,/if\\(!transientAbort\\|\\|\\(stillCurrent&&stillVisible\\)\\)\\{[\\s\\S]*?card\\.dataset\\.previewStatus='blocked-video-play-failed';[\\s\\S]*?delete card\\.dataset\\.videoSrc;/);
+  assert.match(source,/video\\.src=card\\.dataset\\.videoSrc/);
+});

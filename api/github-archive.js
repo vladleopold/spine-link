@@ -1654,6 +1654,7 @@ function archiveHtml({ origin, entries, metrics }) {
           nextPageData.remove();
         }
         const visible=new Set(),active=new Set();
+        const playAbortRetries=new WeakMap();
         const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
         let queued=false;
         const queueUpdate=()=>{
@@ -1686,8 +1687,12 @@ function archiveHtml({ origin, entries, metrics }) {
           video.muted=true;video.loop=true;video.playsInline=true;
           video.preload='none';
           video.setAttribute('aria-hidden','true');
-          video.addEventListener('playing',()=>video.classList.add('is-playing'));
+          video.addEventListener('playing',()=>{
+            playAbortRetries.delete(card);
+            video.classList.add('is-playing');
+          });
           video.addEventListener('error',()=>{
+            playAbortRetries.delete(card);
             card.dataset.previewStatus='blocked-video-load-failed';
             delete card.dataset.videoSrc;
             stopVideo(card);
@@ -1696,11 +1701,21 @@ function archiveHtml({ origin, entries, metrics }) {
           host.append(video);
           video.src=card.dataset.videoSrc;
           void video.play().catch(error=>{
-            if(error?.name!=='AbortError'){
+            const transientAbort=error?.name==='AbortError';
+            const stillCurrent=video.isConnected&&card.contains(video);
+            const stillVisible=visible.has(card)&&card.isConnected&&!document.hidden&&!reducedMotion;
+            const attempts=playAbortRetries.get(card)||0;
+            stopVideo(card);
+            if(transientAbort&&stillCurrent&&stillVisible&&attempts<1){
+              playAbortRetries.set(card,attempts+1);
+              queueUpdate();
+              return;
+            }
+            playAbortRetries.delete(card);
+            if(!transientAbort||(stillCurrent&&stillVisible)){
               card.dataset.previewStatus='blocked-video-play-failed';
               delete card.dataset.videoSrc;
             }
-            stopVideo(card);
           });
         }
         function updateAutoplay(){
@@ -1712,14 +1727,14 @@ function archiveHtml({ origin, entries, metrics }) {
           const cards=Array.from(visible).filter(c=>c.isConnected&&c.dataset.videoSrc)
             .sort((a,b)=>a.getBoundingClientRect().top-b.getBoundingClientRect().top);
           const target=new Set(cards.slice(0,limit));
-          for(const card of Array.from(active))if(!target.has(card))stopVideo(card);
+          for(const card of Array.from(active))if(!target.has(card)){stopVideo(card);playAbortRetries.delete(card);}
           for(const card of target)startVideo(card);
         }
         const observer='IntersectionObserver' in window
           ?new IntersectionObserver(records=>{
              for(const record of records){
                if(record.isIntersecting&&record.intersectionRatio>=.1)visible.add(record.target);
-               else{visible.delete(record.target);stopVideo(record.target);}
+               else{visible.delete(record.target);stopVideo(record.target);playAbortRetries.delete(record.target);}
              }
              queueUpdate();
            },{threshold:[0,.1,.35,.7]})
