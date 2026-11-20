@@ -104,4 +104,7 @@ test('the hourly Chromium audit wires the eight-frame motion gate into each play
   assert.match(workflow, /minDistinctFrames:\s*8/);
   assert.match(workflow, /sample-video-lacks-eight-distinct-motion-frames/);
   assert.match(workflow, /motionVerifiedSamples/);
+  assert.match(workflow, /PREVIEW_BLOCKED=PREVIEW_NOT_PUBLIC/);
+  assert.match(workflow, /continuing with production archive audit/);
+  assert.match(workflow, /pr-preview-unavailable/);
 });
