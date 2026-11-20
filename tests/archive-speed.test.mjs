@@ -432,6 +432,12 @@ test('first four eligible archive posters reach the initial DOM after fifty-five
     for(const card of cards.slice(0,55)){
       assert.doesNotMatch(card,/<img|<video|data-video-src=/,
         'blocked cards must not gain a fabricated poster or video');
+      assert.match(card,/data-source-webm-status="blocked-no-exact-animation-preview"/,
+        'a card without the exact selected-animation pair must be explicitly blocked');
+      assert.match(card,/data-source-preview-status="blocked"/,
+        'a missing exact preview must never be exposed as unclassified');
+      assert.doesNotMatch(card,/data-source-(?:webm|preview)-status="ready"/,
+        'source readiness must not survive when the exact card media pair is absent');
     }
     for(let i=0;i<4;i++){
       assert.match(cards[55+i],/<img /,'the first eligible cards must be in the initial DOM');
