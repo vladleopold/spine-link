@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { previewMediaStatusAllowsPlayback } from '../lib/preview-media-status.js';
 
 const preview = fs.readFileSync(new URL('../api/github-preview.js', import.meta.url), 'utf8');
 const archive = fs.readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
@@ -39,6 +40,21 @@ test('video target is restricted to the indexed defaultAnimation', () => {
   const metadata = section(preview, 'function videoMetadataForEntry(', 'function ');
   assert.match(metadata, /const contentUrl = target\.url \? entryVideoAsset\(target\.url, entry, 'webm'\) : ''/);
   assert.match(metadata, /previewAnimation: target\.name/);
+});
+
+
+test('failed or blocked preview media cannot leak stale WebM/WebP URLs', () => {
+  const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
+  assert.match(resolver, /previewMediaStatusAllowsPlayback\\(entry\\)/);
+  assert.match(resolver, /const selected = previewMediaStatusAllowsPlayback\\(entry\\) && chosen\\.trim\\(\\) && previews \\? previews\\[chosen\\] : null/);
+  assert.match(resolver, /name: chosen/);
+
+  assert.equal(previewMediaStatusAllowsPlayback({ previewStatus: 'failed', webmStatus: 'ready' }), false);
+  assert.equal(previewMediaStatusAllowsPlayback({ previewStatus: 'blocked', webmStatus: 'ready' }), false);
+  assert.equal(previewMediaStatusAllowsPlayback({ previewStatus: 'ready', webmStatus: 'pending' }), false);
+  assert.equal(previewMediaStatusAllowsPlayback({ previewStatus: 'ready', webmStatus: 'ready' }), true);
+  assert.equal(previewMediaStatusAllowsPlayback({}), true);
+  assert.equal(previewMediaStatusAllowsPlayback({ webmStatus: 'ready' }), true);
 });
 
 test('player keeps the exact requested animation and marks missing tracks blocked', () => {
