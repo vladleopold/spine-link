@@ -13,6 +13,8 @@ on:
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
       - scripts/resolve-vercel-preview-comment.mjs
+      - scripts/video-motion-audit.mjs
+      - tests/video-motion-audit.test.mjs
       - .github/workflows/archive-live-speed.yml
 permissions:
   contents: read
@@ -122,6 +124,7 @@ jobs:
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { chromium } from 'playwright';
+          import { auditVideoMotion } from './scripts/video-motion-audit.mjs';
           
           const browser=await chromium.launch({headless:true});
           const failures=[];
@@ -394,7 +397,7 @@ jobs:
                 }
                 if(webmProbeFailures)failures.push('webm-byte-probe-failed');
           
-                let playedSamples=0;
+                let playedSamples=0,motionVerifiedSamples=0;
                 for(const sample of samples){
                   const card=page.locator('.feed-card').nth(sample.index);
                   let ready=false;
@@ -431,13 +434,18 @@ jobs:
                     failures.push('sample-webm-requested-before-own-poster');
                   if(![200,206].includes(posterResponseStatuses.get(sample.poster)))
                     failures.push('sample-poster-http-status-failed');
+                  const motion=await card.locator('video').evaluate(auditVideoMotion,{
+                    minDistinctFrames:8,maxFrames:48,timeoutMs:12000
+                  }).catch(()=>({ok:false}));
+                  if(motion.ok)motionVerifiedSamples++;
+                  else failures.push('sample-video-lacks-eight-distinct-motion-frames');
                   playedSamples++;
                 }
                 console.log('ARCHIVE_ALL_PAGES_EVIDENCE '+JSON.stringify({
                   viewport:viewport.width,totalEntries,loadedCards:allCards.length,batches:allPageBatches,
                   paired:allPairs.length,blocked:allBlocked.length,unexpectedMissing:allUnexpectedMissing.length,
                   decodedPosters:posterDecode.total,posterDecodeFailures:posterDecode.failed,posterStatusFailures,
-                  webmProbed,webmProbeFailures,playedSamples,maxAppendMs:Math.max(0,...appendLatencies),
+                  webmProbed,webmProbeFailures,playedSamples,motionVerifiedSamples,maxAppendMs:Math.max(0,...appendLatencies),
                   maxPosterBatchMs:Math.max(0,...posterLatencies),blockedApiRequests,allowedApiRequests,
                   assetHttpErrors:assetHttpErrors.length,requestFailures:requestFailures.length,
                   jsErrors:pageErrors.length,consoleErrors:consoleErrors.length,viewportFailures:failures.length-failureStart
