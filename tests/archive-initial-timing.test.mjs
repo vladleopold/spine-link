@@ -49,9 +49,12 @@ test('hourly production archive audit stays read-only during deployment cooldown
     'recorded browser audit failures must fail the job');
   assert.match(workflow,/responseStartMs:[\s\S]*posterEndMs:[\s\S]*posterTransferBytes:/,
     'capture navigation and poster network timings to isolate a regression');
-  assert.match(workflow,/newest20Blocked/);
-  assert.match(workflow,/newest20UnexpectedMissing/);
-  assert.match(workflow,/Every newest-20 missing preview must have an explicit blocked status/);
+  assert.match(workflow,/const allBlocked=allMissing\.filter/);
+  assert.match(workflow,/const allUnexpectedMissing=allMissing\.filter/);
+  assert.match(workflow,/if\(allUnexpectedMissing\.length\)failures\.push\('public-card-missing-without-blocked-status'\)/,
+    'every unblocked missing card across the full archive must fail');
+  assert.match(workflow,/if\(allInvalidBlocked\.length\)failures\.push\('blocked-card-exposes-partial-media'\)/,
+    'a blocked card must never expose a partial poster or video');
   assert.doesNotMatch(workflow,/older20Missing\.map\(x=>x\.id\)|JSON\.stringify\(newest20Missing\.map\(x=>x\.id\)\)/,
     'public CI logs must not disclose private work identifiers');
 });
