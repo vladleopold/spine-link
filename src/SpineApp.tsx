@@ -3653,7 +3653,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   }, [currentLibraryEntry]);
 
   useEffect(() => {
-    preparedSpineRef.current = preparedSpine;  useEffect(() => {
     preparedSpineRef.current = preparedSpine;
   }, [preparedSpine]);
 
