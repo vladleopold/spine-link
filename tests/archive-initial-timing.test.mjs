@@ -189,6 +189,22 @@ test('PR live proof uses only the successful Vercel preview for the exact head S
 });
 
 
+test('exact-head Vercel preview diagnostics distinguish protection from route failures without leaking content', () => {
+  const start = workflow.indexOf('name: Resolve the ready Vercel preview for this exact PR commit');
+  const end = workflow.indexOf('name: Install Playwright', start);
+  assert.ok(start >= 0 && end > start, 'the exact-head preview resolver must exist');
+  const resolver = workflow.slice(start, end);
+  assert.match(resolver,/response\.status === 401 \|\| response\.status === 403/,
+    '401/403 must be classified as deployment protection');
+  assert.match(resolver,/PREVIEW_PROTECTED/);
+  assert.match(resolver,/PREVIEW_MISSING_ARCHIVE_MARKERS/);
+  assert.match(resolver,/PREVIEW_HTTP_/);
+  assert.match(resolver,/PREVIEW_FETCH_FAILED/);
+  assert.match(resolver,/httpStatus=/,'safe HTTP status must be retained for triage');
+  assert.doesNotMatch(resolver,/console\.warn\([^;]*(?:previewUrl\.origin|html)/,
+    'preview URLs and response HTML must not be copied into CI logs');
+});
+
 test('hourly archive browser scripts are syntax-checked without a Vercel preview',()=>{
   const blocks=[...workflow.matchAll(/node --input-type=module <<'NODE'\r?\n([\s\S]*?)\r?\n\s+NODE/g)];
   assert.equal(blocks.length,2,'both preview resolver and full-library browser script must be present');
