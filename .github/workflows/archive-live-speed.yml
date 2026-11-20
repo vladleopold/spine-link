@@ -291,7 +291,7 @@ jobs:
           
                 // Decode every poster on desktop; on mobile decode the initial batch and
                 // the representative cards immediately before their playback checks.
-                const decodeLimit=viewport.width>1000?Number.MAX_SAFE_INTEGER:12;
+                const decodeLimit=Number.MAX_SAFE_INTEGER;
                 const posterDecode=await page.evaluate(async limit=>{
                   const images=Array.from(document.querySelectorAll('.feed-card img')).slice(0,limit);
                   images.forEach(image=>{image.loading='eager';});
@@ -348,7 +348,7 @@ jobs:
                 if(allBadPairs.length)failures.push('public-card-webm-webp-pair-mismatch');
                 if(allFallbacks.length)failures.push('public-card-has-fallback-content');
           
-                const posterStatusTargets=viewport.width>1000?allPairs:allPairs.filter(item=>item.index<12);
+                const posterStatusTargets=allPairs;
                 const posterStatusFailures=posterStatusTargets.filter(item=>
                   ![200,206].includes(posterResponseStatuses.get(item.poster))).length;
                 if(posterStatusFailures)failures.push('poster-http-status-failed');
@@ -358,7 +358,7 @@ jobs:
                 if(consoleErrors.length)failures.push('archive-console-error');
                 if(blockedApiRequests)failures.push('embedded-page-request-was-blocked');
           
-                const sampleCount=Math.min(viewport.width>1000?8:2,allPairs.length);
+                const sampleCount=Math.min(8,allPairs.length);
                 if(sampleCount===0)failures.push('archive-has-no-eligible-media');
                 const samplePositions=[...new Set(Array.from({length:sampleCount},(_,i)=>
                   Math.round(i*(allPairs.length-1)/Math.max(1,sampleCount-1))))];
@@ -385,7 +385,7 @@ jobs:
                       prefix[2]===0xdf&&prefix[3]===0xa3&&type.includes('video/webm'),status:response.status};
                   }catch{return {ok:false,status:0};}
                 }
-                const webmTargets=viewport.width>1000?allPairs:samples;
+                const webmTargets=allPairs;
                 let webmProbeFailures=0,webmProbed=0;
                 for(let start=0;start<webmTargets.length;start+=8){
                   const results=await Promise.all(webmTargets.slice(start,start+8).map(item=>probeWebm(item.video)));
