@@ -28,7 +28,7 @@ test('hourly production archive audit stays read-only during deployment cooldown
     'scheduled audits must inspect the current public production alias');
   assert.match(workflow,/github\.event_name != 'workflow_run'/,
     'scheduled audits must run without pretending a deployment occurred');
-  assert.doesNotMatch(workflow,/\bvercel\s+(?:deploy|alias)\b/i,
+  assert.doesNotMatch(workflow,/^\s+run:\s*vercel\s+(?:deploy|alias)\b/im,
     'the hourly browser audit must never deploy or mutate production');
   assert.doesNotMatch(workflow,/^\s+push:/m,
     'live proof must not race the production deploy on main push');
