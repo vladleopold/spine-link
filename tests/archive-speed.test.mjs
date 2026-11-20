@@ -421,3 +421,20 @@ test('first eligible archive posters stay eager when earlier cards are explicitl
     if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
+
+
+test('hourly archive proof traverses every public page and verifies media beyond the embedded batch',()=>{
+  const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
+  assert.match(workflow,/schedule:\s*\n\s+- cron: '\d+ \* \* \* \*'/,
+    'the production archive audit must run hourly');
+  assert.match(workflow,/group: spine-archive-live-proof[\s\S]*cancel-in-progress:\s*false/,
+    'hourly audits must not cancel an in-progress full-library scan');
+  assert.match(workflow,/const offset=Number\(requestUrl\.searchParams\.get\('offset'\)\|\|0\)/);
+  assert.match(workflow,/if\(offset<40\)[\s\S]*route\.abort\(\)[\s\S]*allowedApiRequests\+\+[\s\S]*route\.continue\(\)/,
+    'only the already embedded first 40 cards may avoid the paginated API');
+  assert.match(workflow,/End of archive/);
+  assert.match(workflow,/assert\.equal\(allCards\.length,totalEntries/);
+  assert.match(workflow,/ARCHIVE_ALL_PAGES_EVIDENCE/);
+  assert.match(workflow,/probeWebm/);
+  assert.match(workflow,/video\.readyState>=2/);
+});
