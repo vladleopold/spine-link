@@ -469,5 +469,11 @@ test('hourly archive proof traverses every public page and verifies media beyond
     'desktop and mobile must validate real WebM response headers for every eligible card');
   assert.match(workflow,/const sampleCount=Math\.min\(8,allPairs\.length\)/,
     'both viewports must play a representative set including archive boundaries');
+  assert.match(workflow,/const batchLimit=Math\.max\(1,totalEntries\)/,
+    'pagination cap must handle the live production page size, not assume 48-card PR batches');
+  assert.match(workflow,/await page\.emulateMedia\(\{reducedMotion:'no-preference'\}\)/,
+    'video playback audit must explicitly test the non-reduced-motion path');
+  assert.match(workflow,/scrollIntoView\(\{block:'start',inline:'nearest',behavior:'instant'\}\)/,
+    'each playback sample must be the primary visible card before testing lazy video');
   assert.match(workflow,/video\.readyState>=2/);
 });
