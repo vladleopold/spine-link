@@ -104,6 +104,8 @@ jobs:
               let previewHttpStatus = 0;
               let previewRedirected = false;
               let previewFinalOriginMatches = true;
+              let hasArchivePaginationMarker = false;
+              let hasDeferredVideoMetadata = false;
               try {
                 const response = await fetch(previewUrl.origin + '/world-spine-archive', {
                   signal: AbortSignal.timeout(20000),
@@ -112,8 +114,12 @@ jobs:
                 previewRedirected = response.redirected;
                 previewFinalOriginMatches = new URL(response.url).origin === previewUrl.origin;
                 const html = await response.text();
+                hasArchivePaginationMarker = html.includes('id="archive-next-page"');
+                hasDeferredVideoMetadata = html.includes('data-video-src=');
+                // A valid archive can have no eligible first-page media when exact
+                // animations are blocked. Pagination, not a video tag, proves the route.
                 previewReady = response.ok && previewFinalOriginMatches && !previewRedirected &&
-                  html.includes('data-video-src=') && html.includes('id="archive-next-page"');
+                  hasArchivePaginationMarker;
                 if (!previewReady) {
                   previewBlocker = response.status === 401 || response.status === 403
                     ? 'PREVIEW_PROTECTED'
@@ -132,6 +138,8 @@ jobs:
                   '; httpStatus=' + previewHttpStatus +
                   '; redirected=' + previewRedirected +
                   '; sameOrigin=' + previewFinalOriginMatches +
+                  '; archivePaginationMarker=' + hasArchivePaginationMarker +
+                  '; deferredVideoMetadata=' + hasDeferredVideoMetadata +
                   '; continuing with production archive audit.');
                 process.exit(0);
               }
