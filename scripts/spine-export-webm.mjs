@@ -51,14 +51,14 @@ const found = entryForUpload(repoRoot, args.uploadId);
 const basePath = found ? found.basePath : collectionPathForUpload(repoRoot, args.uploadId, args.basePath);
 const indexPath = path.join(repoRoot, basePath, 'index.json');
 if (!fs.existsSync(indexPath)) {
-  console.error(`Index not found at ${indexPath}`);
+  console.error('Library index is unavailable.');
   process.exit(1);
 }
 
 const indexEntries = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
 const entry = found ? found.entry : indexEntries.find(e => e.id === args.uploadId);
 if (!entry) {
-  console.error(`Entry ${args.uploadId} not found in index`);
+  console.error('Selected library entry is unavailable.');
   process.exit(1);
 }
 
@@ -91,7 +91,7 @@ const previewDir = path.join(repoRoot, uploadPath);
 const sets = findSetDirectories(previewDir);
 
 if (sets.length === 0) {
-  console.error(`No Spine sets found in ${previewDir}`);
+  console.error('No source Spine set was found.');
   process.exit(1);
 }
 
@@ -102,7 +102,7 @@ const atlasFile = setFiles.find(f => /\.(atlas|atlas\.txt|atlas\.docx)$/i.test(f
 const textureFiles = setFiles.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f));
 
 if (!skeletonFile || !atlasFile || textureFiles.length === 0) {
-  console.error(`Set ${firstSet.name} is missing required files`);
+  console.error('Source Spine set is missing required files.');
   process.exit(1);
 }
 
@@ -530,11 +530,10 @@ console.error(`Video dimensions: ${videoWidth}x${videoHeight}.`);
 console.error('Atlas source resolved.');
 const captureAnimation = targetAnimation;
 console.error('Selected animation pinned; alternate tracks are disabled.');
-console.error(`Is default: ${isDefault}`);console.error(`Is default: ${isDefault}`);
+console.error(`Is default: ${isDefault}`);
 
-// Capture page builder. activeSkin selects the Spine skin to render; when
-// null the player default is used. Some skeletons draw nothing with the
-// default skin, so the export retries with named skins (see skinCandidates).
+// Capture page builder. Only the source default skin is used. If it renders
+// no visible content, the exact selected animation is blocked without relayering.
 function buildCaptureHtml(activeSkin) {
 const skinLine = activeSkin ? `    skin: '${activeSkin}',\n` : '';
 return `<!DOCTYPE html>
@@ -608,7 +607,6 @@ ${skinLine}    showLoading: false,
       window.__canvasHeight = player.canvas ? player.canvas.height : 0;
 
       try {
-        var track = player.animationState ? player.animationState.getCurrent(0) : null;      try {
         var track = player.animationState ? player.animationState.getCurrent(0) : null;
         if (track && track.animation && typeof track.animation.duration === 'number') {
           window.__animDuration = track.animation.duration;
@@ -644,12 +642,12 @@ ${skinLine}    showLoading: false,
           };
           return 'recording';
         } catch (err) {
-          return 'error: ' + err.message;
+          return 'MEDIA_RECORDER_START_FAILED';
         }
       };
     },
-    error: function (p, err) {
-      window.__captureError = 'Player creation failed: ' + err;
+    error: function () {
+      window.__captureError = 'PLAYER_CREATION_FAILED';
     }
   };
 
@@ -688,7 +686,7 @@ ${skinLine}    showLoading: false,
       window.__captureError = 'spine.SpinePlayer is not a function';
     }
   } catch (e) {
-    window.__captureError = 'Player creation failed: ' + (e.message || e);
+    window.__captureError = 'PLAYER_CREATION_FAILED';
   }
 })();
 </script>
@@ -719,8 +717,8 @@ try {
   });
   const page = await context.newPage();
 
-  page.on('console', msg => console.error(`[BROWSER ${msg.type()}] ${msg.text()}`));
-  page.on('pageerror', err => console.error(`[BROWSER ERROR] ${err.message}`));
+  page.on('console', msg => { if (msg.type() === 'error') console.error('[BROWSER] runtime error'); });
+  page.on('pageerror', () => console.error('[BROWSER] page error'));
 
   await page.route(atlasRawUrl, async route => {
     await route.fulfill({
@@ -821,23 +819,23 @@ try {
     canvasWidth = canvasSize[0] || videoWidth;
     canvasHeight = canvasSize[1] || videoHeight;
     const framePeak = await page.evaluate(() => (typeof window.__framePeak === 'function' ? window.__framePeak() : -1));
-    console.error(`Skin ${label}: frame peak=${framePeak}, canvas=${canvasWidth}x${canvasHeight}, duration=${animDuration}s`);
-    const moreSkins = skinCandidates.indexOf(skin) < skinCandidates.length - 1;
-    if (framePeak < FRAME_PEAK_MIN && moreSkins) {
-      console.error(`Skin ${label} rendered no visible content, trying next skin...`);
-      continue;
+    console.error('Source default skin frame validation complete.');
+    if (framePeak < FRAME_PEAK_MIN) {
+      lastCaptureError = 'SELECTED_SPINE_ANIMATION_RENDERED_NO_VISIBLE_CONTENT';
+      console.error('Capture blocked: selected animation produced no visible content on the source skin.');
+      break;
     }
 
     // Start recording only now, on the settled canvas showing content.
     const recState = await page.evaluate(() => (typeof window.__startRecording === 'function' ? window.__startRecording() : 'missing'));
     console.error(`Skin ${label}: recorder ${recState}`);
     if (recState !== 'recording') {
-      lastCaptureError = `MediaRecorder failed to start (${recState})`;
-      console.error(`Capture with skin ${label} failed: ${lastCaptureError}`);
+      lastCaptureError = 'MEDIA_RECORDER_START_FAILED';
+      console.error('Capture blocked: MediaRecorder could not start.');
       break;
     }
 
-    if (captureDuration <= 0)    if (captureDuration <= 0) captureDuration = effectiveDuration > 0 ? effectiveDuration : 1; // Record exactly the animation duration (no artificial minimum)
+    if (captureDuration <= 0) captureDuration = effectiveDuration > 0 ? effectiveDuration : 1; // Record exactly the selected animation duration (no artificial minimum)
     await new Promise((resolve) => setTimeout(resolve, captureDuration * 1000));
 
     await page.evaluate(() => {
@@ -850,17 +848,17 @@ try {
       videoDataUrl = null;
     }
     if (!videoDataUrl) {
-      lastCaptureError = 'No video data captured by MediaRecorder';
-      console.error(`Capture with skin ${label} failed: ${lastCaptureError}`);
+      lastCaptureError = 'MEDIA_RECORDER_EMPTY_OUTPUT';
+      console.error('Capture blocked: MediaRecorder produced no video data.');
       break;
     }
     chosenSkin = skin;
-    console.error(`Capture skin: ${label} (peak ${framePeak})`);
+    console.error('Capture completed with the source default skin.');
     break;
   }
 
   if (!videoDataUrl) {
-    console.error(`Capture failed: ${lastCaptureError || 'no skin produced visible content'}`);
+    console.error('PREVIEW_CAPTURE_BLOCKED');
     process.exit(1);
   }
 
@@ -873,7 +871,7 @@ try {
   await context.close();
 
   const videoSize = webmBuffer.length;
-  console.error(`MediaRecorder recording: ${videoPath} (${videoSize} bytes)`);
+  console.error(`MediaRecorder recording (${videoSize} bytes).`);
 
   if (videoSize < 100) {
     console.error('Recorded video is too small, possibly empty');
@@ -895,7 +893,7 @@ try {
   // This runs before the quality ladder and the posters are generated, so all
   // three WebM variants and all three WebP posters inherit the trimmed start.
   const leadResult = trimBlackLead(outputPath, {
-    label: path.basename(outputPath),
+    label: 'preview.webm',
     log: (line) => console.error(line),
   });
   if (leadResult.trimmed) {
@@ -1046,13 +1044,13 @@ try {
       try {
         convertToWebp(webmSrc, webpOut, webpDims[q]);
       } catch (err) {
-        console.error(`WebP (${q}) failed: ${err.message}`);
+        console.error(`WebP encoding failed for the ${q} quality tier.`);
         webpOk = false;
       }
     }
     if (webpOk) console.error(`WebP posters generated.`);
   } catch (err) {
-    console.error(`FFmpeg processing failed or skipped: ${err.message}`);
+    console.error('FFmpeg processing failed or was skipped.');
     // Fallback if ffmpeg fails: copy the capture to the main output. This must be
     // outputPath (post-trim), not videoPath (pre-trim), or the black lead we just
     // removed would come straight back.
@@ -1094,7 +1092,7 @@ try {
   fs.writeFileSync(outPaths.webmHigh + '.json', JSON.stringify(meta, null, 2));
 
   console.error(`Final High WebM size: ${meta.files.webmHigh} bytes`);
-  console.log(JSON.stringify({ ...meta, ok: true, path: outputPath }));
+  console.log(JSON.stringify({ ok: true, bytes: meta.bytes, files: meta.files }));
 
   try { fs.rmSync(tempDir, { recursive: true }); } catch { }
 

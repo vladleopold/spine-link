@@ -5466,7 +5466,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           {!modalIsLoading && !modalError && prepared && (
             <>
               <div className="detail-modal-player" ref={modalPlayerHostRef} />
-              {modalAnimations.length > 1 && (
+              {modalAnimations.length > 0 && (
                 <div className="detail-modal-animations">
                   <label htmlFor="detail-animation-select">Animation:</label>
                   <select
