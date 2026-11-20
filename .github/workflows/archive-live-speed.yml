@@ -95,10 +95,24 @@ jobs:
             if (preview && vercelStatus?.target_url && inspector === vercelStatus.target_url &&
                 deploymentStatus === 'DEPLOYED' && vercelStatus.state === 'success') {
               const previewUrl = new URL(preview);
-              if (!/^spine-link-git-.*-leopoldus-projects\.vercel\.app$/.test(previewUrl.hostname)) {
+              if (!/^spine-link-git-.*-leopoldus-projects\\.vercel\\.app$/.test(previewUrl.hostname)) {
                 throw new Error('Unexpected Vercel preview host');
               }
-              appendFileSync(process.env.GITHUB_ENV, 'SITE=' + previewUrl.origin + '\n');
+              let previewReady = false;
+              try {
+                const response = await fetch(previewUrl.origin + '/world-spine-archive', {
+                  signal: AbortSignal.timeout(20000),
+                });
+                const html = await response.text();
+                previewReady = response.ok && html.includes('data-video-src=') &&
+                  html.includes('id="archive-next-page"');
+              } catch {}
+              if (!previewReady) {
+                appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=PREVIEW_NOT_PUBLIC\\n');
+                console.warn('VERCEL_PREVIEW_BLOCKED=PREVIEW_NOT_PUBLIC; continuing with production archive audit.');
+                process.exit(0);
+              }
+              appendFileSync(process.env.GITHUB_ENV, 'SITE=' + previewUrl.origin + '\\n');
               console.log('VERCEL_PREVIEW_READY=' + previewUrl.origin);
               process.exit(0);
             }
@@ -106,14 +120,19 @@ jobs:
               const failureCode = vercelStatus.target_url.includes('build-rate-limit')
                 ? 'BUILD_RATE_LIMIT'
                 : 'DEPLOYMENT_FAILED';
-              throw new Error('VERCEL_PREVIEW_BLOCKED=' + failureCode + ' SHA=' + expectedSha);
+              appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=' + failureCode + '\\n');
+              console.warn('VERCEL_PREVIEW_BLOCKED=' + failureCode + '; continuing with production archive audit.');
+              process.exit(0);
             }
             if (vercelStatus?.target_url && inspector === vercelStatus.target_url && deploymentStatus === 'ERROR') {
-              throw new Error('Vercel preview deployment failed for this PR commit');
+              appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=DEPLOYMENT_FAILED\\n');
+              console.warn('VERCEL_PREVIEW_BLOCKED=DEPLOYMENT_FAILED; continuing with production archive audit.');
+              process.exit(0);
             }
             await new Promise((resolve) => setTimeout(resolve, 10000));
           }
-          throw new Error('Timed out waiting for a Vercel preview for ' + expectedSha);
+          appendFileSync(process.env.GITHUB_ENV, 'PREVIEW_BLOCKED=PREVIEW_NOT_READY\\n');
+          console.warn('VERCEL_PREVIEW_BLOCKED=PREVIEW_NOT_READY; continuing with production archive audit.');
           NODE
       - name: Install Playwright
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -442,7 +461,7 @@ jobs:
                   playedSamples++;
                 }
                 console.log('ARCHIVE_ALL_PAGES_EVIDENCE '+JSON.stringify({
-                  viewport:viewport.width,totalEntries,loadedCards:allCards.length,batches:allPageBatches,
+                  viewport:viewport.width,previewBlocked:process.env.PREVIEW_BLOCKED||'',totalEntries,loadedCards:allCards.length,batches:allPageBatches,
                   paired:allPairs.length,blocked:allBlocked.length,unexpectedMissing:allUnexpectedMissing.length,
                   decodedPosters:posterDecode.total,posterDecodeFailures:posterDecode.failed,posterStatusFailures,
                   webmProbed,webmProbeFailures,playedSamples,motionVerifiedSamples,maxAppendMs:Math.max(0,...appendLatencies),
@@ -462,6 +481,7 @@ jobs:
           }finally{
             await browser.close();
           }
+          if(process.env.PREVIEW_BLOCKED)failures.push('pr-preview-unavailable');
           assert.equal(failures.length,0,
             'Archive full-library audit failure count: '+failures.length+'; codes='+failures.slice(0,12).join(','));
           NODE
