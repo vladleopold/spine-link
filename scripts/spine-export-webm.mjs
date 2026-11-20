@@ -62,7 +62,7 @@ if (!entry) {
   process.exit(1);
 }
 
-console.log(`Collection folder for ${args.uploadId}: ${basePath}`);
+console.log('Library collection resolved.');
 
 const uploadPath = entry.previewPath || path.posix.join(basePath, args.uploadId);
 
@@ -602,6 +602,11 @@ ${skinLine}    showLoading: false,
         window.__captureError = 'SELECTED_SPINE_ANIMATION_UNAVAILABLE';
         return;
       }
+      var currentTrack = player.animationState && player.animationState.getCurrent(0);
+      if (!currentTrack || !currentTrack.animation || currentTrack.animation.name !== window.__selectedAnimation) {
+        window.__captureError = 'SELECTED_SPINE_ANIMATION_NOT_ACTIVE';
+        return;
+      }
       window.__ready = true;
       window.__canvasWidth = player.canvas ? player.canvas.width : 0;
       window.__canvasHeight = player.canvas ? player.canvas.height : 0;
@@ -828,7 +833,7 @@ try {
 
     // Start recording only now, on the settled canvas showing content.
     const recState = await page.evaluate(() => (typeof window.__startRecording === 'function' ? window.__startRecording() : 'missing'));
-    console.error(`Skin ${label}: recorder ${recState}`);
+    console.error(`Recorder state: ${recState === 'recording' ? 'recording' : 'failed'}.`);
     if (recState !== 'recording') {
       lastCaptureError = 'MEDIA_RECORDER_START_FAILED';
       console.error('Capture blocked: MediaRecorder could not start.');

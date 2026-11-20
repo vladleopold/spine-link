@@ -62,6 +62,7 @@ test('WebM exporter fails the exact missing animation and never changes animatio
   assert.match(exporter, /SELECTED_SPINE_ANIMATION_UNAVAILABLE/);
   assert.match(exporter, /const targetAnimation = requestedAnimation/);
   assert.match(exporter, /window\.__selectedAnimation =/);
+  assert.match(exporter, /SELECTED_SPINE_ANIMATION_NOT_ACTIVE/);
   assert.match(exporter, /SELECTED_SPINE_ANIMATION_RENDERED_NO_VISIBLE_CONTENT/);
   assert.match(exporter, /if \(framePeak < FRAME_PEAK_MIN\)/);
   assert.doesNotMatch(exporter, /availableAnimations\s*\[\s*0\s*\]/);
