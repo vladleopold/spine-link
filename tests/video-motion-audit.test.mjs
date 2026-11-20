@@ -113,6 +113,13 @@ test('the hourly Chromium audit wires the eight-frame motion gate into each play
   assert.match(workflow, /response\.redirected/);
   assert.match(workflow, /sameOrigin=/);
   assert.match(workflow, /httpStatus=/);
+  assert.match(workflow, /hasArchivePaginationMarker = html\.includes\('id="archive-next-page"'\)/);
+  assert.match(workflow, /hasDeferredVideoMetadata = html\.includes\('data-video-src='\)/);
+  assert.match(workflow, /previewReady = response\.ok && previewFinalOriginMatches && !previewRedirected &&\s*hasArchivePaginationMarker/);
+  assert.match(workflow, /archivePaginationMarker=/);
+  assert.match(workflow, /deferredVideoMetadata=/);
+  assert.doesNotMatch(workflow, /previewReady = response\.ok[^;]*hasDeferredVideoMetadata/,
+    'absence of eligible media must not make a structurally valid archive preview unavailable');
   assert.match(workflow, /continuing with production archive audit/);
   assert.match(workflow, /pr-preview-unavailable/);
 });
