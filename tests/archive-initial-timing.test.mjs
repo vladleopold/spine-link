@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { findMatchingVercelProject } from '../scripts/resolve-vercel-preview-comment.mjs';
 
 const workflow = readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
 
@@ -84,6 +85,23 @@ test('archive cards expose source-level blocked status without exposing preview 
 });
 
 
+test('Vercel resolver skips newer failed comments and matches the exact commit status URL', () => {
+  const inspectorUrl = 'https://vercel.example/deployment/exact-head';
+  const previewUrl = 'https://spine-link-git-test-leopoldus-projects.vercel.app';
+  const payload = Buffer.from(JSON.stringify({projects:[{
+    name:'spine-link',inspectorUrl,previewUrl,nextCommitStatus:'DEPLOYED'
+  }]})).toString('base64');
+  const comments = [
+    {user:{login:'vercel[bot]'},body:'[vc]: #signature:'+payload+'\\nDeployment ready'},
+    {user:{login:'vercel[bot]'},body:'Deployment failed: build rate limit'},
+    {user:{login:'unrelated-user'},body:'[vc]: #signature:'+payload},
+  ];
+  const match = findMatchingVercelProject(comments, inspectorUrl);
+  assert.equal(match?.previewUrl, previewUrl);
+  assert.equal(match?.nextCommitStatus, 'DEPLOYED');
+  assert.equal(findMatchingVercelProject(comments, 'https://vercel.example/other-head'), null);
+});
+
 test('PR live proof uses only the successful Vercel preview for the exact head SHA', () => {
   assert.ok(workflow.includes('pull_request:'), 'archive changes must receive a live preview browser check');
   assert.ok(workflow.includes('EXPECTED_SHA: $' + '{{ github.event.pull_request.head.sha }}'),
@@ -109,6 +127,8 @@ test('PR live proof uses only the successful Vercel preview for the exact head S
     'the Playwright container does not include the GitHub CLI');
   assert.ok(resolverStep.includes('api.github.com'),
     'the resolver must read Vercel status and comments through the GitHub API');
+  assert.ok(resolverStep.includes("findMatchingVercelProject(comments, vercelStatus?.target_url)"),
+    'select a Vercel payload matching the exact SHA status, not the latest arbitrary bot comment');
   assert.ok(resolverStep.includes("vercelStatus?.state === 'failure'"),
     'an explicit failed Vercel status for the exact head SHA must stop polling immediately');
   assert.ok(resolverStep.includes("includes('build-rate-limit')") &&

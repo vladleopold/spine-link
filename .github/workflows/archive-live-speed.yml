@@ -10,6 +10,7 @@ on:
       - api/github-archive.js
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
+      - scripts/resolve-vercel-preview-comment.mjs
       - .github/workflows/archive-live-speed.yml
 permissions:
   contents: read
@@ -56,6 +57,7 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import { appendFileSync } from 'node:fs';
+          import { findMatchingVercelProject } from './scripts/resolve-vercel-preview-comment.mjs';
 
           const token = process.env.GH_TOKEN;
           const repository = process.env.GITHUB_REPOSITORY;
@@ -78,16 +80,7 @@ jobs:
               githubJson('/repos/' + repository + '/statuses/' + expectedSha),
             ]);
             const vercelStatus = statuses.find((item) => item.context === 'Vercel');
-            const comment = comments.filter((item) => item.user?.login === 'vercel[bot]').at(-1)?.body || '';
-            const firstLine = comment.split(/\r?\n/, 1)[0] || '';
-            const encoded = firstLine.slice(firstLine.lastIndexOf(':') + 1).trim();
-            let payload = {};
-            try {
-              payload = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
-            } catch {
-              // Wait for Vercel's deployment comment to become complete.
-            }
-            const project = payload.projects?.find((item) => item.name === 'spine-link');
+            const project = findMatchingVercelProject(comments, vercelStatus?.target_url);
             const inspector = project?.inspectorUrl || '';
             const preview = project?.previewUrl || '';
             const deploymentStatus = project?.nextCommitStatus || '';
