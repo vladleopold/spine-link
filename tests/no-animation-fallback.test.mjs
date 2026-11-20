@@ -9,6 +9,7 @@ const agent = read('../lib/agent-animation.js');
 const science = read('../lib/spine-data-science.js');
 const exporter = read('../scripts/spine-export-webm.mjs');
 const cloudExport = read('../scripts/spine-project-cloud-export.mjs');
+const exportWorkflow = read('../.github/workflows/spine-export-webm.yml');
 
 function section(source, start, end) {
   const from = source.indexOf(start);
@@ -70,4 +71,15 @@ test('WebM exporter fails the exact missing animation and never changes animatio
   assert.match(exporter, /const skinCandidates = Object\.freeze\(\[null\]\)/);
   assert.doesNotMatch(exporter, /skinNames\.filter/);
   assert.doesNotMatch(exporter, /msg\.text\(\)|JSON\.stringify\(\{ \.\.\.meta, ok: true, path:/);
+});
+
+
+test('preview workflow keeps upload identifiers and animation names out of public logs', () => {
+  assert.doesNotMatch(exportWorkflow, /echo "Upload ID:|echo "Animation:|Collection folder for \$uploadId|Auto-export media for \$\{uploadId\}|Dispatched spine-export-full for/);
+  assert.doesNotMatch(exportWorkflow, /--upload-id="\$\{\{ github\.event\.client_payload\.uploadId \}\}"/);
+  assert.doesNotMatch(exportWorkflow, /--animation="\$\{\{ github\.event\.client_payload\.animation \}\}"/);
+  assert.match(exportWorkflow, /UPLOAD_ID: \$\{\{ github\.event\.client_payload\.uploadId \}\}/);
+  assert.match(exportWorkflow, /ANIMATION: \$\{\{ github\.event\.client_payload\.animation \}\}/);
+  assert.match(exportWorkflow, /git commit -m "Auto-export preview media"/);
+  assert.match(exportWorkflow, /payload=\$\(jq -n/);
 });
