@@ -81,17 +81,7 @@ test('preview workflow keeps upload identifiers and animation names out of publi
   assert.doesNotMatch(exportWorkflow, /--animation="\$\{\{ github\.event\.client_payload\.animation \}\}"/);
   assert.match(exportWorkflow, /UPLOAD_ID: \$\{\{ github\.event\.client_payload\.uploadId \}\}/);
   assert.match(exportWorkflow, /ANIMATION: \$\{\{ github\.event\.client_payload\.animation \}\}/);
-  assert.match(exportWorkflow, /git commit -m "Auto-export preview media"/);
-  assert.match(exportWorkflow, /payload=\$\(jq -n/);
-});
-
-
-test('preview workflow keeps upload identifiers and animation names out of public logs', () => {
-  assert.doesNotMatch(exportWorkflow, /echo "Upload ID:|echo "Animation:|Collection folder for \$uploadId|Auto-export media for \$\{uploadId\}|Dispatched spine-export-full for/);
-  assert.doesNotMatch(exportWorkflow, /--upload-id="\$\{\{ github\.event\.client_payload\.uploadId \}\}"/);
-  assert.doesNotMatch(exportWorkflow, /--animation="\$\{\{ github\.event\.client_payload\.animation \}\}"/);
-  assert.match(exportWorkflow, /UPLOAD_ID: \$\{\{ github\.event\.client_payload\.uploadId \}\}/);
-  assert.match(exportWorkflow, /ANIMATION: \$\{\{ github\.event\.client_payload\.animation \}\}/);
+  assert.match(exportWorkflow, /BASE_PATH: \$\{\{ steps\.basepath\.outputs\.basePath \}\}/);
   assert.match(exportWorkflow, /git commit -m "Auto-export preview media"/);
   assert.match(exportWorkflow, /payload=\$\(jq -n/);
 });

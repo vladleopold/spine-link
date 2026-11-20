@@ -66,6 +66,7 @@ jobs:
         env:
           UPLOAD_ID: ${{ github.event.client_payload.uploadId }}
           ANIMATION: ${{ github.event.client_payload.animation }}
+          BASE_PATH: ${{ steps.basepath.outputs.basePath }}
         run: |
           echo "=== COMPUTING ANIMATION DURATION ==="
           uploadId="$UPLOAD_ID"
