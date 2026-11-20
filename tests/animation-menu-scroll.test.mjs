@@ -37,6 +37,9 @@ test('live animation-menu scroll gate stays strict and runs only after productio
   assert.ok(browserWorkflow.includes('Deploy to Vercel'));
   assert.ok(browserWorkflow.includes("needs.release_gate.outputs.deployed == 'true'"));
   assert.ok(browserWorkflow.includes('farSelectionVisible'));
+  assert.ok(browserWorkflow.includes("cron: '53 * * * *'"));
+  assert.ok(browserWorkflow.includes('PASS LIVE REAL ANIMATION MENU'));
+  assert.ok(browserWorkflow.includes('Real short animation list must size to its content'));
   assert.ok(browserWorkflow.includes('A newly selected off-screen animation must be revealed'));
 });
 
