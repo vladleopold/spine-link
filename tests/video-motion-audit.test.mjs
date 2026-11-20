@@ -104,9 +104,9 @@ test('the hourly Chromium audit wires the eight-frame motion gate into each play
   assert.match(workflow, /minDistinctFrames:\s*8/);
   assert.match(workflow, /sample-video-lacks-eight-distinct-motion-frames/);
   assert.match(workflow, /motionVerifiedSamples/);
-  assert.match(workflow, /deferredSourcePresent:\\s*!!element\\.dataset\\.videoSrc/);
-  assert.match(workflow, /cardVisible:\\s*visibleWidth>0&&visibleHeight>0/);
-  assert.match(workflow, /documentVisible:\\s*document\\.visibilityState==='visible'/);
+  assert.match(workflow, /deferredSourcePresent:\s*!!element\.dataset\.videoSrc/);
+  assert.match(workflow, /cardVisible:\s*visibleWidth>0&&visibleHeight>0/);
+  assert.match(workflow, /documentVisible:\s*document\.visibilityState==='visible'/);
   assert.match(workflow, /PREVIEW_PROTECTED/);
   assert.match(workflow, /PREVIEW_REDIRECTED_AWAY/);
   assert.match(workflow, /PREVIEW_REDIRECTED/);
