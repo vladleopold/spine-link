@@ -62,7 +62,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           node --input-type=module <<'NODE'
           import { appendFileSync } from 'node:fs';
@@ -72,8 +71,6 @@ jobs:
           const repository = process.env.GITHUB_REPOSITORY;
           const pullNumber = process.env.PR_NUMBER;
           const expectedSha = process.env.EXPECTED_SHA;
-          const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '';
-          const previewHeaders = bypassSecret ? { 'x-vercel-protection-bypass': bypassSecret } : {};
           const headers = {
             Accept: 'application/vnd.github+json',
             Authorization: 'Bearer ' + token,
@@ -113,7 +110,6 @@ jobs:
               let hasDeferredVideoMetadata = false;
               try {
                 const response = await fetch(previewUrl.origin + '/world-spine-archive', {
-                  headers: previewHeaders,
                   signal: AbortSignal.timeout(20000),
                 });
                 previewHttpStatus = response.status;
@@ -148,7 +144,6 @@ jobs:
                   '; redirected=' + previewRedirected +
                   '; sameOrigin=' + previewFinalOriginMatches +
                   '; finalHost=' + (previewFinalHost || 'unresolved') +
-                  '; bypassConfigured=' + Boolean(bypassSecret) +
                   '; archivePaginationMarker=' + hasArchivePaginationMarker +
                   '; deferredVideoMetadata=' + hasDeferredVideoMetadata +
                   '; continuing with production archive audit.');
