@@ -59,6 +59,47 @@ function stubFetch(log, sourceEntries=entries){
     throw Error('Unexpected per-card remote request '+url);
   };
 }
+test('public works without media stay visible as blocked; test-only and hidden works stay private',async()=>{
+  const publicBlocked={
+    ...entries[0],
+    id:'public-blocked-no-media',
+    previewPath:'library_02/public-blocked-no-media',
+    skeleton:'public-blocked-no-media.skel',
+    defaultAnimation:'walk',
+    webmStatus:'blocked-missing-source',
+    previewStatus:'blocked',
+    webmPreview:'',webmPreviewMedium:'',webmPreviewLow:'',
+    webpPoster:'',webpPosterMedium:'',webpPosterLow:'',
+    thumbnail:'',thumbnailPoster:'',
+    allAnimationPreviews:{},
+  };
+  const testOnly={...entries[1],id:'synthetic-test-only',testOnly:true};
+  const hidden={...entries[2],id:'synthetic-hidden',hiddenFromPublicLibrary:true};
+  const log=[];
+  globalThis.fetch=stubFetch(log,[publicBlocked,testOnly,hidden]);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-public-blocked-visibility';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'12'}},res);
+    assert.equal(res.code,200);
+    assert.equal(res.body.total,1,'public source work remains in the archive even when every preview asset is absent');
+    assert.equal(res.body.entries.length,1);
+    const item=res.body.entries[0];
+    assert.equal(item.id,'public-blocked-no-media');
+    assert.equal(item.poster,'','missing media must not acquire a placeholder poster');
+    assert.equal(item.video,'','missing media must not acquire a substitute WebM');
+    assert.equal(item.sourceWebmStatus,'blocked-missing-source');
+    assert.equal(item.sourcePreviewStatus,'blocked');
+    assert.doesNotMatch(JSON.stringify(res.body),/synthetic-test-only|synthetic-hidden/,
+      'test-only and explicitly hidden works must never enter the public archive');
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
+
 test('archive feed paginates without probing every media card, caches public responses',async()=>{
   const log=[];
   globalThis.fetch=stubFetch(log);

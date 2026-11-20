@@ -2476,7 +2476,7 @@ export default async function handler(request, response) {
     const entries = Array.isArray(allEntries)
       ? dedupeArchiveEntries(allEntries.filter((entry) => (
           entry?.hiddenFromPublicLibrary !== true &&
-          (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster) &&
+          entry?.testOnly !== true &&
           !entryExcludedFromArchive(entry, exclusions)
         )))
       : [];
