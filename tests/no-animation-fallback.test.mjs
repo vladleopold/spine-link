@@ -91,10 +91,11 @@ test('full export preserves the exact indexed default animation and never promot
   const end = fullExportWorkflow.indexOf('fs.writeFileSync(indexPath', start);
   assert.ok(start >= 0 && end > start, 'full-export selected-animation block must exist');
   const block = fullExportWorkflow.slice(start, end);
-  assert.match(block, /const chosenAnim = typeof indexData\\[entryIndex\\]\\?\\.defaultAnimation === 'string'/);
-  assert.match(block, /const chosenPreview = chosenAnim \\? allAnimPreviews\\[chosenAnim\\] : null/);
-  assert.match(block, /delete nextEntry\\.previewDuration/);
-  assert.doesNotMatch(block, /effectiveDefault|animOrder|Automatic preview fallback|for \\(const a of/);
-  assert.doesNotMatch(block, /defaultAnimation\\s*:/,
-    'full export must not rewrite the indexed default animation');
+  assert.ok(block.includes("const chosenAnim = typeof indexData[entryIndex]?.defaultAnimation === 'string'"));
+  assert.ok(block.includes("const chosenPreview = chosenAnim ? allAnimPreviews[chosenAnim] : null"));
+  assert.ok(block.includes("delete nextEntry.previewDuration"));
+  assert.ok(!/effectiveDefault|animOrder|Automatic preview fallback/.test(block));
+  assert.ok(!block.includes("for (const a of"));
+  assert.ok(!block.includes("defaultAnimation:"),
+    "full export must not rewrite the indexed default animation");
 });
