@@ -108,7 +108,7 @@ jobs:
               let previewRedirected = false;
               let previewFinalOriginMatches = true;
               let previewFinalHost = '';
-              let previewProtectionRedirect = false;
+                previewProtectionRedirect = /(^|\.)vercel\.com$/i.test(previewFinalHost);
               let hasArchivePaginationMarker = false;
               let hasDeferredVideoMetadata = false;
               try {
@@ -121,7 +121,7 @@ jobs:
                 const finalUrl = new URL(response.url);
                 previewFinalHost = finalUrl.hostname.toLowerCase();
                 previewFinalOriginMatches = finalUrl.origin === previewUrl.origin;
-                previewProtectionRedirect = /(^|\\.)vercel\\.com$/i.test(previewFinalHost);
+                previewProtectionRedirect = /(^|\.)vercel\.com$/i.test(previewFinalHost);
                 const html = await response.text();
                 hasArchivePaginationMarker = html.includes('id="archive-next-page"');
                 hasDeferredVideoMetadata = html.includes('data-video-src=');
