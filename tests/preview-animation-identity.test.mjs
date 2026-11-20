@@ -45,8 +45,8 @@ test('video target is restricted to the indexed defaultAnimation', () => {
 
 test('failed or blocked preview media cannot leak stale WebM/WebP URLs', () => {
   const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
-  assert.match(resolver, /previewMediaStatusAllowsPlayback\\(entry\\)/);
-  assert.match(resolver, /const selected = previewMediaStatusAllowsPlayback\\(entry\\) && chosen\\.trim\\(\\) && previews \\? previews\\[chosen\\] : null/);
+  assert.match(resolver, /previewMediaStatusAllowsPlayback\(entry\)/);
+  assert.match(resolver, /const selected = previewMediaStatusAllowsPlayback\(entry\) && chosen\.trim\(\) && previews \? previews\[chosen\] : null/);
   assert.match(resolver, /name: chosen/);
 
   assert.equal(previewMediaStatusAllowsPlayback({ previewStatus: 'failed', webmStatus: 'ready' }), false);
