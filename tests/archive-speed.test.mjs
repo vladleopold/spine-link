@@ -200,7 +200,7 @@ test('source textures and guessed posters never unlock archive WebM or render a 
       'without a matching video/poster pair the card must render no visual substitute');
     assert.ok(html.includes("if(!poster||!poster.complete||poster.naturalWidth<=0)"),
       'WebM must wait for a decoded first-frame poster');
-    assert.ok(html.includes('preview-medium|preview-low'),
+    assert.ok(html.includes("'/preview-medium.webp'") && html.includes("'/preview-low.webp'"),
       'only medium/low generated WebP posters may unlock playback');
     assert.ok(log.length<=6);
   }finally{
@@ -633,8 +633,8 @@ test('visible lazy WebM retries one transient AbortError before failing closed',
 });
 
 
-test('lazy video accepts every exact generated WebP poster tier and rejects unrelated thumbnails', () => {
-  for (const suffix of ['preview.webp', 'preview-medium.webp', 'preview-low.webp']) {
+test('lazy video accepts only exact generated medium/low WebP poster tiers', () => {
+  for (const suffix of ['preview-medium.webp', 'preview-low.webp']) {
     assert.equal(
       isGeneratedPosterUrl('https://spine-link.vercel.app/assets/library_02/work/' + suffix + '?v=1'),
       true,
@@ -642,6 +642,7 @@ test('lazy video accepts every exact generated WebP poster tier and rejects unre
     );
   }
   for (const url of [
+    'https://spine-link.vercel.app/assets/library_02/work/preview.webp',
     'https://spine-link.vercel.app/assets/library_02/work/thumbnail.webp',
     'https://spine-link.vercel.app/assets/library_02/work/texture.webp',
     'https://spine-link.vercel.app/assets/library_02/work/preview.webp.evil',
