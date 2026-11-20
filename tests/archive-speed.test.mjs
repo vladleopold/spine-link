@@ -323,6 +323,7 @@ test('archive never substitutes another animation when defaultAnimation is absen
   const source=[
     {...entries[0],defaultAnimation:'',allAnimationPreviews:entries[0].allAnimationPreviews},
     {...entries[1],id:'missing-default',previewPath:'library_02/missing-default',defaultAnimation:'missing',allAnimationPreviews:entries[1].allAnimationPreviews},
+    {...entries[2],id:'failed-default',previewPath:'library_02/failed-default',defaultAnimation:'walk',webmStatus:'failed',previewStatus:'failed',allAnimationPreviews:{}},
   ];
   const log=[];
   globalThis.fetch=stubFetch(log,source);
@@ -332,11 +333,18 @@ test('archive never substitutes another animation when defaultAnimation is absen
     const res=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'12'}},res);
     assert.equal(res.code,200);
-    assert.equal(res.body.entries.length,2);
-    for(const item of res.body.entries){
+    assert.equal(res.body.entries.length,3);
+    for(const [index,item] of res.body.entries.entries()){
       assert.equal(item.poster,'','no other animation may supply a poster');
       assert.equal(item.video,'','no other animation may supply WebM');
       assert.equal(item.quality,'','unselected animation must remain blocked');
+      if(index<2){
+        assert.equal(item.sourceWebmStatus,'blocked-no-exact-animation-preview');
+        assert.equal(item.sourcePreviewStatus,'blocked');
+      }else{
+        assert.equal(item.sourceWebmStatus,'failed','an explicit failure must remain failed');
+        assert.equal(item.sourcePreviewStatus,'failed');
+      }
     }
   }finally{
     globalThis.fetch=originalFetch;
@@ -346,8 +354,8 @@ test('archive never substitutes another animation when defaultAnimation is absen
 });
 
 
-test('first eligible archive posters stay eager when earlier cards are explicitly blocked',async()=>{
-  const blocked=Array.from({length:5},(_,i)=>({
+test('first eligible archive posters are preloaded across the embedded batch after twelve blocked cards',async()=>{
+  const blocked=Array.from({length:13},(_,i)=>({
     ...entries[0],
     id:'blocked-'+i,
     uploadedAt:new Date(Date.UTC(2026,10,19,0,i)).toISOString(),
@@ -390,29 +398,39 @@ test('first eligible archive posters stay eager when earlier cards are explicitl
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
     assert.equal(res.code,200);
     const html=String(res.body);
-    const cardFor=id=>html.match(new RegExp('<article class="feed-card"[^>]*data-entry-id="'+id+'"[\\s\\S]*?<\\/article>'))?.[0]||'';
-    for(let i=0;i<5;i++){
-      const card=cardFor('blocked-'+i);
-      assert.ok(card,'blocked source card must remain in the archive');
+    const cards=[...html.matchAll(/<article class="feed-card"[\s\S]*?<\/article>/g)].map(match=>match[0]);
+    assert.equal(cards.length,12,'keep only twelve compact cards in the initial HTML');
+    for(const card of cards){
       assert.doesNotMatch(card,/<img|<video|data-video-src=/,
-        'a blocked card must not gain a fabricated poster or video');
+        'blocked initial cards must not gain a fabricated poster or video');
     }
-    for(let i=0;i<4;i++){
-      const card=cardFor('ready-'+i);
-      const image=card.match(/<img\b[^>]*>/)?.[0]||'';
-      assert.ok(image,'eligible card must have its own poster');
-      assert.match(image,/loading="eager"/,
-        'the first four eligible posters must be eager regardless of their card positions');
-      assert.match(image,i<2?/fetchpriority="high"/:/fetchpriority="low"/);
+    const embedded=html.match(/<script type="application\/json" id="archive-next-page">([^<]+)<\/script>/);
+    assert.ok(embedded,'the next compact card records must be embedded in HTML');
+    const batch=JSON.parse(embedded[1]);
+    assert.equal(batch.entries.length,8,'thirteen blocked plus seven ready means eight records remain after the first twelve');
+    assert.equal(batch.entries[0].id,'blocked-12');
+    assert.equal(batch.entries[0].poster,'');
+    assert.equal(batch.entries[0].video,'');
+    assert.equal(batch.entries[0].sourceWebmStatus,'blocked-missing');
+    for(let i=0;i<7;i++){
+      assert.equal(batch.entries[i+1].id,'ready-'+i);
+      assert.ok(batch.entries[i+1].poster&&batch.entries[i+1].video);
     }
-    const fifthImage=cardFor('ready-4').match(/<img\b[^>]*>/)?.[0]||'';
-    assert.match(fifthImage,/loading="lazy"/,
-      'later eligible posters must remain lazy');
     const preloads=[...html.matchAll(/<link rel="preload" as="image" href="([^"]+)" fetchpriority="([^"]+)"/g)];
-    assert.equal(preloads.length,4,'preload only the first four eligible WebP posters');
+    assert.equal(preloads.length,4,'preload only the first four eligible WebP posters across the first forty records');
     assert.deepEqual(preloads.map(match=>new URL(match[1]).pathname.split('/').at(-2)),
       ['ready-0','ready-1','ready-2','ready-3']);
     assert.deepEqual(preloads.map(match=>match[2]),['high','high','low','low']);
+    const source=fs.readFileSync(new URL('../api/github-archive.js',import.meta.url),'utf8');
+    assert.match(source,/card\.dataset\.sourceWebmStatus=item\.sourceWebmStatus\|\|''/);
+    assert.match(source,/card\.dataset\.sourcePreviewStatus=item\.sourcePreviewStatus\|\|''/);
+    assert.match(source,/const posterIndex=item\.poster&&item\.video\?eligiblePosterIndex\+\+:-1/);
+    assert.match(source,/image\.loading=posterIndex>=0&&posterIndex<4\?'eager':'lazy'/);
+    assert.match(source,/image\.fetchPriority=posterIndex>=0&&posterIndex<2\?'high':'low'/);
+    assert.ok(html.includes('const pageSize=48'));
+    assert.ok(html.includes("rootMargin:'5200px'"));
+    assert.ok(html.includes('new MutationObserver'),
+      'optional enhancements must wait for the first poster even when all initial cards are blocked');
     assert.ok(!html.includes('<video src='),'initial archive HTML must not request WebM');
     assert.ok(log.length<=6,'poster priority must not add per-card GitHub requests');
   }finally{

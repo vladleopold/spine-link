@@ -1,7 +1,7 @@
 name: Spine archive WebP-first performance regression
 on:
   push:
-    branches: [main, 'fix/archive-*']
+    branches: [main]
     paths:
       - api/github-archive.js
       - api/github-preview.js
@@ -10,6 +10,7 @@ on:
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
       - scripts/resolve-vercel-preview-comment.mjs
+      - scripts/archive-request-failure.mjs
       - scripts/video-motion-audit.mjs
       - tests/video-motion-audit.test.mjs
       - tests/spine-runtime-file-selection.test.mjs
@@ -31,6 +32,7 @@ on:
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
       - scripts/resolve-vercel-preview-comment.mjs
+      - scripts/archive-request-failure.mjs
       - scripts/video-motion-audit.mjs
       - tests/video-motion-audit.test.mjs
       - .github/workflows/archive-performance.yml

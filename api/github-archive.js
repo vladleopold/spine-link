@@ -9,7 +9,8 @@ const defaultBranch = 'main';
 const defaultBasePath = 'library';
 // Second library folder that receives new uploads; read alongside the first.
 const recoveredArchiveRef = 'f4e51c6c420d4ff1f4d2028c12492b04153cc862';
-const archivePageSize = 12;
+const archiveInitialCardCount = 12;
+const archivePageSize = 48;
 // Keep the first 40 compact card records in HTML; the rest arrive via prefetched API pages.
 const archiveEmbeddedCardCount = 40;
 
@@ -573,10 +574,30 @@ function archiveFeedEntry(origin, entry, metrics) {
     new URL(candidate.video).pathname.replace(/\.webm$/i, '').toLowerCase() ===
       new URL(candidate.poster).pathname.replace(/\.webp$/i, '').toLowerCase()
   ) || null;
+  const hasExactMediaPair = Boolean(mediaReady && selected);
+  const sourceWebmStatus = String(entry?.webmStatus || '').trim();
+  const sourcePreviewStatus = String(entry?.previewStatus || '').trim();
+  const sourceFailed = sourceWebmStatus.startsWith('failed') || sourcePreviewStatus.startsWith('failed');
+  const effectiveWebmStatus = hasExactMediaPair
+    ? sourceWebmStatus
+    : sourceWebmStatus.startsWith('failed') || sourceWebmStatus.startsWith('blocked')
+      ? sourceWebmStatus
+      : sourceFailed
+        ? 'failed'
+        : 'blocked-no-exact-animation-preview';
+  const effectivePreviewStatus = hasExactMediaPair
+    ? sourcePreviewStatus
+    : sourcePreviewStatus.startsWith('failed')
+      ? sourcePreviewStatus
+      : sourcePreviewStatus === 'blocked'
+        ? 'blocked'
+        : sourceFailed
+          ? 'failed'
+          : 'blocked';
   return {
     id,
-    sourceWebmStatus: String(entry?.webmStatus || '').trim(),
-    sourcePreviewStatus: String(entry?.previewStatus || '').trim(),
+    sourceWebmStatus: effectiveWebmStatus,
+    sourcePreviewStatus: effectivePreviewStatus,
     title: cleanPublicText(entry?.title || id || 'Spine animation', 120),
     ownerName: cleanPublicText(entry?.ownerName || (entry?.portfolioMode === true ? 'Spine artist' : 'Spine creator'), 80),
     ownerUrl: entry?.publicOwnerId ? `/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
@@ -1481,24 +1502,24 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
 }
 
 function archiveHtml({ origin, entries, metrics }) {
-  const initialItems = entries.slice(0, archivePageSize).map((entry) => archiveFeedEntry(origin, entry, metrics));
+  const embeddedEnd = Math.min(entries.length, archiveEmbeddedCardCount);
+  const embeddedItems = entries.slice(0, embeddedEnd).map((entry) => archiveFeedEntry(origin, entry, metrics));
+  const initialItems = embeddedItems.slice(0, archiveInitialCardCount);
   let eligiblePosterIndex = 0;
   const cards = initialItems.map((item) => {
     const posterIndex = item.poster && item.video ? eligiblePosterIndex++ : -1;
     return lightweightCardHtml(item, posterIndex);
   }).join('');
-  // Embed the compact metadata of all remaining cards. Scroll pagination
-  // requires zero API round trips; assets are separately demand-loaded.
+  // Embed a bounded first batch; larger API pages keep later scrolling efficient.
   const nextOffset = initialItems.length;
-  const embeddedEnd = Math.min(entries.length, archiveEmbeddedCardCount);
   const preloadedBatch = {
-    entries: entries.slice(nextOffset, embeddedEnd).map(entry => archiveFeedEntry(origin, entry, metrics)),
+    entries: embeddedItems.slice(nextOffset),
     hasMore: entries.length > embeddedEnd,
   };
-  const firstPoster = initialItems.find((item) => item.poster)?.poster || '';
+  const eligiblePosters = embeddedItems.filter((item) => item.poster && item.video);
+  const firstPoster = eligiblePosters[0]?.poster || '';
   const archiveImage = firstPoster || `${origin}/spine-link-video-thumbnail.png`;
-  const posterPreloads = initialItems
-    .filter((item) => item.poster && item.video)
+  const posterPreloads = eligiblePosters
     .slice(0, 4)
     .map((item, index) => `<link rel="preload" as="image" href="${escapeHtml(item.poster)}" fetchpriority="${index < 2 ? 'high' : 'low'}" />`)
     .join('');
@@ -1576,8 +1597,6 @@ function archiveHtml({ origin, entries, metrics }) {
           setTimeout(startScripts,1200);
         }
         function deferOptionalEnhancementsUntilPoster(){
-          const firstPoster=feed.querySelector('.feed-card img');
-          if(!firstPoster){loadOptionalEnhancements();return;}
           let scheduled=false;
           const schedule=()=>{
             if(scheduled)return;
@@ -1585,9 +1604,30 @@ function archiveHtml({ origin, entries, metrics }) {
             if('requestIdleCallback' in window)requestIdleCallback(loadOptionalEnhancements,{timeout:1500});
             else setTimeout(loadOptionalEnhancements,250);
           };
-          firstPoster.addEventListener('load',schedule,{once:true});
-          firstPoster.addEventListener('error',schedule,{once:true});
-          if(firstPoster.complete)schedule();
+          const waitForPoster=poster=>{
+            if(!poster)return false;
+            if(poster.complete){schedule();return true;}
+            poster.addEventListener('load',schedule,{once:true});
+            poster.addEventListener('error',schedule,{once:true});
+            return true;
+          };
+          if(waitForPoster(feed.querySelector('.feed-card img')))return;
+          let feedObserver=null,sentinelObserver=null;
+          const watch=()=>{
+            if(waitForPoster(feed.querySelector('.feed-card img'))){
+              feedObserver?.disconnect();
+              sentinelObserver?.disconnect();
+            }else if(sentinel.textContent.trim()==='End of archive'){
+              feedObserver?.disconnect();
+              sentinelObserver?.disconnect();
+              loadOptionalEnhancements();
+            }
+          };
+          feedObserver=new MutationObserver(watch);
+          sentinelObserver=new MutationObserver(watch);
+          feedObserver.observe(feed,{childList:true,subtree:true});
+          sentinelObserver.observe(sentinel,{childList:true,subtree:true,characterData:true});
+          watch();
         }
         const pageSize=${archivePageSize};
         const totalEntries=${entries.length};
@@ -1644,7 +1684,13 @@ function archiveHtml({ origin, entries, metrics }) {
           active.add(card);
           host.append(video);
           video.src=card.dataset.videoSrc;
-          void video.play().catch(()=>stopVideo(card));
+          void video.play().catch(error=>{
+            if(error?.name!=='AbortError'){
+              card.dataset.previewStatus='blocked-video-play-failed';
+              delete card.dataset.videoSrc;
+            }
+            stopVideo(card);
+          });
         }
         function updateAutoplay(){
           if(document.hidden||reducedMotion){
@@ -1703,10 +1749,12 @@ function archiveHtml({ origin, entries, metrics }) {
           addEventListener('resize',scan,{passive:true});
           scan();
         }
-        function makeCard(item,index){
+        function makeCard(item,posterIndex){
           const card=document.createElement('article');
           card.className='feed-card';
           card.dataset.entryId=item.id;
+          card.dataset.sourceWebmStatus=item.sourceWebmStatus||'';
+          card.dataset.sourcePreviewStatus=item.sourcePreviewStatus||'';
           card.dataset.previewStatus=item.poster&&item.video?'poster-pending':'blocked-no-webm-poster';
           if(item.poster&&item.video)card.dataset.videoSrc=item.video;
           card.style.setProperty('--media-ratio',item.width&&item.height
@@ -1716,8 +1764,8 @@ function archiveHtml({ origin, entries, metrics }) {
             const image=document.createElement('img');
             image.src=item.poster;
             image.alt=item.title+' Spine animation preview';
-            image.loading=index<6?'eager':'lazy';
-            image.fetchPriority=index<4?'high':'low';
+            image.loading=posterIndex>=0&&posterIndex<4?'eager':'lazy';
+            image.fetchPriority=posterIndex>=0&&posterIndex<2?'high':'low';
             image.decoding='async';
             const settlePoster=()=>{
               if(!image.complete)return;
@@ -1755,7 +1803,7 @@ function archiveHtml({ origin, entries, metrics }) {
         // offscreen preloads and request the same WebP again during scrolling.
         const warmedPosters=new Map();
         function warmPosters(data){
-          for(const item of (data.entries||[]).slice(0,pageSize)){
+          for(const item of (data.entries||[]).slice(0,12)){
             const url=item.poster||item.posterFallback;
             if(!url||!/\\.webp(?:[?#]|$)/i.test(url)||warmedPosters.has(url))continue;
             const img=new Image();
@@ -1809,7 +1857,11 @@ function archiveHtml({ origin, entries, metrics }) {
             }
             if(!data)data=await fetchPage(offset);
             const entries=Array.isArray(data.entries)?data.entries:[];
-            const cards=entries.map(makeCard);
+            let eligiblePosterIndex=0;
+            const cards=entries.map(item=>{
+              const posterIndex=item.poster&&item.video?eligiblePosterIndex++:-1;
+              return makeCard(item,posterIndex);
+            });
             const fragment=document.createDocumentFragment();
             cards.forEach(card=>fragment.append(card));
             feed.append(fragment);
@@ -1834,7 +1886,7 @@ function archiveHtml({ origin, entries, metrics }) {
         if(!finished&&observer){
           new IntersectionObserver(records=>{
             if(records.some(r=>r.isIntersecting))void loadMore();
-          },{rootMargin:'2200px'}).observe(sentinel);
+          },{rootMargin:'5200px'}).observe(sentinel);
         }
         if(embeddedEntries.length)warmPosters({entries:embeddedEntries.slice(0,pageSize)});
         else if(prefetched)warmPosters(prefetched.data);

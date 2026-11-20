@@ -14,6 +14,7 @@ on:
       - tests/archive-initial-timing.test.mjs
       - scripts/resolve-vercel-preview-comment.mjs
       - scripts/video-motion-audit.mjs
+      - scripts/archive-request-failure.mjs
       - tests/video-motion-audit.test.mjs
       - .github/workflows/archive-live-speed.yml
 permissions:
@@ -144,6 +145,7 @@ jobs:
           import assert from 'node:assert/strict';
           import { chromium } from 'playwright';
           import { auditVideoMotion } from './scripts/video-motion-audit.mjs';
+          import { isExpectedArchiveRequestAbort } from './scripts/archive-request-failure.mjs';
           
           const browser=await chromium.launch({headless:true});
           const failures=[];
@@ -153,12 +155,17 @@ jobs:
               const page=await browser.newPage({viewport});
               const pageErrors=[],consoleErrors=[],requestFailures=[],mediaRequests=[],assetHttpErrors=[];
               const posterResponseStatuses=new Map();
-              let blockedApiRequests=0,allowedApiRequests=0;
+              const samplePlaybackDiagnostics=[];
+              let blockedApiRequests=0,allowedApiRequests=0,expectedRequestAborts=0;
               page.on('pageerror',()=>pageErrors.push(1));
               page.on('console',message=>{if(message.type()==='error')consoleErrors.push(1);});
               page.on('requestfailed',request=>{
                 const url=request.url();
-                if(/\.(?:webm|webp)(?:\?|$)/i.test(url)||url.includes('/api/github-archive'))requestFailures.push(1);
+                if(/\.(?:webm|webp)(?:\?|$)/i.test(url)||url.includes('/api/github-archive')){
+                  const errorText=request.failure()?.errorText||'';
+                  if(isExpectedArchiveRequestAbort(errorText))expectedRequestAborts++;
+                  else requestFailures.push(1);
+                }
               });
               page.on('response',response=>{
                 const url=response.url();
@@ -193,7 +200,7 @@ jobs:
                   continue;
                 }
                 const firstHtml=await page.content();
-                if(!firstHtml.includes('data-video-src='))failures.push('missing-deferred-video-metadata');
+                if(!firstHtml.includes('data-video-src=')&&!firstHtml.includes('"video":"'))failures.push('missing-deferred-video-metadata');
                 if(firstHtml.includes('<video src="'))failures.push('eager-webm-in-html');
           
                 let initialPosterDecoded=false;
@@ -240,7 +247,7 @@ jobs:
                 }
                 let allPageBatches=0,paginationComplete=false;
                 const appendLatencies=[],posterLatencies=[];
-                const batchLimit=Math.ceil(totalEntries/12)+4;
+                const batchLimit=Math.ceil(totalEntries/48)+4;
                 while(allPageBatches<batchLimit){
                   const sentinel=page.locator('#sentinel');
                   const state=(await sentinel.innerText()).trim();
@@ -284,14 +291,14 @@ jobs:
                   appendLatencies.push(appendMs);
                   if(appendMs>1000)failures.push('archive-batch-append-over-one-second');
                   const eagerCount=await page.locator('.feed-card').evaluateAll((cards,start)=>
-                    cards.slice(start,start+12).slice(0,6).filter(card=>card.querySelector('img')).length,previous);
+                    cards.slice(start,start+48).slice(0,6).filter(card=>card.querySelector('img')).length,previous);
                   if(eagerCount>0){
                     const required=Math.min(3,eagerCount);
                     const posterStarted=Date.now();
                     let decoded=false;
                     try{
                       await page.waitForFunction(({start,required})=>{
-                        const cards=Array.from(document.querySelectorAll('.feed-card')).slice(start,start+12).slice(0,6);
+                        const cards=Array.from(document.querySelectorAll('.feed-card')).slice(start,start+48).slice(0,6);
                         const images=cards.map(card=>card.querySelector('img')).filter(Boolean);
                         return images.filter(img=>img.complete&&img.naturalWidth>0).length>=required;
                       },{start:previous,required},{timeout:5000});
@@ -346,11 +353,16 @@ jobs:
                 const allPairs=allCards.filter(item=>item.video&&item.poster);
                 const allMissing=allCards.filter(item=>!item.video||!item.poster);
                 const allBlocked=allMissing.filter(item=>!item.video&&!item.poster&&
-                  item.sourceWebmStatus.startsWith('blocked-')&&item.sourcePreviewStatus==='blocked');
-                const allUnexpectedMissing=allMissing.filter(item=>!allBlocked.includes(item));
-                const allInvalidBlocked=allCards.filter(item=>
-                  item.sourceWebmStatus.startsWith('blocked-')&&item.sourcePreviewStatus==='blocked'&&
-                  (item.video||item.poster));
+                  item.sourceWebmStatus.startsWith('blocked')&&item.sourcePreviewStatus==='blocked');
+                const allFailed=allMissing.filter(item=>!item.video&&!item.poster&&
+                  (item.sourceWebmStatus.startsWith('failed')||item.sourcePreviewStatus.startsWith('failed')));
+                const allUnavailable=[...allBlocked,...allFailed];
+                const allUnexpectedMissing=allMissing.filter(item=>!allUnavailable.includes(item));
+                const allInvalidUnavailable=allCards.filter(item=>{
+                  const blocked=item.sourceWebmStatus.startsWith('blocked')&&item.sourcePreviewStatus==='blocked';
+                  const failed=item.sourceWebmStatus.startsWith('failed')||item.sourcePreviewStatus.startsWith('failed');
+                  return (blocked||failed)&&(item.video||item.poster);
+                });
                 const allBadPairs=allCards.filter(item=>{
                   if(!item.video&&!item.poster)return false;
                   if(!item.video||!item.poster||item.imageCount!==1)return true;
@@ -366,7 +378,7 @@ jobs:
                 });
                 const allFallbacks=allCards.filter(item=>item.fallback||item.mediaText);
                 if(allUnexpectedMissing.length)failures.push('public-card-missing-without-blocked-status');
-                if(allInvalidBlocked.length)failures.push('blocked-card-exposes-partial-media');
+                if(allInvalidUnavailable.length)failures.push('blocked-or-failed-card-exposes-partial-media');
                 if(allBadPairs.length)failures.push('public-card-webm-webp-pair-mismatch');
                 if(allFallbacks.length)failures.push('public-card-has-fallback-content');
           
@@ -417,7 +429,7 @@ jobs:
                 if(webmProbeFailures)failures.push('webm-byte-probe-failed');
           
                 let playedSamples=0,motionVerifiedSamples=0;
-                for(const sample of samples){
+                for(const [sampleOrdinal,sample] of samples.entries()){
                   const card=page.locator('.feed-card').nth(sample.index);
                   let ready=false;
                   try{
@@ -434,6 +446,22 @@ jobs:
                     ready=true;
                   }catch{}
                   if(!ready){
+                    const diagnostic=await card.evaluate(element=>{
+                      const image=element.querySelector('img');
+                      const video=element.querySelector('video');
+                      return {
+                        previewStatus:element.dataset.previewStatus||'',
+                        posterDecoded:!!image&&image.complete&&image.naturalWidth>0,
+                        videoPresent:!!video,
+                        readyState:video?.readyState||0,
+                        networkState:video?.networkState||0,
+                        paused:video?.paused??true,
+                        errorCode:video?.error?.code||0,
+                        sourcePresent:!!(video?.currentSrc||video?.getAttribute('src')),
+                        canPlayWebm:video?.canPlayType('video/webm')||'',
+                      };
+                    }).catch(()=>({}));
+                    samplePlaybackDiagnostics.push({sample:sampleOrdinal,...diagnostic});
                     failures.push('sample-video-playback-failed');
                     continue;
                   }
@@ -462,10 +490,11 @@ jobs:
                 }
                 console.log('ARCHIVE_ALL_PAGES_EVIDENCE '+JSON.stringify({
                   viewport:viewport.width,previewBlocked:process.env.PREVIEW_BLOCKED||'',totalEntries,loadedCards:allCards.length,batches:allPageBatches,
-                  paired:allPairs.length,blocked:allBlocked.length,unexpectedMissing:allUnexpectedMissing.length,
+                  paired:allPairs.length,blocked:allBlocked.length,failed:allFailed.length,unexpectedMissing:allUnexpectedMissing.length,
                   decodedPosters:posterDecode.total,posterDecodeFailures:posterDecode.failed,posterStatusFailures,
-                  webmProbed,webmProbeFailures,playedSamples,motionVerifiedSamples,maxAppendMs:Math.max(0,...appendLatencies),
-                  maxPosterBatchMs:Math.max(0,...posterLatencies),blockedApiRequests,allowedApiRequests,
+                  webmProbed,webmProbeFailures,playedSamples,motionVerifiedSamples,samplePlaybackDiagnostics,
+                  maxAppendMs:Math.max(0,...appendLatencies),maxPosterBatchMs:Math.max(0,...posterLatencies),
+                  blockedApiRequests,allowedApiRequests,expectedRequestAborts,
                   assetHttpErrors:assetHttpErrors.length,requestFailures:requestFailures.length,
                   jsErrors:pageErrors.length,consoleErrors:consoleErrors.length,viewportFailures:failures.length-failureStart
                 }));

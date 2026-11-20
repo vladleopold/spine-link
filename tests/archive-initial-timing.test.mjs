@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { findMatchingVercelProject } from '../scripts/resolve-vercel-preview-comment.mjs';
+import { isExpectedArchiveRequestAbort } from '../scripts/archive-request-failure.mjs';
 
 const workflow = readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
 
@@ -16,6 +17,9 @@ test('initial archive poster timing excludes intentional prefetch warm-up', () =
   assert.ok(warmup > firstPoster, 'first-poster timing includes warm-up delay');
   assert.ok(evidence > firstPoster && evidence < warmup, 'logged metric must use the captured checkpoint before warm-up');
   assert.ok(!workflow.includes('initialMs:Date.now()-started'), 'old inflated metric must not return');
+  assert.ok(workflow.includes('samplePlaybackDiagnostics'),'failed playback must emit privacy-safe diagnostics');
+  assert.ok(workflow.includes('isExpectedArchiveRequestAbort(errorText)'),'intentional request aborts must be classified separately');
+  assert.ok(workflow.includes('expectedRequestAborts'),'expected abort count must remain visible in evidence');
 });
 
 test('hourly production archive audit stays read-only during deployment cooldown', () => {
@@ -50,11 +54,12 @@ test('hourly production archive audit stays read-only during deployment cooldown
   assert.match(workflow,/responseStartMs:[\s\S]*posterEndMs:[\s\S]*posterTransferBytes:/,
     'capture navigation and poster network timings to isolate a regression');
   assert.match(workflow,/const allBlocked=allMissing\.filter/);
+  assert.match(workflow,/const allFailed=allMissing\.filter/);
   assert.match(workflow,/const allUnexpectedMissing=allMissing\.filter/);
   assert.match(workflow,/if\(allUnexpectedMissing\.length\)failures\.push\('public-card-missing-without-blocked-status'\)/,
     'every unblocked missing card across the full archive must fail');
-  assert.match(workflow,/if\(allInvalidBlocked\.length\)failures\.push\('blocked-card-exposes-partial-media'\)/,
-    'a blocked card must never expose a partial poster or video');
+  assert.match(workflow,/if\(allInvalidUnavailable\.length\)failures\.push\('blocked-or-failed-card-exposes-partial-media'\)/,
+    'a blocked or failed card must never expose a partial poster or video');
   assert.doesNotMatch(workflow,/older20Missing\.map\(x=>x\.id\)|JSON\.stringify\(newest20Missing\.map\(x=>x\.id\)\)/,
     'public CI logs must not disclose private work identifiers');
 });
@@ -72,13 +77,18 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   const end = source.indexOf('function humanizeEntryTitle(', start);
   assert.ok(start >= 0 && end > start, 'archive HTML renderer must exist');
   const archive = source.slice(start, end);
-  assert.match(archive, /const firstPoster = initialItems\.find\(\(item\) => item\.poster\)\?\.poster \|\| ''/);
+  assert.match(source, /const archiveInitialCardCount = 12/);
+  assert.match(source, /const archivePageSize = 48/);
+  assert.match(archive, /const embeddedItems = entries\.slice\(0, embeddedEnd\)\.map/);
+  assert.match(archive, /const initialItems = embeddedItems\.slice\(0, archiveInitialCardCount\)/);
+  assert.match(archive, /const eligiblePosters = embeddedItems\.filter\(\(item\) => item\.poster && item\.video\)/);
+  assert.match(archive, /const firstPoster = eligiblePosters\[0\]\?\.poster \|\| ''/);
   assert.match(archive, /let eligiblePosterIndex = 0/);
   assert.match(archive, /item\.poster && item\.video \? eligiblePosterIndex\+\+ : -1/,
     'poster priority must count eligible same-work pairs, not blocked card positions');
   assert.match(source, /posterIndex >= 0 && posterIndex < 4/);
   assert.match(source, /posterIndex >= 0 && posterIndex < 2/);
-  assert.match(archive, /const posterPreloads = initialItems[\s\S]*?\.slice\(0, 4\)/);
+  assert.match(archive, /const posterPreloads = eligiblePosters[\s\S]*?\.slice\(0, 4\)/);
   assert.match(archive, /href="\$\{escapeHtml\(item\.poster\)\}" fetchpriority="\$\{index < 2 \? 'high' : 'low'\}"/,
     'the first four eligible WebP posters must be preloaded before client script execution');
   assert.match(archive, /\$\{posterPreloads\}/);
@@ -87,8 +97,18 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   assert.doesNotMatch(archive, /<script src="\/(?:spine-embers\.js|page-transitions\.js)/,
     'decorative scripts must not delay initial DOMContentLoaded');
   assert.match(archive, /function deferOptionalEnhancementsUntilPoster\(\)/);
-  assert.match(archive, /firstPoster\.addEventListener\('load',schedule/);
-  assert.match(archive, /firstPoster\.addEventListener\('error',schedule/);
+  assert.match(archive, /poster\.addEventListener\('load',schedule/);
+  assert.match(archive, /poster\.addEventListener\('error',schedule/);
+  assert.match(archive, /new MutationObserver/);
+  assert.match(archive, /sentinel\.textContent\.trim\(\)==='End of archive'/);
+  assert.match(archive, /rootMargin:'5200px'/);
+  assert.match(archive, /function makeCard\(item,posterIndex\)/);
+  assert.match(archive, /card\.dataset\.sourceWebmStatus=item\.sourceWebmStatus\|\|''/);
+  assert.match(archive, /card\.dataset\.sourcePreviewStatus=item\.sourcePreviewStatus\|\|''/);
+  assert.match(archive, /const posterIndex=item\.poster&&item\.video\?eligiblePosterIndex\+\+:-1/);
+  assert.match(archive, /image\.loading=posterIndex>=0&&posterIndex<4\?'eager':'lazy'/);
+  assert.match(archive, /image\.fetchPriority=posterIndex>=0&&posterIndex<2\?'high':'low'/);
+  assert.match(archive, /blocked-video-play-failed/);
   assert.match(archive, /requestIdleCallback\(loadOptionalEnhancements/);
   assert.match(archive, /deferOptionalEnhancementsUntilPoster\(\);/);
 });
@@ -178,4 +198,20 @@ test('hourly archive browser scripts are syntax-checked without a Vercel preview
   }finally{
     rmSync(directory,{recursive:true,force:true});
   }
+});
+
+test('only intentional browser request abort/cancel errors are ignored', () => {
+  assert.equal(isExpectedArchiveRequestAbort('net::ERR_ABORTED'), true);
+  assert.equal(isExpectedArchiveRequestAbort('net::ERR_CANCELED'), true);
+  assert.equal(isExpectedArchiveRequestAbort('ERR_ABORTED'), true);
+  assert.equal(isExpectedArchiveRequestAbort('net::ERR_CONNECTION_RESET'), false);
+  assert.equal(isExpectedArchiveRequestAbort('Timeout'), false);
+});
+
+test('feature branches run archive regression once through pull_request, not push plus pull_request', () => {
+  const performanceWorkflow = readFileSync(new URL('../.github/workflows/archive-performance.yml', import.meta.url), 'utf8');
+  assert.match(performanceWorkflow, /push:\s*\n\s+branches:\s*\[main\]/);
+  assert.match(performanceWorkflow, /pull_request:/);
+  assert.doesNotMatch(performanceWorkflow, /fix\/archive-\*/);
+  assert.match(performanceWorkflow, /scripts\/archive-request-failure\.mjs/);
 });
