@@ -572,9 +572,9 @@ test('later archive batches prioritize the first four eligible same-work posters
   const batch=source.slice(start,end);
   assert.match(batch,/let eligiblePosterIndex=0;/,
     'each appended batch must count only cards with an exact WebP/WebM pair');
-  assert.match(batch,/const cards=entries\\.map\\(item=>\\{\\s*const posterIndex=item\\.poster&&item\\.video\\?eligiblePosterIndex\\+\\+:-1;\\s*return makeCard\\(item,posterIndex\\);\\s*\\}\\);/,
+  assert.match(batch,/const cards=entries\.map\(item=>\{\s*const posterIndex=item\.poster&&item\.video\?eligiblePosterIndex\+\+:-1;\s*return makeCard\(item,posterIndex\);\s*\}\);/
     'blocked rows must not consume eager poster slots in later pages');
-  assert.doesNotMatch(batch,/entries\\.map\\(makeCard\\)/,
+  assert.doesNotMatch(batch,/entries\.map\(makeCard\)/,
     'Array.map raw indexes must never determine poster priority');
 });
 
