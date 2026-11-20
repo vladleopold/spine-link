@@ -10,6 +10,7 @@ const science = read('../lib/spine-data-science.js');
 const exporter = read('../scripts/spine-export-webm.mjs');
 const cloudExport = read('../scripts/spine-project-cloud-export.mjs');
 const exportWorkflow = read('../.github/workflows/spine-export-webm.yml');
+const fullExportWorkflow = read('../.github/workflows/spine-export-full.yml');
 
 function section(source, start, end) {
   const from = source.indexOf(start);
@@ -83,4 +84,17 @@ test('preview workflow keeps upload identifiers and animation names out of publi
   assert.match(exportWorkflow, /BASE_PATH: \$\{\{ steps\.basepath\.outputs\.basePath \}\}/);
   assert.match(exportWorkflow, /git commit -m "Auto-export preview media"/);
   assert.match(exportWorkflow, /payload=\$\(jq -n/);
+});
+
+test('full export preserves the exact indexed default animation and never promotes another track', () => {
+  const start = fullExportWorkflow.indexOf('// The work-level duration belongs only to the exact indexed');
+  const end = fullExportWorkflow.indexOf('fs.writeFileSync(indexPath', start);
+  assert.ok(start >= 0 && end > start, 'full-export selected-animation block must exist');
+  const block = fullExportWorkflow.slice(start, end);
+  assert.match(block, /const chosenAnim = typeof indexData\\[entryIndex\\]\\?\\.defaultAnimation === 'string'/);
+  assert.match(block, /const chosenPreview = chosenAnim \\? allAnimPreviews\\[chosenAnim\\] : null/);
+  assert.match(block, /delete nextEntry\\.previewDuration/);
+  assert.doesNotMatch(block, /effectiveDefault|animOrder|Automatic preview fallback|for \\(const a of/);
+  assert.doesNotMatch(block, /defaultAnimation\\s*:/,
+    'full export must not rewrite the indexed default animation');
 });
