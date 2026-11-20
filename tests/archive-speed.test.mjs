@@ -391,8 +391,8 @@ test('first four eligible archive posters reach the initial DOM after fifty-five
     skeleton:'blocked-'+i+'.skel',
     previewPath:'library_02/blocked-'+i,
     defaultAnimation:'',
-    webmStatus:'blocked-missing',
-    previewStatus:'blocked',
+    webmStatus:'ready',
+    previewStatus:'ready',
     allAnimationPreviews:{},
   }));
   const ready=Array.from({length:7},(_,i)=>{
