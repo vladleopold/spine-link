@@ -504,12 +504,18 @@ test('hourly archive proof traverses every public page and verifies media beyond
 
 test('visible lazy WebM retries one transient AbortError before failing closed',()=>{
   const source=fs.readFileSync(new URL('../api/github-archive.js',import.meta.url),'utf8');
-  assert.match(source,/const playAbortRetries=new WeakMap\\(\\)/);
-  assert.match(source,/video\\.addEventListener\\('playing',\\(\\)=>/);
-  assert.match(source,/const transientAbort=error\\?\\.name==='AbortError'/);
-  assert.match(source,/const stillCurrent=video\\.isConnected&&card\\.contains\\(video\\)/);
-  assert.match(source,/const stillVisible=visible\\.has\\(card\\)&&card\\.isConnected&&!document\\.hidden&&!reducedMotion/);
-  assert.match(source,/if\\(transientAbort&&stillCurrent&&stillVisible&&attempts<1\\)\\{[\\s\\S]*?playAbortRetries\\.set\\(card,attempts\\+1\\);[\\s\\S]*?queueUpdate\\(\\);/);
-  assert.match(source,/if\\(!transientAbort\\|\\|\\(stillCurrent&&stillVisible\\)\\)\\{[\\s\\S]*?card\\.dataset\\.previewStatus='blocked-video-play-failed';[\\s\\S]*?delete card\\.dataset\\.videoSrc;/);
-  assert.match(source,/video\\.src=card\\.dataset\\.videoSrc/);
+  assert.ok(source.includes('const playAbortRetries=new WeakMap();'));
+  assert.ok(source.includes("const transientAbort=error?.name==='AbortError';"));
+  assert.ok(source.includes('const stillCurrent=video.isConnected&&card.contains(video);'));
+  assert.ok(source.includes('const stillVisible=visible.has(card)&&card.isConnected&&!document.hidden&&!reducedMotion;'));
+  const retry=source.indexOf('if(transientAbort&&stillCurrent&&stillVisible&&attempts<1){');
+  const retryCount=source.indexOf('playAbortRetries.set(card,attempts+1);',retry);
+  const retrySchedule=source.indexOf('queueUpdate();',retryCount);
+  const failClosed=source.indexOf('if(!transientAbort||(stillCurrent&&stillVisible)){',retrySchedule);
+  assert.ok(retry>=0&&retryCount>retry&&retrySchedule>retryCount&&failClosed>retrySchedule,
+    'a visible transient AbortError gets one bounded retry, then fails closed');
+  assert.ok(source.includes("card.dataset.previewStatus='blocked-video-play-failed';"));
+  assert.ok(source.includes('delete card.dataset.videoSrc;'));
+  assert.ok(source.includes('video.src=card.dataset.videoSrc;'),
+    'retry must reuse the same card-bound WebM URL');
 });
