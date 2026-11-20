@@ -116,7 +116,8 @@ test('Vercel resolver skips newer failed comments and matches the exact commit s
     {user:{login:'unrelated-user'},body:'[vc]: #signature:'+payload},
   ];
   const match = findMatchingVercelProject(comments, inspectorUrl);
-  assert.equal(match?.previewUrl, 'https://' + previewUrl,\n    'Vercel bot payloads may provide a hostname without a URL scheme');
+  assert.equal(match?.previewUrl, 'https://' + previewUrl,
+    'Vercel bot payloads may provide a hostname without a URL scheme');
   assert.equal(match?.nextCommitStatus, 'DEPLOYED');
   assert.equal(findMatchingVercelProject(comments, 'https://vercel.example/other-head'), null);
   const unsafePayload = Buffer.from(JSON.stringify({projects:[{
