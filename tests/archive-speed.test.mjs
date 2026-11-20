@@ -564,6 +564,20 @@ test('first four eligible archive posters reach the initial DOM after fifty-five
   }
 });
 
+test('later archive batches prioritize the first four eligible same-work posters, not raw row positions',()=>{
+  const source=fs.readFileSync(new URL('../api/github-archive.js',import.meta.url),'utf8');
+  const start=source.indexOf("const entries=Array.isArray(data.entries)?data.entries:[];");
+  const end=source.indexOf("const fragment=",start);
+  assert.ok(start>=0&&end>start,'the paginated card-construction block must exist');
+  const batch=source.slice(start,end);
+  assert.match(batch,/let eligiblePosterIndex=0;/,
+    'each appended batch must count only cards with an exact WebP/WebM pair');
+  assert.match(batch,/const cards=entries\\.map\\(item=>\\{\\s*const posterIndex=item\\.poster&&item\\.video\\?eligiblePosterIndex\\+\\+:-1;\\s*return makeCard\\(item,posterIndex\\);\\s*\\}\\);/,
+    'blocked rows must not consume eager poster slots in later pages');
+  assert.doesNotMatch(batch,/entries\\.map\\(makeCard\\)/,
+    'Array.map raw indexes must never determine poster priority');
+});
+
 test('hourly archive proof traverses every public page and verifies media beyond the embedded batch',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
   assert.match(workflow,/schedule:\s*\n\s+- cron: '\d+ \* \* \* \*'/,
