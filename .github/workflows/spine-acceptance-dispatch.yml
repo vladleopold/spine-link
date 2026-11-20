@@ -9,7 +9,6 @@ on:
       - scripts/spine-export-webm.mjs
       - scripts/spine-project-cloud-export.mjs
       - .github/workflows/spine-export-webm.yml
-      - .github/workflows/spine-export-webm.yml
       - src/SpineApp.tsx
       - tests/runtime-acceptance.test.mjs
       - tests/no-animation-fallback.test.mjs
@@ -21,7 +20,6 @@ on:
       - lib/spine-data-science.js
       - scripts/spine-export-webm.mjs
       - scripts/spine-project-cloud-export.mjs
-      - .github/workflows/spine-export-webm.yml
       - .github/workflows/spine-export-webm.yml
       - src/SpineApp.tsx
       - tests/runtime-acceptance.test.mjs
