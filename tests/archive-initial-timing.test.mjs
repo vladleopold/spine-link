@@ -15,14 +15,21 @@ test('initial archive poster timing excludes intentional prefetch warm-up', () =
   assert.ok(!workflow.includes('initialMs:Date.now()-started'), 'old inflated metric must not return');
 });
 
-test('first available archive poster decodes within one second after a real deployment', () => {
+test('hourly production archive audit stays read-only during deployment cooldown', () => {
   assert.match(workflow,/release_gate:/,
-    'live proof must have a deployment gate');
+    'post-deploy live proof must retain its deployment gate');
   assert.match(workflow,/Deploy to Vercel/);
   assert.match(workflow,/needs\.release_gate\.outputs\.deployed == 'true'/,
     'a cooldown skip must not count as a production release');
-  assert.doesNotMatch(workflow,/^\s+schedule:/m,
-    'live proof must not repeatedly benchmark stale production during quota cooldown');
+  assert.match(workflow,/^\s+schedule:/m,
+    'the public archive must still receive its hourly read-only production audit during quota cooldown');
+  assert.match(workflow,/cron: '43 \* \* \* \*'/);
+  assert.match(workflow,/SITE: https:\/\/spine-link\.vercel\.app/,
+    'scheduled audits must inspect the current public production alias');
+  assert.match(workflow,/github\.event_name != 'workflow_run'/,
+    'scheduled audits must run without pretending a deployment occurred');
+  assert.doesNotMatch(workflow,/\bvercel\s+(?:deploy|alias)\b/i,
+    'the hourly browser audit must never deploy or mutate production');
   assert.doesNotMatch(workflow,/^\s+push:/m,
     'live proof must not race the production deploy on main push');
   assert.match(workflow,/const img=document\.querySelector\('\.feed-card img'\)/,
