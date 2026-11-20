@@ -100,6 +100,16 @@ test('public works without media stay visible as blocked; test-only and hidden w
   }
 });
 
+test('exact PR preview probe supports Vercel protection bypass without logging the secret',()=>{
+  const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
+  assert.match(workflow,/VERCEL_AUTOMATION_BYPASS_SECRET: \\?\$\\?\{\{ secrets\\.VERCEL_AUTOMATION_BYPASS_SECRET \\?\}\}/);
+  assert.match(workflow,/x-vercel-protection-bypass/);
+  assert.match(workflow,/previewProtectionRedirect/);
+  assert.match(workflow,/finalHost=/);
+  assert.match(workflow,/PREVIEW_PROTECTED/);
+  assert.doesNotMatch(workflow,/console\\.log\\([^\\n]*bypassSecret/);
+});
+
 test('archive feed paginates without probing every media card, caches public responses',async()=>{
   const log=[];
   globalThis.fetch=stubFetch(log);

@@ -62,6 +62,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           node --input-type=module <<'NODE'
           import { appendFileSync } from 'node:fs';
@@ -71,6 +72,8 @@ jobs:
           const repository = process.env.GITHUB_REPOSITORY;
           const pullNumber = process.env.PR_NUMBER;
           const expectedSha = process.env.EXPECTED_SHA;
+          const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '';
+          const previewHeaders = bypassSecret ? { 'x-vercel-protection-bypass': bypassSecret } : {};
           const headers = {
             Accept: 'application/vnd.github+json',
             Authorization: 'Bearer ' + token,
@@ -104,15 +107,21 @@ jobs:
               let previewHttpStatus = 0;
               let previewRedirected = false;
               let previewFinalOriginMatches = true;
+              let previewFinalHost = '';
+              let previewProtectionRedirect = false;
               let hasArchivePaginationMarker = false;
               let hasDeferredVideoMetadata = false;
               try {
                 const response = await fetch(previewUrl.origin + '/world-spine-archive', {
+                  headers: previewHeaders,
                   signal: AbortSignal.timeout(20000),
                 });
                 previewHttpStatus = response.status;
                 previewRedirected = response.redirected;
-                previewFinalOriginMatches = new URL(response.url).origin === previewUrl.origin;
+                const finalUrl = new URL(response.url);
+                previewFinalHost = finalUrl.hostname.toLowerCase();
+                previewFinalOriginMatches = finalUrl.origin === previewUrl.origin;
+                previewProtectionRedirect = /(^|\\.)vercel\\.com$/i.test(previewFinalHost);
                 const html = await response.text();
                 hasArchivePaginationMarker = html.includes('id="archive-next-page"');
                 hasDeferredVideoMetadata = html.includes('data-video-src=');
@@ -121,7 +130,7 @@ jobs:
                 previewReady = response.ok && previewFinalOriginMatches && !previewRedirected &&
                   hasArchivePaginationMarker;
                 if (!previewReady) {
-                  previewBlocker = response.status === 401 || response.status === 403
+                  previewBlocker = response.status === 401 || response.status === 403 || previewProtectionRedirect
                     ? 'PREVIEW_PROTECTED'
                     : previewRedirected && !previewFinalOriginMatches
                       ? 'PREVIEW_REDIRECTED_AWAY'
@@ -138,6 +147,8 @@ jobs:
                   '; httpStatus=' + previewHttpStatus +
                   '; redirected=' + previewRedirected +
                   '; sameOrigin=' + previewFinalOriginMatches +
+                  '; finalHost=' + (previewFinalHost || 'unresolved') +
+                  '; bypassConfigured=' + Boolean(bypassSecret) +
                   '; archivePaginationMarker=' + hasArchivePaginationMarker +
                   '; deferredVideoMetadata=' + hasDeferredVideoMetadata +
                   '; continuing with production archive audit.');
