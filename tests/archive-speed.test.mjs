@@ -433,7 +433,10 @@ test('hourly archive proof traverses every public page and verifies media beyond
   assert.match(workflow,/if\(offset<40\)[\s\S]*route\.abort\(\)[\s\S]*allowedApiRequests\+\+[\s\S]*route\.continue\(\)/,
     'only the already embedded first 40 cards may avoid the paginated API');
   assert.match(workflow,/End of archive/);
-  assert.match(workflow,/assert\.equal\(allCards\.length,totalEntries/);
+  assert.match(workflow,/if\(allCards\.length!==totalEntries\)failures\.push\('archive-final-card-count-mismatch'\)/,
+    'a truncated archive must be recorded as a hard failure');
+  assert.match(workflow,/assert\.equal\(failures\.length,0/,
+    'recorded full-library audit failures must fail the job');
   assert.match(workflow,/ARCHIVE_ALL_PAGES_EVIDENCE/);
   assert.match(workflow,/probeWebm/);
   assert.match(workflow,/video\.readyState>=2/);

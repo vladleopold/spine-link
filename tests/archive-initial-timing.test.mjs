@@ -43,8 +43,10 @@ test('hourly production archive audit stays read-only during deployment cooldown
     'measure the first available poster, not an arbitrary later image');
   assert.match(workflow,/await page\.locator\('\.feed-card img'\)\.first\(\)\.evaluate\(img=>img\.decode\(\)\)/,
     'wait for actual browser image decoding');
-  assert.match(workflow,/assert\.ok\(initialPosterMs<=1000/,
-    'the one-second first-poster requirement must be a hard gate');
+  assert.match(workflow,/if\(initialPosterMs>1000\)failures\.push\('initial-poster-slow'\)/,
+    'the one-second first-poster requirement must add a hard failure');
+  assert.match(workflow,/assert\.equal\(failures\.length,0/,
+    'recorded browser audit failures must fail the job');
   assert.match(workflow,/responseStartMs:[\s\S]*posterEndMs:[\s\S]*posterTransferBytes:/,
     'capture navigation and poster network timings to isolate a regression');
   assert.match(workflow,/newest20Blocked/);
