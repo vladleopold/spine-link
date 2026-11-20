@@ -124,8 +124,9 @@ for (let attempt=0;attempt<7;attempt++) {
     ...(status === 'ready' ? {
       files:[...new Set([...(existing.files || []),...exported])],
       skeleton,atlas,textures,animations,
-      defaultAnimation:animations[0] || '',
-      webmStatus:'pending',dispatchStatus:'pending',
+      defaultAnimation:typeof existing.defaultAnimation==='string'?existing.defaultAnimation:'',
+      webmStatus:typeof existing.defaultAnimation==='string'&&existing.defaultAnimation.trim()?'pending':'blocked-no-default-animation',
+      dispatchStatus:typeof existing.defaultAnimation==='string'&&existing.defaultAnimation.trim()?'pending':'blocked',
     }:{}),
   };
   const indexBlob=await api('POST','/git/blobs',{

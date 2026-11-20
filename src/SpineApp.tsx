@@ -2522,11 +2522,9 @@ if (extensionOf(file.name) === "json" && text) {
         skeletonJson && typeof skeletonJson === "object" && "animations" in skeletonJson
           ? Object.keys((skeletonJson as { animations?: Record<string, unknown> }).animations ?? {})
           : [];
-      const defaultAnimation =
-        animationNames.find((animationName) => animationName.toLowerCase() === "idle") ??
-        animationNames.find((animationName) => animationName.toLowerCase().includes("idle")) ??
-        animationNames.find((animationName) => !animationName.toLowerCase().startsWith("eyes")) ??
-        animationNames[0];
+      // A new upload has no implicit default. The user chooses the exact
+      // animation from the list before any preview is generated or published.
+      const defaultAnimation = "";
       const skinNames = skinNamesFromSkeletonJson(skeletonJson);
       const defaultSkin = preferredSkinName(skinNames);
       const skeletonBounds =
@@ -2687,6 +2685,19 @@ function setPlayerTrackLoop(player: SpinePlayerInstance | null, isLoopEnabled: b
 function disablePlayerMix(player: SpinePlayerInstance | null) {
   const animationStateData = (player as PlayerWithLoopControls | null)?.animationState?.data;
   if (animationStateData) animationStateData.defaultMix = 0;
+}
+
+function clearPlayerAnimation(player: SpinePlayerInstance | null) {
+  if (!player) return;
+  const target = player as unknown as {
+    animationState?: { clearTracks?: () => void };
+    skeleton?: { setToSetupPose?: () => void; updateWorldTransform?: () => void };
+    pause?: () => void;
+  };
+  target.animationState?.clearTracks?.();
+  target.skeleton?.setToSetupPose?.();
+  target.skeleton?.updateWorldTransform?.();
+  target.pause?.();
 }
 
 function playAnimationWithLoopMode(player: SpinePlayerInstance | null, animationName: string, isLoopEnabled: boolean, isLoopEnabledNow: () => boolean) {
@@ -2902,7 +2913,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const zoomRef = useRef(1);
   const loopEnabledRef = useRef(true);
   const activeAnimationRef = useRef("");
-  const animationsRef = useRef<string[]>([]);
   const preparedSpineRef = useRef<PreparedSpine | null>(null);
   const initialOpenLibraryRef = useRef(initialOpenLibrary);
   const initialLoginRef = useRef(initialLogin);
@@ -3642,41 +3652,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     setSelectedCardSize(currentLibraryEntry.cardSize || "auto");
   }, [currentLibraryEntry]);
 
-  // Automatic preview fallback after publish/save.
-  //
-  // A work's "main" preview is the one for defaultAnimation. When that
-  // animation's preview is a 1-3 frame clip (an `idle` that is a single held
-  // frame) the moving thumbnail is effectively a still image. After every
-  // publish the work is re-checked: if the chosen preview is shorter than 2 s
-  // and another animation in the same skeleton has a long-enough preview, the
-  // work is re-published with that animation as defaultAnimation. This runs
-  // automatically — no user action, no confirmation.
   useEffect(() => {
-    if (!currentLibraryEntry || !preparedSpine) return;
-    if (isPublishingLink) return;
-    const previews = currentLibraryEntry.allAnimationPreviews;
-    if (!previews || !Object.keys(previews).length) return;
-    const animations = Array.isArray(currentLibraryEntry.animations) && currentLibraryEntry.animations.length
-      ? currentLibraryEntry.animations
-      : Object.keys(previews);
-    const chosen = String(currentLibraryEntry.defaultAnimation || '').trim();
-    const chosenDur = previews[chosen] ? Number(previews[chosen].previewDuration) : NaN;
-    if (Number.isFinite(chosenDur) && chosenDur >= 2) return;
-    const fallback = animations.find((a) => {
-      const d = previews[a] ? Number(previews[a].previewDuration) : NaN;
-      return Number.isFinite(d) && d >= 2;
-    });
-    if (!fallback || fallback === chosen) return;
-    const active = activeAnimation || preparedSpine.defaultAnimation || animations[0] || "";
-    void publishToGitHub(preparedSpine, animations, fallback);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentLibraryEntry?.id]);
-
-  useEffect(() => {
-    animationsRef.current = animations;
-  }, [animations]);
-
-  useEffect(() => {
+    preparedSpineRef.current = preparedSpine;  useEffect(() => {
     preparedSpineRef.current = preparedSpine;
   }, [preparedSpine]);
 
@@ -3758,13 +3735,18 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   }, []);
 
   const playActiveAnimationFromStart = useCallback(() => {
-    const animationName = activeAnimationRef.current || preparedSpineRef.current?.defaultAnimation || animationsRef.current[0] || "";
+    const animationName = activeAnimationRef.current || preparedSpineRef.current?.defaultAnimation || "";
+    if (!animationName) {
+      setError("No animation selected.");
+      setStatus("Select an animation from the list.");
+      return;
+    }
     if (playAnimationWithLoopMode(playerRef.current, animationName, loopEnabledRef.current, () => loopEnabledRef.current)) {
       setActiveAnimation(animationName);
       setError("");
-    } else if (animationName) {
-      setError(`Animation bounds are invalid: ${animationName}.`);
-      setStatus("Choose another animation.");
+    } else {
+      setError("Selected animation failed to render.");
+      setStatus("Preview blocked. No alternate animation was selected.");
     }
   }, []);
 
@@ -3861,8 +3843,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           const nextSpineOptions = await loadFiles(Array.from(fileList));
           const nextSpine = chooseInitialSet(nextSpineOptions);
           if (!nextSpine) throw new Error("Could not create an extra player from these files.");
-          const nextAnimations = nextSpine.animations.length ? nextSpine.animations : [nextSpine.defaultAnimation || "animation"].filter(Boolean);
-          const nextActiveAnimation = nextSpine.defaultAnimation && nextAnimations.includes(nextSpine.defaultAnimation) ? nextSpine.defaultAnimation : nextAnimations[0] || "";
+          const nextAnimations = nextSpine.animations;
+          const nextActiveAnimation = nextSpine.defaultAnimation || "";
           setExtraSpineSets((currentSets) => [
             ...currentSets,
             {
@@ -4053,7 +4035,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           atlas: prepared.atlasName,
           atlasUrl: prepared.atlasName,
           rawDataURIs: prepared.rawDataURIs,
-          animation: extraSet?.activeAnimation || prepared.defaultAnimation,
+          animation: "",
           ...(prepared.defaultSkin ? { skin: prepared.defaultSkin } : {}),
           premultipliedAlpha: prepared.premultipliedAlpha,
           showControls: true,
@@ -4061,6 +4043,22 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           alpha: true,
           preserveDrawingBuffer: true,
           backgroundColor: "00000000",
+          success: (player: SpinePlayerInstance) => {
+            clearPlayerAnimation(player);
+            const requestedAnimation = typeof extraSet?.activeAnimation === "string" ? extraSet.activeAnimation : "";
+            if (!requestedAnimation) return;
+            const names = player.skeleton?.data.animations.map((animation: { name: string }) => animation.name) ?? [];
+            if (!names.includes(requestedAnimation)) {
+              setStatus("Extra player preview blocked: selected animation unavailable; no alternate animation was selected.");
+              return;
+            }
+            try {
+              player.setAnimation(requestedAnimation, true);
+              player.play();
+            } catch {
+              setStatus("Extra player preview blocked: selected animation failed; no alternate animation was selected.");
+            }
+          },
         } as unknown as SpinePlayerConfig);
         mountedPlayers.push(player as unknown as SpinePlayerInstance);
       }
@@ -4169,7 +4167,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       atlas: configuredSpine.atlasName,
       atlasUrl: configuredSpine.atlasName,
       rawDataURIs: configuredSpine.rawDataURIs,
-      animation: configuredSpine.defaultAnimation,
+      animation: "",
       ...(configuredSpine.defaultSkin ? { skin: configuredSpine.defaultSkin } : {}),
       premultipliedAlpha: configuredSpine.premultipliedAlpha,
       showControls: true,
@@ -4186,28 +4184,30 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       },
       success: (player: SpinePlayerInstance) => {
         const names = player.skeleton?.data.animations.map((animation: { name: string }) => animation.name) ?? [];
-        const initialAnimation = configuredSpine.defaultAnimation && names.includes(configuredSpine.defaultAnimation) ? configuredSpine.defaultAnimation : names[0];
-        const playableAnimation =
-          initialAnimation && playAnimationWithLoopMode(player, initialAnimation, loopEnabledRef.current, () => loopEnabledRef.current)
-            ? initialAnimation
-            : names.find((animationName: string) => playAnimationWithLoopMode(player, animationName, loopEnabledRef.current, () => loopEnabledRef.current));
+        const requestedAnimation = typeof configuredSpine.defaultAnimation === "string" ? configuredSpine.defaultAnimation : "";
+        clearPlayerAnimation(player);
         setAnimations(names);
-        setActiveAnimation(playableAnimation ?? initialAnimation ?? "");
-        if (playableAnimation) {
-          installLoopButton(player, loopEnabledRef.current, toggleLoopEnabled, playActiveAnimationFromStart);
-          rememberCurrentViewport();
-          applyZoomToPlayer(zoomRef.current, false);
-          if (!currentLibraryEntry) void publishToGitHub(configuredSpine, names, playableAnimation);
-        } else if (initialAnimation) {
-          setError(`Animation bounds are invalid: ${initialAnimation}.`);
+        setActiveAnimation(requestedAnimation);
+        installLoopButton(player, loopEnabledRef.current, toggleLoopEnabled, playActiveAnimationFromStart);
+        rememberCurrentViewport();
+        applyZoomToPlayer(zoomRef.current, false);
+        if (!requestedAnimation) {
+          setStatus(`Ready. Animations found: ${names.length}. Select an animation to preview and save.`);
+          return;
         }
-        setStatus(
-          playableAnimation
-            ? `Ready. Animations found: ${names.length}. Creating permanent link...`
-            : names.length
-              ? "Ready, but the available animations have invalid bounds."
-            : "Ready, but the animation list is empty.",
-        );
+        if (!names.includes(requestedAnimation)) {
+          setError("Selected animation is unavailable.");
+          setStatus("Preview blocked. The selected animation is unavailable; no alternate animation was selected.");
+          return;
+        }
+        if (!playAnimationWithLoopMode(player, requestedAnimation, loopEnabledRef.current, () => loopEnabledRef.current)) {
+          setError("Selected animation failed to render.");
+          setStatus("Preview blocked. The selected animation failed to render; no alternate animation was selected.");
+          return;
+        }
+        setError("");
+        if (!currentLibraryEntry) void publishToGitHub(configuredSpine, names, requestedAnimation);
+        setStatus(`Ready. Animations found: ${names.length}. Creating permanent link...`);
       },
       error: (_player: SpinePlayerInstance, message: unknown) => {
         const runtimeMessage = message as unknown;
@@ -5384,7 +5384,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             atlas: prepared.atlasName,
             atlasUrl: prepared.atlasName,
             rawDataURIs: prepared.rawDataURIs,
-            animation: prepared.defaultAnimation,
+            animation: "",
             ...(prepared.defaultSkin ? { skin: prepared.defaultSkin } : {}),
             premultipliedAlpha: prepared.premultipliedAlpha,
             showControls: true,
@@ -5402,12 +5402,21 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             success: (player: SpinePlayerInstance) => {
               if (cancelled) return;
               const names = player.skeleton?.data.animations.map((a: { name: string }) => a.name) ?? [];
-              const initial = prepared.defaultAnimation && names.includes(prepared.defaultAnimation) ? prepared.defaultAnimation : names[0];
+              const requestedAnimation = typeof prepared.defaultAnimation === "string" ? prepared.defaultAnimation : "";
+              clearPlayerAnimation(player);
               setModalAnimations(names);
-              setModalActiveAnimation(initial || "");
+              setModalActiveAnimation(requestedAnimation);
               setModalIsLoading(false);
-              if (initial) {
-                try { player.setAnimation(initial, true); player.play(); } catch {}
+              if (!requestedAnimation) return;
+              if (!names.includes(requestedAnimation)) {
+                setModalError("Selected animation is unavailable. Preview blocked; no alternate animation was selected.");
+                return;
+              }
+              try {
+                player.setAnimation(requestedAnimation, true);
+                player.play();
+              } catch {
+                setModalError("Selected animation failed to render. Preview blocked; no alternate animation was selected.");
               }
             },
             error: (_player: SpinePlayerInstance, message: unknown) => {
@@ -5465,6 +5474,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     value={modalActiveAnimation}
                     onChange={(e) => playModalAnimation(e.target.value)}
                   >
+                    <option value="">Select animation</option>
                     {modalAnimations.map((name) => (
                       <option key={name} value={name}>{name}</option>
                     ))}
@@ -5861,6 +5871,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                     value={extraSet.activeAnimation}
                     onChange={(event) => updateExtraPlayerAnimation(extraSet.id, event.target.value)}
                   >
+                    <option value="">Select animation</option>
                     {extraSet.animations.map((animationName) => (
                       <option key={animationName} value={animationName}>
                         {animationName}

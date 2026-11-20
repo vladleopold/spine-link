@@ -415,13 +415,19 @@ function sanitizedSkelBuffer(buffer, version = "") {
 const skeletonFilePath = path.join(firstSet.path, skeletonFile);
 const skeletonVersion = detectSkeletonVersion(skeletonFilePath);
 const skeletonBounds = readSkeletonBounds(skeletonFilePath);
-let targetAnimation = args.animation || entry.defaultAnimation || '';
+const requestedAnimation = args.animation !== ''
+  ? args.animation
+  : (typeof entry.defaultAnimation === 'string' ? entry.defaultAnimation : '');
 const availableAnimations = readAnimationNames(skeletonFilePath);
-if (availableAnimations.length > 0) {
-  if (!targetAnimation || !availableAnimations.includes(targetAnimation)) {
-    targetAnimation = availableAnimations[0] || '';
-  }
+if (!requestedAnimation.trim()) {
+  console.error('NO_DEFAULT_SPINE_ANIMATION');
+  process.exit(1);
 }
+if (availableAnimations.length > 0 && !availableAnimations.includes(requestedAnimation)) {
+  console.error('SELECTED_SPINE_ANIMATION_UNAVAILABLE');
+  process.exit(1);
+}
+const targetAnimation = requestedAnimation;
 
 // --- Calculate dynamic video dimensions from skeleton bounds ---
 const PAD_RATIO = 0.14; // 14% padding on each side
@@ -514,32 +520,17 @@ const atlasLocalPath = path.join(firstSet.path, atlasFile);
 let atlasContent = fs.readFileSync(atlasLocalPath, 'utf8');
 atlasContent = atlasContent.replace(/^\.\.[\/\\]textures[\/\\]/gm, '');
 
-const isDefault = args.animation && args.defaultAnimation && args.animation === args.defaultAnimation;
+const isDefault = targetAnimation === (typeof entry.defaultAnimation === 'string' ? entry.defaultAnimation : '');
 
-console.error(`Entry: ${args.uploadId}`);
-console.error(`Set: ${firstSet.name}`);
-console.error(`Skeleton: ${skeletonFile} (v${skeletonVersion})`);
-console.error(`Skeleton bounds: ${rawSkelWidth}x${rawSkelHeight}`);
-console.error(`Video dimensions: ${videoWidth}x${videoHeight} (from bounds + ${PAD_RATIO * 100}% padding)`);
-console.error(`Atlas: ${atlasFile}`);
-// Works that ship begin/end (or in/out) plus idle are recorded as a loop of the
-// whole scenario, so the preview video shows the same cycle the player runs.
-const animationToken = (name) => String(name || '').trim().toLowerCase().split('/').pop();
-const tokenIndex = new Map();
-for (const name of availableAnimations) {
-  const token = animationToken(name);
-  if (token && !tokenIndex.has(token)) tokenIndex.set(token, name);
-}
-const scenarioEntry = tokenIndex.has('in') ? tokenIndex.get('in') : tokenIndex.get('begin');
-const scenarioExit = tokenIndex.has('out') ? tokenIndex.get('out') : tokenIndex.get('end');
-const scenarioIdle = tokenIndex.has('idle') ? tokenIndex.get('idle') : tokenIndex.get('loop');
-const scenarioCycle = scenarioEntry && scenarioExit ? [scenarioEntry, scenarioIdle, scenarioIdle, scenarioExit].filter(Boolean) : [];
-const captureAnimation = scenarioCycle.length > 1 ? scenarioCycle[0] : targetAnimation;
-if (scenarioCycle.length > 1) {
-  console.error(`Scenario: ${scenarioCycle.join(' -> ')} (запись превью по кругу)`);
-}
-console.error(`Animation: ${captureAnimation}`);
-console.error(`Is default: ${isDefault}`);
+console.error('Entry source resolved.');
+console.error('Source set resolved.');
+console.error(`Skeleton source resolved (Spine ${skeletonVersion}).`);
+console.error(`Skeleton bounds: ${rawSkelWidth}x${rawSkelHeight}.`);
+console.error(`Video dimensions: ${videoWidth}x${videoHeight}.`);
+console.error('Atlas source resolved.');
+const captureAnimation = targetAnimation;
+console.error('Selected animation pinned; alternate tracks are disabled.');
+console.error(`Is default: ${isDefault}`);console.error(`Is default: ${isDefault}`);
 
 // Capture page builder. activeSkin selects the Spine skin to render; when
 // null the player default is used. Some skeletons draw nothing with the
@@ -568,9 +559,8 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
   window.__ready = false;
 
   var player;
-  // Peak brightness of the currently rendered frame (center sample).
-  // Used by the exporter to detect "rendered nothing but background" and
-  // fall back to another skin. Requires preserveDrawingBuffer (set below).
+  // Peak brightness detects a blank source render. It never selects another
+  // animation or skin. Requires preserveDrawingBuffer (set below).
   window.__framePeak = function () {
     try {
       var c = player && player.canvas;
@@ -595,9 +585,7 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
     ${isLegacy ? (skeletonKey === 'skelUrl' ? `skelUrl: '${skeletonRawUrl}'` : `jsonUrl: '${skeletonRawUrl}'`) : (skeletonKey === 'skelUrl' ? `skelUrl: '${skeletonRawUrl}'` : `skeleton: '${skeletonRawUrl}'`)},
     ${isLegacy ? `atlasUrl: '${atlasRawUrl}'` : `atlas: '${atlasRawUrl}'`},
     textures: ${JSON.stringify(textureRawUrls)},
-    animation: '${captureAnimation}',
-    scenario: ${JSON.stringify(scenarioCycle)},
-    __spineScenario: ${JSON.stringify(scenarioCycle)},
+    animation: ${JSON.stringify(captureAnimation)},
 ${skinLine}    showLoading: false,
     premultipliedAlpha: false,
     preserveDrawingBuffer: true,
@@ -606,35 +594,21 @@ ${skinLine}    showLoading: false,
     viewport: { padLeft: '0%', padRight: '0%', padTop: '0%', padBottom: '0%' },
     success: function (p) {
       player = p;
+      var runtimeData = player.skeleton && player.skeleton.data || player.skeletonData;
+      var runtimeAnimations = runtimeData && runtimeData.animations
+        ? runtimeData.animations.map(function (animation) { return animation.name; })
+        : [];
+      window.__selectedAnimation = ${JSON.stringify(captureAnimation)};
+      if (runtimeAnimations.indexOf(window.__selectedAnimation) === -1) {
+        window.__captureError = 'SELECTED_SPINE_ANIMATION_UNAVAILABLE';
+        return;
+      }
       window.__ready = true;
       window.__canvasWidth = player.canvas ? player.canvas.width : 0;
       window.__canvasHeight = player.canvas ? player.canvas.height : 0;
-      
-      // begin -> idle -> idle -> end, on repeat, so the recorded preview shows the
-      // same loop the player plays on the work page.
-      try {
-        var cycle = Array.isArray(window.__spineScenario) ? window.__spineScenario : [];
-        if (cycle.length > 1 && player.animationState) {
-          var mixed = 0;
-          cycle.forEach(function (name, i) {
-            if (i === 0) player.setAnimation(0, name, true);
-            else player.animationState.addAnimation(0, name, true, mixed);
-          });
-          var state = player.animationState;
-          var originalSetAnimation = state.setAnimation.bind(state);
-          state.setAnimation = function (trackIndex, name, loop) {
-            var entry = originalSetAnimation(trackIndex, name, loop);
-            // Keep the cycle running: when it ends, restart from the first step.
-            var current = state.getCurrent(0);
-            if (current && !current.next) {
-              current.next = { animation: cycle[0], delay: 0, loop: true, mixDuration: mixed, mixTime: mixed };
-            }
-            return entry;
-          };
-        }
-      } catch (e) {}
 
       try {
+        var track = player.animationState ? player.animationState.getCurrent(0) : null;      try {
         var track = player.animationState ? player.animationState.getCurrent(0) : null;
         if (track && track.animation && typeof track.animation.duration === 'number') {
           window.__animDuration = track.animation.duration;
@@ -782,14 +756,10 @@ try {
       });
     });
   }
-  // Skin fallback: the player default skin sometimes renders nothing but the
-  // background (e.g. a skeleton whose visible attachments live on a named
-  // skin). Capture with the default first to preserve existing renders,
-  // then retry with each named non-default skin until a frame shows content.
+  // Preserve the source skin and layers. A blank default-skin render is blocked;
+  // named skins are never substituted.
   const FRAME_PEAK_MIN = 40;
-  const skinNames = readSkinNames(skeletonFilePath);
-  const skinCandidates = [null, ...skinNames.filter((s) => s && s.toLowerCase() !== 'default')];
-  console.error(`Skin candidates: ${JSON.stringify(skinCandidates)}`);
+  const skinCandidates = Object.freeze([null]);
 
   let chosenSkin = null;
   let animDuration = 0;
@@ -811,9 +781,9 @@ try {
     }
     const error = ready ? await page.evaluate(() => window.__captureError || null) : 'Timed out waiting for player ready';
     if (error) {
-      lastCaptureError = error;
-      console.error(`Capture with skin ${label} failed: ${error}`);
-      break; // player/skeleton broken — another skin will not fix it
+      lastCaptureError = 'SELECTED_SPINE_ANIMATION_UNAVAILABLE_OR_RENDER_FAILED';
+      console.error('Capture blocked for the exact selected animation and source skin.');
+      break;
     }
 
     animDuration = await page.evaluate(() => window.__animDuration || 0);
@@ -826,7 +796,7 @@ try {
     if (effectiveDuration <= 0 && targetAnimation) {
       const fallbackDuration = readJsonAnimationDuration(skeletonFilePath, targetAnimation);
       if (fallbackDuration > 0) {
-        console.error(`Player reported duration=0, using JSON timeline max time=${fallbackDuration}s for '${targetAnimation}'`);
+        console.error(`Player reported duration=0; using selected animation timeline max time=${fallbackDuration}s.`);
         effectiveDuration = fallbackDuration;
       }
     }
@@ -867,19 +837,7 @@ try {
       break;
     }
 
-    // A scenario is recorded in full: every step plays once, back to back.
-    if (scenarioCycle.length > 1) {
-      let scenarioDuration = 0;
-      for (const stepName of scenarioCycle) {
-        const stepDuration = readJsonAnimationDuration(skeletonFilePath, stepName);
-        scenarioDuration += stepDuration > 0 ? stepDuration : effectiveDuration;
-      }
-      if (scenarioDuration > 0) {
-        captureDuration = scenarioDuration;
-        console.error(`Scenario duration: ${scenarioDuration.toFixed(2)}s (${scenarioCycle.join(' + ')})`);
-      }
-    }
-    if (captureDuration <= 0) captureDuration = effectiveDuration > 0 ? effectiveDuration : 1; // Record exactly the animation duration (no artificial minimum)
+    if (captureDuration <= 0)    if (captureDuration <= 0) captureDuration = effectiveDuration > 0 ? effectiveDuration : 1; // Record exactly the animation duration (no artificial minimum)
     await new Promise((resolve) => setTimeout(resolve, captureDuration * 1000));
 
     await page.evaluate(() => {
@@ -926,7 +884,7 @@ try {
   fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
   fs.copyFileSync(videoPath, outputPath);
 
-  console.error(`WebM saved: ${outputPath} (${webmBuffer.length} bytes, ${canvasWidth}x${canvasHeight})`);
+  console.error(`WebM saved (${webmBuffer.length} bytes, ${canvasWidth}x${canvasHeight}).`);
 
   // MediaRecorder can start before the first real frame lands on the canvas,
   // and the amount of leading black it captures varies per run (7 frames for

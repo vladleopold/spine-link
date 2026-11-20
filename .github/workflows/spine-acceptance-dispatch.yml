@@ -4,14 +4,24 @@ on:
     branches: [fix/preview-dispatch-and-file-acceptance-20261118]
     paths:
       - api/github-upload.js
-      - lib/runtime-acceptance.js
+      - lib/agent-animation.js
+      - lib/spine-data-science.js
+      - scripts/spine-export-webm.mjs
+      - scripts/spine-project-cloud-export.mjs
+      - src/SpineApp.tsx
       - tests/runtime-acceptance.test.mjs
+      - tests/no-animation-fallback.test.mjs
       - .github/workflows/spine-acceptance-dispatch.yml
   pull_request:
     paths:
       - api/github-upload.js
-      - lib/runtime-acceptance.js
+      - lib/agent-animation.js
+      - lib/spine-data-science.js
+      - scripts/spine-export-webm.mjs
+      - scripts/spine-project-cloud-export.mjs
+      - src/SpineApp.tsx
       - tests/runtime-acceptance.test.mjs
+      - tests/no-animation-fallback.test.mjs
       - .github/workflows/spine-acceptance-dispatch.yml
 permissions:
   contents: read
@@ -26,7 +36,12 @@ jobs:
       - name: Require real source triad, reject orphan skeleton and unsafe paths
         run: |
           node --check api/github-upload.js
+          node --check lib/agent-animation.js
+          node --check lib/spine-data-science.js
+          node --check scripts/spine-export-webm.mjs
+          node --check scripts/spine-project-cloud-export.mjs
           node tests/runtime-acceptance.test.mjs
+          node tests/no-animation-fallback.test.mjs
       - name: Confirm preview dispatch cannot be orphaned after serverless exit
         run: |
           node --input-type=module <<'JS'

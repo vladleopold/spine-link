@@ -435,7 +435,8 @@ async function dispatchSpineProjectExport(settings, entry, origin) {
 async function dispatchSpineExportWebm(settings, entry, origin) {
   const id = String(entry?.id || '').trim();
   if (!id) return null;
-  const defaultAnimation = String(entry?.defaultAnimation || (Array.isArray(entry?.animations) ? entry.animations[0] : '') || '').trim();
+  const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+  if (!defaultAnimation.trim()) return { status: 'blocked', error: 'NO_DEFAULT_SPINE_ANIMATION' };
   const animations = Array.isArray(entry?.animations) ? entry.animations : [];
   try {
     const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
