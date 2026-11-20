@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { findMatchingVercelProject } from '../scripts/resolve-vercel-preview-comment.mjs';
 
@@ -28,6 +31,10 @@ test('hourly production archive audit stays read-only during deployment cooldown
     'scheduled audits must inspect the current public production alias');
   assert.match(workflow,/github\.event_name != 'workflow_run'/,
     'scheduled audits must run without pretending a deployment occurred');
+  assert.ok(workflow.includes("if(/\\.webp(?:\\?|$)/i.test(url))"),
+    'poster HTTP monitoring must match real WebP URLs, not a literal backslash');
+  assert.ok(workflow.includes("if(/\\.(?:webm|webp)(?:\\?|$)/i.test(url)"),
+    'asset HTTP monitoring must match actual media extensions');
   assert.doesNotMatch(workflow,/^\s+run:\s*vercel\s+(?:deploy|alias)\b/im,
     'the hourly browser audit must never deploy or mutate production');
   assert.doesNotMatch(workflow,/^\s+push:/m,
@@ -141,4 +148,21 @@ test('PR live proof uses only the successful Vercel preview for the exact head S
   assert.ok(resolverStep.includes("includes('build-rate-limit')") &&
     resolverStep.includes('VERCEL_PREVIEW_BLOCKED='),
     'report the Vercel quota blocker instead of a misleading five-minute timeout');
+});
+
+
+test('hourly archive browser scripts are syntax-checked without a Vercel preview',()=>{
+  const blocks=[...workflow.matchAll(/node --input-type=module <<'NODE'\r?\n([\s\S]*?)\r?\n\s+NODE/g)];
+  assert.equal(blocks.length,2,'both preview resolver and full-library browser script must be present');
+  const directory=mkdtempSync(join(tmpdir(),'spine-archive-live-'));
+  try{
+    for(let index=0;index<blocks.length;index++){
+      const source=blocks[index][1].split(/\r?\n/).map(line=>line.startsWith('          ')?line.slice(10):line).join('\n')+'\n';
+      const path=join(directory,'workflow-'+index+'.mjs');
+      writeFileSync(path,source);
+      execFileSync(process.execPath,['--check',path],{stdio:'pipe'});
+    }
+  }finally{
+    rmSync(directory,{recursive:true,force:true});
+  }
 });
