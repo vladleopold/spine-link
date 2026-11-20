@@ -102,6 +102,12 @@ jobs:
               console.log('VERCEL_PREVIEW_READY=' + previewUrl.origin);
               process.exit(0);
             }
+            if (vercelStatus?.state === 'failure' && vercelStatus?.target_url) {
+              const failureCode = vercelStatus.target_url.includes('build-rate-limit')
+                ? 'BUILD_RATE_LIMIT'
+                : 'DEPLOYMENT_FAILED';
+              throw new Error('VERCEL_PREVIEW_BLOCKED=' + failureCode + ' SHA=' + expectedSha);
+            }
             if (vercelStatus?.target_url && inspector === vercelStatus.target_url && deploymentStatus === 'ERROR') {
               throw new Error('Vercel preview deployment failed for this PR commit');
             }

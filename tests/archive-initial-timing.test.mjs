@@ -109,4 +109,9 @@ test('PR live proof uses only the successful Vercel preview for the exact head S
     'the Playwright container does not include the GitHub CLI');
   assert.ok(resolverStep.includes('api.github.com'),
     'the resolver must read Vercel status and comments through the GitHub API');
+  assert.ok(resolverStep.includes("vercelStatus?.state === 'failure'"),
+    'an explicit failed Vercel status for the exact head SHA must stop polling immediately');
+  assert.ok(resolverStep.includes("includes('build-rate-limit')") &&
+    resolverStep.includes('VERCEL_PREVIEW_BLOCKED='),
+    'report the Vercel quota blocker instead of a misleading five-minute timeout');
 });
