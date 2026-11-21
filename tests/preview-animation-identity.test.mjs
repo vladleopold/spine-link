@@ -17,7 +17,9 @@ test('atlas page matching never accepts a suffix-only texture filename', () => {
   const real = { name: 'character.png', path: 'work/character.png' };
   const suffixOnly = { name: 'other-character.png', path: 'work/other-character.png' };
   assert.deepEqual(matchAtlasPageTextures(['character.png'], [real], exact), [real]);
-  assert.equal(matchAtlasPageTextures(['character.png'], [suffixOnly], exact), null,
+  assert.equal(matchAtlasPageTextures(['character.png'], [
+    suffixOnly, { name: 'unrelated.png', path: 'work/unrelated.png' },
+  ], exact), null,
     'a similar suffix is not proof that the source texture is the atlas page');
 });
 
