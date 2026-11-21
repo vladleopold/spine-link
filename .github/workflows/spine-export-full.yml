@@ -467,48 +467,28 @@ jobs:
                 }
               }
 
-              const hasExports = Object.keys(allAnimPreviews).length > 0;
-
-              // Work-level preview duration: the duration of the animation the
-              // work is currently presenting (defaultAnimation). The page
-              // renderer uses this to decide whether the chosen preview is
-              // long enough, or whether to fall back to another animation's
-              // preview that is.
-              const chosenAnim = String(indexData[entryIndex]?.defaultAnimation || '').trim();
-              const chosenPreview = allAnimPreviews[chosenAnim];
+              // Preserve the exact indexed animation. Other exported tracks are
+              // metadata only; they must never replace the selected preview.
+              const chosenAnim = typeof indexData[entryIndex]?.defaultAnimation === 'string'
+                ? indexData[entryIndex].defaultAnimation
+                : '';
+              const chosenPreview = chosenAnim ? allAnimPreviews[chosenAnim] : null;
               const chosenDuration = chosenPreview ? Number(chosenPreview.previewDuration) : NaN;
-
-              // Automatic preview fallback — runs after every full export, so
-              // it works for both freshly created pages and existing ones.
-              // A work's main preview is the one for defaultAnimation. When
-              // that animation's preview is a 1–3 frame clip (an idle that is
-              // a single held frame) the moving thumbnail is effectively a
-              // still image, so the site silently re-points defaultAnimation at
-              // the first animation whose preview is long enough (>= 2 s).
-              // Declaration order is preserved; the first long-enough win.
-              const animOrder = Array.isArray(indexData[entryIndex]?.animations) && indexData[entryIndex].animations.length
-                ? indexData[entryIndex].animations
-                : Object.keys(allAnimPreviews);
-              let effectiveDefault = chosenAnim && animOrder.includes(chosenAnim) ? chosenAnim : (animOrder[0] || '');
-              if (effectiveDefault) {
-                const effDur = allAnimPreviews[effectiveDefault] ? Number(allAnimPreviews[effectiveDefault].previewDuration) : NaN;
-                if (!(Number.isFinite(effDur) && effDur >= 2)) {
-                  for (const a of animOrder) {
-                    const d = allAnimPreviews[a] ? Number(allAnimPreviews[a].previewDuration) : NaN;
-                    if (Number.isFinite(d) && d >= 2) { effectiveDefault = a; break; }
-                  }
-                }
-              }
-              const effectivePreview = allAnimPreviews[effectiveDefault] || chosenPreview;
-              const effectiveDuration = effectivePreview ? Number(effectivePreview.previewDuration) : NaN;
+              const hasChosenExport = Boolean(chosenPreview);
+              const blockedStatus = chosenAnim
+                ? 'blocked-selected-animation-preview-missing'
+                : 'blocked-missing-animation-selection';
 
               indexData[entryIndex] = {
                 ...indexData[entryIndex],
                 allAnimationPreviews: allAnimPreviews,
-                ...(effectiveDefault && effectiveDefault !== chosenAnim ? { defaultAnimation: effectiveDefault } : {}),
-                previewDuration: Number.isFinite(effectiveDuration) && effectiveDuration > 0 ? effectiveDuration : undefined,
-                fullExportStatus: hasExports ? 'ready' : 'failed',
+                previewDuration: Number.isFinite(chosenDuration) && chosenDuration > 0 ? chosenDuration : undefined,
+                fullExportStatus: hasChosenExport ? 'ready' : 'failed',
                 fullExportGeneratedAt: new Date().toISOString(),
+                ...(hasChosenExport ? {} : {
+                  previewStatus: 'blocked',
+                  webmStatus: blockedStatus,
+                }),
               };
 
               fs.writeFileSync(indexPath, JSON.stringify(indexData, null, 2));
