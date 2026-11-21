@@ -5,6 +5,7 @@ on:
     paths:
       - api/github-archive.js
       - api/github-preview.js
+      - api/github-upload.js
       - tests/preview-animation-identity.test.mjs
       - tests/animation-menu-scroll.test.mjs
       - tests/archive-speed.test.mjs
@@ -30,6 +31,7 @@ on:
     paths:
       - api/github-archive.js
       - api/github-preview.js
+      - api/github-upload.js
       - tests/preview-animation-identity.test.mjs
       - tests/animation-menu-scroll.test.mjs
       - tests/archive-speed.test.mjs
