@@ -14,28 +14,42 @@ test('initial archive poster timing excludes intentional prefetch warm-up', () =
   assert.ok(!workflow.includes('initialMs:Date.now()-started'), 'old inflated metric must not return');
 });
 
-test('first available archive poster decodes within one second after a real deployment', () => {
-  assert.match(workflow,/release_gate:/,
-    'live proof must have a deployment gate');
+test('hourly archive audit is deployment-gated for deploy events and still checks production on schedule', () => {
+  assert.match(workflow,/schedule:\\s*\\n\\s+- cron:\\s*'17 \\* \\* \\* \\*'/,
+    'the full archive must be checked hourly without triggering a deployment');
+  assert.match(workflow,/workflow_run:/);
+  assert.match(workflow,/release_gate:/);
   assert.match(workflow,/Deploy to Vercel/);
-  assert.match(workflow,/needs\.release_gate\.outputs\.deployed == 'true'/,
-    'a cooldown skip must not count as a production release');
-  assert.doesNotMatch(workflow,/^\s+schedule:/m,
-    'live proof must not repeatedly benchmark stale production during quota cooldown');
-  assert.doesNotMatch(workflow,/^\s+push:/m,
+  assert.match(workflow,/needs\\.release_gate\\.outputs\\.deployed == 'true'/,
+    'a workflow_run cooldown skip must not count as a production release');
+  assert.match(workflow,/github\\.event_name != 'workflow_run'/,
+    'scheduled audits must run independently of deployment events');
+  assert.doesNotMatch(workflow,/^\\s+push:/m,
     'live proof must not race the production deploy on main push');
-  assert.match(workflow,/const img=document\.querySelector\('\.feed-card img'\)/,
+  assert.match(workflow,/const img=document\\.querySelector\\('\\.feed-card img'\\)/,
     'measure the first available poster, not an arbitrary later image');
-  assert.match(workflow,/await page\.locator\('\.feed-card img'\)\.first\(\)\.evaluate\(img=>img\.decode\(\)\)/,
+  assert.match(workflow,/await page\\.locator\\('\\.feed-card img'\\)\\.first\\(\\)\\.evaluate\\(img=>img\\.decode\\(\\)\\)/,
     'wait for actual browser image decoding');
-  assert.match(workflow,/assert\.ok\(initialPosterMs<=1000/,
-    'the one-second first-poster requirement must be a hard gate');
-  assert.match(workflow,/responseStartMs:[\s\S]*posterEndMs:[\s\S]*posterTransferBytes:/,
-    'capture navigation and poster network timings to isolate a regression');
-  assert.match(workflow,/newest20Blocked/);
-  assert.match(workflow,/newest20UnexpectedMissing/);
-  assert.match(workflow,/Every newest-20 missing preview must have an explicit blocked status/);
-  assert.doesNotMatch(workflow,/older20Missing\.map\(x=>x\.id\)|JSON\.stringify\(newest20Missing\.map\(x=>x\.id\)\)/,
+  assert.match(workflow,/assert\\.ok\\(initialPosterMs<=1000/);
+  assert.match(workflow,/responseStartMs:[\\s\\S]*posterEndMs:[\\s\\S]*posterTransferBytes:/);
+});
+
+test('hourly archive audit traverses every page and checks real poster/video media', () => {
+  assert.match(workflow,/await page\\.unroute\\(archiveFeedMatcher,archiveFeedAbort\\)/,
+    'only the embedded first page may be isolated from the feed API');
+  assert.match(workflow,/End of archive/);
+  assert.match(workflow,/expectedTotal/);
+  assert.match(workflow,/allCards\\.length,expectedTotal/);
+  assert.match(workflow,/ARCHIVE_ALL_CARDS_EVIDENCE/);
+  assert.match(workflow,/createImageBitmap/,'every card WebP must be decoded from real bytes');
+  assert.match(workflow,/inspectWebmPrefix/,'every card WebM must be checked from real response bytes');
+  assert.match(workflow,/video\\.play\\(\\)/,'representative videos must load and play');
+  assert.match(workflow,/posterDiff/,'representative poster must match its own WebM first frame');
+  assert.match(workflow,/motionDiff/,'representative playback must show changing frames');
+  assert.match(workflow,/lazyOrderFailures/,'WebM must not be requested before its own poster');
+  assert.match(workflow,/unexpectedMissing/,'missing previews must have explicit blocked/failed status');
+  assert.match(workflow,/maxAppendMs<=1000/,'each archive page batch must meet the one-second target');
+  assert.doesNotMatch(workflow,/JSON\\.stringify\\(allCards|console\\.log\\([^\\n]*entryId/,
     'public CI logs must not disclose private work identifiers');
 });
 
