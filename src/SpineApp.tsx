@@ -2521,11 +2521,8 @@ if (extensionOf(file.name) === "json" && text) {
         skeletonJson && typeof skeletonJson === "object" && "animations" in skeletonJson
           ? Object.keys((skeletonJson as { animations?: Record<string, unknown> }).animations ?? {})
           : [];
-      const defaultAnimation =
-        animationNames.find((animationName) => animationName.toLowerCase() === "idle") ??
-        animationNames.find((animationName) => animationName.toLowerCase().includes("idle")) ??
-        animationNames.find((animationName) => !animationName.toLowerCase().startsWith("eyes")) ??
-        animationNames[0];
+      // Spine source files do not define a selected preview animation. Keep it empty until the user or index explicitly selects one.
+      const defaultAnimation = "";
       const skinNames = skinNamesFromSkeletonJson(skeletonJson);
       const defaultSkin = preferredSkinName(skinNames);
       const skeletonBounds =
