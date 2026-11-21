@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { test } from 'node:test';
 
 const workflow = readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
@@ -57,12 +58,32 @@ test('hourly archive audit traverses every page and checks real poster/video med
   assert.match(workflow,/createHash\('sha256'\)/);
   assert.match(workflow,/archiveIds/);
   assert.match(workflow,/reportedUnexpectedMissing/);
-  assert.doesNotMatch(workflow,/boss_1-2026|Spine-animation-2026-11-17|wolf_v13|config-2026-11-17/,
+  assert.doesNotMatch(workflow,/\\b[A-Za-z0-9_]+-\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z\\b/,
     'private work identifiers must not be embedded in the public live workflow');
   assert.match(workflow,/unexpectedMissing/,'missing previews must have explicit blocked/failed status');
   assert.match(workflow,/maxAppendMs<=1000/,'each archive page batch must meet the one-second target');
   assert.doesNotMatch(workflow,/JSON\.stringify\(allCards|console\.log\([^\n]*entryId/,
     'public CI logs must not disclose private work identifiers');
+});
+
+test('reported preview identities stay opaque and live browser script syntax is checked', () => {
+  const block = workflow.match(/const reportedCardHashes = new Set\\(\\[([\\s\\S]*?)\\]\\);/);
+  assert.ok(block, 'all reported work hashes must be declared');
+  const hashes = [...block[1].matchAll(/'([a-f0-9]{64})'/g)].map(match => match[1]);
+  assert.equal(hashes.length, 19, 'the audit must target all 18 reported works plus the priority work');
+  assert.equal(new Set(hashes).size, 19, 'reported work hashes must be unique');
+  const priority = workflow.match(/const priorityCardHash = '([a-f0-9]{64})';/);
+  assert.ok(priority && hashes.includes(priority[1]), 'the priority work must be in the opaque identity set');
+  const command = workflow.indexOf("node --input-type=module <<'NODE'");
+  assert.ok(command >= 0, 'the live browser script must exist');
+  const scriptStart = workflow.indexOf('\\n', command) + 1;
+  const scriptEnd = workflow.indexOf('\\n          NODE', scriptStart);
+  assert.ok(scriptStart > 0 && scriptEnd > scriptStart, 'the browser script heredoc must be closed');
+  const script = workflow.slice(scriptStart, scriptEnd).split('\\n')
+    .map(line => line.startsWith('          ') ? line.slice(10) : line).join('\\n');
+  execFileSync(process.execPath, ['--check', '--input-type=module'], {
+    input: script, encoding: 'utf8',
+  });
 });
 
 const lifecycleWorkflow = readFileSync(new URL('../.github/workflows/keep-pull-requests-empty.yml', import.meta.url), 'utf8');
