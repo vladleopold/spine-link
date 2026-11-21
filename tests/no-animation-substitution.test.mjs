@@ -10,7 +10,7 @@ import { choosePreviewAnimation } from '../scripts/preview-animation-choice.mjs'
 import { chooseSourceSet } from '../scripts/lib/source-set-choice.mjs';
 import { chooseSourceSkeleton } from '../scripts/source-skeleton-choice.mjs';
 import { chooseAtlasForSkeleton } from '../scripts/atlas-pages.mjs';
-import { safeAnimations, hasExplicitAnimationSelection } from '../lib/agent-animation.js';
+import { safeAnimations, hasExplicitAnimationSelection, previewDispatchState } from '../lib/agent-animation.js';
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -117,6 +117,37 @@ test('agent animation names and selection preserve exact whitespace without acce
   assert.equal(hasExplicitAnimationSelection(' Walk ', [], 'spine-project'), true);
 });
 
+test('upload preview state blocks missing or unavailable exact selections before dispatch', () => {
+  const missing = previewDispatchState({ defaultAnimation: '', animations: ['idle'] });
+  assert.equal(missing.webmStatus, 'blocked-missing-animation-selection');
+  assert.equal(missing.previewStatus, 'blocked');
+  assert.equal(missing.dispatchStatus, 'blocked');
+
+  const unavailable = previewDispatchState({ defaultAnimation: 'run', animations: ['idle'] });
+  assert.equal(unavailable.webmStatus, 'blocked-selected-animation-unavailable');
+  assert.equal(unavailable.previewStatus, 'blocked');
+  assert.equal(unavailable.dispatchStatus, 'blocked');
+
+  const exact = previewDispatchState({ defaultAnimation: ' run ', animations: [' run '] });
+  assert.equal(exact.webmStatus, 'pending');
+  assert.equal(exact.previewStatus, 'pending');
+  assert.equal(exact.dispatchStatus, 'pending');
+
+  const unchangedReady = previewDispatchState(
+    { defaultAnimation: 'run', animations: ['run'] },
+    { defaultAnimation: 'run', webmStatus: 'ready', previewStatus: 'ready' },
+  );
+  assert.equal(unchangedReady.webmStatus, 'ready');
+  assert.equal(unchangedReady.previewStatus, 'ready');
+
+  const editorProject = previewDispatchState({
+    sourceKind: 'spine-project', conversionStatus: 'pending', defaultAnimation: '', animations: [],
+  });
+  assert.equal(editorProject.webmStatus, 'waiting-for-editor');
+  assert.equal(editorProject.previewStatus, 'pending');
+  assert.equal(editorProject.dispatchStatus, 'project-export-pending');
+});
+
 test('agent and upload APIs preserve the supplied name and do not dispatch without a selection', () => {
   const agent = read('../lib/agent-animation.js');
   const upload = read('../api/github-upload.js');
@@ -126,6 +157,10 @@ test('agent and upload APIs preserve the supplied name and do not dispatch witho
   assert.doesNotMatch(agent, /animations\s*\[\s*0\s*\]|animations\.includes\(preferred\) \? preferred/);
   assert.match(upload, /const defaultAnimation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
   assert.match(upload, /NO_DEFAULT_SPINE_ANIMATION/);
+  assert.match(upload, /SELECTED_SPINE_ANIMATION_UNAVAILABLE/);
+  assert.match(upload, /previewDispatchState\(nextEntry, existing\)/);
+  assert.match(upload, /previewDispatchState\(nextEntry, existingEntry\)/);
+  assert.match(upload, /async function dispatchEntryPreview/);
   assert.doesNotMatch(upload, /animations\s*\[\s*0\s*\]/);
 });
 

@@ -1,4 +1,4 @@
-import agentAnimationHandler from '../lib/agent-animation.js';
+import agentAnimationHandler, { hasExplicitAnimationSelection, previewDispatchState } from '../lib/agent-animation.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -438,6 +438,9 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
   const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
   const animations = Array.isArray(entry?.animations) ? entry.animations : [];
   if (!defaultAnimation.trim()) return { status: 'blocked', code: 'NO_DEFAULT_SPINE_ANIMATION' };
+  if (!hasExplicitAnimationSelection(defaultAnimation, animations, 'runtime')) {
+    return { status: 'blocked', code: 'SELECTED_SPINE_ANIMATION_UNAVAILABLE' };
+  }
   try {
     const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
       method: 'POST',
@@ -465,6 +468,25 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
     console.error('[UPLOAD] dispatch workflow exception:', error instanceof Error ? error.message : String(error));
     return { status: 'failed', error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function dispatchEntryPreview(settings, entry, origin) {
+  if (entry?.sourceKind === 'spine-project') {
+    if (process.env.SPINE_PROJECT_EXPORT_ENABLED === 'false') {
+      return { status: 'unavailable', error: 'Spine Editor export disabled' };
+    }
+    return dispatchSpineProjectExport(settings, entry, origin);
+  }
+  if (entry?.webmStatus === 'ready') return { status: 'already-ready' };
+  if (entry?.webmStatus !== 'pending') {
+    const code = entry?.webmStatus === 'blocked-missing-animation-selection'
+      ? 'NO_DEFAULT_SPINE_ANIMATION'
+      : entry?.webmStatus === 'blocked-selected-animation-unavailable'
+        ? 'SELECTED_SPINE_ANIMATION_UNAVAILABLE'
+        : 'PREVIEW_SELECTION_BLOCKED';
+    return { status: 'blocked', code };
+  }
+  return dispatchSpineExportWebm(settings, entry, origin);
 }
 
 export function publicLibraryEntry(origin, entry) {
@@ -1527,11 +1549,8 @@ export default async function handler(request, response) {
           ownerAnonFingerprint: anonymousAccount?.fingerprint,
           publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existing?.publicOwnerId),
         });
-        nextEntry.webmStatus = isEditorProject ? 'waiting-for-editor' :
-          existing?.webmStatus === 'ready' ? 'ready' : 'pending';
-        nextEntry.dispatchStatus = isEditorProject
-          ? editorExportEnabled ? 'project-export-pending' : 'editor-unavailable'
-          : 'pending';
+        Object.assign(nextEntry, previewDispatchState(nextEntry, existing));
+        if (isEditorProject && !editorExportEnabled) nextEntry.dispatchStatus = 'editor-unavailable';
         const nextEntries = [nextEntry, ...currentEntries.filter(item => item.id !== uploadId)];
         try {
           commit = await commitGitHubChanges(settings, {
@@ -1548,11 +1567,7 @@ export default async function handler(request, response) {
       // Serverless invocations do not guarantee fire-and-forget network calls
       // survive the response. Await the GitHub dispatch and expose its actual
       // outcome rather than falsely telling the user preview generation began.
-      const dispatch = isEditorProject
-        ? editorExportEnabled
-          ? await dispatchSpineProjectExport(settings, nextEntry, origin)
-          : { status: 'unavailable', error: 'Spine Editor export disabled' }
-        : await dispatchSpineExportWebm(settings, nextEntry, origin);
+      const dispatch = await dispatchEntryPreview(settings, nextEntry, origin);
       if (dispatch?.status === 'failed') {
         console.error('[UPLOAD] Preview dispatch failed for committed upload', uploadId,
           String(dispatch.error || '').slice(0, 300));
@@ -1588,8 +1603,7 @@ export default async function handler(request, response) {
           publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existingEntry?.publicOwnerId),
           sourceProof: body?.entry?.sourceProof,
         });
-        nextEntry.webmStatus = existingEntry?.webmStatus === 'ready' ? 'ready' : 'pending';
-        nextEntry.dispatchStatus = 'pending';
+        Object.assign(nextEntry, previewDispatchState(nextEntry, existingEntry));
         const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== uploadId)];
         try {
           await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
@@ -1597,7 +1611,7 @@ export default async function handler(request, response) {
           if (attempt < 2 && [409, 422].includes(Number(error?.status))) continue;
           throw error;
         }
-        const dispatch = await dispatchSpineExportWebm(settings, nextEntry, origin);
+        const dispatch = await dispatchEntryPreview(settings, nextEntry, origin);
         return response.status(200).json({ ok: true, indexed: nextEntries.length, dispatch });
       }
     }
@@ -1843,13 +1857,14 @@ export default async function handler(request, response) {
         publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
         showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
         portfolioMode: Boolean(entry?.portfolioMode),
-        ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
       };
+      Object.assign(nextEntry, previewDispatchState(nextEntry, existingEntry));
       const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
       const dataScience = await updateDataScienceCatalog(settings, body, nextEntry, commitPrefix, origin);
-      const isNewUpload = !existingEntry || existingEntry.webmStatus !== 'ready';
-      const dispatch = isNewUpload ? await dispatchSpineExportWebm(settings, nextEntry, origin) : null;
+      const isNewUpload = nextEntry.webmStatus === 'pending' ||
+        (nextEntry.sourceKind === 'spine-project' && nextEntry.conversionStatus === 'pending');
+      const dispatch = isNewUpload ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
       return response.status(200).json({ ok: true, indexed: nextEntries.length, dataScience, dispatch });
     }
 
@@ -1943,8 +1958,8 @@ export default async function handler(request, response) {
           publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entryPayload?.publicOwnerId),
           showOwnerLibrary: Boolean(entryPayload?.showOwnerLibrary),
           portfolioMode: Boolean(entryPayload?.portfolioMode),
-          ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
         };
+        Object.assign(nextEntry, previewDispatchState(nextEntry, existingEntry));
 
         // The anchor is optional. Building it here keeps it in the same commit
         // as index.json instead of paying for a second request and a second
@@ -2020,8 +2035,9 @@ export default async function handler(request, response) {
       ];
 
       if (finalize && nextEntry) {
-        const isNewUpload = !existingEntry || existingEntry.webmStatus !== 'ready';
-        dispatch = isNewUpload ? await dispatchSpineExportWebm(settings, nextEntry, origin) : null;
+        const isNewUpload = nextEntry.webmStatus === 'pending' ||
+          (nextEntry.sourceKind === 'spine-project' && nextEntry.conversionStatus === 'pending');
+        dispatch = isNewUpload ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
       }
 
       return response.status(200).json({
@@ -2077,10 +2093,11 @@ export default async function handler(request, response) {
       }
       if (Object.keys(layoutOut).length) nextEntry.layout = layoutOut;
       else delete nextEntry.layout;
+      Object.assign(nextEntry, previewDispatchState(nextEntry, currentEntries[entryIndex]));
       const nextEntries = [...currentEntries];
       nextEntries[entryIndex] = nextEntry;
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update preview layout`, currentIndex?.sha, origin);
-      dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {});
+      if (nextEntry.webmStatus === 'pending') dispatchEntryPreview(settings, nextEntry, origin).catch(() => {});
       return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry) });
     }
 
@@ -2412,13 +2429,15 @@ export default async function handler(request, response) {
       publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
       showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
       portfolioMode: Boolean(entry?.portfolioMode),
-      ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
     };
+    Object.assign(nextEntry, previewDispatchState(nextEntry, existingEntry));
     const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
 
     await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
     const dataScience = await updateDataScienceCatalog(settings, body, nextEntry, commitPrefix, origin);
-    const dispatch = existingEntry?.webmStatus === 'ready' ? null : await dispatchSpineExportWebm(settings, nextEntry, origin);
+    const dispatch = nextEntry.webmStatus === 'pending'
+      ? await dispatchEntryPreview(settings, nextEntry, origin)
+      : null;
 
     return response.status(200).json({
       ok: true,
