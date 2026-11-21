@@ -6,7 +6,7 @@ import { choosePreviewAnimation } from '../scripts/preview-animation-choice.mjs'
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 
 test('the selector preserves an explicit animation name even when the skeleton does not list it', () => {
-  assert.equal(choosePreviewAnimation(['idle', 'run'], 'Idle Post Climax Cum'), 'Idle Post Climax Cum');
+  assert.equal(choosePreviewAnimation(['idle', 'run'], 'Requested Animation With Spaces'), 'Requested Animation With Spaces');
   assert.equal(choosePreviewAnimation(['idle', 'run'], 'Missing'), 'Missing');
   assert.equal(choosePreviewAnimation(['idle', 'run'], ''), '');
   assert.equal(choosePreviewAnimation(['idle', 'run'], ' run '), ' run ');
