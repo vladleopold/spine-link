@@ -36,21 +36,26 @@ test('the main and extra players never infer a default from the first runtime an
 
 test('manual skeleton import never infers idle or the first animation as the default', () => {
   const app = read('../src/SpineApp.tsx');
-  const start = app.indexOf('const animationNames =');
+  const preparedSetsStart = app.indexOf('const preparedSets =');
+  const start = app.indexOf('const animationNames =', preparedSetsStart);
   const end = app.indexOf('const skinNames =', start);
-  assert.ok(start >= 0 && end > start, 'animation-selection block must remain discoverable');
+  assert.ok(preparedSetsStart >= 0 && start > preparedSetsStart && end > start, 'animation-selection block must remain discoverable');
   const selection = app.slice(start, end);
-  assert.match(selection, /const defaultAnimation = "";/);
-  assert.doesNotMatch(selection, /animationNames\\.find|animationNames\\s*\\[/);
+  assert.ok(selection.includes('const defaultAnimation = "";'));
+  assert.equal(selection.includes('animationNames.find'), false);
+  assert.equal(selection.includes('animationNames[0]'), false);
 });
 
 test('WebM export records only the requested animation and never guesses a named skin', () => {
   const exporter = read('../scripts/spine-export-webm.mjs');
-  assert.match(exporter, /const captureAnimation = targetAnimation;/);
-  assert.doesNotMatch(exporter, /scenarioEntry|scenarioExit|scenarioIdle|scenarioCycle|__spineScenario/);
-  assert.match(exporter, /const skinCandidates = \\[null\\]/);
-  assert.match(exporter, /DEFAULT_SKIN_NO_VISIBLE_CONTENT/);
-  assert.doesNotMatch(exporter, /skinNames\\.filter|trying next skin/);
+  assert.ok(exporter.includes('const captureAnimation = targetAnimation;'));
+  for (const forbidden of ['scenarioEntry', 'scenarioExit', 'scenarioIdle', 'scenarioCycle', '__spineScenario']) {
+    assert.equal(exporter.includes(forbidden), false, `unexpected animation sequence token: ${forbidden}`);
+  }
+  assert.ok(exporter.includes('const skinCandidates = [null];'));
+  assert.ok(exporter.includes("lastCaptureError = 'DEFAULT_SKIN_NO_VISIBLE_CONTENT';"));
+  assert.equal(exporter.includes('skinNames.filter'), false);
+  assert.equal(exporter.includes('trying next skin'), false);
 });
 
 test('post-publish export keeps the exact indexed animation and blocks a missing selected preview', () => {
