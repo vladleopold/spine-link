@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { trimBlackLead } from './lib/black-lead.mjs';
 import { collectionPathForUpload, entryForUpload } from './resolve-library.mjs';
+import { choosePreviewAnimation } from './preview-animation-choice.mjs';
 
 const args = {
   uploadId: '',
@@ -415,12 +416,20 @@ function sanitizedSkelBuffer(buffer, version = "") {
 const skeletonFilePath = path.join(firstSet.path, skeletonFile);
 const skeletonVersion = detectSkeletonVersion(skeletonFilePath);
 const skeletonBounds = readSkeletonBounds(skeletonFilePath);
-let targetAnimation = args.animation || entry.defaultAnimation || '';
+const requestedAnimation = args.animation !== ''
+  ? args.animation
+  : args.defaultAnimation !== ''
+    ? args.defaultAnimation
+    : (typeof entry.defaultAnimation === 'string' ? entry.defaultAnimation : '');
 const availableAnimations = readAnimationNames(skeletonFilePath);
-if (availableAnimations.length > 0) {
-  if (!targetAnimation || !availableAnimations.includes(targetAnimation)) {
-    targetAnimation = availableAnimations[0] || '';
-  }
+const targetAnimation = choosePreviewAnimation(availableAnimations, requestedAnimation);
+if (!targetAnimation) {
+  console.error('No explicit selected/default Spine animation; export blocked.');
+  process.exit(1);
+}
+if (!availableAnimations.includes(targetAnimation)) {
+  console.error('Selected Spine animation is unavailable in the source skeleton; export blocked.');
+  process.exit(1);
 }
 
 // --- Calculate dynamic video dimensions from skeleton bounds ---
