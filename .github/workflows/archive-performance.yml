@@ -9,8 +9,9 @@ on:
       - tests/animation-menu-scroll.test.mjs
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
+      - tests/vercel-deploy-schedule.test.mjs
       - tests/spine-runtime-file-selection.test.mjs
-      - tests/spine-atlas-integrity.test.mjs
+      - tests/spine-atlas-integrity.test.mjs tests/vercel-deploy-schedule.test.mjs
       - lib/spine-atlas-integrity.js
       - lib/spine-runtime-file-selection.js
       - api/github-preview.js
@@ -26,6 +27,7 @@ on:
       - tests/animation-menu-scroll.test.mjs
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
+      - tests/vercel-deploy-schedule.test.mjs
       - .github/workflows/archive-performance.yml
       - .github/workflows/vercel-deploy-and-alias.yml
       - .github/workflows/archive-live-speed.yml

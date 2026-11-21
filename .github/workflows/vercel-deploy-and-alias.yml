@@ -12,9 +12,9 @@ on:
   workflow_run:
     workflows: ["Spine-Link Agent API CI", "Spine archive WebP-first performance regression"]
     types: [completed]
-  # Vercel rejected deployments at 20:42 UTC; retry only after the rolling 24h window.
+  # Check hourly; the rolling 24h guard suppresses deployment attempts until quota recovery.
   schedule:
-    - cron: '15 21 * * *'
+    - cron: '15 * * * *'
 
 # Queue releases rather than cancelling an in-flight validated deploy when
 # another workflow_run event arrives. The source-SHA guard rejects stale queued
