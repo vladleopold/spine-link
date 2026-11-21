@@ -110,7 +110,7 @@ if (!firstSet) {
 
 const setFiles = fs.readdirSync(firstSet.path);
 const isValidJsonSkeleton = (file) => {
-  if (!/\\.json$/i.test(file)) return false;
+  if (!/\.json$/i.test(file)) return false;
   try {
     return Array.isArray(JSON.parse(fs.readFileSync(path.join(firstSet.path, file), 'utf8')).bones);
   } catch {
@@ -125,7 +125,7 @@ try {
   process.exit(1);
 }
 const atlasFile = chooseAtlasForSkeleton(skeletonFile, setFiles);
-const textureFiles = setFiles.filter(f => /\\.(png|jpg|jpeg|webp)$/i.test(f));
+const textureFiles = setFiles.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f));
 
 if (!skeletonFile || !atlasFile || textureFiles.length === 0) {
   console.error('SOURCE_SKELETON_ATLAS_OR_TEXTURE_MISSING');

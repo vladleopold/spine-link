@@ -7,11 +7,11 @@ function normalizedFileName(value) {
   try {
     source = decodeURIComponent(source);
   } catch {}
-  return source.replace(/\\\\/g, '/').split('/').filter(Boolean).pop() || '';
+  return source.replace(/\\/g, '/').split('/').filter(Boolean).pop() || '';
 }
 
 function stem(value) {
-  return normalizedFileName(value).replace(/\\.(?:skel|json)$/i, '').toLowerCase();
+  return normalizedFileName(value).replace(/\.(?:skel|json)$/i, '').toLowerCase();
 }
 
 // Preserve the indexed source skeleton. A converted JSON or same-stem binary
@@ -22,22 +22,22 @@ export function chooseSourceSkeleton(requested, files, isValidJson = () => false
   if (wanted) {
     const wantedStem = stem(wanted);
     const exact = names.find((name) => normalizedFileName(name) === wanted);
-    if (exact && /\\.json$/i.test(exact) && isValidJson(exact)) return exact;
-    if (/\\.skel$/i.test(wanted)) {
-      const converted = names.find((name) => stem(name) === wantedStem && /\\.json$/i.test(name) && isValidJson(name));
+    if (exact && /\.json$/i.test(exact) && isValidJson(exact)) return exact;
+    if (/\.skel$/i.test(wanted)) {
+      const converted = names.find((name) => stem(name) === wantedStem && /\.json$/i.test(name) && isValidJson(name));
       if (converted) return converted;
     }
-    if (/\\.json$/i.test(wanted)) {
-      const alias = names.find((name) => stem(name) === wantedStem && /\\.skel$/i.test(name));
+    if (/\.json$/i.test(wanted)) {
+      const alias = names.find((name) => stem(name) === wantedStem && /\.skel$/i.test(name));
       if (alias) return alias;
     }
-    if (exact && /\\.skel$/i.test(exact)) return exact;
+    if (exact && /\.skel$/i.test(exact)) return exact;
     throw new Error('SOURCE_SKELETON_MISSING_OR_AMBIGUOUS');
   }
 
-  const validJson = names.filter((name) => /\\.json$/i.test(name) && isValidJson(name));
+  const validJson = names.filter((name) => /\.json$/i.test(name) && isValidJson(name));
   if (validJson.length === 1) return validJson[0];
-  const binary = names.filter((name) => /\\.skel$/i.test(name));
+  const binary = names.filter((name) => /\.skel$/i.test(name));
   if (validJson.length === 0 && binary.length === 1) return binary[0];
   throw new Error('SOURCE_SKELETON_MISSING_OR_AMBIGUOUS');
 }

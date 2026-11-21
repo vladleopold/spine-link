@@ -7,11 +7,11 @@ function normalizedSourceFileName(value) {
   try {
     source = decodeURIComponent(source);
   } catch {}
-  return source.replace(/\\\\/g, '/').split('/').filter(Boolean).pop()?.toLowerCase() || '';
+  return source.replace(/\\/g, '/').split('/').filter(Boolean).pop()?.toLowerCase() || '';
 }
 
 function sourceStem(value) {
-  return normalizedSourceFileName(value).replace(/\\.(?:skel|json|bytes)$/i, '');
+  return normalizedSourceFileName(value).replace(/\.(?:skel|json|bytes)$/i, '');
 }
 
 // An index-selected skeleton must identify exactly one source directory.
