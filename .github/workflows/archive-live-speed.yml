@@ -397,7 +397,8 @@ jobs:
               }
               const badVideos=videoChecks.filter(item=>![200,206].includes(item.status)||!item.webm);
               assert.deepEqual(badVideos,[],'At least one archive WebM is missing or not a real WebM container');
-              assert.ok(videoSamples>0||videoUrls.length===0,'No sampled archive video reached actual playback');
+              assert.ok(videoUrls.length>0,'Archive has no exact-animation WebM assets to verify; all cards are blocked or missing media');
+              assert.ok(videoSamples>0,'No sampled archive WebM reached actual playback');
               assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors after full pagination');
               console.log('ARCHIVE_ALL_PAGES_EVIDENCE '+JSON.stringify({
                 viewport:viewport.width,total:expectedTotal,batches,
