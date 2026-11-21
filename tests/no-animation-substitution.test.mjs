@@ -92,7 +92,10 @@ test('post-publish export keeps the exact indexed animation and blocks a missing
   assert.match(workflow, /const chosenAnim = typeof indexData\[entryIndex\]\?\.defaultAnimation === 'string'/);
   assert.match(workflow, /const chosenPreview = chosenAnim \? allAnimPreviews\[chosenAnim\] : null/);
   assert.match(workflow, /fullExportStatus: hasChosenExport \? 'ready' : 'failed'/);
+  assert.match(workflow, /const hasChosenExport = hasSelectedPreviewMedia\(chosenPreview\)/);
+  assert.match(workflow, /require\('\.\/scripts\/lib\/preview-export-status\.cjs'\)/);
   assert.match(workflow, /previewStatus: 'blocked'/);
+  assert.doesNotMatch(workflow, /const hasChosenExport = Boolean\(chosenPreview\)/);
   assert.doesNotMatch(workflow, /effectiveDefault|animOrder|animations\s*\[\s*0\s*\]|defaultAnimation:\s*effective/);
 });
 
