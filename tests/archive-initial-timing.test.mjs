@@ -76,3 +76,21 @@ test('archive cards expose source-level blocked status without exposing preview 
   assert.doesNotMatch(source, /data-preview-error=/,
     'private source error details must not be copied into public card markup');
 });
+
+
+test('live archive verification traverses every page and validates every displayed poster/video pair', () => {
+  assert.match(workflow,/const blockArchiveFeed = url =>/);
+  assert.match(workflow,/await page\.unroute\(blockArchiveFeed\)/,
+    'the initial 40-card embedded proof must not prevent later API pages from loading');
+  assert.match(workflow,/const expectedTotal = await page\.evaluate/);
+  assert.match(workflow,/while\(scannedCards<expectedTotal\)/);
+  assert.match(workflow,/await image\.decode\(\)/);
+  assert.match(workflow,/httpStatus===200/);
+  assert.match(workflow,/Range:'bytes=0-63'/);
+  assert.match(workflow,/videoSamples/);
+  assert.match(workflow,/player\.searchParams\.get\('animation'\)/);
+  assert.match(workflow,/Not all archive pages were traversed/);
+  assert.match(readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8'),
+    /card\.dataset\.playerUrl=item\.playerUrl\|\|''/,
+    'dynamic cards must expose the same exact player URL used by the click handler');
+});

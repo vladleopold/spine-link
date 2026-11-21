@@ -47,13 +47,14 @@ jobs:
           const browser=await chromium.launch({headless:true});
           try {
             for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
-              const page=await browser.newPage({viewport});
+              const page=await browser.newPage({viewport,reducedMotion:'no-preference'});
               const pageErrors=[],mediaRequests=[];
               let blockedApiRequests=0;
               // Prove the first lazy page is supplied in HTML, without
               // relying on a warm GitHub feed endpoint at all.
-              await page.route(url=>url.pathname==='/api/github-archive' &&
-                url.searchParams.get('feed')==='archive',route=>{
+              const blockArchiveFeed = url => url.pathname==='/api/github-archive' &&
+                url.searchParams.get('feed')==='archive';
+              await page.route(blockArchiveFeed,route=>{
                 blockedApiRequests++;
                 return route.abort();
               });
@@ -208,6 +209,180 @@ jobs:
               assert.deepEqual(broken,[],'One of the first 40 cards has a missing/non-WebP/non-WebM asset');
               assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
               assert.ok(posterMs<=1000,'Three new WebP posters took over one second: '+posterMs+'ms');
+              // The first 40 cards are embedded in HTML. Remove the initial
+              // API block only after proving that first page; then walk every
+              // remaining page until the archive's explicit end sentinel.
+              const expectedTotal = await page.evaluate(() => {
+                const text = document.querySelector('.legend')?.textContent || '';
+                const match = text.match(/([\d,]+)\s+works/i);
+                return match ? Number(match[1].replace(/,/g,'')) : 0;
+              });
+              assert.ok(expectedTotal >= 40,'Archive total must include the embedded 40-card sample');
+              await page.unroute(blockArchiveFeed);
+              async function decodeCardRange(start,end) {
+                return await page.evaluate(async ({start,end}) => {
+                  const cards=Array.from(document.querySelectorAll('.feed-card')).slice(start,end);
+                  const results=[];
+                  for(const card of cards){
+                    const image=card.querySelector('.feed-media img');
+                    const video=card.dataset.videoSrc||'';
+                    const status=card.dataset.previewStatus||'';
+                    const id=card.dataset.entryId||'';
+                    const playerUrl=card.dataset.playerUrl||'';
+                    let poster='',decoded=false,httpStatus=0,posterBytes=0,webp=false;
+                    if(image){
+                      image.loading='eager';
+                      poster=image.currentSrc||image.src||'';
+                      try{
+                        await image.decode();
+                        decoded=image.naturalWidth>0&&image.naturalHeight>0;
+                      }catch{}
+                      try{
+                        const response=await fetch(poster,{cache:'no-store'});
+                        const bytes=new Uint8Array(await response.arrayBuffer());
+                        httpStatus=response.status;
+                        posterBytes=bytes.length;
+                        webp=bytes.length>=12&&
+                          String.fromCharCode(...bytes.subarray(0,4))==='RIFF'&&
+                          String.fromCharCode(...bytes.subarray(8,12))==='WEBP';
+                      }catch{}
+                    }
+                    results.push({id,playerUrl,poster,video,status,hasImage:Boolean(image),
+                      decoded,httpStatus,posterBytes,webp,
+                      fallback:Boolean(card.querySelector('[data-fallback-src],[data-video-fallback],.feed-placeholder,.media-fallback'))});
+                  }
+                  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+                  return results;
+                },{start,end});
+              }
+              const allDomRows=await decodeCardRange(0,40);
+              let scannedCards=40,batches=0,videoSamples=0;
+              while(scannedCards<expectedTotal){
+                const sentinel=page.locator('#sentinel');
+                await sentinel.scrollIntoViewIfNeeded();
+                const beforeCount=scannedCards;
+                let progressed=false;
+                for(let attempt=0;attempt<3;attempt++){
+                  await page.waitForFunction(({before,total})=>{
+                    const count=document.querySelectorAll('.feed-card').length;
+                    const label=document.querySelector('#sentinel')?.textContent?.trim()||'';
+                    return count>before||count>=total||label==='Tap to retry'||label==='End of archive';
+                  },{before:beforeCount,total:expectedTotal},{timeout:12000});
+                  const currentCount=await page.locator('.feed-card').count();
+                  const label=(await sentinel.innerText()).trim();
+                  if(currentCount>beforeCount){
+                    scannedCards=currentCount;
+                    progressed=true;
+                    break;
+                  }
+                  if(label==='End of archive')break;
+                  if(label==='Tap to retry'){
+                    await sentinel.click();
+                    continue;
+                  }
+                }
+                if(!progressed){
+                  const label=(await sentinel.innerText()).trim();
+                  if(label==='End of archive'&&scannedCards===expectedTotal)break;
+                  throw new Error('Archive pagination stopped before the final page');
+                }
+                assert.ok(scannedCards<=expectedTotal,'Archive exposed more cards than its indexed total');
+                const batchRows=await decodeCardRange(beforeCount,scannedCards);
+                allDomRows.push(...batchRows);
+                const sampleIndex=batchRows.findIndex(row=>row.video);
+                if(sampleIndex>=0){
+                  const sampleCard=page.locator('.feed-card').nth(beforeCount+sampleIndex);
+                  await sampleCard.evaluate(element=>element.scrollIntoView({block:'start'}));
+                  await page.waitForFunction(element=>{
+                    const video=element.querySelector('video');
+                    return video&&video.readyState>=2&&!video.paused&&video.currentTime>0;
+                  },await sampleCard.elementHandle(),{timeout:8000});
+                  const sampleVideo=sampleCard.locator('video').first();
+                  const startTime=await sampleVideo.evaluate(video=>video.currentTime);
+                  await page.waitForTimeout(450);
+                  const endTime=await sampleVideo.evaluate(video=>video.currentTime);
+                  assert.ok(endTime>startTime,'A sampled archive WebM did not advance during playback');
+                  videoSamples++;
+                }
+                batches++;
+              }
+              assert.equal(scannedCards,expectedTotal,'Not all archive pages were traversed');
+              assert.equal(allDomRows.length,expectedTotal,'Not all archive cards were inspected');
+              await page.waitForFunction(()=>document.querySelector('#sentinel')?.textContent?.trim()==='End of archive',{timeout:5000});
+              const cardRows=await page.locator('.feed-card').evaluateAll(cards=>cards.map(card=>({
+                id:card.dataset.entryId||'',
+                playerUrl:card.dataset.playerUrl||'',
+                poster:card.querySelector('.feed-media img')?.currentSrc||card.querySelector('.feed-media img')?.src||'',
+                video:card.dataset.videoSrc||'',
+                status:card.dataset.previewStatus||'',
+                fallback:Boolean(card.querySelector('[data-fallback-src],[data-video-fallback],.feed-placeholder,.media-fallback')),
+              })));
+              const invalidCards=cardRows.filter(row=>{
+                if(!row.poster&&!row.video)return !row.status.startsWith('blocked-')||row.fallback;
+                if(!row.poster||!row.video||row.fallback||row.status!=='ready-poster-lazy-video')return true;
+                try{
+                  const poster=new URL(row.poster),video=new URL(row.video),player=new URL(row.playerUrl,site);
+                  const videoName=video.pathname.split('/').pop().toLowerCase();
+                  const posterName=poster.pathname.split('/').pop().toLowerCase();
+                  const playerId=decodeURIComponent(player.pathname.split('/').pop()||'');
+                  return !['preview-medium.webm','preview-low.webm'].includes(videoName)||
+                    posterName!==videoName.replace(/\.webm$/,'.webp')||
+                    poster.pathname.slice(0,poster.pathname.lastIndexOf('/'))!==
+                      video.pathname.slice(0,video.pathname.lastIndexOf('/'))||
+                    !player.searchParams.get('animation')||playerId!==row.id;
+                }catch{return true;}
+              });
+              assert.deepEqual(invalidCards,[],'An archive card has mismatched media, no exact animation link, or an unblocked empty state');
+              assert.ok(allDomRows.every(row=>!row.hasImage||
+                (row.decoded&&row.httpStatus===200&&row.posterBytes>128&&row.webp)),
+                'At least one archive poster failed HTTP, byte-signature, or browser decode validation');
+              assert.ok(allDomRows.every(row=>row.hasImage===Boolean(row.poster)&&
+                Boolean(row.poster)===Boolean(row.video)&&!row.fallback),
+                'An archive card contains partial or fallback media');
+              const lazyRequestEvidence=mediaRequests.slice();
+              const earlyVideos=lazyRequestEvidence.filter(request=>request.type==='webm').filter(request=>{
+                const videoUrl=new URL(request.url);
+                const expectedPosterPath=videoUrl.pathname.replace(/\.webm$/i,'.webp');
+                return !lazyRequestEvidence.some(candidate=>candidate.type==='webp'&&
+                  new URL(candidate.url).pathname===expectedPosterPath&&candidate.at<=request.at);
+              });
+              assert.deepEqual(earlyVideos,[],'A WebM request occurred before its exact paired WebP poster');
+              const videoUrls=Array.from(new Set(cardRows.map(row=>row.video).filter(Boolean)));
+              const videoChecks=[];
+              for(let offset=0;offset<videoUrls.length;offset+=12){
+                const part=await page.evaluate(async urls=>{
+                  const results=[];
+                  for(let i=0;i<urls.length;i+=6){
+                    const batch=await Promise.all(urls.slice(i,i+6).map(async url=>{
+                      try{
+                        const response=await fetch(url,{headers:{Range:'bytes=0-63'},cache:'no-store'});
+                        const reader=response.body?.getReader();
+                        const first=reader?await reader.read():{value:new Uint8Array()};
+                        if(reader)await reader.cancel().catch(()=>{});
+                        const bytes=first.value||new Uint8Array();
+                        return {status:response.status,bytes:bytes.length,
+                          webm:bytes.length>=4&&bytes[0]===0x1a&&bytes[1]===0x45&&bytes[2]===0xdf&&bytes[3]===0xa3};
+                      }catch{return {status:0,bytes:0,webm:false};}
+                    }));
+                    results.push(...batch);
+                  }
+                  return results;
+                },videoUrls.slice(offset,offset+12));
+                videoChecks.push(...part);
+              }
+              const badVideos=videoChecks.filter(item=>![200,206].includes(item.status)||!item.webm);
+              assert.deepEqual(badVideos,[],'At least one archive WebM is missing or not a real WebM container');
+              assert.ok(videoSamples>0||videoUrls.length===0,'No sampled archive video reached actual playback');
+              assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors after full pagination');
+              console.log('ARCHIVE_ALL_PAGES_EVIDENCE '+JSON.stringify({
+                viewport:viewport.width,total:expectedTotal,batches,
+                postersDecoded:allDomRows.filter(row=>row.hasImage&&row.decoded).length,
+                pairedCards:cardRows.filter(row=>row.poster&&row.video).length,
+                blockedCards:cardRows.filter(row=>!row.poster&&!row.video).length,
+                videoAssetsVerified:videoChecks.length,videoPlaybackSamples:videoSamples,
+                lazyWebmRequests:lazyRequestEvidence.filter(row=>row.type==='webm').length,
+              }));
+
               } finally {
                 await page.close();
               }

@@ -153,6 +153,8 @@ test('only a matching medium WebM and its own medium first-frame WebP unlock a c
     const html=String(res.body);
     const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
     assert.match(card,/data-preview-status="poster-pending"/);
+    assert.match(card,/data-player-url="\\/p\\/card-000\\?animation=walk"/,
+      'the card click target must preserve the exact selected animation');
     assert.match(card,/src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview-medium\.webp/,
       'poster is the medium WebP extracted from the medium video');
     assert.match(card,/data-video-src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview-medium\.webm/,

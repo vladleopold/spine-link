@@ -1734,6 +1734,7 @@ function archiveHtml({ origin, entries, metrics }) {
           const card=document.createElement('article');
           card.className='feed-card';
           card.dataset.entryId=item.id;
+          card.dataset.playerUrl=item.playerUrl||'';
           card.dataset.previewStatus=item.poster&&item.video?'poster-pending':'blocked-no-webm-poster';
           if(item.poster&&item.video)card.dataset.videoSrc=item.video;
           card.style.setProperty('--media-ratio',item.width&&item.height
