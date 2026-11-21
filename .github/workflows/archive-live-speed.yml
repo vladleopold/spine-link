@@ -261,9 +261,10 @@ jobs:
                 await sampleCard.evaluate(element=>element.scrollIntoView({block:'start'}));
                 const sampleVideo=sampleCard.locator('video').first();
                 await sampleVideo.waitFor({state:'attached',timeout:8000});
-                await page.waitForFunction(video=>
-                  video.readyState>=2&&!video.paused&&video.currentTime>0,
-                  await sampleVideo.elementHandle(),{timeout:8000});
+                await page.waitForFunction(index=>{
+                  const video=document.querySelectorAll('.feed-card')[index]?.querySelector('video');
+                  return video&&video.readyState>=2&&!video.paused&&video.currentTime>0;
+                },index,{timeout:8000});
                 const startTime=await sampleVideo.evaluate(video=>video.currentTime);
                 await page.waitForTimeout(450);
                 const playback=await sampleVideo.evaluate(video=>({
