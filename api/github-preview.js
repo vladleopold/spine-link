@@ -6,7 +6,7 @@ import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
 import { previewMediaStatusAllowsPlayback } from '../lib/preview-media-status.js';
-import { resolvePreviewAnimationTarget } from '../lib/preview-animation-target.js';
+import { resolvePreviewAnimationTarget, requestedAnimationFromRequest } from '../lib/preview-animation-target.js';
 
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -1371,7 +1371,11 @@ function createHtml(config) {
       }
       const config = JSON.parse(document.getElementById("spine-preview-config").textContent);
       const sets = config.sets || [];
-      function queryValue(name) { return new URLSearchParams(window.location.search).get(name) || ""; }
+      function queryValues(name) { return new URLSearchParams(window.location.search).getAll(name); }
+      function queryValue(name) {
+        const values = queryValues(name);
+        return values.length === 1 ? values[0] || "" : "";
+      }
       function setHasAnimation(set, animationName) { return Boolean(set && animationName && (set.animations || []).includes(animationName)); }
       function initialSet() {
         const querySet = queryValue("set");
@@ -1380,7 +1384,9 @@ function createHtml(config) {
         return sets.find((set) => setHasAnimation(set, queryAnimation)) || sets.find((set) => set.label === config.activeLabel) || sets[0] || null;
       }
       function initialAnimation(set) {
-        const queryAnimation = queryValue("animation");
+        const animationValues = queryValues("animation");
+        if (animationValues.length > 1) return null;
+        const queryAnimation = animationValues[0] || "";
         return queryAnimation || set?.animation || "";
       }
       // Kept in sync with the server-side PREVIEW_PAD: a narrow margin so a clip whose
@@ -2845,10 +2851,7 @@ export default async function handler(request, response) {
     if (!path) return response.status(404).send('Preview not found');
   }
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
-  const queryAnimation = request.query?.animation;
-  const requestedAnimation = typeof queryAnimation === 'string'
-    ? queryAnimation
-    : (new URL(request.url || '/', origin).searchParams.get('animation') ?? '');
+  const requestedAnimation = requestedAnimationFromRequest(request, origin);
 
   try {
     let html = '';
