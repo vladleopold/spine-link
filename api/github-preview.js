@@ -1455,21 +1455,20 @@ function createHtml(config) {
         }
       }
       const playerElement = document.getElementById("player");
-      const playerFrameElement = playerElement?.closest(".player-frame");
-      if (animationMenu && playerFrameElement) {
+      if (animationMenu && playerElement) {
         const syncAnimationMenuHeight = () => {
           if (window.innerWidth <= 1000) {
             animationMenu.style.removeProperty("--animation-menu-player-height");
             return;
           }
-          const playerHeight = playerFrameElement.getBoundingClientRect().height;
+          const playerHeight = playerElement.getBoundingClientRect().height;
           if (playerHeight > 0) {
-            animationMenu.style.setProperty("--animation-menu-player-height", Math.floor(playerHeight) + "px");
+            animationMenu.style.setProperty("--animation-menu-player-height", playerHeight.toFixed(2) + "px");
           }
         };
         syncAnimationMenuHeight();
         if (typeof ResizeObserver === "function") {
-          new ResizeObserver(syncAnimationMenuHeight).observe(playerFrameElement);
+          new ResizeObserver(syncAnimationMenuHeight).observe(playerElement);
         }
         window.addEventListener("resize", syncAnimationMenuHeight, { passive: true });
       }
