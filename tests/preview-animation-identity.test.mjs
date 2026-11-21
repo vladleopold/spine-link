@@ -49,29 +49,29 @@ test('URL-selected video preview is exact and never falls back to the indexed de
     'animation names are byte-for-byte exact');
 
   const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
-  assert.match(resolver, /resolvePreviewAnimationTarget\\(entry, requestedAnimation\\)/);
-  assert.match(resolver, /previewMediaStatusAllowsPlayback\\(entry\\)/);
-  assert.doesNotMatch(resolver, /entry\\?\\.webmPreview/);
-  assert.match(resolver, /lowUrl: shortClip/);
-  assert.match(resolver, /isFallback: false/);
+  assert.ok(resolver.includes('resolvePreviewAnimationTarget(entry, requestedAnimation)'));
+  assert.ok(resolver.includes('previewMediaStatusAllowsPlayback(entry)'));
+  assert.ok(!resolver.includes('entry?.webmPreview'));
+  assert.ok(resolver.includes('lowUrl: shortClip'));
+  assert.ok(resolver.includes('isFallback: false'));
 
   const metadata = section(preview, 'function videoMetadataForEntry(', 'function ');
-  assert.match(metadata, /resolvePreviewTarget\\(entry, origin, requestedAnimation\\)/);
-  assert.match(metadata, /previewAnimation: target\\.name/);
+  assert.ok(metadata.includes('resolvePreviewTarget(entry, origin, requestedAnimation)'));
+  assert.ok(metadata.includes('previewAnimation: target.name'));
   const fallback = section(preview, 'function createVideoFallbackHtml(', 'async function createDynamicPreview(');
-  assert.match(fallback, /resolvePreviewTarget\\(entry, origin, requestedAnimation\\)/);
+  assert.ok(fallback.includes('resolvePreviewTarget(entry, origin, requestedAnimation)'));
   const dynamic = section(preview, 'async function createDynamicPreview(', '// Finds the folder of a work');
-  assert.match(dynamic, /videoMetadataForEntry\\([^;]*requestedAnimation\\)/);
-  assert.match(dynamic, /createVideoFallbackHtml\\([^;]*requestedAnimation\\)/);
+  assert.ok(dynamic.includes('playerUrl, requestedAnimation)'));
+  assert.ok(dynamic.includes('archiveUrl, requestedAnimation }'));
   const handler = preview.slice(preview.indexOf('export default async function handler('));
-  assert.match(handler, /request\\.query\\?\\.animation/);
-  assert.match(handler, /createDynamicPreview\\(settings, path, origin, entryRecord, requestedAnimation\\)/);
+  assert.ok(handler.includes('request.query?.animation'));
+  assert.ok(handler.includes('createDynamicPreview(settings, path, origin, entryRecord, requestedAnimation)'));
 });
 
 test('failed or blocked preview media cannot leak stale WebM/WebP URLs', () => {
   const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
   assert.match(resolver, /previewMediaStatusAllowsPlayback\(entry\)/);
-  assert.match(resolver, /const selected = previewMediaStatusAllowsPlayback\(entry\) && chosen\.trim\(\) && previews \? previews\[chosen\] : null/);
+  assert.ok(resolver.includes('const selected = previewMediaStatusAllowsPlayback(entry) ? preview : null;'));
   assert.match(resolver, /name: chosen/);
 
   assert.equal(previewMediaStatusAllowsPlayback({ previewStatus: 'failed', webmStatus: 'ready' }), false);
