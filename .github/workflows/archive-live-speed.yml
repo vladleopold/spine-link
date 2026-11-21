@@ -257,6 +257,7 @@ jobs:
               }
               const allDomRows=await decodeCardRange(0,40);
               let scannedCards=40,batches=0,videoSamples=0;
+              const batchTimings=[];
               async function verifyPlaybackSample(index) {
                 const sampleCard=page.locator('.feed-card').nth(index);
                 await sampleCard.evaluate(element=>element.scrollIntoView({block:'start'}));
@@ -282,6 +283,7 @@ jobs:
                 videoSamples++;
               }
               while(scannedCards<expectedTotal){
+                const batchStarted=Date.now();
                 const sentinel=page.locator('#sentinel');
                 await sentinel.scrollIntoViewIfNeeded();
                 const beforeCount=scannedCards;
@@ -311,7 +313,12 @@ jobs:
                   throw new Error('Archive pagination stopped before the final page');
                 }
                 assert.ok(scannedCards<=expectedTotal,'Archive exposed more cards than its indexed total');
+                const appendMs=Date.now()-batchStarted;
+                assert.ok(appendMs<=1000,'Archive page batch '+(batches+1)+' took more than 1 second to append: '+appendMs+'ms');
                 const batchRows=await decodeCardRange(beforeCount,scannedCards);
+                const posterDecodeMs=Date.now()-batchStarted;
+                assert.ok(posterDecodeMs<=1000,'Archive page batch '+(batches+1)+' posters took more than 1 second to decode: '+posterDecodeMs+'ms');
+                batchTimings.push({appendMs,posterDecodeMs});
                 allDomRows.push(...batchRows);
                 const sampleIndex=batchRows.findIndex(row=>row.video);
                 if(sampleIndex>=0){
@@ -394,6 +401,8 @@ jobs:
               assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors after full pagination');
               console.log('ARCHIVE_ALL_PAGES_EVIDENCE '+JSON.stringify({
                 viewport:viewport.width,total:expectedTotal,batches,
+                maxAppendMs:Math.max(0,...batchTimings.map(item=>item.appendMs)),
+                maxPosterDecodeMs:Math.max(0,...batchTimings.map(item=>item.posterDecodeMs)),
                 postersDecoded:allDomRows.filter(row=>row.hasImage&&row.decoded).length,
                 pairedCards:cardRows.filter(row=>row.poster&&row.video).length,
                 blockedCards:cardRows.filter(row=>!row.poster&&!row.video).length,
