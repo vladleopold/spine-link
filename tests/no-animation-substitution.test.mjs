@@ -10,6 +10,7 @@ import { choosePreviewAnimation } from '../scripts/preview-animation-choice.mjs'
 import { chooseSourceSet } from '../scripts/lib/source-set-choice.mjs';
 import { chooseSourceSkeleton } from '../scripts/source-skeleton-choice.mjs';
 import { chooseAtlasForSkeleton } from '../scripts/atlas-pages.mjs';
+import { safeAnimations, hasExplicitAnimationSelection } from '../lib/agent-animation.js';
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -104,12 +105,21 @@ test('post-publish export keeps the exact indexed animation and blocks a missing
   assert.doesNotMatch(workflow, /effectiveDefault|animOrder|animations\s*\[\s*0\s*\]|defaultAnimation:\s*effective/);
 });
 
+test('agent animation names and selection preserve exact whitespace without accepting blank names', () => {
+  assert.deepEqual(safeAnimations([' run ', 'run', ' run ', '   ', '']), [' run ', 'run']);
+  assert.equal(hasExplicitAnimationSelection(' run ', [' run '], 'runtime'), true);
+  assert.equal(hasExplicitAnimationSelection(' run ', ['run'], 'runtime'), false);
+  assert.equal(hasExplicitAnimationSelection('   ', ['   '], 'runtime'), false);
+  assert.equal(hasExplicitAnimationSelection('', [], 'spine-project'), false);
+  assert.equal(hasExplicitAnimationSelection(' Walk ', [], 'spine-project'), true);
+});
+
 test('agent and upload APIs preserve the supplied name and do not dispatch without a selection', () => {
   const agent = read('../lib/agent-animation.js');
   const upload = read('../api/github-upload.js');
   assert.match(agent, /const preferred = typeof body\.defaultAnimation === 'string' \? body\.defaultAnimation : ''/);
   assert.match(agent, /animations, defaultAnimation: preferred/);
-  assert.match(agent, /const hasSelectedAnimation = Boolean\(preferred\)/);
+  assert.match(agent, /hasExplicitAnimationSelection\(preferred, animations, job\.format\)/);
   assert.doesNotMatch(agent, /animations\s*\[\s*0\s*\]|animations\.includes\(preferred\) \? preferred/);
   assert.match(upload, /const defaultAnimation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
   assert.match(upload, /NO_DEFAULT_SPINE_ANIMATION/);
