@@ -3733,7 +3733,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   }, []);
 
   const playActiveAnimationFromStart = useCallback(() => {
-    const animationName = activeAnimationRef.current || preparedSpineRef.current?.defaultAnimation || animationsRef.current[0] || "";
+    const animationName = activeAnimationRef.current || preparedSpineRef.current?.defaultAnimation || "";
+    if (!animationName) return;
     if (playAnimationWithLoopMode(playerRef.current, animationName, loopEnabledRef.current, () => loopEnabledRef.current)) {
       setActiveAnimation(animationName);
       setError("");
