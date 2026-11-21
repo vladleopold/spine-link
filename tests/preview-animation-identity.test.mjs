@@ -18,7 +18,13 @@ test('URL-selected animation is preserved even when absent from index animation 
   assert.match(initial, /return queryAnimation \|\| set\?\.animation \|\| ""/);
   assert.doesNotMatch(initial, /setHasAnimation/);
   const initialSet = section(preview, 'function initialSet()', 'function initialAnimation(set)');
-  assert.match(initialSet, /if \(querySet\) return sets\.find\(\(set\) => set\.label === querySet\) \|\| null/);
+  assert.match(initialSet, /if \(querySet\)/);
+  assert.match(initialSet, /if \(config\.sourceSetRequired\)/);
+  assert.match(initialSet, /matches\.length === 1 \? matches\[0\] : null/);
+  assert.match(initialSet, /return sets\.length === 1 \? sets\[0\] : null/);
+  assert.doesNotMatch(initialSet, /sets\[0\] \|\| null/);
+  assert.match(preview, /const sourceSetMatches = sourceSetRequired \? sets\.filter/);
+  assert.match(preview, /sourceSetMatches\.length === 1 \? sourceSetMatches\[0\]\.label : ''/);
 });
 
 test('default animation comes only from the index, never idle or the first runtime track', () => {

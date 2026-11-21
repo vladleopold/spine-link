@@ -10,3 +10,24 @@ test('binary mislabeled atlas and metadata rejected',()=>{
  assert.equal(isValidSpineAtlasHeader('{\"defaultSkin\":\"Lamb\"}'),false);
  assert.equal(isValidSpineAtlasHeader(''),false);
 });
+
+test('every atlas page must map to one exact distinct source texture', async () => {
+ const {matchAtlasPagesToTextures}=await import('../lib/spine-atlas-integrity.js');
+ const textures=['body.png','face.png'];
+ const exact=(texture,page)=>texture.toLowerCase()===page.toLowerCase();
+ assert.deepEqual(matchAtlasPagesToTextures(['body.png','face.png'],textures,exact),textures);
+ assert.equal(matchAtlasPagesToTextures(['body.png','missing.png'],textures,exact),null);
+ assert.equal(matchAtlasPagesToTextures(['body.png','body.png'],textures,exact),null,
+   'one texture must not silently stand in for two atlas pages');
+ assert.equal(matchAtlasPagesToTextures(['body.png'],['body.png','BODY.PNG'],exact),null,
+   'ambiguous case-insensitive matches must be blocked');
+ assert.equal(matchAtlasPagesToTextures([],textures,exact),null);
+});
+
+test('preview runtime never injects a transparent placeholder for an unmatched atlas page', async () => {
+ const {readFileSync}=await import('node:fs');
+ const source=readFileSync(new URL('../api/github-preview.js',import.meta.url),'utf8');
+ assert.match(source,/matchAtlasPagesToTextures\(\s*atlasPages,\s*textures,/);
+ assert.match(source,/SPINE_ATLAS_TEXTURE_SET_INCOMPLETE/);
+ assert.doesNotMatch(source,/data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB/);
+});

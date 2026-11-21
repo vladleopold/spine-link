@@ -1,5 +1,5 @@
 import { selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
-import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
+import { isValidSpineAtlasHeader, matchAtlasPagesToTextures } from '../lib/spine-atlas-integrity.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
@@ -17,6 +17,11 @@ function cleanRepoPath(value = '') {
 
 function basename(value = '') {
   return String(value).replace(/\\/g, '/').split('/').filter(Boolean).pop() || '';
+}
+
+function sourceAssetName(value = '') {
+  const clean = String(value || '').trim().split(/[?#]/, 1)[0];
+  return basename(clean).toLowerCase();
 }
 
 function joinRepoPath(...parts) {
@@ -208,11 +213,7 @@ function canonicalAtlasPageName(pageName = '') {
 function imageMatchesAtlasPage(imageName = '', pageName = '') {
   const imageBase = basename(String(imageName || '').replace(/\\/g, '/').trim()).toLowerCase();
   const pageBase = canonicalAtlasPageName(pageName).toLowerCase();
-  if (!imageBase || !pageBase) return false;
-  if (imageBase === pageBase) return true;
-  if (pageBase.endsWith(imageBase)) return true;
-  if (imageBase.endsWith(pageBase)) return true;
-  return false;
+  return Boolean(imageBase && pageBase && imageBase === pageBase);
 }
 
 function safePublicVideo(value = '') {
@@ -1374,8 +1375,23 @@ function createHtml(config) {
       function initialSet() {
         const querySet = queryValue("set");
         const queryAnimation = queryValue("animation");
-        if (querySet) return sets.find((set) => set.label === querySet) || null;
-        return sets.find((set) => setHasAnimation(set, queryAnimation)) || sets.find((set) => set.label === config.activeLabel) || sets[0] || null;
+        if (querySet) {
+          const matches = sets.filter((set) => set.label === querySet);
+          return matches.length === 1 ? matches[0] : null;
+        }
+        if (config.sourceSetRequired) {
+          const matches = sets.filter((set) => set.label === config.sourceSetLabel);
+          return matches.length === 1 ? matches[0] : null;
+        }
+        if (queryAnimation) {
+          const matches = sets.filter((set) => setHasAnimation(set, queryAnimation));
+          return matches.length === 1 ? matches[0] : null;
+        }
+        if (config.activeLabel) {
+          const matches = sets.filter((set) => set.label === config.activeLabel);
+          return matches.length === 1 ? matches[0] : null;
+        }
+        return sets.length === 1 ? sets[0] : null;
       }
       function initialAnimation(set) {
         const queryAnimation = queryValue("animation");
@@ -2617,12 +2633,17 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     // Historical Spine 3.8 exports can reference DXT5 .dds page files.
     // Those original assets remain immutable; /assets/...dds decodes them
     // on demand to PNG for the web player.
-    const textureUrls = atlasPages.map((pageName) => {
-      const matchedTexture =
-        textures.find((texture) => imageMatchesAtlasPage(texture.name, pageName)) ??
-        (textures.length === 1 ? textures[0] : null);
-      return matchedTexture ? versionedAssetUrl(origin, matchedTexture, matchedTexture.sha) : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5U9WcAAAAASUVORK5CYII=';
-    });
+    const textureMatches = matchAtlasPagesToTextures(
+      atlasPages,
+      textures,
+      (texture, pageName) => imageMatchesAtlasPage(texture.name, pageName),
+    );
+    if (!textureMatches) {
+      console.warn('SPINE_ATLAS_TEXTURE_SET_INCOMPLETE');
+      continue;
+    }
+    const textureUrls = textureMatches.map((texture) =>
+      versionedAssetUrl(origin, texture, texture.sha));
     const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
 
     const assetVersion = [skeleton.sha, atlas.sha, ...textures.map((texture) => texture.sha),
@@ -2716,6 +2737,13 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
   } catch {
     note = '';
   }
+  const indexedSkeletonName = sourceAssetName(entry?.skeleton || entry?.skeletonFile || '');
+  const indexedAtlasName = sourceAssetName(entry?.atlas || entry?.atlasFile || '');
+  const sourceSetRequired = Boolean(indexedSkeletonName || indexedAtlasName);
+  const sourceSetMatches = sourceSetRequired ? sets.filter((set) =>
+    (!indexedSkeletonName || sourceAssetName(set.skeleton) === indexedSkeletonName) &&
+    (!indexedAtlasName || sourceAssetName(set.atlas) === indexedAtlasName)) : [];
+  const sourceSetLabel = sourceSetMatches.length === 1 ? sourceSetMatches[0].label : '';
   const publicArchiveEntry = isPublicArchiveEntry(entry, exclusions);
   const playerUrl = publicArchiveEntry ? playerUrlForEntry(origin, entry, entryId) : pageUrlForEntry(origin, entryId);
   const archiveUrl = publicArchiveEntry ? archiveUrlForEntry(origin, entry, entryId) : '';
@@ -2761,7 +2789,10 @@ ${waiting ? '<small>This page will refresh when the editor export finishes.</sma
     };
   }
   return {
-    html: createHtml({ sets, note, ownerProfile, entryId, entry, origin, video, metrics, robots, playerUrl, archiveUrl }),
+    html: createHtml({
+      sets, note, ownerProfile, entryId, entry, origin, video, metrics, robots, playerUrl, archiveUrl,
+      sourceSetRequired, sourceSetLabel,
+    }),
     robots,
   };
 }
