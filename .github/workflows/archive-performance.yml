@@ -11,6 +11,14 @@ on:
       - tests/archive-initial-timing.test.mjs
       - tests/spine-runtime-file-selection.test.mjs
       - tests/spine-atlas-integrity.test.mjs
+      - tests/no-animation-substitution.test.mjs
+      - scripts/preview-animation-choice.mjs
+      - scripts/spine-export-webm.mjs
+      - src/SpineApp.tsx
+      - lib/agent-animation.js
+      - lib/spine-data-science.js
+      - scripts/spine-project-cloud-export.mjs
+      - .github/workflows/spine-export-full.yml
       - lib/spine-atlas-integrity.js
       - lib/spine-runtime-file-selection.js
       - api/github-preview.js
@@ -26,6 +34,14 @@ on:
       - tests/animation-menu-scroll.test.mjs
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
+      - tests/no-animation-substitution.test.mjs
+      - scripts/preview-animation-choice.mjs
+      - scripts/spine-export-webm.mjs
+      - src/SpineApp.tsx
+      - lib/agent-animation.js
+      - lib/spine-data-science.js
+      - scripts/spine-project-cloud-export.mjs
+      - .github/workflows/spine-export-full.yml
       - .github/workflows/archive-performance.yml
       - .github/workflows/vercel-deploy-and-alias.yml
       - .github/workflows/archive-live-speed.yml
@@ -35,7 +51,7 @@ permissions:
 jobs:
   archive-regression:
     runs-on: ubuntu-24.04
-    timeout-minutes: 6
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,4 +61,11 @@ jobs:
         run: |
           node --check api/github-archive.js
           node --check api/github-preview.js
-          node --test tests/archive-speed.test.mjs tests/archive-initial-timing.test.mjs tests/preview-animation-identity.test.mjs tests/animation-menu-scroll.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs
+          node --check api/github-upload.js
+          node --check scripts/spine-export-webm.mjs
+          node --check scripts/spine-project-cloud-export.mjs
+          node --check lib/agent-animation.js
+          node --check lib/spine-data-science.js
+          node --test tests/archive-speed.test.mjs tests/archive-initial-timing.test.mjs tests/preview-animation-identity.test.mjs tests/animation-menu-scroll.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs tests/no-animation-substitution.test.mjs
+      - name: Install dependencies and build the browser app
+        run: npm ci --no-audit --no-fund && npm run build
