@@ -49,6 +49,16 @@ test('hourly archive audit traverses every page and checks real poster/video med
   assert.match(workflow,/frameHashes\.size>=8/,'representative videos must expose eight distinct frames');
   assert.match(workflow,/nonzeroFrames>=8/,'representative videos must expose eight nonzero frames');
   assert.match(workflow,/lazyOrderFailures/,'WebM must not be requested before its own poster');
+  assert.match(workflow,/reportedCardHashes/,'the 18 known reported works and exact priority work must be targeted without public identifiers');
+  assert.match(workflow,/reportedCardIndexes/);
+  assert.match(workflow,/reportedPlayableIndexes/);
+  assert.match(workflow,/reportedPlaybackFailures/);
+  assert.match(workflow,/priorityPlayback\?\.ok===true/);
+  assert.match(workflow,/createHash\('sha256'\)/);
+  assert.match(workflow,/archiveIds/);
+  assert.match(workflow,/reportedUnexpectedMissing/);
+  assert.doesNotMatch(workflow,/boss_1-2026|Spine-animation-2026-11-17|wolf_v13|config-2026-11-17/,
+    'private work identifiers must not be embedded in the public live workflow');
   assert.match(workflow,/unexpectedMissing/,'missing previews must have explicit blocked/failed status');
   assert.match(workflow,/maxAppendMs<=1000/,'each archive page batch must meet the one-second target');
   assert.doesNotMatch(workflow,/JSON\.stringify\(allCards|console\.log\([^\n]*entryId/,

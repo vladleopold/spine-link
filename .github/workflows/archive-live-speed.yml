@@ -48,8 +48,33 @@ jobs:
           set -euo pipefail
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
           import { chromium } from 'playwright';
           const browser=await chromium.launch({headless:true});
+          // Keep reported work identifiers out of public workflow source and logs.
+          // Their SHA-256 fingerprints let the live audit target every known case.
+          const reportedCardHashes = new Set([
+  "62d25b9d3e9fde66b2d4dc466c3bd8d9f7f06647a14650e89b5cd9ea0d24d776",
+  "fa75396f581f1f03fbcfacc7f0a42f39a7051ebd12f4ce77ead9e60290ab7234",
+  "5a0250637c6c2801b722a76bf47e185f223333e35e948de1bcf9e06b206f411a",
+  "67d97adbc7df92d4339a8ad0ca51479a717df2ebe134883232be437fe7ed1ff6",
+  "74a314556219228c44272c6268c89c25e85acd9b4510e56600aa7720dadda70b",
+  "80e0fcd08dbcfb4c0c9fe1888de33c259740ee7418f09ba516920f30009332ae",
+  "8dbdaca06478ed90d0b6adb59284aa1d901b7b1d562a3db7a680aab018ff6333",
+  "04908cbea596d3fd8ce1f53b3943e0f928f37c5399f0e818c96db530bb86493f",
+  "e02c03144105f87cb5b679cfd609f0904d94fb3b7ce1e1f7819936495a6f0aa1",
+  "1444b2a9bb60643a220968d6dfd49530c25f4506952a0c1925a91cb2011efca0",
+  "13e52a684a56a95a59377fbd9537d0f920935dfa8bc1c8a386c16d74d7fbe1d6",
+  "1efc4e6ff6107aaad38b2b3bfe8ebba47ee5737e272ca9bf49b9f0f3ff1939e7",
+  "527b52379b3ceba6cd73341446bdedd20bd7c3f1968a42da3fde68ba3cb11fa1",
+  "8b3e9a49d19869d9d1dcb865fa50440e2ebdfdca544345cb8145d65a912ad23c",
+  "cd02d69b3b85244d6beda46283ee8288efd8fd5139bb85705ca2d5af7bc34541",
+  "c567cd4b88a77c6cb38e8d30e632861e664cdcae3390e88f12df60c1d24a2a9f",
+  "f7bcebd41955d613e7a28d7712ec53a5cf64ba1757c518e73c43d797f75da591",
+  "83ed7e4b55895d001a99c5b856b2e8081e5373530f8b2f31c2679238b5b811b3",
+  "558d06592d696a0663169bd097de8332d60052f6f7f11fa2e93a212b038495f5"
+]);
+          const priorityCardHash = '558d06592d696a0663169bd097de8332d60052f6f7f11fa2e93a212b038495f5';
           try {
             for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
               const page=await browser.newPage({viewport});
@@ -207,6 +232,32 @@ jobs:
                   mediaText:(card.querySelector('.feed-media')?.textContent||'').trim(),
                 };
               }));
+              const archiveIds=await page.locator('.feed-card').evaluateAll(cards=>
+                cards.map(card=>card.dataset.entryId||''));
+              assert.equal(archiveIds.length,allCards.length,
+                'Every rendered archive card must expose a stable internal identity');
+              const archiveIdHashes=archiveIds.map(id=>
+                createHash('sha256').update(id).digest('hex'));
+              const reportedCardIndexes=archiveIdHashes.map((hash,index)=>
+                reportedCardHashes.has(hash)?index:-1).filter(index=>index>=0);
+              assert.equal(reportedCardIndexes.length,reportedCardHashes.size,
+                'Every known reported work must be present in the full archive');
+              const priorityCardIndex=archiveIdHashes.indexOf(priorityCardHash);
+              assert.ok(priorityCardIndex>=0,'The exact priority work must be present in the full archive');
+              const reportedPlayableIndexes=reportedCardIndexes.filter(index=>
+                allCards[index].video&&allCards[index].poster);
+              const reportedMissingIndexes=reportedCardIndexes.filter(index=>
+                !allCards[index].video||!allCards[index].poster);
+              const reportedUnexpectedMissing=reportedMissingIndexes.filter(index=>{
+                const item=allCards[index];
+                return !['blocked','failed'].includes(item.sourcePreviewStatus)&&
+                  !item.sourceWebmStatus.startsWith('blocked-')&&item.sourceWebmStatus!=='failed';
+              });
+              const priorityHasPair=Boolean(allCards[priorityCardIndex].video&&allCards[priorityCardIndex].poster);
+              assert.deepEqual(reportedUnexpectedMissing,[],
+                'A known reported work without a media pair must be explicitly blocked/failed');
+              assert.ok(priorityHasPair,
+                'The exact priority work must expose its own WebM/WebP pair before playback acceptance');
               const expectedTotal=await page.locator('.legend').evaluate(el=>
                 Number(el.textContent.match(/(\d+)\s+works/i)?.[1]||0));
               assert.ok(expectedTotal>0,'Archive total card count is missing');
@@ -295,12 +346,17 @@ jobs:
                 ![200,206,304].includes(item.status)||
                 (item.status!==304&&(item.type==='webp'?!item.contentType.includes('image/webp'):!item.contentType.includes('video/webm'))));
               const pairedIndexes=allCards.map((item,index)=>item.video&&item.poster?index:-1).filter(index=>index>=0);
+              const reportedIndexSet=new Set(reportedPlayableIndexes);
               const sampleIndexes=[...new Set([
                 ...pairedIndexes.slice(0,10),
                 ...pairedIndexes.filter((_,index)=>index%20===0),
+                ...reportedPlayableIndexes,
                 pairedIndexes.at(-1),
               ].filter(index=>Number.isInteger(index)&&index>=0))];
-              const sampleItems=sampleIndexes.map(i=>({video:allCards[i].video,poster:allCards[i].poster}));
+              const sampleItems=sampleIndexes.map(i=>({
+                video:allCards[i].video,poster:allCards[i].poster,
+                reported:reportedIndexSet.has(i),priority:i===priorityCardIndex,
+              }));
               const playbackSamples=await page.evaluate(async items=>{
                 async function inspect(item){
                   const image=new Image();
@@ -379,16 +435,21 @@ jobs:
                   return {ok:width>0&&height>0&&duration>=0.5&&
                     after>before+0.05&&frameHashes.size>=8&&nonzeroFrames>=8&&
                     frameChanges>=7&&motionDiff>0.2&&posterDiff<=35,
+                    reported:item.reported===true,priority:item.priority===true,
                     width,height,duration,advanced:after>before+0.05,
                     distinctFrames:frameHashes.size,nonzeroFrames,frameChanges,motionDiff,posterDiff};
                 }
                 const results=[];
                 for(const item of items){
                   try{results.push(await inspect(item));}
-                  catch{results.push({ok:false,advanced:false,motionDiff:0,posterDiff:999});}
+                  catch{results.push({ok:false,reported:item.reported===true,priority:item.priority===true,
+                    advanced:false,motionDiff:0,posterDiff:999});}
                 }
                 return results;
               },sampleItems);
+              const reportedPlaybackSamples=playbackSamples.filter(item=>item.reported).length;
+              const reportedPlaybackFailures=playbackSamples.filter(item=>item.reported&&!item.ok).length;
+              const priorityPlayback=playbackSamples.find(item=>item.priority);
               const posterFailures=posterDecodeResults.filter(x=>!x.ok);
               const webmFailures=webmProbeResults.filter(x=>!x.ok);
               const sampleFailures=playbackSamples.filter(x=>!x.ok);
@@ -403,6 +464,9 @@ jobs:
                 lazyWebmRequests:mediaRequests.filter(x=>x.type==='webm').length,
                 lazyOrderFailures:lazyOrderFailures.length,mediaResponseFailures:mediaResponseFailures.length,
                 playbackSamples:playbackSamples.length,playbackFailures:sampleFailures.length,
+                reportedWorks:reportedCardIndexes.length,reportedPlayable:reportedPlaybackSamples,
+                reportedMissing:reportedMissingIndexes.length,reportedPlaybackFailures,
+                priorityPlayback:priorityPlayback?.ok===true,
                 blockedApiRequests,pageErrors:pageErrors.length,initialMs:initialPosterMs,initialTiming,
               }));
               assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
@@ -417,6 +481,11 @@ jobs:
               assert.ok(paired.length>=8,'Fewer than eight real archive preview pairs are available');
               assert.ok(playbackSamples.length>=8,'Fewer than eight representative WebM animations were decoded');
               assert.equal(sampleFailures.length,0,'A representative archive WebM failed 8-frame, first-frame-match or moving-playback acceptance');
+              assert.equal(reportedPlaybackFailures,0,'A known reported work with media failed exact-pair playback acceptance');
+              assert.equal(reportedPlaybackSamples,reportedPlayableIndexes.length,
+                'Every available known reported work must be included in playback acceptance');
+              assert.equal(priorityPlayback?.ok,true,
+                'The exact priority work must decode, play and show eight distinct moving frames');
               assert.ok(maxAppendMs<=1000,'A full archive page batch exceeded the one-second card loading target: '+maxAppendMs+'ms');
               assert.ok(latency<=1000,'Initial next card batch took more than one second: '+latency+'ms');
               assert.ok(posterMs<=1000,'Initial next batch WebP posters took more than one second: '+posterMs+'ms');
