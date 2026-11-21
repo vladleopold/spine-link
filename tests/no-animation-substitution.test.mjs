@@ -34,6 +34,25 @@ test('the main and extra players never infer a default from the first runtime an
   assert.doesNotMatch(app, /Automatic preview fallback after publish\/save|publishToGitHub\(preparedSpine, animations, fallback\)/);
 });
 
+test('manual skeleton import never infers idle or the first animation as the default', () => {
+  const app = read('../src/SpineApp.tsx');
+  const start = app.indexOf('const animationNames =');
+  const end = app.indexOf('const skinNames =', start);
+  assert.ok(start >= 0 && end > start, 'animation-selection block must remain discoverable');
+  const selection = app.slice(start, end);
+  assert.match(selection, /const defaultAnimation = "";/);
+  assert.doesNotMatch(selection, /animationNames\\.find|animationNames\\s*\\[/);
+});
+
+test('WebM export records only the requested animation and never guesses a named skin', () => {
+  const exporter = read('../scripts/spine-export-webm.mjs');
+  assert.match(exporter, /const captureAnimation = targetAnimation;/);
+  assert.doesNotMatch(exporter, /scenarioEntry|scenarioExit|scenarioIdle|scenarioCycle|__spineScenario/);
+  assert.match(exporter, /const skinCandidates = \\[null\\]/);
+  assert.match(exporter, /DEFAULT_SKIN_NO_VISIBLE_CONTENT/);
+  assert.doesNotMatch(exporter, /skinNames\\.filter|trying next skin/);
+});
+
 test('post-publish export keeps the exact indexed animation and blocks a missing selected preview', () => {
   const workflow = read('../.github/workflows/spine-export-full.yml');
   assert.match(workflow, /const chosenAnim = typeof indexData\[entryIndex\]\?\.defaultAnimation === 'string'/);
