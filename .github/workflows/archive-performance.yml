@@ -14,7 +14,6 @@ on:
       - lib/spine-atlas-integrity.js
       - lib/spine-atlas-texture-matching.js
       - lib/spine-runtime-file-selection.js
-      - lib/spine-atlas-texture-matching.js
       - api/github-preview.js
       - src/main.tsx
       - .github/workflows/archive-performance.yml
@@ -28,6 +27,7 @@ on:
       - tests/animation-menu-scroll.test.mjs
       - tests/archive-speed.test.mjs
       - tests/archive-initial-timing.test.mjs
+      - lib/spine-atlas-texture-matching.js
       - .github/workflows/archive-performance.yml
       - .github/workflows/vercel-deploy-and-alias.yml
       - .github/workflows/archive-live-speed.yml
