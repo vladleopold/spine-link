@@ -294,11 +294,12 @@ jobs:
               const mediaResponseFailures=mediaResponses.filter(item=>
                 ![200,206,304].includes(item.status)||
                 (item.status!==304&&(item.type==='webp'?!item.contentType.includes('image/webp'):!item.contentType.includes('video/webm'))));
+              const pairedIndexes=allCards.map((item,index)=>item.video&&item.poster?index:-1).filter(index=>index>=0);
               const sampleIndexes=[...new Set([
-                0,9,19,39,
-                ...Array.from({length:Math.ceil(allCards.length/20)},(_,i)=>i*20),
-                allCards.length-1,
-              ])].filter(i=>i>=0&&i<allCards.length&&allCards[i].video&&allCards[i].poster);
+                ...pairedIndexes.slice(0,10),
+                ...pairedIndexes.filter((_,index)=>index%20===0),
+                pairedIndexes.at(-1),
+              ].filter(index=>Number.isInteger(index)&&index>=0))];
               const sampleItems=sampleIndexes.map(i=>({video:allCards[i].video,poster:allCards[i].poster}));
               const playbackSamples=await page.evaluate(async items=>{
                 async function inspect(item){
@@ -337,18 +338,49 @@ jobs:
                   const firstPixels=pixels(video);
                   const posterDiff=difference(posterPixels,firstPixels);
                   const before=video.currentTime;
-                  await video.play();
-                  await new Promise(resolve=>setTimeout(resolve,400));
-                  const after=video.currentTime;
-                  const secondPixels=pixels(video);
-                  const motionDiff=difference(firstPixels,secondPixels);
                   const width=video.videoWidth,height=video.videoHeight,duration=video.duration;
+                  await video.play();
+                  const frameHashes=new Set();
+                  let nonzeroFrames=0,frameChanges=0,previousPixels=firstPixels;
+                  const hashFrame=data=>{
+                    let hash=2166136261;
+                    for(let i=0;i<data.length;i+=4){
+                      hash^=data[i];hash=Math.imul(hash,16777619);
+                      hash^=data[i+1];hash=Math.imul(hash,16777619);
+                      hash^=data[i+2];hash=Math.imul(hash,16777619);
+                    }
+                    return hash>>>0;
+                  };
+                  const peak=data=>{
+                    let value=0;
+                    for(let i=0;i<data.length;i+=4)
+                      value=Math.max(value,data[i],data[i+1],data[i+2]);
+                    return value;
+                  };
+                  frameHashes.add(hashFrame(firstPixels));
+                  if(peak(firstPixels)>12)nonzeroFrames++;
+                  for(let frame=1;frame<8;frame++){
+                    await new Promise(resolve=>{
+                      if(typeof video.requestVideoFrameCallback==='function')
+                        video.requestVideoFrameCallback(()=>resolve());
+                      else setTimeout(resolve,120);
+                    });
+                    const currentPixels=pixels(video);
+                    if(peak(currentPixels)>12)nonzeroFrames++;
+                    if(difference(previousPixels,currentPixels)>0.2)frameChanges++;
+                    frameHashes.add(hashFrame(currentPixels));
+                    previousPixels=currentPixels;
+                  }
+                  const after=video.currentTime;
+                  const motionDiff=difference(firstPixels,previousPixels);
                   video.pause();
                   video.removeAttribute('src');
                   video.load();
                   return {ok:width>0&&height>0&&duration>=0.5&&
-                    after>before+0.05&&motionDiff>0.2&&posterDiff<=35,
-                    width,height,duration,advanced:after>before+0.05,motionDiff,posterDiff};
+                    after>before+0.05&&frameHashes.size>=8&&nonzeroFrames>=8&&
+                    frameChanges>=7&&motionDiff>0.2&&posterDiff<=35,
+                    width,height,duration,advanced:after>before+0.05,
+                    distinctFrames:frameHashes.size,nonzeroFrames,frameChanges,motionDiff,posterDiff};
                 }
                 const results=[];
                 for(const item of items){
@@ -382,7 +414,9 @@ jobs:
               assert.equal(webmFailures.length,0,'A card WebM returned invalid bytes or content type');
               assert.equal(mediaResponseFailures.length,0,'A live archive WebP/WebM request returned an HTTP error');
               assert.equal(lazyOrderFailures.length,0,'A card WebM was requested before its own WebP poster');
-              assert.equal(sampleFailures.length,0,'A representative archive WebM failed first-frame match or moving playback');
+              assert.ok(paired.length>=8,'Fewer than eight real archive preview pairs are available');
+              assert.ok(playbackSamples.length>=8,'Fewer than eight representative WebM animations were decoded');
+              assert.equal(sampleFailures.length,0,'A representative archive WebM failed 8-frame, first-frame-match or moving-playback acceptance');
               assert.ok(maxAppendMs<=1000,'A full archive page batch exceeded the one-second card loading target: '+maxAppendMs+'ms');
               assert.ok(latency<=1000,'Initial next card batch took more than one second: '+latency+'ms');
               assert.ok(posterMs<=1000,'Initial next batch WebP posters took more than one second: '+posterMs+'ms');
