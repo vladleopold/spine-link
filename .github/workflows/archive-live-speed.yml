@@ -43,6 +43,7 @@ jobs:
           set -euo pipefail
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
           import { chromium } from 'playwright';
           const browser=await chromium.launch({headless:true});
           try {
@@ -325,6 +326,7 @@ jobs:
               const cardRows=await page.locator('.feed-card').evaluateAll(cards=>cards.map(card=>({
                 id:card.dataset.entryId||'',
                 playerUrl:card.dataset.playerUrl||'',
+                animationHash:card.dataset.animationHash||'',
                 poster:card.querySelector('.feed-media img')?.currentSrc||card.querySelector('.feed-media img')?.src||'',
                 video:card.dataset.videoSrc||'',
                 status:card.dataset.previewStatus||'',
@@ -338,11 +340,14 @@ jobs:
                   const videoName=video.pathname.split('/').pop().toLowerCase();
                   const posterName=poster.pathname.split('/').pop().toLowerCase();
                   const playerId=decodeURIComponent(player.pathname.split('/').pop()||'');
+                  const selectedAnimation=player.searchParams.get('animation')||'';
+                  const expectedAnimationHash=selectedAnimation
+                    ?createHash('sha256').update(selectedAnimation).digest('hex'):'';
                   return !['preview-medium.webm','preview-low.webm'].includes(videoName)||
                     posterName!==videoName.replace(/\.webm$/,'.webp')||
                     poster.pathname.slice(0,poster.pathname.lastIndexOf('/'))!==
                       video.pathname.slice(0,video.pathname.lastIndexOf('/'))||
-                    !player.searchParams.get('animation')||playerId!==row.id;
+                    !selectedAnimation||expectedAnimationHash!==row.animationHash||playerId!==row.id;
                 }catch{return true;}
               });
               assert.deepEqual(invalidCards,[],'An archive card has mismatched media, no exact animation link, or an unblocked empty state');
