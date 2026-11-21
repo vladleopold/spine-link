@@ -2,10 +2,66 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { matchAtlasPageTextures } from '../lib/spine-atlas-texture-matching.js';
-import { resolveIndexedPreviewSet } from '../lib/preview-set-selection.js';
+import { resolveIndexedPreviewSet, resolveIndexedSpineSourceFiles } from '../lib/preview-set-selection.js';
 
 const preview = fs.readFileSync(new URL('../api/github-preview.js', import.meta.url), 'utf8');
 const archive = fs.readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
+
+
+test('atlas page matching never accepts a suffix-only texture filename', () => {
+  const matcher = section(preview, 'function imageMatchesAtlasPage', 'function safePublicVideo');
+  assert.match(matcher, /imageBase === pageBase/);
+  assert.doesNotMatch(matcher, /endsWith/);
+  const exact = (imageName, pageName) =>
+    String(imageName).toLowerCase() === String(pageName).toLowerCase();
+  const real = { name: 'character.png', path: 'work/character.png' };
+  const suffixOnly = { name: 'other-character.png', path: 'work/other-character.png' };
+  assert.deepEqual(matchAtlasPageTextures(['character.png'], [real], exact), [real]);
+  assert.equal(matchAtlasPageTextures(['character.png'], [suffixOnly], exact), null,
+    'a similar suffix is not proof that the source texture is the atlas page');
+});
+
+test('indexed skeleton and atlas are resolved before API listing order can select a pair', () => {
+  const unrelatedSkeleton = { type: 'file', name: 'Other.skel' };
+  const unrelatedAtlas = { type: 'file', name: 'Other.atlas' };
+  const targetSkeleton = { type: 'file', name: 'Target Rig.skel' };
+  const targetAtlas = { type: 'file', name: 'Target Rig.atlas' };
+  const files = [unrelatedSkeleton, unrelatedAtlas, targetSkeleton, targetAtlas];
+  assert.deepEqual(resolveIndexedSpineSourceFiles(files, {
+    skeleton: 'https://spine-link.vercel.app/assets/library/work/Target%20Rig.skel?v=1',
+    atlas: 'Target Rig.atlas',
+  }), { skeleton: targetSkeleton, atlas: targetAtlas });
+  assert.equal(resolveIndexedSpineSourceFiles(files, {
+    skeleton: 'Target Rig.skel', atlas: 'Missing.atlas',
+  }), null, 'a missing indexed atlas must block instead of choosing the first atlas');
+  assert.equal(resolveIndexedSpineSourceFiles(files, {}),
+    null, 'multiple source pairs without index names are ambiguous');
+  assert.deepEqual(resolveIndexedSpineSourceFiles([
+    { type: 'file', name: 'Only.json' },
+    { type: 'file', name: 'Only.atlas' },
+    { type: 'file', name: 'Only.png' },
+  ], {}), {
+    skeleton: { type: 'file', name: 'Only.json' },
+    atlas: { type: 'file', name: 'Only.atlas' },
+  });
+});
+
+test('single indexed source filename resolves only its uniquely corresponding counterpart', () => {
+  const skeleton = { type: 'file', name: 'Rig.skel' };
+  const atlas = { type: 'file', name: 'Rig.atlas' };
+  const unrelated = { type: 'file', name: 'Other.atlas' };
+  assert.deepEqual(resolveIndexedSpineSourceFiles([skeleton, atlas, unrelated], {
+    skeletonFile: 'Rig.skel',
+  }), { skeleton, atlas });
+  assert.deepEqual(resolveIndexedSpineSourceFiles([skeleton, atlas, {
+    type: 'file', name: 'Other.skel',
+  }], { atlasFile: 'Rig.atlas' }), { skeleton, atlas });
+});
+
+test('preview API resolves the indexed pair before selecting an atlas or skeleton', () => {
+  assert.match(preview, /resolveIndexedSpineSourceFiles\(files, entry\)/);
+  assert.doesNotMatch(preview, /items\.find\(\(item\) => item\.type === 'file' && isAtlas\(item\.name\)\)/);
+});
 
 test('atlas pages require unique source textures and never use synthetic placeholders', () => {
   const matchExact = (imageName, pageName) =>

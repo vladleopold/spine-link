@@ -1,7 +1,7 @@
-import { selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
+
 import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
 import { matchAtlasPageTextures } from '../lib/spine-atlas-texture-matching.js';
-import { resolveIndexedPreviewSet } from '../lib/preview-set-selection.js';
+import { resolveIndexedPreviewSet, resolveIndexedSpineSourceFiles } from '../lib/preview-set-selection.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
@@ -211,11 +211,7 @@ function canonicalAtlasPageName(pageName = '') {
 function imageMatchesAtlasPage(imageName = '', pageName = '') {
   const imageBase = basename(String(imageName || '').replace(/\\/g, '/').trim()).toLowerCase();
   const pageBase = canonicalAtlasPageName(pageName).toLowerCase();
-  if (!imageBase || !pageBase) return false;
-  if (imageBase === pageBase) return true;
-  if (pageBase.endsWith(imageBase)) return true;
-  if (imageBase.endsWith(pageBase)) return true;
-  return false;
+  return Boolean(imageBase && pageBase && imageBase === pageBase);
 }
 
 function safePublicVideo(value = '') {
@@ -2594,10 +2590,13 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
 
   for (const directory of setDirectories) {
     const items = await githubList(settings, directory.path);
-    const skeleton = selectSpineRuntimeSkeleton(items.filter(item => item.type === 'file'),
-      items.find(item => item.type === 'file' && isAtlas(item.name))?.name);
-    const atlas = items.find((item) => item.type === 'file' && isAtlas(item.name));
-    const textures = items.filter((item) => item.type === 'file' && isImage(item.name));
+    const files = items.filter((item) => item.type === 'file');
+    // Resolve the indexed skeleton/atlas pair before reading either source.
+    // Never let API listing order choose the first atlas or skeleton.
+    const sourcePair = resolveIndexedSpineSourceFiles(files, entry);
+    const skeleton = sourcePair?.skeleton || null;
+    const atlas = sourcePair?.atlas || null;
+    const textures = files.filter((item) => isImage(item.name));
     if (!skeleton || !atlas || textures.length === 0) continue;
 
     let skeletonJson = null;
