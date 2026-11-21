@@ -86,12 +86,14 @@ function selectedAnimationVideo(entry = {}) {
 
 function entryVideoSrc(origin, entry = {}) {
   const selected = selectedAnimationVideo(entry);
-  return selected.full || selected.medium || selected.low;
+  const hasPoster = Boolean(selected.poster || selected.posterMedium || selected.posterLow);
+  return hasPoster ? selected.full || selected.medium || selected.low : '';
 }
 
 function entryVideoLowSrc(origin, entry = {}) {
   const selected = selectedAnimationVideo(entry);
-  return selected.low || selected.medium || selected.full;
+  const hasPoster = Boolean(selected.poster || selected.posterMedium || selected.posterLow);
+  return hasPoster ? selected.low || selected.medium || selected.full : '';
 }
 function safeAsset(value = '') {
   const url = String(value).trim();
@@ -764,31 +766,26 @@ function fallbackPosterAssetUrl(origin, entry = {}) {
 }
 
 function entryImageUrl(origin, entry) {
+  if (!hasExplicitDefaultAnimation(entry)) return '';
   const selected = selectedAnimationVideo(entry);
-  const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-  const staticThumbnail = isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
-  if (!hasExplicitDefaultAnimation(entry)) return staticThumbnail;
-  return selected.posterMedium || selected.poster || selected.posterLow || staticThumbnail;
+  return selected.posterMedium || selected.poster || selected.posterLow || '';
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, altText = '', fetchpriority = '' } = {}) {
   const selected = selectedAnimationVideo(entry);
-  const video = selected.full || selected.medium || selected.low;
   const poster = selected.posterMedium || selected.poster || selected.posterLow;
-  const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-  const thumbnail = isGifThumbnail ? poster : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
+  const video = poster ? selected.full || selected.medium || selected.low : '';
   const alt = altText || escapeHtml(entry?.title || entry?.id || 'Spine animation preview');
   const fp = fetchpriority ? ` fetchpriority="${escapeHtml(fetchpriority)}"` : '';
   const loading = fetchpriority === 'high' ? '' : ' loading="lazy"';
   if (video) {
     const videoSource = ` src="${escapeHtml(video)}"`;
     const preload = eagerVideo ? 'metadata' : 'metadata';
-    const posterAttr = poster || thumbnail ? ` poster="${escapeHtml(poster || thumbnail)}"` : '';
+    const posterAttr = ` poster="${escapeHtml(poster)}"`;
     return `<video class="${posterClass}"${posterAttr}${videoSource} muted playsinline preload="${preload}" loop aria-label="${alt}"${fp} data-video-src="${escapeHtml(video)}"></video>`;
   }
-  if (thumbnail) {
-    const fallback = poster && poster !== thumbnail ? ` data-fallback-src="${escapeHtml(poster)}"` : '';
-    return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="${alt}"${loading} decoding="async"${fp} data-poster="${escapeHtml(poster || thumbnail)}"${fallback} onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried='1';this.src=this.dataset.fallbackSrc;}else{this.style.display='none';}" />`;
+  if (poster) {
+    return `<img class="${posterClass}" src="${escapeHtml(poster)}" alt="${alt}"${loading} decoding="async"${fp} data-poster="${escapeHtml(poster)}" onerror="this.style.display='none';" />`;
   }
   return `<div class="media-fallback" aria-label="${alt}">${Array.isArray(entry?.animations) ? entry.animations.length : 0}</div>`;
 }
