@@ -356,6 +356,7 @@ jobs:
             node -e "
               const fs = require('fs');
               const path = require('path');
+              const { hasSelectedPreviewMedia } = require('./scripts/lib/preview-export-status.cjs');
 
               const uploadId = '$UPLOAD_ID';
               const origin = '$ORIGIN';
@@ -474,7 +475,7 @@ jobs:
                 : '';
               const chosenPreview = chosenAnim ? allAnimPreviews[chosenAnim] : null;
               const chosenDuration = chosenPreview ? Number(chosenPreview.previewDuration) : NaN;
-              const hasChosenExport = Boolean(chosenPreview);
+              const hasChosenExport = hasSelectedPreviewMedia(chosenPreview);
               const blockedStatus = chosenAnim
                 ? 'blocked-selected-animation-preview-missing'
                 : 'blocked-missing-animation-selection';
