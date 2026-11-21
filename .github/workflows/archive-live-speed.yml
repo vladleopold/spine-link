@@ -227,6 +227,8 @@ jobs:
                   sourcePreviewStatus:card.dataset.sourcePreviewStatus||'',
                   video:card.dataset.videoSrc||'',
                   poster:image?.getAttribute('src')||'',
+                  playerUrl:card.dataset.playerUrl||'',
+                  animationHash:card.dataset.previewAnimationSha256||'',
                   imageCount:card.querySelectorAll('.feed-media img').length,
                   fallback:!!card.querySelector('[data-fallback-src],[data-video-fallback],.feed-placeholder,.media-fallback'),
                   mediaText:(card.querySelector('.feed-media')?.textContent||'').trim(),
@@ -263,6 +265,12 @@ jobs:
               assert.ok(expectedTotal>0,'Archive total card count is missing');
               assert.equal(allCards.length,expectedTotal,
                 'Archive pagination did not expose every available card');
+              const animationIdentityFailures=allCards.filter(item=>{
+                let selected='';
+                try{selected=new URL(item.playerUrl,'https://spine-link.vercel.app').searchParams.get('animation')||'';}catch{}
+                const expected=selected?createHash('sha256').update(selected).digest('hex'):'';
+                return item.animationHash!==expected||Boolean(item.video||item.poster)&&!expected;
+              });
               const paired=allCards.filter(item=>item.video&&item.poster);
               const pairIssues=allCards.filter(item=>{
                 if(!item.video&&!item.poster)return false;
@@ -466,11 +474,13 @@ jobs:
                 playbackSamples:playbackSamples.length,playbackFailures:sampleFailures.length,
                 reportedWorks:reportedCardIndexes.length,reportedPlayable:reportedPlaybackSamples,
                 reportedMissing:reportedMissingIndexes.length,reportedPlaybackFailures,
+                animationIdentityFailures:animationIdentityFailures.length,
                 priorityPlayback:priorityPlayback?.ok===true,
                 blockedApiRequests,pageErrors:pageErrors.length,initialMs:initialPosterMs,initialTiming,
               }));
               assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
               assert.deepEqual(pairIssues,[],'Mismatched animation-specific WebM/WebP pairs across archive');
+              assert.deepEqual(animationIdentityFailures,[],'Each archive card player URL must preserve the exact animation used for its media pair');
               assert.deepEqual(fallbacks,[],'Archive contains a fake image/text fallback');
               assert.deepEqual(unexpectedMissing,[],'A missing archive preview is not explicitly blocked/failed');
               assert.deepEqual(newest10UnexpectedMissing,[],'A newest-10 missing preview is not explicitly blocked/failed');

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import handler from '../api/github-archive.js';
 
 function response() {
@@ -152,6 +153,10 @@ test('only a matching medium WebM and its own medium first-frame WebP unlock a c
     assert.equal(res.code,200);
     const html=String(res.body);
     const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
+    const expectedAnimationHash=createHash('sha256').update('walk').digest('hex');
+    assert.match(card,new RegExp('data-preview-animation-sha256="' + expectedAnimationHash + '"'));
+    assert.match(card,/data-player-url="\/p\/card-000\?animation=walk"/,
+      'the player link must retain the exact indexed animation represented by the card hash');
     assert.match(card,/data-preview-status="poster-pending"/);
     assert.match(card,/src="https:\/\/spine-link\.vercel\.app\/assets\/library_02\/card-000\/preview-medium\.webp/,
       'poster is the medium WebP extracted from the medium video');
@@ -161,6 +166,36 @@ test('only a matching medium WebM and its own medium first-frame WebP unlock a c
       'no image/video fallback and no quality mismatch');
     assert.ok(html.includes("card.dataset.previewStatus!=='ready-poster-lazy-video'"));
     assert.ok(log.length<=6);
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
+
+
+test('an absent default animation never borrows a key from the animation map',async()=>{
+  const source=[{
+    ...entries[0],
+    previewPath:'library_02/card-000',
+    defaultAnimation:'',
+    allAnimationPreviews:{walk:entries[0].allAnimationPreviews.walk},
+  }];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-no-default-animation';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
+    assert.equal(res.code,200);
+    const html=String(res.body);
+    const card=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
+    assert.match(card,/data-preview-status="blocked-no-webm-poster"/);
+    assert.match(card,/data-player-url="\/p\/card-000"/);
+    assert.doesNotMatch(card,/data-player-url="[^"]*animation=/);
+    assert.doesNotMatch(card,/data-video-src=|data-preview-animation-sha256="[a-f0-9]{64}"/,
+      'no animation or media may be inferred from the available animation-map keys');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;

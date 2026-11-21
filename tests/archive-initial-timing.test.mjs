@@ -123,3 +123,14 @@ test('archive cards expose source-level blocked status without exposing preview 
   assert.doesNotMatch(source, /data-preview-error=/,
     'private source error details must not be copied into public card markup');
 });
+
+
+test('full archive browser proof ties each card media pair to its exact indexed animation', () => {
+  const source = readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
+  assert.match(source, /animationHash: selectedPreview\?\.name \? createHash\('sha256'\)/);
+  assert.match(source, /data-preview-animation-sha256=/);
+  assert.match(workflow, /animationIdentityFailures/);
+  assert.match(workflow, /new URL\(item\.playerUrl/);
+  assert.match(workflow, /createHash\('sha256'\)/);
+  assert.match(workflow, /assert\.deepEqual\(animationIdentityFailures,\[\]/);
+});
