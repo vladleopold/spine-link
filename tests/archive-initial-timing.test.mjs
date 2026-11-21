@@ -134,3 +134,12 @@ test('full archive browser proof ties each card media pair to its exact indexed 
   assert.match(workflow, /createHash\('sha256'\)/);
   assert.match(workflow, /assert\.deepEqual\(animationIdentityFailures,\[\]/);
 });
+
+
+test('archive batch timing waits for every visible new card poster, not an arbitrary subset', () => {
+  assert.match(workflow, /const visibleCards=newCards\.filter\(card=>/);
+  assert.match(workflow, /visibleCards\.every\(card=>/);
+  assert.match(workflow, /image\.complete&&image\.naturalWidth>0/);
+  assert.doesNotMatch(workflow, /\.length>=3/,
+    'three fast posters must not hide a slow visible card poster');
+});
