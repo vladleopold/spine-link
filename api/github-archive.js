@@ -214,7 +214,7 @@ function sameWorkAssetPath(value = "", entry = {}) {
     url = new URL(String(value || ""));
     pathname = decodeURIComponent(url.pathname);
   } catch { return false; }
-  if (url.protocol !== "https:" || url.username || url.password) return false;
+  if (url.origin !== "https://spine-link.vercel.app" || url.username || url.password) return false;
   return pathname.includes("/" + previewPath + "/") || pathname.includes("/library/" + id + "/");
 }
 

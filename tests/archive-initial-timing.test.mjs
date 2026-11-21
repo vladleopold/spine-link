@@ -70,8 +70,8 @@ test('reported preview identities stay opaque and live browser script syntax is 
   const block = workflow.match(/const reportedCardHashes = new Set\(\[([\s\S]*?)\]\);/);
   assert.ok(block, 'all reported work hashes must be declared');
   const hashes = [...block[1].matchAll(/"([a-f0-9]{64})"/g)].map(match => match[1]);
-  assert.equal(hashes.length, 19, 'the audit must target all 18 reported works plus the priority work');
-  assert.equal(new Set(hashes).size, 19, 'reported work hashes must be unique');
+  assert.equal(hashes.length, 20, 'the audit must target 18 reported works, the priority work, and one verified legacy pair');
+  assert.equal(new Set(hashes).size, 20, 'reported work hashes must be unique');
   const priority = workflow.match(/const priorityCardHash = '([a-f0-9]{64})';/);
   assert.ok(priority && hashes.includes(priority[1]), 'the priority work must be in the opaque identity set');
   const command = workflow.indexOf("node --input-type=module <<'NODE'");
