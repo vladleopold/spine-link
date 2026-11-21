@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { hasSelectedPreviewMedia } = require('../scripts/lib/preview-export-status.cjs');
 import { choosePreviewAnimation } from '../scripts/preview-animation-choice.mjs';
 import { chooseSourceSet } from '../scripts/lib/source-set-choice.mjs';
 import { chooseSourceSkeleton } from '../scripts/source-skeleton-choice.mjs';
@@ -121,4 +125,32 @@ test('preview skin selection does not substitute the first non-default skin', ()
   assert.match(app, /skinNames\.includes\("default"\) \? "default" : ""/);
   assert.match(preview, /skinNames\.includes\('default'\) \? 'default' : ''/);
   assert.doesNotMatch(app + preview, /skinNames\s*\[\s*0\s*\]/);
+});
+
+
+test('full-export readiness requires a real same-tier opaque WebM and WebP URL pair', () => {
+  assert.equal(hasSelectedPreviewMedia(null), false);
+  assert.equal(hasSelectedPreviewMedia({ previewDuration: 2 }), false);
+  assert.equal(hasSelectedPreviewMedia({ webmPreview: 'https://cdn.example/preview.webm' }), false);
+  assert.equal(hasSelectedPreviewMedia({ webpPoster: 'https://cdn.example/preview.webp' }), false);
+  assert.equal(hasSelectedPreviewMedia({
+    webmPreview: 'https://cdn.example/preview.webm',
+    webpPosterMedium: 'https://cdn.example/preview-medium.webp',
+  }), false);
+  assert.equal(hasSelectedPreviewMedia({
+    webmPreviewMedium: 'https://cdn.example/preview-medium.webm?version=1',
+    webpPosterMedium: 'https://cdn.example/preview-medium.webp?version=1',
+  }), true);
+  assert.equal(hasSelectedPreviewMedia({
+    webmPreview: 'https://cdn.example/preview.webm',
+    webpPoster: 'https://cdn.example/preview.webp',
+  }), true);
+  assert.equal(hasSelectedPreviewMedia({
+    webmPreview: 'not-a-url',
+    webpPoster: 'not-a-url',
+  }), false);
+  assert.equal(hasSelectedPreviewMedia({
+    webmPreview: 'https://cdn.example/preview.mp4',
+    webpPoster: 'https://cdn.example/preview.webp',
+  }), false);
 });
