@@ -57,6 +57,9 @@ test('the WebM exporter blocks an absent or unavailable selected animation inste
 test('the main and extra players never infer a default from the first runtime animation', () => {
   const app = read('../src/SpineApp.tsx');
   assert.doesNotMatch(app, /names\s*\[\s*0\s*\]|animations\s*\[\s*0\s*\]|names\.find\(\(animationName/);
+  assert.match(app, /const animationName = activeAnimationRef\.current \\|\\| preparedSpineRef\.current\\?\\.defaultAnimation \\|\\| \"\";\\s*if \\(!animationName\\) return;/);
+  assert.doesNotMatch(app, /animationsRef\\.current\\s*\\[\\s*0\\s*\\]/,
+    'loop-button playback must not start an unselected runtime track');
   assert.match(app, /const requestedAnimation = typeof configuredSpine\.defaultAnimation === "string"/);
   assert.match(app, /const requestedAnimation = typeof prepared\.defaultAnimation === "string"/);
   assert.match(app, /animation: extraSet \? extraSet\.activeAnimation/);
