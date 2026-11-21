@@ -4,6 +4,7 @@ import fs from 'node:fs';
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 const app = read('../src/SpineApp.tsx');
+const previewApi = read('../api/github-preview.js');
 const upload = read('../api/github-upload.js');
 const agent = read('../lib/agent-animation.js');
 const science = read('../lib/spine-data-science.js');
@@ -98,4 +99,11 @@ test('full export preserves the exact indexed default animation and never promot
   assert.ok(!block.includes("for (const a of"));
   assert.ok(!block.includes("defaultAnimation:"),
     "full export must not rewrite the indexed default animation");
+});
+
+test('preview API and React player never substitute the first Spine skin', () => {
+  assert.match(previewApi, /function preferredSkinName\\(skinNames\\) \\{\\s*return Array\\.isArray\\(skinNames\\) && skinNames\\.includes\\('default'\\) \\? 'default' : '';\\s*\\}/);
+  assert.doesNotMatch(previewApi, /skinNames\\s*\\[\\s*0\\s*\\]/);
+  assert.match(app, /function preferredSkinName\\(skinNames: string\\[\\]\\) \\{\\s*return Array\\.isArray\\(skinNames\\) && skinNames\\.includes\\("default"\\) \\? "default" : "";\\s*\\}/);
+  assert.doesNotMatch(app, /skinNames\\s*\\[\\s*0\\s*\\]/);
 });

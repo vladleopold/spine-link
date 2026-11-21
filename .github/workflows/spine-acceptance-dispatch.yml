@@ -4,6 +4,7 @@ on:
     branches: [fix/preview-dispatch-and-file-acceptance-20261118]
     paths:
       - api/github-upload.js
+      - api/github-preview.js
       - lib/agent-animation.js
       - lib/spine-data-science.js
       - scripts/spine-export-webm.mjs
@@ -16,6 +17,7 @@ on:
   pull_request:
     paths:
       - api/github-upload.js
+      - api/github-preview.js
       - lib/agent-animation.js
       - lib/spine-data-science.js
       - scripts/spine-export-webm.mjs
