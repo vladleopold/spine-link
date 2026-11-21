@@ -98,16 +98,20 @@ test('archive cards, detail pages and video pages never expose global media with
   assert.match(home, /previewAnimation: selectedPreview\.name/);
   assert.doesNotMatch(home, /entryVideoAsset\(entry\?\.webmPreview/);
 
-  const imageUrl = section(archive, 'function entryImageUrl(', 'function mediaHtml(');
+  const videoSrc = section(archive, 'function entryVideoSrc(', 'function safeAsset(');
+  assert.match(videoSrc, /hasPoster = Boolean\(selected\.poster \|\| selected\.posterMedium \|\| selected\.posterLow\)/);
+  assert.match(videoSrc, /return hasPoster \? selected\.full \|\| selected\.medium \|\| selected\.low : ''/);
+
+  const imageUrl = section(archive, 'function entryImageUrl(', 'function baseStyles(');
   assert.match(imageUrl, /selectedAnimationVideo\(entry\)/);
-  assert.match(imageUrl, /if \(!hasExplicitDefaultAnimation\(entry\)\) return staticThumbnail/);
-  assert.doesNotMatch(imageUrl, /entry\?\.webpPoster|entry\?\.thumbnailPoster|generatedThumbnailUrl|fallbackPosterAssetUrl/);
+  assert.match(imageUrl, /if \(!hasExplicitDefaultAnimation\(entry\)\) return ''/);
+  assert.doesNotMatch(imageUrl, /entry\?\.webpPoster|entry\?\.thumbnailPoster|entry\?\.thumbnail|generatedThumbnailUrl|fallbackPosterAssetUrl/);
 
   const media = section(archive, 'function mediaHtml(', 'function imageSizeFromBuffer(');
   assert.match(media, /const selected = selectedAnimationVideo\(entry\)/);
-  assert.match(media, /const video = selected\.full \|\| selected\.medium \|\| selected\.low/);
+  assert.match(media, /const video = poster \? selected\.full \|\| selected\.medium \|\| selected\.low : ''/);
   assert.match(media, /const poster = selected\.posterMedium \|\| selected\.poster \|\| selected\.posterLow/);
-  assert.doesNotMatch(media, /entry\?\.webpPoster|entry\?\.thumbnailPoster/);
+  assert.doesNotMatch(media, /entry\?\.webpPoster|entry\?\.thumbnailPoster|entry\?\.thumbnail/);
 
   const detail = section(archive, 'function archiveItemHtml(', 'function archiveVideoHtml(');
   assert.match(detail, /const mediaVideo = entryVideoSrc\(origin, entry\)/);
