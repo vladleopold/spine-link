@@ -69,7 +69,7 @@ test('hourly archive audit traverses every page and checks real poster/video med
 test('reported preview identities stay opaque and live browser script syntax is checked', () => {
   const block = workflow.match(/const reportedCardHashes = new Set\(\[([\s\S]*?)\]\);/);
   assert.ok(block, 'all reported work hashes must be declared');
-  const hashes = [...block[1].matchAll(/'([a-f0-9]{64})'/g)].map(match => match[1]);
+  const hashes = [...block[1].matchAll(/"([a-f0-9]{64})"/g)].map(match => match[1]);
   assert.equal(hashes.length, 19, 'the audit must target all 18 reported works plus the priority work');
   assert.equal(new Set(hashes).size, 19, 'reported work hashes must be unique');
   const priority = workflow.match(/const priorityCardHash = '([a-f0-9]{64})';/);
