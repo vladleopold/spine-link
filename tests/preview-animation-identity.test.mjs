@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { matchAtlasPageTextures } from '../lib/spine-atlas-texture-matching.js';
+import { resolveIndexedPreviewSet } from '../lib/preview-set-selection.js';
 
 const preview = fs.readFileSync(new URL('../api/github-preview.js', import.meta.url), 'utf8');
 const archive = fs.readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
@@ -41,6 +42,43 @@ test('preview API blocks missing or ambiguous atlas textures instead of creating
   assert.doesNotMatch(atlasSelection, /data:image\/png;base64,/);
   assert.doesNotMatch(preview, /data:image\/png;base64,/,
     'no missing atlas page may be disguised by a synthetic texture');
+});
+
+test('indexed source set selection never guesses the first discovered skeleton', () => {
+  const target = {
+    label: 'indexed-source',
+    skeleton: 'https://spine-link.vercel.app/assets/library/work/Target%20Rig.skel?v=1',
+    atlasUrl: 'https://spine-link.vercel.app/assets/library/work/Target%20Rig.atlas?v=1',
+  };
+  const unrelated = {
+    label: 'unrelated-source',
+    skeleton: 'https://spine-link.vercel.app/assets/library/work/Other.skel?v=1',
+    atlasUrl: 'https://spine-link.vercel.app/assets/library/work/Other.atlas?v=1',
+  };
+  assert.equal(resolveIndexedPreviewSet([unrelated, target], {
+    skeleton: 'Target Rig.skel', atlas: 'Target Rig.atlas',
+  }), target);
+  assert.equal(resolveIndexedPreviewSet([target, { ...target, label: 'duplicate' }], {
+    skeleton: 'Target Rig.skel', atlas: 'Target Rig.atlas',
+  }), null, 'duplicate matching source sets must be treated as ambiguous');
+  assert.equal(resolveIndexedPreviewSet([unrelated, target], {
+    skeleton: 'Missing.skel', atlas: 'Missing.atlas',
+  }), null, 'missing indexed source files must not fall back to another set');
+  assert.equal(resolveIndexedPreviewSet([unrelated, target], {}), null,
+    'multiple sets without indexed source names must not select the first set');
+  assert.equal(resolveIndexedPreviewSet([target], {}), target,
+    'one discovered source set is unambiguous when the index has no file names');
+});
+
+test('preview player never chooses the first discovered set for an unavailable animation', () => {
+  const initialSet = section(preview, 'function initialSet()', 'function initialAnimation(set)');
+  assert.match(initialSet, /if \(queryAnimation\) \{/);
+  assert.match(initialSet, /const matches = sets\.filter\(\(set\) => setHasAnimation\(set, queryAnimation\)\)/);
+  assert.match(initialSet, /return matches\.length === 1 \? matches\[0\] : null/);
+  assert.match(initialSet, /return sets\.length === 1 \? sets\[0\] : null/);
+  assert.doesNotMatch(initialSet, /sets\[0\] \|\| null/);
+  assert.match(preview, /const indexedSet = resolveIndexedPreviewSet\(sets, entry\)/);
+  assert.match(preview, /if \(indexedSet\) sets\.splice\(0, sets\.length, indexedSet\);\s*else sets\.length = 0;/);
 });
 
 function section(source, start, end) {

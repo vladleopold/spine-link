@@ -1,6 +1,7 @@
 import { selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
 import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
 import { matchAtlasPageTextures } from '../lib/spine-atlas-texture-matching.js';
+import { resolveIndexedPreviewSet } from '../lib/preview-set-selection.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
@@ -1377,7 +1378,13 @@ function createHtml(config) {
         const querySet = queryValue("set");
         const queryAnimation = queryValue("animation");
         if (querySet) return sets.find((set) => set.label === querySet) || null;
-        return sets.find((set) => setHasAnimation(set, queryAnimation)) || sets.find((set) => set.label === config.activeLabel) || sets[0] || null;
+        if (queryAnimation) {
+          const matches = sets.filter((set) => setHasAnimation(set, queryAnimation));
+          return matches.length === 1 ? matches[0] : null;
+        }
+        const indexed = sets.find((set) => set.label === config.activeLabel);
+        if (indexed) return indexed;
+        return sets.length === 1 ? sets[0] : null;
       }
       function initialAnimation(set) {
         const queryAnimation = queryValue("animation");
@@ -2673,6 +2680,11 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     entry = Array.isArray(entries)
       ? entries.find((item) => item?.id === uploadId || cleanRepoPath(item?.previewPath || '') === cleanRepoPath(uploadPath))
       : null;
+    // Select only the skeleton/atlas pair named by the index. If it is
+    // missing or ambiguous, do not silently load the first discovered set.
+    const indexedSet = resolveIndexedPreviewSet(sets, entry);
+    if (indexedSet) sets.splice(0, sets.length, indexedSet);
+    else sets.length = 0;
     note = String(entry?.note || '').trim();
     if (entry?.showOwnerLibrary) {
       const ownerEmail = String(entry?.ownerEmail || '').toLowerCase();
