@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { previewMediaStatusAllowsPlayback } from '../lib/preview-media-status.js';
-import { resolvePreviewAnimationTarget } from '../lib/preview-animation-target.js';
+import { resolvePreviewAnimationTarget, requestedAnimationFromRequest } from '../lib/preview-animation-target.js';
 
 const preview = fs.readFileSync(new URL('../api/github-preview.js', import.meta.url), 'utf8');
 const archive = fs.readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
@@ -17,7 +17,10 @@ function section(source, start, end) {
 
 test('URL-selected animation is preserved even when absent from index animation names', () => {
   const initial = section(preview, 'function initialAnimation(set)', 'const PREVIEW_PAD');
+  assert.match(initial, /if \(animationValues\.length > 1\) return null/);
   assert.match(initial, /return queryAnimation \|\| set\?\.animation \|\| ""/);
+  const queryValues = section(preview, 'function queryValues(name)', 'function queryValue(name)');
+  assert.match(queryValues, /getAll\(name\)/);
   assert.doesNotMatch(initial, /setHasAnimation/);
   const initialSet = section(preview, 'function initialSet()', 'function initialAnimation(set)');
   assert.match(initialSet, /if \(querySet\) return sets\.find\(\(set\) => set\.label === querySet\) \|\| null/);
@@ -45,6 +48,15 @@ test('URL-selected video preview is exact and never falls back to the indexed de
     name: 'Missing', preview: null,
   }, 'a missing explicit animation must not fall back to the indexed default');
   assert.equal(resolvePreviewAnimationTarget(entry, '').name, 'Run');
+  const origin = 'https://spine-link.invalid';
+  const repeatedUrl = requestedAnimationFromRequest({ url: '/p/demo?animation=Walk&animation=Run' }, origin);
+  assert.deepEqual(repeatedUrl, ['Walk', 'Run']);
+  assert.deepEqual(resolvePreviewAnimationTarget(entry, repeatedUrl), { name: '', preview: null },
+    'the server must reject every repeated animation value instead of choosing the first');
+  assert.deepEqual(requestedAnimationFromRequest({ query: { animation: ['Walk', 'Run'] }, url: '/p/demo?animation=Walk' }, origin), ['Walk', 'Run']);
+  assert.equal(requestedAnimationFromRequest({ query: { animation: 7 }, url: '/p/demo?animation=Walk' }, origin), 7);
+  assert.equal(requestedAnimationFromRequest({ url: '/p/demo?animation=Walk' }, origin), 'Walk');
+  assert.equal(requestedAnimationFromRequest({ url: '/p/demo' }, origin), '');
   assert.deepEqual(resolvePreviewAnimationTarget(entry, ['Walk', 'Run']), {
     name: '', preview: null,
   }, 'duplicate animation query values are ambiguous and must block instead of falling back');
@@ -70,8 +82,18 @@ test('URL-selected video preview is exact and never falls back to the indexed de
   assert.ok(dynamic.includes('playerUrl, requestedAnimation)'));
   assert.ok(dynamic.includes('archiveUrl, requestedAnimation }'));
   const handler = preview.slice(preview.indexOf('export default async function handler('));
-  assert.ok(handler.includes('request.query?.animation'));
+  assert.ok(handler.includes('requestedAnimationFromRequest(request, origin)'));
+  assert.doesNotMatch(handler, /searchParams\.get\('animation'\)/);
   assert.ok(handler.includes('createDynamicPreview(settings, path, origin, entryRecord, requestedAnimation)'));
+});
+
+
+test('browser player blocks repeated animation query values before default startup', () => {
+  const initial = section(preview, 'function initialAnimation(set)', 'const PREVIEW_PAD');
+  assert.match(initial, /if \(animationValues\.length > 1\) return null/);
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /if \(!activeAnimation\.name\)/);
+  assert.match(startup, /markPreviewBlocked\("NO_DEFAULT_ANIMATION"\)/);
 });
 
 test('failed or blocked preview media cannot leak stale WebM/WebP URLs', () => {
