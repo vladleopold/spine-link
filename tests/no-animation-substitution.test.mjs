@@ -146,6 +146,14 @@ test('upload preview state blocks missing or unavailable exact selections before
   assert.equal(editorProject.webmStatus, 'waiting-for-editor');
   assert.equal(editorProject.previewStatus, 'pending');
   assert.equal(editorProject.dispatchStatus, 'project-export-pending');
+
+  const convertedProject = previewDispatchState({
+    sourceKind: 'spine-project', conversionStatus: 'ready',
+    defaultAnimation: 'walk', animations: ['walk'],
+  });
+  assert.equal(convertedProject.webmStatus, 'pending');
+  assert.equal(convertedProject.previewStatus, 'pending');
+  assert.equal(convertedProject.dispatchStatus, 'pending');
 });
 
 test('agent and upload APIs preserve the supplied name and do not dispatch without a selection', () => {
@@ -161,6 +169,8 @@ test('agent and upload APIs preserve the supplied name and do not dispatch witho
   assert.match(upload, /previewDispatchState\(nextEntry, existing\)/);
   assert.match(upload, /previewDispatchState\(nextEntry, existingEntry\)/);
   assert.match(upload, /async function dispatchEntryPreview/);
+  assert.match(upload, /conversionStatus !== 'ready'/);
+  assert.match(upload, /hasExplicitAnimationSelection\(defaultAnimation, animations, 'runtime'\)/);
   assert.doesNotMatch(upload, /animations\s*\[\s*0\s*\]/);
 });
 

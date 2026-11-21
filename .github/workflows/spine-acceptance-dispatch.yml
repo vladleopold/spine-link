@@ -35,9 +35,12 @@ jobs:
           const s=fs.readFileSync('api/github-upload.js','utf8');
           const route=s.slice(s.indexOf("if (action === 'background-finalize-fast')"),
             s.indexOf("if (action === 'background-finalize-index')"));
-          assert.match(route,/await dispatchSpineExportWebm\(settings, nextEntry, origin\)/);
+          assert.match(route,/await dispatchEntryPreview\(settings, nextEntry, origin\)/);
+          assert.match(route,/previewDispatchState\(nextEntry, existing\)/);
+          assert.match(s,/async function dispatchEntryPreview[\s\S]*return dispatchSpineExportWebm\(settings, entry, origin\)/);
+          assert.match(s,/if \(entry\?\.webmStatus !== 'pending'\)/);
           assert.match(route,/inspectRuntimeAssetSet\(relativeFiles\)/);
-          assert.doesNotMatch(route,/dispatchSpineExportWebm\(settings, nextEntry, origin\)\.catch/);
+          assert.doesNotMatch(route,/dispatchEntryPreview\(settings, nextEntry, origin\)\.catch/);
           console.log('PASS no orphaned asynchronous preview dispatch on main upload route');
           JS
       - name: Build production client with TypeScript type checks

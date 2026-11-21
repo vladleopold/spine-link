@@ -471,7 +471,7 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
 }
 
 async function dispatchEntryPreview(settings, entry, origin) {
-  if (entry?.sourceKind === 'spine-project') {
+  if (entry?.sourceKind === 'spine-project' && entry?.conversionStatus !== 'ready') {
     if (process.env.SPINE_PROJECT_EXPORT_ENABLED === 'false') {
       return { status: 'unavailable', error: 'Spine Editor export disabled' };
     }
@@ -2435,9 +2435,9 @@ export default async function handler(request, response) {
 
     await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
     const dataScience = await updateDataScienceCatalog(settings, body, nextEntry, commitPrefix, origin);
-    const dispatch = nextEntry.webmStatus === 'pending'
-      ? await dispatchEntryPreview(settings, nextEntry, origin)
-      : null;
+    const shouldDispatch = nextEntry.webmStatus === 'pending' ||
+      (nextEntry.sourceKind === 'spine-project' && nextEntry.conversionStatus === 'pending');
+    const dispatch = shouldDispatch ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
 
     return response.status(200).json({
       ok: true,
