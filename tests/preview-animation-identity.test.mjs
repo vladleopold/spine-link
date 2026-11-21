@@ -96,6 +96,9 @@ test('archive cards, detail pages and video pages never expose global media with
   const home = section(archive, 'function homepageFeedEntries(', 'function mergeArchiveEntries(');
   assert.match(home, /entryVideoLowSrc\(origin, entry\)/);
   assert.match(home, /previewAnimation: selectedPreview\.name/);
+  assert.match(home, /const poster = selectedPreview\.posterMedium \|\| selectedPreview\.poster \|\| selectedPreview\.posterLow/);
+  assert.match(home, /thumbnail: poster/);
+  assert.doesNotMatch(home, /entryImageAsset\(entry\?\.thumbnail/);
   assert.doesNotMatch(home, /entryVideoAsset\(entry\?\.webmPreview/);
 
   const videoSrc = section(archive, 'function entryVideoSrc(', 'function safeAsset(');
@@ -122,6 +125,10 @@ test('archive cards, detail pages and video pages never expose global media with
   const legacy = section(archive, 'function legacyArchiveHtml(', 'function archiveItemHtml(');
   assert.match(legacy, /const video = entryVideoSrc\(origin, entry\)/);
   assert.doesNotMatch(legacy, /entryVideoAsset\(entry\?\.webmPreview/);
+  const layout = section(archive, 'async function enrichArchiveEntryLayout(', 'async function enrichArchiveLayout(');
+  assert.match(layout, /const selected = selectedAnimationVideo\(entry\)/);
+  assert.match(layout, /selected\.posterMedium \|\| selected\.poster \|\| selected\.posterLow/);
+  assert.doesNotMatch(layout, /entry\.webpPoster|entry\.thumbnailPoster|generatedThumbnailUrl|fallbackPosterAssetUrl/);
   const handler = archive.slice(archive.indexOf('export default async function handler'));
   assert.match(handler, /isVideoWatchPage && \(!entry \|\| !entryVideoSrc\(origin, entry\)\)/);
 });
