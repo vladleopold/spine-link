@@ -754,10 +754,13 @@ function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, a
   const fp = fetchpriority ? ` fetchpriority="${escapeHtml(fetchpriority)}"` : '';
   const loading = fetchpriority === 'high' ? '' : ' loading="lazy"';
   if (video) {
-    const videoSource = ` src="${escapeHtml(video)}"`;
-    const preload = eagerVideo ? 'metadata' : 'metadata';
+    // Archive tiles show the WebP poster immediately; only the detail page opts
+    // into a WebM src. The viewport controller attaches tile src after decoding
+    // the exact poster, so the initial card render never requests video bytes.
+    const videoSource = eagerVideo ? ` src="${escapeHtml(video)}"` : '';
+    const preload = eagerVideo ? 'metadata' : 'none';
     const posterAttr = ` poster="${escapeHtml(poster)}"`;
-    return `<video class="${posterClass}"${posterAttr}${videoSource} muted playsinline preload="${preload}" loop aria-label="${alt}"${fp} data-video-src="${escapeHtml(video)}"></video>`;
+    return `<video class="${posterClass}"${posterAttr}${videoSource} muted playsinline preload="${preload}" loop aria-label="${alt}"${fp} data-video-src="${escapeHtml(video)}" data-poster="${escapeHtml(poster)}"></video>`;
   }
   if (poster) {
     return `<img class="${posterClass}" src="${escapeHtml(poster)}" alt="${alt}"${loading} decoding="async"${fp} data-poster="${escapeHtml(poster)}" onerror="this.style.display='none';" />`;
@@ -1333,22 +1336,61 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
         const visibleTiles = new Set();
         const playingTiles = new Set();
         function ensureReady(video) {
-          if (!video) return;
-          if (!video.getAttribute("src")) {
-            const src = video.dataset.videoSrc || video.getAttribute("data-video-src") || "";
-            if (src) video.setAttribute("src", src);
+          if (!video) return false;
+          const src = video.dataset.videoSrc || video.getAttribute("data-video-src") || "";
+          const posterUrl = video.dataset.poster || video.getAttribute("poster") || "";
+          if (!src || !posterUrl) {
+            video.dataset.previewStatus = "blocked-no-webm-poster";
+            delete video.dataset.videoSrc;
+            return false;
           }
+          if (video.dataset.posterReady !== "true") {
+            if (video.dataset.posterLoading !== "true") {
+              video.dataset.posterLoading = "true";
+              const image = new Image();
+              let settled = false;
+              let decoding = false;
+              const fail = () => {
+                if (settled) return;
+                settled = true;
+                video.dataset.previewStatus = "blocked-poster-load-failed";
+                delete video.dataset.videoSrc;
+                video.removeAttribute("poster");
+              };
+              const decoded = async () => {
+                if (settled || decoding) return;
+                decoding = true;
+                try {
+                  if (image.naturalWidth <= 0) throw new Error("POSTER_EMPTY");
+                  if (typeof image.decode === "function") await image.decode();
+                  if (image.naturalWidth <= 0) throw new Error("POSTER_DECODE_FAILED");
+                  settled = true;
+                  video.dataset.posterReady = "true";
+                  video.dispatchEvent(new Event("posterready"));
+                } catch {
+                  fail();
+                }
+              };
+              image.onload = decoded;
+              image.onerror = fail;
+              image.src = posterUrl;
+              if (image.complete && image.naturalWidth > 0) void decoded();
+            }
+            return false;
+          }
+          if (!video.getAttribute("src")) video.setAttribute("src", src);
           video.muted = true;
           video.loop = true;
           video.playsInline = true;
+          return Boolean(video.getAttribute("src"));
         }
         function playArchiveVideo(video) {
-          if (!video) return;
-          ensureReady(video);
+          if (!ensureReady(video)) return false;
           const src = video.dataset.videoSrc || video.getAttribute("src") || "";
-          if (!src) return;
+          if (!src) return false;
           try { video.currentTime = 0; } catch {}
           video.play().catch(() => {});
+          return true;
         }
         function stopArchiveVideo(video) {
           if (!video) return;
@@ -1383,25 +1425,25 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
             stopArchiveVideo(video);
             playingTiles.delete(tile);
           });
-          toPlay.slice(0, limit).forEach((tile) => {
+          toPlay.forEach((tile) => {
             const video = tile.querySelector("video");
-            playArchiveVideo(video);
-            playingTiles.add(tile);
+            if (playingTiles.size >= limit && !playingTiles.has(tile)) return;
+            if (playArchiveVideo(video)) playingTiles.add(tile);
+            else playingTiles.delete(tile);
           });
         }
         document.querySelectorAll(".tile").forEach((tile) => {
           const video = tile.querySelector("video");
           if (!video) return;
+          video.addEventListener("posterready", updateAutoplay);
           tile.addEventListener("pointerenter", () => {
-            ensureReady(video);
-            playArchiveVideo(video);
-            playingTiles.add(tile);
+            if (playArchiveVideo(video)) playingTiles.add(tile);
+            else playingTiles.delete(tile);
             updateAutoplay();
           });
           tile.addEventListener("focusin", () => {
-            ensureReady(video);
-            playArchiveVideo(video);
-            playingTiles.add(tile);
+            if (playArchiveVideo(video)) playingTiles.add(tile);
+            else playingTiles.delete(tile);
             updateAutoplay();
           });
           tile.addEventListener("pointerleave", () => {
