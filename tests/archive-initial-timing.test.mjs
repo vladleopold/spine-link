@@ -67,6 +67,19 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   assert.match(archive, /deferOptionalEnhancementsUntilPoster\(\);/);
 });
 
+test('archive cards bind the selected animation fingerprint to the exact player URL', () => {
+  const source = readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
+  assert.match(source, /animationHash: name \? createHash\('sha256'\)\.update\(name\)\.digest\('hex'\) : ''/);
+  assert.match(source, /animationHash: selectedPreview\?\.animationHash \|\| ''/);
+  assert.match(source, /data-animation-hash=/);
+  assert.match(source, /card\.dataset\.animationHash=item\.animationHash\|\|''/);
+  assert.doesNotMatch(source, /data-animation-name=/,
+    'the raw animation name must not be duplicated into public card metadata');
+  assert.match(workflow, /createHash from 'node:crypto'/);
+  assert.match(workflow, /expectedAnimationHash!==row\.animationHash/,
+    'the live all-pages audit must compare the exact player query with the card fingerprint');
+});
+
 test('archive cards expose source-level blocked status without exposing preview error text', () => {
   const source = readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
   assert.match(source, /sourceWebmStatus: String\(entry\?\.webmStatus \|\| ''\)\.trim\(\)/);
