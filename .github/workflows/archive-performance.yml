@@ -15,6 +15,7 @@ on:
       - tests/no-animation-substitution.test.mjs
       - scripts/preview-animation-choice.mjs
       - scripts/spine-export-webm.mjs
+      - scripts/lib/preview-export-status.cjs
       - src/SpineApp.tsx
       - lib/agent-animation.js
       - lib/spine-data-science.js
@@ -39,6 +40,7 @@ on:
       - tests/no-animation-substitution.test.mjs
       - scripts/preview-animation-choice.mjs
       - scripts/spine-export-webm.mjs
+      - scripts/lib/preview-export-status.cjs
       - src/SpineApp.tsx
       - lib/agent-animation.js
       - lib/spine-data-science.js
@@ -65,6 +67,7 @@ jobs:
           node --check api/github-preview.js
           node --check api/github-upload.js
           node --check scripts/spine-export-webm.mjs
+          node --check scripts/lib/preview-export-status.cjs
           node --check scripts/spine-project-cloud-export.mjs
           node --check lib/agent-animation.js
           node --check lib/spine-data-science.js
