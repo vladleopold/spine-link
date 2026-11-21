@@ -45,6 +45,12 @@ test('URL-selected video preview is exact and never falls back to the indexed de
     name: 'Missing', preview: null,
   }, 'a missing explicit animation must not fall back to the indexed default');
   assert.equal(resolvePreviewAnimationTarget(entry, '').name, 'Run');
+  assert.deepEqual(resolvePreviewAnimationTarget(entry, ['Walk', 'Run']), {
+    name: '', preview: null,
+  }, 'duplicate animation query values are ambiguous and must block instead of falling back');
+  assert.deepEqual(resolvePreviewAnimationTarget(entry, 7), {
+    name: '', preview: null,
+  }, 'non-string animation query values must block instead of falling back');
   assert.equal(resolvePreviewAnimationTarget(entry, ' Walk ').name, ' Walk ',
     'animation names are byte-for-byte exact');
 
