@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { previewMediaStatusAllowsPlayback } from '../lib/preview-media-status.js';
+import { resolvePreviewAnimationTarget, requestedAnimationFromRequest } from '../lib/preview-animation-target.js';
 
 const preview = fs.readFileSync(new URL('../api/github-preview.js', import.meta.url), 'utf8');
 const archive = fs.readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
@@ -15,7 +17,10 @@ function section(source, start, end) {
 
 test('URL-selected animation is preserved even when absent from index animation names', () => {
   const initial = section(preview, 'function initialAnimation(set)', 'const PREVIEW_PAD');
+  assert.match(initial, /if \(animationValues\.length > 1\) return null/);
   assert.match(initial, /return queryAnimation \|\| set\?\.animation \|\| ""/);
+  const queryValues = section(preview, 'function queryValues(name)', 'function queryValue(name)');
+  assert.match(queryValues, /getAll\(name\)/);
   assert.doesNotMatch(initial, /setHasAnimation/);
   const initialSet = section(preview, 'function initialSet()', 'function initialAnimation(set)');
   assert.match(initialSet, /if \(querySet\) return sets\.find\(\(set\) => set\.label === querySet\) \|\| null/);
@@ -28,17 +33,81 @@ test('default animation comes only from the index, never idle or the first runti
   assert.doesNotMatch(preview, /skeleton\.data\.animations\[0\]/);
 });
 
-test('video target is restricted to the indexed defaultAnimation', () => {
+test('URL-selected video preview is exact and never falls back to the indexed default', () => {
+  const entry = {
+    defaultAnimation: 'Run',
+    allAnimationPreviews: {
+      Run: { webmPreview: '/run.webm' },
+      Walk: { webmPreview: '/walk.webm' },
+    },
+  };
+  assert.deepEqual(resolvePreviewAnimationTarget(entry, 'Walk'), {
+    name: 'Walk', preview: entry.allAnimationPreviews.Walk,
+  });
+  assert.deepEqual(resolvePreviewAnimationTarget(entry, 'Missing'), {
+    name: 'Missing', preview: null,
+  }, 'a missing explicit animation must not fall back to the indexed default');
+  assert.equal(resolvePreviewAnimationTarget(entry, '').name, 'Run');
+  const origin = 'https://spine-link.invalid';
+  const repeatedUrl = requestedAnimationFromRequest({ url: '/p/demo?animation=Walk&animation=Run' }, origin);
+  assert.deepEqual(repeatedUrl, ['Walk', 'Run']);
+  assert.deepEqual(resolvePreviewAnimationTarget(entry, repeatedUrl), { name: '', preview: null },
+    'the server must reject every repeated animation value instead of choosing the first');
+  assert.deepEqual(requestedAnimationFromRequest({ query: { animation: ['Walk', 'Run'] }, url: '/p/demo?animation=Walk' }, origin), ['Walk', 'Run']);
+  assert.equal(requestedAnimationFromRequest({ query: { animation: 7 }, url: '/p/demo?animation=Walk' }, origin), 7);
+  assert.equal(requestedAnimationFromRequest({ url: '/p/demo?animation=Walk' }, origin), 'Walk');
+  assert.equal(requestedAnimationFromRequest({ url: '/p/demo' }, origin), '');
+  assert.deepEqual(resolvePreviewAnimationTarget(entry, ['Walk', 'Run']), {
+    name: '', preview: null,
+  }, 'duplicate animation query values are ambiguous and must block instead of falling back');
+  assert.deepEqual(resolvePreviewAnimationTarget(entry, 7), {
+    name: '', preview: null,
+  }, 'non-string animation query values must block instead of falling back');
+  assert.equal(resolvePreviewAnimationTarget(entry, ' Walk ').name, ' Walk ',
+    'animation names are byte-for-byte exact');
+
   const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
-  assert.match(resolver, /const chosen = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : '';/);
-  assert.doesNotMatch(resolver, /entry\?\.webmPreview/);
-  assert.match(resolver, /lowUrl: shortClip/);
-  assert.doesNotMatch(resolver, /for \(const a of animations\)/);
-  assert.doesNotMatch(resolver, /candidates\.find|animations\.find/);
-  assert.match(resolver, /isFallback: false/);
+  assert.ok(resolver.includes('resolvePreviewAnimationTarget(entry, requestedAnimation)'));
+  assert.ok(resolver.includes('previewMediaStatusAllowsPlayback(entry)'));
+  assert.ok(!resolver.includes('entry?.webmPreview'));
+  assert.ok(resolver.includes('lowUrl: shortClip'));
+  assert.ok(resolver.includes('isFallback: false'));
+
   const metadata = section(preview, 'function videoMetadataForEntry(', 'function ');
-  assert.match(metadata, /const contentUrl = target\.url \? entryVideoAsset\(target\.url, entry, 'webm'\) : ''/);
-  assert.match(metadata, /previewAnimation: target\.name/);
+  assert.ok(metadata.includes('resolvePreviewTarget(entry, origin, requestedAnimation)'));
+  assert.ok(metadata.includes('previewAnimation: target.name'));
+  const fallback = section(preview, 'function createVideoFallbackHtml(', 'async function createDynamicPreview(');
+  assert.ok(fallback.includes('resolvePreviewTarget(entry, origin, requestedAnimation)'));
+  const dynamic = section(preview, 'async function createDynamicPreview(', '// Finds the folder of a work');
+  assert.ok(dynamic.includes('playerUrl, requestedAnimation)'));
+  assert.ok(dynamic.includes('archiveUrl, requestedAnimation }'));
+  const handler = preview.slice(preview.indexOf('export default async function handler('));
+  assert.ok(handler.includes('requestedAnimationFromRequest(request, origin)'));
+  assert.doesNotMatch(handler, /searchParams\.get\('animation'\)/);
+  assert.ok(handler.includes('createDynamicPreview(settings, path, origin, entryRecord, requestedAnimation)'));
+});
+
+
+test('browser player blocks repeated animation query values before default startup', () => {
+  const initial = section(preview, 'function initialAnimation(set)', 'const PREVIEW_PAD');
+  assert.match(initial, /if \(animationValues\.length > 1\) return null/);
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /if \(!activeAnimation\.name\)/);
+  assert.match(startup, /markPreviewBlocked\("NO_DEFAULT_ANIMATION"\)/);
+});
+
+test('failed or blocked preview media cannot leak stale WebM/WebP URLs', () => {
+  const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
+  assert.match(resolver, /previewMediaStatusAllowsPlayback\(entry\)/);
+  assert.ok(resolver.includes('const selected = previewMediaStatusAllowsPlayback(entry) ? preview : null;'));
+  assert.match(resolver, /name: chosen/);
+
+  assert.equal(previewMediaStatusAllowsPlayback({ previewStatus: 'failed', webmStatus: 'ready' }), false);
+  assert.equal(previewMediaStatusAllowsPlayback({ previewStatus: 'blocked', webmStatus: 'ready' }), false);
+  assert.equal(previewMediaStatusAllowsPlayback({ previewStatus: 'ready', webmStatus: 'pending' }), false);
+  assert.equal(previewMediaStatusAllowsPlayback({ previewStatus: 'ready', webmStatus: 'ready' }), true);
+  assert.equal(previewMediaStatusAllowsPlayback({}), true);
+  assert.equal(previewMediaStatusAllowsPlayback({ webmStatus: 'ready' }), true);
 });
 
 test('player keeps the exact requested animation and marks missing tracks blocked', () => {
@@ -99,15 +168,15 @@ test('archive cards use only the indexed default animation and its exact media p
   assert.doesNotMatch(home, /entryVideoAsset\(entry\?\.webmPreview/);
 });
 
-test('video watch and owner-library previews use only the selected default clip', () => {
-  const videoPage = section(preview, 'function createVideoFallbackHtml(', 'function ');
-  assert.match(videoPage, /const target = resolvePreviewTarget\(entry, origin\)/);
-  assert.match(videoPage, /const video = target\.url \? entryVideoAsset\(target\.url, entry, 'webm'\) : ''/);
-  assert.match(preview, /webmPreviewFull: target\.url \? entryVideoAsset\(target\.url, item, 'webm'\) : ''/);
+test('video watch uses the exact URL selection while owner-library cards keep their own defaults', () => {
+  const videoPage = section(preview, 'function createVideoFallbackHtml(', 'async function createDynamicPreview(');
+  assert.ok(videoPage.includes('resolvePreviewTarget(entry, origin, requestedAnimation)'));
+  assert.ok(videoPage.includes("const video = target.url ? entryVideoAsset(target.url, entry, 'webm') : ''"));
+  assert.ok(preview.includes("webmPreviewFull: target.url ? entryVideoAsset(target.url, item, 'webm') : ''"));
   const owner = section(preview, 'const lowWebm = target.lowUrl', 'return {');
-  assert.match(owner, /target\.lowUrl/);
-  assert.doesNotMatch(owner, /item\?\.webmPreviewLow/);
-  assert.match(preview, /previewAnimation: target\.name \|\| ''/);
+  assert.ok(owner.includes('target.lowUrl'));
+  assert.ok(!owner.includes('item?.webmPreviewLow'));
+  assert.ok(preview.includes("previewAnimation: target.name || ''"));
 });
 
 test('indexed animation names remain byte-for-byte exact in URLs, media lookup and viewport refit', () => {
