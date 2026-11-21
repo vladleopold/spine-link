@@ -361,6 +361,7 @@ test('archive feed includes per-animation-only entries and blocks absent or unma
     return {
       ...entries[0],
       id,
+      skeleton:id+'.skel',
       previewPath:workPath,
       webmPreview:'',
       webmPreviewMedium:'',

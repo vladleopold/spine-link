@@ -85,16 +85,6 @@ function selectedAnimationVideo(entry = {}) {
 }
 
 
-function hasArchivePreviewMetadata(entry = {}) {
-  const previews = entry?.allAnimationPreviews;
-  return Boolean(
-    entry?.webmPreview || entry?.webmPreviewMedium || entry?.webmPreviewLow ||
-    entry?.webpPoster || entry?.webpPosterMedium || entry?.webpPosterLow ||
-    entry?.thumbnail || entry?.thumbnailPoster ||
-    (previews && typeof previews === 'object' && !Array.isArray(previews) && Object.keys(previews).length > 0)
-  );
-}
-
 function entryVideoSrc(origin, entry = {}) {
   const selected = selectedAnimationVideo(entry);
   const hasPoster = Boolean(selected.poster || selected.posterMedium || selected.posterLow);
@@ -492,6 +482,16 @@ function feedScore(entry, metrics) {
 function previewDurationSeconds(entry) {
   const value = Number(entry?.previewDuration);
   return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function hasArchivePreviewMetadata(entry = {}) {
+  const previews = entry?.allAnimationPreviews;
+  return Boolean(
+    entry?.webmPreview || entry?.webmPreviewMedium || entry?.webmPreviewLow ||
+    entry?.webpPoster || entry?.webpPosterMedium || entry?.webpPosterLow ||
+    entry?.thumbnail || entry?.thumbnailPoster ||
+    (previews && typeof previews === 'object' && !Array.isArray(previews) && Object.keys(previews).length > 0)
+  );
 }
 
 function homepageFeedEntries(origin, entries, metrics) {
