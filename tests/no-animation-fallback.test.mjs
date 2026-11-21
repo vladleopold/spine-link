@@ -102,8 +102,8 @@ test('full export preserves the exact indexed default animation and never promot
 });
 
 test('preview API and React player never substitute the first Spine skin', () => {
-  assert.match(previewApi, /function preferredSkinName\\(skinNames\\) \\{\\s*return Array\\.isArray\\(skinNames\\) && skinNames\\.includes\\('default'\\) \\? 'default' : '';\\s*\\}/);
-  assert.doesNotMatch(previewApi, /skinNames\\s*\\[\\s*0\\s*\\]/);
-  assert.match(app, /function preferredSkinName\\(skinNames: string\\[\\]\\) \\{\\s*return Array\\.isArray\\(skinNames\\) && skinNames\\.includes\\("default"\\) \\? "default" : "";\\s*\\}/);
-  assert.doesNotMatch(app, /skinNames\\s*\\[\\s*0\\s*\\]/);
+  assert.match(previewApi, /function preferredSkinName\(skinNames\) \{\s*return Array\.isArray\(skinNames\) && skinNames\.includes\('default'\) \? 'default' : '';\s*\}/);
+  assert.doesNotMatch(previewApi, /skinNames\s*\[\s*0\s*\]/);
+  assert.match(app, /function preferredSkinName\(skinNames: string\[\]\) \{\s*return Array\.isArray\(skinNames\) && skinNames\.includes\("default"\) \? "default" : "";\s*\}/);
+  assert.doesNotMatch(app, /skinNames\s*\[\s*0\s*\]/);
 });
