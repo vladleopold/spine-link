@@ -110,7 +110,7 @@ test('archive cards, detail pages and video pages never expose global media with
   assert.match(imageUrl, /if \(!hasExplicitDefaultAnimation\(entry\)\) return ''/);
   assert.doesNotMatch(imageUrl, /entry\?\.webpPoster|entry\?\.thumbnailPoster|entry\?\.thumbnail|generatedThumbnailUrl|fallbackPosterAssetUrl/);
 
-  const media = section(archive, 'function mediaHtml(', 'function imageSizeFromBuffer(');
+  const media = section(archive, 'function mediaHtml(', 'function baseStyles(');
   assert.match(media, /const selected = selectedAnimationVideo\(entry\)/);
   assert.match(media, /const video = poster \? selected\.full \|\| selected\.medium \|\| selected\.low : ''/);
   assert.match(media, /const videoSource = eagerVideo \? .* : ''/);
@@ -165,7 +165,7 @@ test('indexed animation names remain byte-for-byte exact in URLs, media lookup a
   assert.match(archiveUrl, /encodeURIComponent\(animation\)/);
 
   const selected = section(archive, 'function selectedAnimationVideo(', 'function safeAsset(');
-  assert.match(selected, /const name = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+  assert.match(selected, /const name = hasExplicitDefaultAnimation\(entry\) \? entry\.defaultAnimation : ''/);
   assert.match(selected, /previews\[name\]/);
   assert.doesNotMatch(selected, /String\(entry\?\.defaultAnimation \|\| ''\)\.trim\(\)/);
 });
