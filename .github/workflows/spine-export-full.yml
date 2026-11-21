@@ -352,12 +352,24 @@ jobs:
             git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
             git reset --hard refs/remotes/origin/main
 
+            WORK_PATH=$(node -e "
+              const fs = require('fs');
+              const { resolvePreviewWorkPath } = require('./scripts/lib/preview-work-path.cjs');
+              const [indexPath, uploadId, basePath] = process.argv.slice(1);
+              const entries = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+              const entry = entries.find((item) => item.id === uploadId);
+              if (!entry) throw new Error('ENTRY_NOT_FOUND');
+              console.log(resolvePreviewWorkPath(basePath, uploadId, entry.previewPath));
+            " "$INDEX_PATH" "$UPLOAD_ID" "$BASE_PATH")
+
             # 2. Process all downloaded artifacts and update index.json
-            node -e "
+            WORK_PATH="$WORK_PATH" node -e "
               const fs = require('fs');
               const path = require('path');
               const { hasSelectedPreviewMedia } = require('./scripts/lib/preview-export-status.cjs');
 
+              const workPath = process.env.WORK_PATH;
+              if (!workPath) throw new Error('UNSAFE_PREVIEW_PATH');
               const uploadId = '$UPLOAD_ID';
               const origin = '$ORIGIN';
               const basePath = '$BASE_PATH';
@@ -388,7 +400,7 @@ jobs:
 
                   const animName = fs.readFileSync(animNameFile, 'utf8').trim();
                   const safeName = fs.readFileSync(safeNameFile, 'utf8').trim();
-                  const animTargetDir = path.join(basePath, uploadId, 'animations', safeName);
+                  const animTargetDir = path.join(workPath, 'animations', safeName);
                   fs.mkdirSync(animTargetDir, { recursive: true });
 
                   if (!allAnimPreviews[animName]) allAnimPreviews[animName] = {};
@@ -432,7 +444,6 @@ jobs:
                     // actually lives in right now. If the library rotated while
                     // this job ran, basePath can already point at the previous
                     // collection and every URL written here would 404.
-                    const workPath = String(indexData[entryIndex]?.previewPath || (basePath + '/' + uploadId)).replace(/^\/+|\/+$/g, '');
                     const url = origin + '/assets/' + workPath + '/animations/' + safeName + '/' + file;
                     const prefix = uploadId + '-anim-' + safeName + '-';
 
@@ -498,7 +509,7 @@ jobs:
             "
 
             # 3. Stage everything
-            git add "$BASE_PATH"
+            git add "$BASE_PATH" "$WORK_PATH/animations"
             if git diff-index --quiet HEAD --; then
               echo "No changes to commit — all animations already up to date."
               exit 0
