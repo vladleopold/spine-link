@@ -418,3 +418,13 @@ test('archive feed includes per-animation-only entries and blocks absent or unma
     if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
+
+test('live archive acceptance requires a real exact-animation WebM and playback sample',()=>{
+  const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
+  assert.match(workflow,/assert\\.ok\\(videoUrls\\.length>0,/,
+    'an all-blocked archive must not pass media acceptance');
+  assert.match(workflow,/assert\\.ok\\(videoSamples>0,/,
+    'at least one real WebM must reach advancing decoded playback');
+  assert.doesNotMatch(workflow,/videoUrls\\.length===0/,
+    'zero media must never be treated as a successful playback check');
+});
