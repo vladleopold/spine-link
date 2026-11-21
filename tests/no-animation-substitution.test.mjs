@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { choosePreviewAnimation } from '../scripts/preview-animation-choice.mjs';
+import { chooseSourceSet } from '../scripts/lib/source-set-choice.mjs';
+import { chooseSourceSkeleton } from '../scripts/source-skeleton-choice.mjs';
+import { chooseAtlasForSkeleton } from '../scripts/atlas-pages.mjs';
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -10,6 +13,28 @@ test('the selector preserves an explicit animation name even when the skeleton d
   assert.equal(choosePreviewAnimation(['idle', 'run'], 'Missing'), 'Missing');
   assert.equal(choosePreviewAnimation(['idle', 'run'], ''), '');
   assert.equal(choosePreviewAnimation(['idle', 'run'], ' run '), ' run ');
+});
+
+test('the exporter never selects the first source set when the index is missing or ambiguous', () => {
+  const first = { name: 'first', path: '/work/first', files: ['first.skel', 'first.atlas'] };
+  const target = { name: 'target', path: '/work/target', files: ['Target Rig.skel', 'Target Rig.atlas'] };
+  assert.equal(chooseSourceSet([first, target], ''), null);
+  assert.equal(chooseSourceSet([target], ''), target);
+  assert.equal(chooseSourceSet([first, target], 'https://example.invalid/assets/Target%20Rig.json?v=2'), target);
+  assert.equal(chooseSourceSet([first, target], 'Missing.skel'), null);
+  assert.equal(chooseSourceSet([first, target, { ...target, name: 'duplicate' }], 'Target Rig.skel'), null);
+});
+
+test('the exporter chooses only the indexed skeleton and its matching atlas', () => {
+  const files = ['Other.json', 'Target Rig.skel', 'Target Rig.json', 'Other.atlas', 'Target Rig.atlas'];
+  const validJson = (name) => name === 'Target Rig.json';
+  assert.equal(chooseSourceSkeleton('Target Rig.skel', files, validJson), 'Target Rig.json');
+  assert.equal(chooseSourceSkeleton('Target Rig.json', files, validJson), 'Target Rig.json');
+  assert.equal(chooseSourceSkeleton('Target Rig.skel', ['Target Rig.skel'], validJson), 'Target Rig.skel');
+  assert.throws(() => chooseSourceSkeleton('Missing.skel', files, validJson), /SOURCE_SKELETON_MISSING_OR_AMBIGUOUS/);
+  assert.throws(() => chooseSourceSkeleton('', ['one.json', 'two.json'], () => true), /SOURCE_SKELETON_MISSING_OR_AMBIGUOUS/);
+  assert.equal(chooseAtlasForSkeleton('Target Rig.json', files), 'Target Rig.atlas');
+  assert.equal(chooseAtlasForSkeleton('hero.skel', ['first.atlas', 'second.atlas']), null);
 });
 
 test('the WebM exporter blocks an absent or unavailable selected animation instead of choosing the first track', () => {

@@ -7,6 +7,9 @@ import { createHash } from 'node:crypto';
 import { trimBlackLead } from './lib/black-lead.mjs';
 import { collectionPathForUpload, entryForUpload } from './resolve-library.mjs';
 import { choosePreviewAnimation } from './preview-animation-choice.mjs';
+import { chooseSourceSet } from './lib/source-set-choice.mjs';
+import { chooseSourceSkeleton } from './source-skeleton-choice.mjs';
+import { chooseAtlasForSkeleton } from './atlas-pages.mjs';
 
 const args = {
   uploadId: '',
@@ -92,18 +95,40 @@ const previewDir = path.join(repoRoot, uploadPath);
 const sets = findSetDirectories(previewDir);
 
 if (sets.length === 0) {
-  console.error(`No Spine sets found in ${previewDir}`);
+  console.error('NO_SPINE_SOURCE_SET_FOUND');
   process.exit(1);
 }
 
-const firstSet = sets[0];
+const requestedSkeleton = String(entry.skeleton || entry.skeletonFile || '');
+const firstSet = chooseSourceSet(sets, requestedSkeleton, (set) => fs.readdirSync(set.path));
+if (!firstSet) {
+  console.error(requestedSkeleton
+    ? 'REQUESTED_SOURCE_SET_MISSING_OR_AMBIGUOUS'
+    : 'AMBIGUOUS_SOURCE_SKELETON_SET');
+  process.exit(1);
+}
+
 const setFiles = fs.readdirSync(firstSet.path);
-const skeletonFile = setFiles.find(f => /\.(json|skel)$/i.test(f));
-const atlasFile = setFiles.find(f => /\.(atlas|atlas\.txt|atlas\.docx)$/i.test(f));
-const textureFiles = setFiles.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f));
+const isValidJsonSkeleton = (file) => {
+  if (!/\\.json$/i.test(file)) return false;
+  try {
+    return Array.isArray(JSON.parse(fs.readFileSync(path.join(firstSet.path, file), 'utf8')).bones);
+  } catch {
+    return false;
+  }
+};
+let skeletonFile;
+try {
+  skeletonFile = chooseSourceSkeleton(requestedSkeleton, setFiles, isValidJsonSkeleton);
+} catch {
+  console.error('REQUESTED_SOURCE_SKELETON_MISSING_OR_AMBIGUOUS');
+  process.exit(1);
+}
+const atlasFile = chooseAtlasForSkeleton(skeletonFile, setFiles);
+const textureFiles = setFiles.filter(f => /\\.(png|jpg|jpeg|webp)$/i.test(f));
 
 if (!skeletonFile || !atlasFile || textureFiles.length === 0) {
-  console.error(`Set ${firstSet.name} is missing required files`);
+  console.error('SOURCE_SKELETON_ATLAS_OR_TEXTURE_MISSING');
   process.exit(1);
 }
 
