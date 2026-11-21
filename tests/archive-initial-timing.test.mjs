@@ -75,7 +75,7 @@ test('archive cards bind the selected animation fingerprint to the exact player 
   assert.match(source, /card\.dataset\.animationHash=item\.animationHash\|\|''/);
   assert.doesNotMatch(source, /data-animation-name=/,
     'the raw animation name must not be duplicated into public card metadata');
-  assert.match(workflow, /createHash from 'node:crypto'/);
+  assert.ok(workflow.includes("import { createHash } from 'node:crypto';"));
   assert.match(workflow, /expectedAnimationHash!==row\.animationHash/,
     'the live all-pages audit must compare the exact player query with the card fingerprint');
 });
