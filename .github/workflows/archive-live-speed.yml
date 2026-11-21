@@ -1,6 +1,8 @@
 # Live benchmark after deploying all-page embedded archive metadata.
 name: Spine archive live one-second lazy-card browser proof
 on:
+  schedule:
+    - cron: '17 * * * *'
   workflow_run:
     workflows: ["Vercel deploy and alias"]
     types: [completed]
@@ -8,6 +10,9 @@ on:
 permissions:
   contents: read
   actions: read
+concurrency:
+  group: spine-archive-hourly-live-audit
+  cancel-in-progress: false
 jobs:
   release_gate:
     if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
@@ -32,7 +37,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
-    timeout-minutes: 12
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Install Playwright
@@ -51,18 +56,27 @@ jobs:
               const pageErrors=[],mediaRequests=[];
               let blockedApiRequests=0;
               // Prove the first lazy page is supplied in HTML, without
-              // relying on a warm GitHub feed endpoint at all.
-              await page.route(url=>url.pathname==='/api/github-archive' &&
-                url.searchParams.get('feed')==='archive',route=>{
+              // relying on a warm GitHub feed endpoint at all. Release this
+              // route after the embedded first 40 cards so the full audit can
+              // traverse every subsequent API-backed page.
+              const archiveFeedMatcher=url=>url.pathname==='/api/github-archive' &&
+                url.searchParams.get('feed')==='archive';
+              const archiveFeedAbort=route=>{
                 blockedApiRequests++;
                 return route.abort();
-              });
+              };
+              await page.route(archiveFeedMatcher,archiveFeedAbort);
               page.on('pageerror',e=>pageErrors.push(String(e)));
+              const mediaResponses=[];
               page.on('request',r=>{
                 if(/\.(?:webm|webp)(?:\?|$)/.test(r.url()))mediaRequests.push({
                   url:r.url(),type:/\.webm(?:\?|$)/.test(r.url())?'webm':'webp',at:Date.now()
                 });
               });
+              page.on('response',r=>{
+                if(/\.(?:webm|webp)(?:\?|$)/.test(r.url()))
+                  mediaResponses.push({url:r.url(),status:r.status()});
+              });              });
               try {
                 const started=Date.now();
                 const response=await page.goto('https://spine-link.vercel.app/world-spine-archive',{
@@ -121,32 +135,82 @@ jobs:
               const after=await page.locator('.feed-card').count();
               assert.ok(after>before);
               assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
-              // Continue through the live archive until the first 40 newest
-              // public animation cards are present in the DOM.
+              // The first 40 cards are embedded. Keep the initial 1s proof,
+              // then release the feed route and walk every remaining page until
+              // the server explicitly reports End of archive.
               while(await page.locator('.feed-card').count()<40){
                 const previous=await page.locator('.feed-card').count();
                 await page.locator('#sentinel').scrollIntoViewIfNeeded();
                 await page.waitForFunction(n=>document.querySelectorAll('.feed-card').length>n,
                   previous,{timeout:12000});
               }
-              const first40=await page.locator('.feed-card').evaluateAll(cards=>cards.slice(0,40).map(card=>{
+              await page.unroute(archiveFeedMatcher,archiveFeedAbort);
+              const batchEvidence=[{cards:after,appendMs:latency,posterMs}];
+              let archiveFinished=false;
+              for(let batchIndex=0;batchIndex<200;batchIndex++){
+                const sentinelText=await page.locator('#sentinel').innerText();
+                if(sentinelText.includes('End of archive')){
+                  archiveFinished=true;
+                  break;
+                }
+                const previous=await page.locator('.feed-card').count();
+                const batchStarted=Date.now();
+                await page.locator('#sentinel').scrollIntoViewIfNeeded();
+                await page.locator('#sentinel').click({timeout:5000}).catch(()=>{});
+                await page.waitForFunction(n=>{
+                  const count=document.querySelectorAll('.feed-card').length;
+                  const state=document.querySelector('#sentinel')?.textContent||'';
+                  return count>n||state.includes('End of archive')||state.includes('Tap to retry');
+                },previous,{timeout:20000});
+                let current=await page.locator('.feed-card').count();
+                let state=await page.locator('#sentinel').innerText();
+                if(current===previous&&state.includes('Tap to retry')){
+                  await page.locator('#sentinel').click({timeout:5000});
+                  await page.waitForFunction(n=>{
+                    const count=document.querySelectorAll('.feed-card').length;
+                    const label=document.querySelector('#sentinel')?.textContent||'';
+                    return count>n||label.includes('End of archive')||label.includes('Tap to retry');
+                  },previous,{timeout:20000});
+                  current=await page.locator('.feed-card').count();
+                  state=await page.locator('#sentinel').innerText();
+                }
+                if(current===previous&&state.includes('End of archive')){
+                  archiveFinished=true;
+                  break;
+                }
+                if(current===previous)
+                  throw new Error('Archive pagination stalled before the end of the library');
+                await page.waitForFunction(n=>{
+                  const cards=Array.from(document.querySelectorAll('.feed-card')).slice(n);
+                  const images=cards.map(card=>card.querySelector('.feed-media img')).filter(Boolean).slice(0,3);
+                  return images.length===0||images.every(img=>img.complete&&img.naturalWidth>0);
+                },previous,{timeout:10000});
+                const elapsed=Date.now()-batchStarted;
+                batchEvidence.push({cards:current-previous,appendMs:elapsed});
+                assert.ok(elapsed<=1000,
+                  'Archive card batch took more than one second to append and decode: '+elapsed+'ms');
+              }
+              assert.ok(archiveFinished,'Archive did not reach its explicit end sentinel');
+              const allCards=await page.locator('.feed-card').evaluateAll(cards=>cards.map(card=>{
                 const image=card.querySelector('.feed-media img');
-                const video=card.dataset.videoSrc||'';
-                const poster=image?.getAttribute('src')||'';
                 return {
-                  id:card.dataset.entryId||'',
                   status:card.dataset.previewStatus||'',
                   sourceWebmStatus:card.dataset.sourceWebmStatus||'',
                   sourcePreviewStatus:card.dataset.sourcePreviewStatus||'',
-                  video,poster,
+                  video:card.dataset.videoSrc||'',
+                  poster:image?.getAttribute('src')||'',
                   imageCount:card.querySelectorAll('.feed-media img').length,
                   fallback:!!card.querySelector('[data-fallback-src],[data-video-fallback],.feed-placeholder,.media-fallback'),
                   mediaText:(card.querySelector('.feed-media')?.textContent||'').trim(),
                 };
               }));
-              assert.equal(first40.length,40,'Archive did not expose 40 newest cards');
-              const paired=first40.filter(item=>item.video&&item.poster);
-              const badPairs=first40.filter(item=>{
+              const expectedTotal=await page.locator('.legend').evaluate(el=>
+                Number(el.textContent.match(/(\d+)\s+works/i)?.[1]||0));
+              assert.ok(expectedTotal>0,'Archive total card count is missing');
+              assert.equal(allCards.length,expectedTotal,
+                'Archive pagination did not expose every available card');
+              const paired=allCards.filter(item=>item.video&&item.poster);
+              const pairIssues=allCards.filter(item=>{
                 if(!item.video&&!item.poster)return false;
                 if(!item.video||!item.poster||item.imageCount!==1)return true;
                 try{
@@ -159,55 +223,159 @@ jobs:
                       poster.pathname.slice(0,poster.pathname.lastIndexOf('/')+1);
                 }catch{return true;}
               });
-              const fallbacks=first40.filter(item=>item.fallback||item.mediaText);
-              const newest20=first40.slice(0,20);
-              const newest20Missing=newest20.filter(item=>!item.video||!item.poster);
-              const newest20Blocked=newest20.filter(item=>
-                item.sourceWebmStatus.startsWith('blocked-')&&
-                item.sourcePreviewStatus==='blocked'&&!item.video&&!item.poster);
-              const newest20UnexpectedMissing=newest20Missing.filter(item=>!newest20Blocked.includes(item));
-              const newest20InvalidBlocked=newest20.filter(item=>
-                item.sourceWebmStatus.startsWith('blocked-')&&
-                item.sourcePreviewStatus==='blocked'&&(item.video||item.poster));
-              const older20Missing=first40.slice(20,40).filter(item=>!item.video||!item.poster);
-              // Every eligible newest card must have its own WebM/WebP pair.
-              // Explicitly blocked source records remain blank; never guess an
-              // animation or substitute an unrelated texture as a fake preview.
-              assert.deepEqual(badPairs,[],'Mismatched video/poster quality or work path in first 40 cards');
-              assert.deepEqual(fallbacks,[],'Archive card contains a forbidden image/text fallback');
-              const checks=await Promise.all(paired.map(async item=>{
-                const [posterResponse,videoResponse]=await Promise.all([
-                  page.request.get(item.poster,{headers:{Range:'bytes=0-63'},timeout:20000}),
-                  page.request.get(item.video,{headers:{Range:'bytes=0-63'},timeout:20000}),
-                ]);
-                const [posterBytes,videoBytes]=await Promise.all([posterResponse.body(),videoResponse.body()]);
-                return {
-                  posterStatus:posterResponse.status(),
-                  videoStatus:videoResponse.status(),
-                  webp:posterBytes.length>=12&&posterBytes.subarray(0,4).toString('ascii')==='RIFF'&&
-                    posterBytes.subarray(8,12).toString('ascii')==='WEBP',
-                  webm:videoBytes.length>=4&&videoBytes.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3])),
-                };
+              const fallbacks=allCards.filter(item=>item.fallback||item.mediaText);
+              const missing=allCards.filter(item=>!item.video||!item.poster);
+              const unexpectedMissing=missing.filter(item=>
+                !['blocked','failed'].includes(item.sourcePreviewStatus)&&
+                !item.sourceWebmStatus.startsWith('blocked-')&&
+                item.sourceWebmStatus!=='failed');
+              const newest10Missing=allCards.slice(0,10).filter(item=>!item.video||!item.poster);
+              const newest10UnexpectedMissing=newest10Missing.filter(item=>
+                !['blocked','failed'].includes(item.sourcePreviewStatus)&&
+                !item.sourceWebmStatus.startsWith('blocked-')&&
+                item.sourceWebmStatus!=='failed');
+              const posterUrls=[...new Set(paired.map(item=>item.poster))];
+              const posterDecodeResults=[];
+              for(let i=0;i<posterUrls.length;i+=8){
+                const batch=await page.evaluate(async urls=>Promise.all(urls.map(async url=>{
+                  try{
+                    const response=await fetch(url,{cache:'no-store'});
+                    if(!response.ok)return {ok:false,status:response.status,bytes:0};
+                    const type=response.headers.get('content-type')||'';
+                    const blob=await response.blob();
+                    const bitmap=await createImageBitmap(blob);
+                    const result={ok:type.includes('image/webp')&&blob.size>128&&bitmap.width>0&&bitmap.height>0,
+                      status:response.status,bytes:blob.size,width:bitmap.width,height:bitmap.height};
+                    bitmap.close();
+                    return result;
+                  }catch{return {ok:false,status:0,bytes:0};}
+                })),posterUrls.slice(i,i+8));
+                posterDecodeResults.push(...batch);
+              }
+              async function inspectWebmPrefix(url){
+                try{
+                  const response=await fetch(url,{headers:{Range:'bytes=0-63'},
+                    signal:AbortSignal.timeout(20000),cache:'no-store'});
+                  const reader=response.body?.getReader();
+                  let prefix=Buffer.alloc(0);
+                  if(reader){
+                    while(prefix.length<4){
+                      const part=await reader.read();
+                      if(part.done)break;
+                      prefix=Buffer.concat([prefix,Buffer.from(part.value)]);
+                    }
+                    await reader.cancel().catch(()=>{});
+                  }
+                  return {ok:[200,206].includes(response.status)&&
+                    (response.headers.get('content-type')||'').includes('video/webm')&&
+                    prefix.length>=4&&prefix.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3])),
+                    status:response.status,bytes:prefix.length};
+                }catch{return {ok:false,status:0,bytes:0};}
+              }
+              const webmProbeResults=[];
+              for(let i=0;i<paired.length;i+=12)
+                webmProbeResults.push(...await Promise.all(paired.slice(i,i+12).map(item=>inspectWebmPrefix(item.video))));
+              const requestTimes=new Map();
+              for(const request of mediaRequests)
+                if(!requestTimes.has(request.url))requestTimes.set(request.url,request.at);
+              const lazyOrderFailures=paired.filter(item=>{
+                const videoAt=requestTimes.get(item.video);
+                if(videoAt===undefined)return false;
+                const posterAt=requestTimes.get(item.poster);
+                return posterAt===undefined||videoAt<posterAt;
+              });
+              const mediaResponseFailures=mediaResponses.filter(item=>![200,206,304].includes(item.status));
+              const sampleIndexes=[...new Set([
+                0,9,19,39,
+                ...Array.from({length:Math.ceil(allCards.length/20)},(_,i)=>i*20),
+                allCards.length-1,
+              ])].filter(i=>i>=0&&i<allCards.length&&allCards[i].video&&allCards[i].poster);
+              const sampleItems=sampleIndexes.map(i=>({video:allCards[i].video,poster:allCards[i].poster}));
+              const playbackSamples=await page.evaluate(async items=>{
+                async function inspect(item){
+                  const image=new Image();
+                  image.src=item.poster;
+                  await image.decode();
+                  const video=document.createElement('video');
+                  video.muted=true;
+                  video.playsInline=true;
+                  video.preload='auto';
+                  const waitForData=new Promise((resolve,reject)=>{
+                    const timer=setTimeout(()=>reject(new Error('video load timeout')),15000);
+                    video.addEventListener('loadeddata',()=>{clearTimeout(timer);resolve();},{once:true});
+                    video.addEventListener('error',()=>{clearTimeout(timer);reject(new Error('video decode failed'));},{once:true});
+                  });
+                  video.src=item.video;
+                  video.load();
+                  await waitForData;
+                  const canvas=document.createElement('canvas');
+                  canvas.width=32;canvas.height=32;
+                  const context=canvas.getContext('2d',{willReadFrequently:true});
+                  const pixels=source=>{
+                    context.clearRect(0,0,32,32);
+                    context.drawImage(source,0,0,32,32);
+                    return context.getImageData(0,0,32,32).data;
+                  };
+                  const difference=(a,b)=>{
+                    let total=0,count=0;
+                    for(let i=0;i<a.length;i+=4){
+                      total+=Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2]);
+                      count+=3;
+                    }
+                    return total/count;
+                  };
+                  const posterPixels=pixels(image);
+                  const firstPixels=pixels(video);
+                  const posterDiff=difference(posterPixels,firstPixels);
+                  const before=video.currentTime;
+                  await video.play();
+                  await new Promise(resolve=>setTimeout(resolve,400));
+                  const after=video.currentTime;
+                  const secondPixels=pixels(video);
+                  const motionDiff=difference(firstPixels,secondPixels);
+                  video.pause();
+                  video.removeAttribute('src');
+                  video.load();
+                  return {ok:video.videoWidth>0&&video.videoHeight>0&&video.duration>=0.5&&
+                    after>before+0.05&&motionDiff>0.2&&posterDiff<=35,
+                    width:video.videoWidth,height:video.videoHeight,duration:video.duration,
+                    advanced:after>before+0.05,motionDiff,posterDiff};
+                }
+                const results=[];
+                for(const item of items){
+                  try{results.push(await inspect(item));}
+                  catch{results.push({ok:false,advanced:false,motionDiff:0,posterDiff:999});}
+                }
+                return results;
+              },sampleItems);
+              const posterFailures=posterDecodeResults.filter(x=>!x.ok);
+              const webmFailures=webmProbeResults.filter(x=>!x.ok);
+              const sampleFailures=playbackSamples.filter(x=>!x.ok);
+              const maxAppendMs=Math.max(...batchEvidence.map(x=>x.appendMs));
+              console.log('ARCHIVE_ALL_CARDS_EVIDENCE '+JSON.stringify({
+                viewport:viewport.width,total:allCards.length,expectedTotal,
+                batches:batchEvidence.length,maxAppendMs,
+                paired:paired.length,missing:missing.length,unexpectedMissing:unexpectedMissing.length,
+                newest10UnexpectedMissing:newest10UnexpectedMissing.length,
+                postersDecoded:posterDecodeResults.length,posterFailures:posterFailures.length,
+                webmProbed:webmProbeResults.length,webmFailures:webmFailures.length,
+                lazyWebmRequests:mediaRequests.filter(x=>x.type==='webm').length,
+                lazyOrderFailures:lazyOrderFailures.length,mediaResponseFailures:mediaResponseFailures.length,
+                playbackSamples:playbackSamples.length,playbackFailures:sampleFailures.length,
+                blockedApiRequests,pageErrors:pageErrors.length,initialMs:initialPosterMs,initialTiming,
               }));
-              const broken=checks.filter(x=>![200,206].includes(x.posterStatus)||
-                ![200,206].includes(x.videoStatus)||!x.webp||!x.webm);
-              console.log('ARCHIVE_FIRST40_EVIDENCE '+JSON.stringify({
-                viewport:viewport.width,initialMs:initialPosterMs,initialTiming,appendMs:latency,posterMs,
-                before,after,checked:checks.length,newest20Ready:20-newest20Blocked.length,newest20Blocked:newest20Blocked.length,
-                older20Ready:20-older20Missing.length,older20Missing:older20Missing.length,
-                blockedApiRequests,webpRequests:mediaRequests.filter(x=>x.type==='webp').length,
-                webmRequests:mediaRequests.filter(x=>x.type==='webm').length,
-                brokenAssets:broken,
-              }));
-              assert.deepEqual(newest20UnexpectedMissing,[],
-                'An eligible newest-20 card is missing its original WebM/WebP pair');
-              assert.deepEqual(newest20InvalidBlocked,[],
-                'A blocked card must not expose partial or fabricated preview media');
-              assert.equal(newest20Missing.length,newest20Blocked.length,
-                'Every newest-20 missing preview must have an explicit blocked status');
-              assert.deepEqual(broken,[],'One of the first 40 cards has a missing/non-WebP/non-WebM asset');
-              assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
-              assert.ok(posterMs<=1000,'Three new WebP posters took over one second: '+posterMs+'ms');
+              assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
+              assert.deepEqual(pairIssues,[],'Mismatched animation-specific WebM/WebP pairs across archive');
+              assert.deepEqual(fallbacks,[],'Archive contains a fake image/text fallback');
+              assert.deepEqual(unexpectedMissing,[],'A missing archive preview is not explicitly blocked/failed');
+              assert.deepEqual(newest10UnexpectedMissing,[],'A newest-10 missing preview is not explicitly blocked/failed');
+              assert.equal(posterFailures.length,0,'A card poster returned invalid bytes or failed WebP decoding');
+              assert.equal(webmFailures.length,0,'A card WebM returned invalid bytes or content type');
+              assert.equal(mediaResponseFailures.length,0,'A live archive WebP/WebM request returned an HTTP error');
+              assert.equal(lazyOrderFailures.length,0,'A card WebM was requested before its own WebP poster');
+              assert.equal(sampleFailures.length,0,'A representative archive WebM failed first-frame match or moving playback');
+              assert.ok(maxAppendMs<=1000,'A full archive page batch exceeded the one-second card loading target: '+maxAppendMs+'ms');
+              assert.ok(latency<=1000,'Initial next card batch took more than one second: '+latency+'ms');
               } finally {
                 await page.close();
               }
