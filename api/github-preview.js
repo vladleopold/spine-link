@@ -6,6 +6,7 @@ import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
 import { previewMediaStatusAllowsPlayback } from '../lib/preview-media-status.js';
+import { resolvePreviewAnimationTarget } from '../lib/preview-animation-target.js';
 
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -416,12 +417,12 @@ function isPublicArchiveEntry(entry, exclusions) {
   );
 }
 
-function videoMetadataForEntry(origin, entry, entryId, note = '', canonicalUrl = '', embedUrl = '') {
+function videoMetadataForEntry(origin, entry, entryId, note = '', canonicalUrl = '', embedUrl = '', requestedAnimation = '') {
   const id = String(entry?.id || entryId || '').trim();
   // Prefer the preview of an animation that is actually long enough to show as
   // a moving clip. A 1-frame `idle` preview is a still image, so the video-watch
   // panel and the SEO metadata would otherwise surface a zero-length video.
-  const target = resolvePreviewTarget(entry, origin);
+  const target = resolvePreviewTarget(entry, origin, requestedAnimation);
   const contentUrl = target.url ? entryVideoAsset(target.url, entry, 'webm') : '';
   const poster = entryImageAsset(target.poster || '', entry, 'poster') ||
     entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
@@ -724,14 +725,11 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3) {
 // src/SpineApp.tsx so the server-rendered /p/<id> page offers the same files.
 // Resolve media only from the exact indexed defaultAnimation. A missing or short
 // selected preview remains blocked; another animation is never substituted.
-function resolvePreviewTarget(entry, origin = '') {
-  const chosen = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
-  const previews = entry && entry.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
-    ? entry.allAnimationPreviews
-    : null;
+function resolvePreviewTarget(entry, origin = '', requestedAnimation = '') {
+  const { name: chosen, preview } = resolvePreviewAnimationTarget(entry, requestedAnimation);
   // Explicit failed, blocked or pending media states must not leak stale WebM/WebP URLs.
   // Missing status fields remain compatible with legacy index records.
-  const selected = previewMediaStatusAllowsPlayback(entry) && chosen.trim() && previews ? previews[chosen] : null;
+  const selected = previewMediaStatusAllowsPlayback(entry) ? preview : null;
   const fix = origin ? (value) => repairAnimationAssetUrl(entry, value, origin) : (value) => value;
   const selectedFullValue = selected?.webmPreview || selected?.webmPreviewMedium || selected?.webmPreviewLow || '';
   const selectedLowValue = selected?.webmPreviewLow || selected?.webmPreviewMedium || selected?.webmPreview || '';
@@ -2390,9 +2388,9 @@ function jsonScript(value) {
   return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
-function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo, robots, playerUrl, archiveUrl }) {
+function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo, robots, playerUrl, archiveUrl, requestedAnimation = '' }) {
   const title = cleanPublicText(entry?.title || entryId || 'Spine preview');
-  const target = resolvePreviewTarget(entry, origin);
+  const target = resolvePreviewTarget(entry, origin, requestedAnimation);
   const poster = entryImageAsset(target.poster || '', entry, 'poster');
   const video = target.url ? entryVideoAsset(target.url, entry, 'webm') : '';
   const ownerUrl = ownerProfile?.url || (entry?.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '/');
@@ -2561,7 +2559,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
 </html>`;
 }
 
-async function createDynamicPreview(settings, uploadPath, origin, knownEntryRecord = undefined) {
+async function createDynamicPreview(settings, uploadPath, origin, knownEntryRecord = undefined, requestedAnimation = '') {
   const setDirectories = await findSpineSetDirectories(settings, uploadPath);
   const sets = [];
   let note = '';
@@ -2727,7 +2725,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
   const robots = entry && (entry.hiddenFromPublicLibrary === true || entryExcludedFromArchive(entry, exclusions))
     ? 'noindex,follow'
     : 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1';
-  const video = videoMetadataForEntry(origin, entry, entryId, note, canonicalUrl, playerUrl);
+  const video = videoMetadataForEntry(origin, entry, entryId, note, canonicalUrl, playerUrl, requestedAnimation);
   if (sets.length === 0 && entry?.sourceKind === 'spine-project') {
     // A .spine editor project cannot run in spine-player. Do not display the
     // misleading video fallback until the licensed CLI has exported runtime
@@ -2760,7 +2758,7 @@ ${waiting ? '<small>This page will refresh when the editor export finishes.</sma
   }
   if (sets.length === 0) {
     return {
-      html: createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo: video, robots, playerUrl, archiveUrl }),
+      html: createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, metrics, videoSeo: video, robots, playerUrl, archiveUrl, requestedAnimation }),
       robots,
     };
   }
@@ -2847,6 +2845,10 @@ export default async function handler(request, response) {
     if (!path) return response.status(404).send('Preview not found');
   }
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
+  const queryAnimation = request.query?.animation;
+  const requestedAnimation = typeof queryAnimation === 'string'
+    ? queryAnimation
+    : (new URL(request.url || '/', origin).searchParams.get('animation') ?? '');
 
   try {
     let html = '';
@@ -2855,7 +2857,7 @@ export default async function handler(request, response) {
       html = await githubText(settings, path);
       if (!html) return response.status(404).send('Preview not found');
     } else {
-      const preview = await createDynamicPreview(settings, path, origin, entryRecord);
+      const preview = await createDynamicPreview(settings, path, origin, entryRecord, requestedAnimation);
       html = preview.html;
       robotsHeader = preview.robots;
     }
