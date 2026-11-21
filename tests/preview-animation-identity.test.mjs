@@ -82,7 +82,7 @@ test('loading video is hidden and can play only when it names the selected anima
   assert.doesNotMatch(preview, /preview-loading-video[^\n]*autoplay/);
 });
 
-test('archive cards use only the indexed default animation and its exact media pair', () => {
+test('archive cards, detail pages and video pages never expose global media without an exact selected animation', () => {
   const feed = section(archive, 'function archiveFeedEntry(', 'function lightweightCardHtml(');
   assert.match(feed, /hasDefaultAnimation = typeof entry\?\.defaultAnimation === 'string' && entry\.defaultAnimation\.trim\(\)\.length > 0/);
   assert.match(feed, /selectedPreview = hasDefaultAnimation \? selectedAnimationVideo\(entry\) : null/);
@@ -97,6 +97,29 @@ test('archive cards use only the indexed default animation and its exact media p
   assert.match(home, /entryVideoLowSrc\(origin, entry\)/);
   assert.match(home, /previewAnimation: selectedPreview\.name/);
   assert.doesNotMatch(home, /entryVideoAsset\(entry\?\.webmPreview/);
+
+  const imageUrl = section(archive, 'function entryImageUrl(', 'function mediaHtml(');
+  assert.match(imageUrl, /selectedAnimationVideo\(entry\)/);
+  assert.match(imageUrl, /if \(!hasExplicitDefaultAnimation\(entry\)\) return staticThumbnail/);
+  assert.doesNotMatch(imageUrl, /entry\?\.webpPoster|entry\?\.thumbnailPoster|generatedThumbnailUrl|fallbackPosterAssetUrl/);
+
+  const media = section(archive, 'function mediaHtml(', 'function imageSizeFromBuffer(');
+  assert.match(media, /const selected = selectedAnimationVideo\(entry\)/);
+  assert.match(media, /const video = selected\.full \|\| selected\.medium \|\| selected\.low/);
+  assert.match(media, /const poster = selected\.posterMedium \|\| selected\.poster \|\| selected\.posterLow/);
+  assert.doesNotMatch(media, /entry\?\.webpPoster|entry\?\.thumbnailPoster/);
+
+  const detail = section(archive, 'function archiveItemHtml(', 'function archiveVideoHtml(');
+  assert.match(detail, /const mediaVideo = entryVideoSrc\(origin, entry\)/);
+  assert.doesNotMatch(detail, /entryVideoAsset\(entry\?\.webmPreview/);
+  const watch = archive.slice(archive.indexOf('function archiveVideoHtml('), archive.indexOf('export default async function handler'));
+  assert.match(watch, /const mediaVideo = entryVideoSrc\(origin, entry\)/);
+  assert.doesNotMatch(watch, /entryVideoAsset\(entry\?\.webmPreview/);
+  const legacy = section(archive, 'function legacyArchiveHtml(', 'function archiveItemHtml(');
+  assert.match(legacy, /const video = entryVideoSrc\(origin, entry\)/);
+  assert.doesNotMatch(legacy, /entryVideoAsset\(entry\?\.webmPreview/);
+  const handler = archive.slice(archive.indexOf('export default async function handler'));
+  assert.match(handler, /isVideoWatchPage && \(!entry \|\| !entryVideoSrc\(origin, entry\)\)/);
 });
 
 test('video watch and owner-library previews use only the selected default clip', () => {
