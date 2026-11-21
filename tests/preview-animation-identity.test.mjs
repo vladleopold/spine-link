@@ -142,13 +142,13 @@ test('archive cards use only the indexed default animation and its exact media p
 
 test('video watch uses the exact URL selection while owner-library cards keep their own defaults', () => {
   const videoPage = section(preview, 'function createVideoFallbackHtml(', 'async function createDynamicPreview(');
-  assert.match(videoPage, /resolvePreviewTarget\\(entry, origin, requestedAnimation\\)/);
-  assert.match(videoPage, /const video = target\\.url \\? entryVideoAsset\\(target\\.url, entry, 'webm'\\) : ''/);
-  assert.match(preview, /webmPreviewFull: target\\.url \\? entryVideoAsset\\(target\\.url, item, 'webm'\\) : ''/);
+  assert.ok(videoPage.includes('resolvePreviewTarget(entry, origin, requestedAnimation)'));
+  assert.ok(videoPage.includes("const video = target.url ? entryVideoAsset(target.url, entry, 'webm') : ''"));
+  assert.ok(preview.includes("webmPreviewFull: target.url ? entryVideoAsset(target.url, item, 'webm') : ''"));
   const owner = section(preview, 'const lowWebm = target.lowUrl', 'return {');
-  assert.match(owner, /target\\.lowUrl/);
-  assert.doesNotMatch(owner, /item\\?\\.webmPreviewLow/);
-  assert.match(preview, /previewAnimation: target\\.name \\|\\| ''/);
+  assert.ok(owner.includes('target.lowUrl'));
+  assert.ok(!owner.includes('item?.webmPreviewLow'));
+  assert.ok(preview.includes("previewAnimation: target.name || ''"));
 });
 
 test('indexed animation names remain byte-for-byte exact in URLs, media lookup and viewport refit', () => {
