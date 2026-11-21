@@ -206,7 +206,7 @@ function entryExcludedFromArchive(entry, exclusions) {
 
 function sameWorkAssetPath(value = "", entry = {}) {
   const id = String(entry?.id || "").trim();
-  const previewPath = cleanRepoPath(entry?.previewPath || (id ? \`library/\${id}\` : ""));
+  const previewPath = cleanRepoPath(entry?.previewPath || (id ? "library/" + id : ""));
   if (!id || !previewPath) return false;
   let url;
   let pathname = "";
@@ -215,7 +215,7 @@ function sameWorkAssetPath(value = "", entry = {}) {
     pathname = decodeURIComponent(url.pathname);
   } catch { return false; }
   if (url.protocol !== "https:" || url.username || url.password) return false;
-  return pathname.includes(\`/\${previewPath}/\`) || pathname.includes(\`/library/\${id}/\`);
+  return pathname.includes("/" + previewPath + "/") || pathname.includes("/library/" + id + "/");
 }
 
 export function isGeneratedWebpPosterUrl(value = "", entry = {}) {
@@ -252,7 +252,7 @@ export function isMatchingPreviewRenditionPair(video, poster, entry = {}, qualit
     const posterName = posterPath.split("/").pop() || "";
     const videoStem = videoName.replace(/\.webm$/i, "").toLowerCase();
     const posterStem = posterName.replace(/\.webp$/i, "").toLowerCase();
-    const suffix = \`preview-\${quality}\`;
+    const suffix = "preview-" + String(quality);
     return videoStem === posterStem &&
       (videoStem === suffix || videoStem.endsWith("-" + suffix));
   } catch { return false; }
