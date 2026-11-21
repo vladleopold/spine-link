@@ -63,8 +63,12 @@ function entryVideoAsset(value = '', entry = {}, fallback = '') {
   return appendAssetVersion(safeVideo(value), assetVersionForEntry(entry, fallback));
 }
 
+function hasExplicitDefaultAnimation(entry = {}) {
+  return typeof entry?.defaultAnimation === 'string' && entry.defaultAnimation.trim().length > 0;
+}
+
 function selectedAnimationVideo(entry = {}) {
-  const name = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+  const name = hasExplicitDefaultAnimation(entry) ? entry.defaultAnimation : '';
   const previews = entry?.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
     ? entry.allAnimationPreviews
     : null;
@@ -239,7 +243,7 @@ function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
   const previewPath = cleanRepoPath(entry?.previewPath || (id ? `library/${id}` : ''));
   const poster = String(entry?.webpPosterLow || entry?.webpPosterMedium || entry?.webpPoster || entry?.thumbnailPoster || '');
-  if (!origin || !id || !/^data:image\/webp;base64,/i.test(poster)) return '';
+  if (!hasExplicitDefaultAnimation(entry) || !origin || !id || !/^data:image\/webp;base64,/i.test(poster)) return '';
   if (!/^library(?:_\d+)?\/[a-z0-9][a-z0-9._-]{0,180}$/i.test(previewPath)) return '';
   return appendAssetVersion(`${origin}/assets/${encodeRepoPath(`${previewPath}/generated-preview.webp`)}`, assetVersionForEntry(entry, 'generated-preview'));
 }
@@ -751,7 +755,7 @@ function tileClassForEntry(entry, index = 0) {
 // exists in the repository.
 function fallbackPosterAssetUrl(origin, entry = {}) {
   const id = String(entry?.id || '').trim();
-  if (!id || !origin) return '';
+  if (!hasExplicitDefaultAnimation(entry) || !id || !origin) return '';
   // Keep fallback within the same work and correct library collection.
   const ownPath = cleanRepoPath(entry?.previewPath || `library/${id}`);
   if (!/^library(?:_\d+)?\/[a-z0-9][a-z0-9._-]{0,180}$/i.test(ownPath)) return '';
@@ -760,13 +764,17 @@ function fallbackPosterAssetUrl(origin, entry = {}) {
 }
 
 function entryImageUrl(origin, entry) {
+  const selected = selectedAnimationVideo(entry);
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-  return entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || (isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail')) || fallbackPosterAssetUrl(origin, entry);
+  const staticThumbnail = isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
+  if (!hasExplicitDefaultAnimation(entry)) return staticThumbnail;
+  return selected.posterMedium || selected.poster || selected.posterLow || staticThumbnail;
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, altText = '', fetchpriority = '' } = {}) {
-  const video = entryVideoSrc(origin, entry);
-  const poster = entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
+  const selected = selectedAnimationVideo(entry);
+  const video = selected.full || selected.medium || selected.low;
+  const poster = selected.posterMedium || selected.poster || selected.posterLow;
   const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
   const thumbnail = isGifThumbnail ? poster : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
   const alt = altText || escapeHtml(entry?.title || entry?.id || 'Spine animation preview');
@@ -868,7 +876,7 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
     const itemUrl = `${origin}/world-spine-archive/${encodeURIComponent(id)}`;
     const title = cleanPublicText(entry?.title || id || 'Spine animation work', 120);
     const image = entryImageUrl(origin, entry);
-    const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+    const video = entryVideoSrc(origin, entry);
     const work = {
       '@type': video ? 'VideoObject' : 'CreativeWork',
       '@id': `${itemUrl}${video ? '#video' : '#work'}`,
@@ -1875,7 +1883,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
   const videoPageUrl = `${origin}${videoWatchUrl(entry)}`;
   const playerPageUrl = absoluteSpineUrl;
   const mediaImage = entryImageUrl(origin, entry) || `${origin}/spine-link-video-thumbnail.png`;
-  const mediaVideo = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const mediaVideo = entryVideoSrc(origin, entry);
   const ownerName = cleanPublicText(entry?.ownerName || 'Spine creator', 100);
   const description = cleanPublicText(
     entry?.note ||
@@ -2120,7 +2128,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
   const archivePageUrl = `${origin}${archiveItemUrl(entry)}`;
   const playerPageUrl = `${origin}${previewUrl(entry)}`;
   const mediaImage = entryImageUrl(origin, entry) || `${origin}/spine-link-video-thumbnail.png`;
-  const mediaVideo = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const mediaVideo = entryVideoSrc(origin, entry);
   const ownerName = cleanPublicText(entry?.ownerName || 'Spine creator', 100);
   const description = cleanPublicText(
     entry?.note ||
@@ -2441,7 +2449,7 @@ export default async function handler(request, response) {
         return response.status(entry ? 200 : 404).send('');
       }
       const isVideoWatchPage = request.query?.view === 'video' || request.query?.video === '1';
-      if (isVideoWatchPage && (!entry || !entryVideoAsset(entry?.webmPreview || '', entry, 'webm'))) {
+      if (isVideoWatchPage && (!entry || !entryVideoSrc(origin, entry))) {
         response.setHeader('X-Robots-Tag', 'noindex, follow');
       }
       return response.status(entry ? 200 : 404).send(
