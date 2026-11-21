@@ -11,7 +11,7 @@ on:
       - tests/archive-initial-timing.test.mjs
       - tests/vercel-deploy-schedule.test.mjs
       - tests/spine-runtime-file-selection.test.mjs
-      - tests/spine-atlas-integrity.test.mjs tests/vercel-deploy-schedule.test.mjs
+      - tests/spine-atlas-integrity.test.mjs
       - lib/spine-atlas-integrity.js
       - lib/spine-runtime-file-selection.js
       - api/github-preview.js
