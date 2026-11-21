@@ -352,3 +352,66 @@ test('archive never substitutes another animation when defaultAnimation is absen
     if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
+
+
+test('archive feed includes per-animation-only entries and blocks absent or unmatched selected animations',async()=>{
+  const makeEntry=(id,defaultAnimation,mapAnimation)=>{
+    const workPath='library_02/'+id;
+    const asset='https://spine-link.vercel.app/assets/'+workPath;
+    return {
+      ...entries[0],
+      id,
+      previewPath:workPath,
+      webmPreview:'',
+      webmPreviewMedium:'',
+      webmPreviewLow:'',
+      webpPoster:'',
+      webpPosterMedium:'',
+      webpPosterLow:'',
+      thumbnail:'',
+      thumbnailPoster:'',
+      defaultAnimation,
+      webmStatus:'ready',
+      previewStatus:'ready',
+      allAnimationPreviews:{
+        [mapAnimation]:{
+          webmPreviewMedium:asset+'/preview-medium.webm',
+          webpPosterMedium:asset+'/preview-medium.webp',
+          previewDuration:2.5,
+        },
+      },
+    };
+  };
+  const source=[
+    makeEntry('map-only-selected','walk','walk'),
+    makeEntry('map-only-no-default','','run'),
+    makeEntry('map-only-unmatched','missing','run'),
+  ];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-map-only-selected-animation';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'48'}},res);
+    assert.equal(res.code,200);
+    assert.equal(res.body.total,3,'map-only entries must not disappear before selected-media validation');
+    const byId=Object.fromEntries(res.body.entries.map(item=>[item.id,item]));
+    const selected=byId['map-only-selected'];
+    assert.ok(selected);
+    assert.equal(selected.quality,'medium');
+    assert.equal(selected.video,'https://spine-link.vercel.app/assets/library_02/map-only-selected/preview-medium.webm');
+    assert.equal(selected.poster,'https://spine-link.vercel.app/assets/library_02/map-only-selected/preview-medium.webp');
+    for(const id of ['map-only-no-default','map-only-unmatched']){
+      assert.ok(byId[id],'unavailable exact selections remain visible as blocked cards');
+      assert.equal(byId[id].video,'','another map key must never be substituted');
+      assert.equal(byId[id].poster,'','another map key must never be substituted');
+      assert.equal(byId[id].quality,'');
+    }
+    assert.ok(log.length<=6,'map-only feed must not add per-card GitHub requests');
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});

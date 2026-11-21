@@ -84,6 +84,17 @@ function selectedAnimationVideo(entry = {}) {
   };
 }
 
+
+function hasArchivePreviewMetadata(entry = {}) {
+  const previews = entry?.allAnimationPreviews;
+  return Boolean(
+    entry?.webmPreview || entry?.webmPreviewMedium || entry?.webmPreviewLow ||
+    entry?.webpPoster || entry?.webpPosterMedium || entry?.webpPosterLow ||
+    entry?.thumbnail || entry?.thumbnailPoster ||
+    (previews && typeof previews === 'object' && !Array.isArray(previews) && Object.keys(previews).length > 0)
+  );
+}
+
 function entryVideoSrc(origin, entry = {}) {
   const selected = selectedAnimationVideo(entry);
   const hasPoster = Boolean(selected.poster || selected.posterMedium || selected.posterLow);
@@ -2414,7 +2425,7 @@ export default async function handler(request, response) {
     const entries = Array.isArray(allEntries)
       ? dedupeArchiveEntries(allEntries.filter((entry) => (
           entry?.hiddenFromPublicLibrary !== true &&
-          (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster) &&
+          hasArchivePreviewMetadata(entry) &&
           !entryExcludedFromArchive(entry, exclusions)
         )))
       : [];
