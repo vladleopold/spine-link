@@ -67,6 +67,15 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   assert.match(archive, /deferOptionalEnhancementsUntilPoster\(\);/);
 });
 
+test('every archive pagination batch enforces one-second append and poster decoding', () => {
+  assert.ok(workflow.includes('const batchTimings=[];'));
+  assert.ok(workflow.includes('const batchStarted=Date.now();'));
+  assert.ok(workflow.includes('assert.ok(appendMs<=1000'));
+  assert.ok(workflow.includes('assert.ok(posterDecodeMs<=1000'));
+  assert.ok(workflow.includes('maxAppendMs:'));
+  assert.ok(workflow.includes('maxPosterDecodeMs:'));
+});
+
 test('archive cards bind the selected animation fingerprint to the exact player URL', () => {
   const source = readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
   assert.match(source, /animationHash: name \? createHash\('sha256'\)\.update\(name\)\.digest\('hex'\) : ''/);
