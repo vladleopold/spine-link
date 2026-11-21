@@ -1,5 +1,6 @@
 import { selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
 import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
+import { matchAtlasPageTextures } from '../lib/spine-atlas-texture-matching.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
@@ -2618,12 +2619,13 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     // Historical Spine 3.8 exports can reference DXT5 .dds page files.
     // Those original assets remain immutable; /assets/...dds decodes them
     // on demand to PNG for the web player.
-    const textureUrls = atlasPages.map((pageName) => {
-      const matchedTexture =
-        textures.find((texture) => imageMatchesAtlasPage(texture.name, pageName)) ??
-        (textures.length === 1 ? textures[0] : null);
-      return matchedTexture ? versionedAssetUrl(origin, matchedTexture, matchedTexture.sha) : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5U9WcAAAAASUVORK5CYII=';
-    });
+    const matchedTextures = matchAtlasPageTextures(atlasPages, textures, imageMatchesAtlasPage);
+    // A missing or ambiguous atlas page is a blocked source bundle, not
+    // permission to inject a synthetic 1x1 texture or reuse one page.
+    if (!matchedTextures) continue;
+    const textureUrls = matchedTextures.map((texture) =>
+      versionedAssetUrl(origin, texture, texture.sha)
+    );
     const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
 
     const assetVersion = [skeleton.sha, atlas.sha, ...textures.map((texture) => texture.sha),

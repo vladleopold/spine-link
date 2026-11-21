@@ -1,9 +1,47 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { matchAtlasPageTextures } from '../lib/spine-atlas-texture-matching.js';
 
 const preview = fs.readFileSync(new URL('../api/github-preview.js', import.meta.url), 'utf8');
 const archive = fs.readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
+
+test('atlas pages require unique source textures and never use synthetic placeholders', () => {
+  const matchExact = (imageName, pageName) =>
+    String(imageName).toLowerCase() === String(pageName).toLowerCase();
+  const first = { name: 'first.png', path: 'work/first.png' };
+  const second = { name: 'second.png', path: 'work/second.png' };
+
+  assert.deepEqual(matchAtlasPageTextures(['first.png'], [first], matchExact), [first]);
+  assert.deepEqual(matchAtlasPageTextures(['first.png', 'second.png'], [first, second], matchExact),
+    [first, second]);
+  assert.equal(matchAtlasPageTextures(['first.png', 'second.png'], [first], matchExact), null,
+    'one texture must never be reused for multiple atlas pages');
+  assert.equal(matchAtlasPageTextures(['missing.png'], [first, second], matchExact), null,
+    'a missing atlas page must block the source set');
+  assert.equal(matchAtlasPageTextures(['first.png'], [first, { ...first, path: 'work/copy.png' }], matchExact), null,
+    'multiple candidate textures must be treated as ambiguous');
+  assert.equal(matchAtlasPageTextures(['first.png', 'second.png'], [first, first], matchExact), null,
+    'one source texture must not satisfy two different atlas pages');
+  assert.deepEqual(matchAtlasPageTextures(['unnamed-page.png'],
+    [{ name: 'only.png', path: 'work/only.png' }], () => false),
+    [{ name: 'only.png', path: 'work/only.png' }],
+    'the one-texture/one-page legacy case remains unambiguous');
+  assert.equal(matchAtlasPageTextures(['page-a.png', 'page-b.png'],
+    [{ name: 'only.png', path: 'work/only.png' }], () => false), null);
+});
+
+test('preview API blocks missing or ambiguous atlas textures instead of creating a 1x1 page', () => {
+  const atlasSelection = section(preview,
+    'const atlasPages = extractAtlasPages(atlasText);',
+    'const defaultAnimation = typeof entry?.defaultAnimation');
+  assert.match(atlasSelection,
+    /matchAtlasPageTextures\(atlasPages, textures, imageMatchesAtlasPage\)/);
+  assert.match(atlasSelection, /if \(!matchedTextures\) continue/);
+  assert.doesNotMatch(atlasSelection, /data:image\/png;base64,/);
+  assert.doesNotMatch(preview, /data:image\/png;base64,/,
+    'no missing atlas page may be disguised by a synthetic texture');
+});
 
 function section(source, start, end) {
   const from = source.indexOf(start);

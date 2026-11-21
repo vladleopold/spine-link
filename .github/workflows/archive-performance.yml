@@ -12,7 +12,9 @@ on:
       - tests/spine-runtime-file-selection.test.mjs
       - tests/spine-atlas-integrity.test.mjs
       - lib/spine-atlas-integrity.js
+      - lib/spine-atlas-texture-matching.js
       - lib/spine-runtime-file-selection.js
+      - lib/spine-atlas-texture-matching.js
       - api/github-preview.js
       - src/main.tsx
       - .github/workflows/archive-performance.yml
@@ -45,4 +47,5 @@ jobs:
         run: |
           node --check api/github-archive.js
           node --check api/github-preview.js
+          node --check lib/spine-atlas-texture-matching.js
           node --test tests/archive-speed.test.mjs tests/archive-initial-timing.test.mjs tests/preview-animation-identity.test.mjs tests/animation-menu-scroll.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs
