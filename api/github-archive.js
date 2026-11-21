@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
@@ -75,6 +76,7 @@ function selectedAnimationVideo(entry = {}) {
   const selected = name.trim() && previews ? previews[name] : null;
   return {
     name,
+    animationHash: name ? createHash('sha256').update(name).digest('hex') : '',
     poster: entryImageAsset(selected?.webpPoster || '', entry, 'poster'),
     posterMedium: entryImageAsset(selected?.webpPosterMedium || '', entry, 'preview-medium'),
     posterLow: entryImageAsset(selected?.webpPosterLow || '', entry, 'preview-low'),
@@ -587,6 +589,7 @@ function archiveFeedEntry(origin, entry, metrics) {
     ownerName: cleanPublicText(entry?.ownerName || (entry?.portfolioMode === true ? 'Spine artist' : 'Spine creator'), 80),
     ownerUrl: entry?.publicOwnerId ? `/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
     playerUrl: previewUrl(entry),
+    animationHash: selectedPreview?.animationHash || '',
     archiveUrl: archiveItemUrl(entry),
     poster: selected?.poster || '',
     video: selected?.video || '',
@@ -616,7 +619,7 @@ function lightweightCardHtml(item, index = 0) {
   const playerUrlAttr = item.playerUrl ? ` data-player-url="${escapeHtml(item.playerUrl)}"` : '';
   const clickHandler = item.playerUrl ? ` onclick="if(this.dataset.playerUrl)window.location.href=this.dataset.playerUrl"` : '';
   const previewStatus = item.poster && item.video ? 'poster-pending' : 'blocked-no-webm-poster';
-  return `<article class="feed-card"${playerUrlAttr}${videoAttrs}${clickHandler} data-entry-id="${escapeHtml(item.id)}" data-preview-status="${previewStatus}" data-source-webm-status="${escapeHtml(item.sourceWebmStatus)}" data-source-preview-status="${escapeHtml(item.sourcePreviewStatus)}" style="--media-ratio:${ratio}">
+  return `<article class="feed-card"${playerUrlAttr}${videoAttrs}${clickHandler} data-entry-id="${escapeHtml(item.id)}" data-animation-hash="${escapeHtml(item.animationHash || '')}" data-preview-status="${previewStatus}" data-source-webm-status="${escapeHtml(item.sourceWebmStatus)}" data-source-preview-status="${escapeHtml(item.sourcePreviewStatus)}" style="--media-ratio:${ratio}">
     <div class="feed-media">${mediaInner}</div>
     <div class="feed-info">
       <div><span class="feed-title">${title}</span><span class="feed-mode">${escapeHtml(item.mode)}</span></div>
@@ -1735,6 +1738,7 @@ function archiveHtml({ origin, entries, metrics }) {
           card.className='feed-card';
           card.dataset.entryId=item.id;
           card.dataset.playerUrl=item.playerUrl||'';
+          card.dataset.animationHash=item.animationHash||'';
           card.dataset.previewStatus=item.poster&&item.video?'poster-pending':'blocked-no-webm-poster';
           if(item.poster&&item.video)card.dataset.videoSrc=item.video;
           card.style.setProperty('--media-ratio',item.width&&item.height
