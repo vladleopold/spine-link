@@ -113,8 +113,17 @@ test('archive cards, detail pages and video pages never expose global media with
   const media = section(archive, 'function mediaHtml(', 'function imageSizeFromBuffer(');
   assert.match(media, /const selected = selectedAnimationVideo\(entry\)/);
   assert.match(media, /const video = poster \? selected\.full \|\| selected\.medium \|\| selected\.low : ''/);
-  assert.match(media, /const poster = selected\.posterMedium \|\| selected\.poster \|\| selected\.posterLow/);
+  assert.match(media, /const videoSource = eagerVideo \? .* : ''/);
+  assert.match(media, /const preload = eagerVideo \? 'metadata' : 'none'/);
+  assert.match(media, /data-video-src=.*data-poster=/);
   assert.doesNotMatch(media, /entry\?\.webpPoster|entry\?\.thumbnailPoster|entry\?\.thumbnail/);
+
+  const autoplay = archive.slice(archive.indexOf('function installArchiveViewportAutoplay()'));
+  assert.match(autoplay, /video\.dataset\.posterReady !== "true"/);
+  assert.match(autoplay, /await image\.decode\(\)/);
+  assert.match(autoplay, /video\.dispatchEvent\(new Event\("posterready"\)\)/);
+  assert.match(autoplay, /video\.addEventListener\("posterready", updateAutoplay\)/);
+  assert.match(autoplay, /if \(!ensureReady\(video\)\) return false/);
 
   const detail = section(archive, 'function archiveItemHtml(', 'function archiveVideoHtml(');
   assert.match(detail, /const mediaVideo = entryVideoSrc\(origin, entry\)/);
