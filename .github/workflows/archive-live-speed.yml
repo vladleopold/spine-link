@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
-    timeout-minutes: 12
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Install Playwright
@@ -222,8 +222,7 @@ jobs:
               async function decodeCardRange(start,end) {
                 return await page.evaluate(async ({start,end}) => {
                   const cards=Array.from(document.querySelectorAll('.feed-card')).slice(start,end);
-                  const results=[];
-                  for(const card of cards){
+                  const results=await Promise.all(cards.map(async card=>{
                     const image=card.querySelector('.feed-media img');
                     const video=card.dataset.videoSrc||'';
                     const status=card.dataset.previewStatus||'';
@@ -247,16 +246,39 @@ jobs:
                           String.fromCharCode(...bytes.subarray(8,12))==='WEBP';
                       }catch{}
                     }
-                    results.push({id,playerUrl,poster,video,status,hasImage:Boolean(image),
+                    return {id,playerUrl,poster,video,status,hasImage:Boolean(image),
                       decoded,httpStatus,posterBytes,webp,
-                      fallback:Boolean(card.querySelector('[data-fallback-src],[data-video-fallback],.feed-placeholder,.media-fallback'))});
-                  }
+                      fallback:Boolean(card.querySelector('[data-fallback-src],[data-video-fallback],.feed-placeholder,.media-fallback'))};
+                  }));
                   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
                   return results;
                 },{start,end});
               }
               const allDomRows=await decodeCardRange(0,40);
               let scannedCards=40,batches=0,videoSamples=0;
+              async function verifyPlaybackSample(index) {
+                const sampleCard=page.locator('.feed-card').nth(index);
+                await sampleCard.evaluate(element=>element.scrollIntoView({block:'start'}));
+                const sampleVideo=sampleCard.locator('video').first();
+                await sampleVideo.waitFor({state:'attached',timeout:8000});
+                await page.waitForFunction(video=>
+                  video.readyState>=2&&!video.paused&&video.currentTime>0,
+                  await sampleVideo.elementHandle(),{timeout:8000});
+                const startTime=await sampleVideo.evaluate(video=>video.currentTime);
+                await page.waitForTimeout(450);
+                const playback=await sampleVideo.evaluate(video=>({
+                  currentTime:video.currentTime,paused:video.paused,readyState:video.readyState,
+                  width:video.videoWidth,height:video.videoHeight,
+                }));
+                assert.ok(playback.readyState>=2&&!playback.paused&&playback.width>0&&playback.height>0&&
+                  playback.currentTime!==startTime,
+                  'A sampled archive WebM did not produce advancing decoded video frames');
+              }
+              const firstSampleIndex=allDomRows.findIndex(row=>row.video);
+              if(firstSampleIndex>=0){
+                await verifyPlaybackSample(firstSampleIndex);
+                videoSamples++;
+              }
               while(scannedCards<expectedTotal){
                 const sentinel=page.locator('#sentinel');
                 await sentinel.scrollIntoViewIfNeeded();
@@ -291,24 +313,14 @@ jobs:
                 allDomRows.push(...batchRows);
                 const sampleIndex=batchRows.findIndex(row=>row.video);
                 if(sampleIndex>=0){
-                  const sampleCard=page.locator('.feed-card').nth(beforeCount+sampleIndex);
-                  await sampleCard.evaluate(element=>element.scrollIntoView({block:'start'}));
-                  await page.waitForFunction(element=>{
-                    const video=element.querySelector('video');
-                    return video&&video.readyState>=2&&!video.paused&&video.currentTime>0;
-                  },await sampleCard.elementHandle(),{timeout:8000});
-                  const sampleVideo=sampleCard.locator('video').first();
-                  const startTime=await sampleVideo.evaluate(video=>video.currentTime);
-                  await page.waitForTimeout(450);
-                  const endTime=await sampleVideo.evaluate(video=>video.currentTime);
-                  assert.ok(endTime>startTime,'A sampled archive WebM did not advance during playback');
+                  await verifyPlaybackSample(beforeCount+sampleIndex);
                   videoSamples++;
                 }
                 batches++;
               }
               assert.equal(scannedCards,expectedTotal,'Not all archive pages were traversed');
               assert.equal(allDomRows.length,expectedTotal,'Not all archive cards were inspected');
-              await page.waitForFunction(()=>document.querySelector('#sentinel')?.textContent?.trim()==='End of archive',{timeout:5000});
+              await page.waitForFunction(()=>document.querySelector('#sentinel')?.textContent?.trim()==='End of archive',undefined,{timeout:5000});
               const cardRows=await page.locator('.feed-card').evaluateAll(cards=>cards.map(card=>({
                 id:card.dataset.entryId||'',
                 playerUrl:card.dataset.playerUrl||'',
