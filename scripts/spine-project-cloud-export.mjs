@@ -117,6 +117,8 @@ for (let attempt=0;attempt<7;attempt++) {
       animations = Object.keys(data.animations || {});
     } catch {}
   }
+  const selectedAnimation = typeof existing?.defaultAnimation === 'string' ? existing.defaultAnimation : '';
+  const selectedAnimationAvailable = Boolean(selectedAnimation) && animations.includes(selectedAnimation);
   items[idx] = {
     ...existing,
     conversionStatus:status,
@@ -124,8 +126,10 @@ for (let attempt=0;attempt<7;attempt++) {
     ...(status === 'ready' ? {
       files:[...new Set([...(existing.files || []),...exported])],
       skeleton,atlas,textures,animations,
-      defaultAnimation:animations[0] || '',
-      webmStatus:'pending',dispatchStatus:'pending',
+      defaultAnimation:selectedAnimation,
+      webmStatus:selectedAnimationAvailable ? 'pending' : 'blocked-missing-animation-selection',
+      previewStatus:selectedAnimationAvailable ? 'pending' : 'blocked',
+      dispatchStatus:selectedAnimationAvailable ? 'pending' : 'blocked',
     }:{}),
   };
   const indexBlob=await api('POST','/git/blobs',{
@@ -152,7 +156,7 @@ for (let attempt=0;attempt<7;attempt++) {
   }
 }
 if (!committed) throw new Error('Could not update project conversion status');
-if (status === 'ready') {
+if (status === 'ready' && selectedAnimationAvailable) {
   try {
     await api('POST','/dispatches',{
       event_type:'spine-export-webm',client_payload:{

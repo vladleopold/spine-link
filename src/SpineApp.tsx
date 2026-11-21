@@ -958,8 +958,7 @@ function skinNamesFromSkeletonJson(skeletonJson: unknown) {
 }
 
 function preferredSkinName(skinNames: string[]) {
-  if (!skinNames.length) return "";
-  return skinNames.includes("default") ? "default" : skinNames[0] || "";
+  return Array.isArray(skinNames) && skinNames.includes("default") ? "default" : "";
 }
 
 function sanitizeSkeletonData(json: unknown): unknown {
@@ -2522,11 +2521,8 @@ if (extensionOf(file.name) === "json" && text) {
         skeletonJson && typeof skeletonJson === "object" && "animations" in skeletonJson
           ? Object.keys((skeletonJson as { animations?: Record<string, unknown> }).animations ?? {})
           : [];
-      const defaultAnimation =
-        animationNames.find((animationName) => animationName.toLowerCase() === "idle") ??
-        animationNames.find((animationName) => animationName.toLowerCase().includes("idle")) ??
-        animationNames.find((animationName) => !animationName.toLowerCase().startsWith("eyes")) ??
-        animationNames[0];
+      // Spine source files do not define a selected preview animation. Keep it empty until the user or index explicitly selects one.
+      const defaultAnimation = "";
       const skinNames = skinNamesFromSkeletonJson(skeletonJson);
       const defaultSkin = preferredSkinName(skinNames);
       const skeletonBounds =
@@ -2700,6 +2696,7 @@ function playAnimationWithLoopMode(player: SpinePlayerInstance | null, animation
     console.warn(`Could not play Spine animation "${animationName}".`, error);
     return false;
   }
+  if (!trackEntry) return false;
 
   if (trackEntry) {
     (trackEntry as { mixDuration?: number; mixTime?: number }).mixDuration = 0;
@@ -3167,8 +3164,14 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     const prepared = modalPreparedSpineRef.current;
     if (!player || !prepared || !name) return;
     try {
-      player.setAnimation(name, true);
+      const trackEntry = player.setAnimation(name, true);
+      if (!trackEntry) {
+        player.pause();
+        setModalError("Selected animation is unavailable. No alternate animation was played.");
+        return;
+      }
       player.play();
+      setModalError("");
       setModalActiveAnimation(name);
     } catch (err) {
       console.warn(`Could not play animation "${name}".`, err);
@@ -3642,35 +3645,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     setSelectedCardSize(currentLibraryEntry.cardSize || "auto");
   }, [currentLibraryEntry]);
 
-  // Automatic preview fallback after publish/save.
-  //
-  // A work's "main" preview is the one for defaultAnimation. When that
-  // animation's preview is a 1-3 frame clip (an `idle` that is a single held
-  // frame) the moving thumbnail is effectively a still image. After every
-  // publish the work is re-checked: if the chosen preview is shorter than 2 s
-  // and another animation in the same skeleton has a long-enough preview, the
-  // work is re-published with that animation as defaultAnimation. This runs
-  // automatically — no user action, no confirmation.
-  useEffect(() => {
-    if (!currentLibraryEntry || !preparedSpine) return;
-    if (isPublishingLink) return;
-    const previews = currentLibraryEntry.allAnimationPreviews;
-    if (!previews || !Object.keys(previews).length) return;
-    const animations = Array.isArray(currentLibraryEntry.animations) && currentLibraryEntry.animations.length
-      ? currentLibraryEntry.animations
-      : Object.keys(previews);
-    const chosen = String(currentLibraryEntry.defaultAnimation || '').trim();
-    const chosenDur = previews[chosen] ? Number(previews[chosen].previewDuration) : NaN;
-    if (Number.isFinite(chosenDur) && chosenDur >= 2) return;
-    const fallback = animations.find((a) => {
-      const d = previews[a] ? Number(previews[a].previewDuration) : NaN;
-      return Number.isFinite(d) && d >= 2;
-    });
-    if (!fallback || fallback === chosen) return;
-    const active = activeAnimation || preparedSpine.defaultAnimation || animations[0] || "";
-    void publishToGitHub(preparedSpine, animations, fallback);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentLibraryEntry?.id]);
+
 
   useEffect(() => {
     animationsRef.current = animations;
@@ -3861,8 +3836,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           const nextSpineOptions = await loadFiles(Array.from(fileList));
           const nextSpine = chooseInitialSet(nextSpineOptions);
           if (!nextSpine) throw new Error("Could not create an extra player from these files.");
-          const nextAnimations = nextSpine.animations.length ? nextSpine.animations : [nextSpine.defaultAnimation || "animation"].filter(Boolean);
-          const nextActiveAnimation = nextSpine.defaultAnimation && nextAnimations.includes(nextSpine.defaultAnimation) ? nextSpine.defaultAnimation : nextAnimations[0] || "";
+          const nextAnimations = Array.isArray(nextSpine.animations) ? nextSpine.animations : [];
+          const nextActiveAnimation = typeof nextSpine.defaultAnimation === "string" ? nextSpine.defaultAnimation : "";
           setExtraSpineSets((currentSets) => [
             ...currentSets,
             {
@@ -4053,7 +4028,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           atlas: prepared.atlasName,
           atlasUrl: prepared.atlasName,
           rawDataURIs: prepared.rawDataURIs,
-          animation: extraSet?.activeAnimation || prepared.defaultAnimation,
+          animation: extraSet ? extraSet.activeAnimation : (typeof prepared.defaultAnimation === "string" ? prepared.defaultAnimation : ""),
           ...(prepared.defaultSkin ? { skin: prepared.defaultSkin } : {}),
           premultipliedAlpha: prepared.premultipliedAlpha,
           showControls: true,
@@ -4061,6 +4036,16 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           alpha: true,
           preserveDrawingBuffer: true,
           backgroundColor: "00000000",
+          success: (player: SpinePlayerInstance) => {
+            const requestedAnimation = extraSet
+              ? extraSet.activeAnimation
+              : (typeof prepared.defaultAnimation === "string" ? prepared.defaultAnimation : "");
+            const names = player.skeleton?.data.animations.map((animation: { name: string }) => animation.name) ?? [];
+            if (!requestedAnimation || !names.includes(requestedAnimation) ||
+                !playAnimationWithLoopMode(player, requestedAnimation, true, () => true)) {
+              player.pause();
+            }
+          },
         } as unknown as SpinePlayerConfig);
         mountedPlayers.push(player as unknown as SpinePlayerInstance);
       }
@@ -4186,28 +4171,35 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       },
       success: (player: SpinePlayerInstance) => {
         const names = player.skeleton?.data.animations.map((animation: { name: string }) => animation.name) ?? [];
-        const initialAnimation = configuredSpine.defaultAnimation && names.includes(configuredSpine.defaultAnimation) ? configuredSpine.defaultAnimation : names[0];
-        const playableAnimation =
-          initialAnimation && playAnimationWithLoopMode(player, initialAnimation, loopEnabledRef.current, () => loopEnabledRef.current)
-            ? initialAnimation
-            : names.find((animationName: string) => playAnimationWithLoopMode(player, animationName, loopEnabledRef.current, () => loopEnabledRef.current));
+        const requestedAnimation = typeof configuredSpine.defaultAnimation === "string" ? configuredSpine.defaultAnimation : "";
         setAnimations(names);
-        setActiveAnimation(playableAnimation ?? initialAnimation ?? "");
-        if (playableAnimation) {
-          installLoopButton(player, loopEnabledRef.current, toggleLoopEnabled, playActiveAnimationFromStart);
-          rememberCurrentViewport();
-          applyZoomToPlayer(zoomRef.current, false);
-          if (!currentLibraryEntry) void publishToGitHub(configuredSpine, names, playableAnimation);
-        } else if (initialAnimation) {
-          setError(`Animation bounds are invalid: ${initialAnimation}.`);
+        setActiveAnimation(requestedAnimation);
+        if (!requestedAnimation) {
+          player.pause();
+          setError("");
+          setStatus(names.length
+            ? "Choose an animation before previewing or publishing. No default animation is selected."
+            : "Ready, but the animation list is empty.");
+          return;
         }
-        setStatus(
-          playableAnimation
-            ? `Ready. Animations found: ${names.length}. Creating permanent link...`
-            : names.length
-              ? "Ready, but the available animations have invalid bounds."
-            : "Ready, but the animation list is empty.",
-        );
+        if (!names.includes(requestedAnimation)) {
+          player.pause();
+          setError(`Selected animation is unavailable: ${requestedAnimation}. No alternate animation was played.`);
+          setStatus("Preview blocked.");
+          return;
+        }
+        if (!playAnimationWithLoopMode(player, requestedAnimation, loopEnabledRef.current, () => loopEnabledRef.current)) {
+          player.pause();
+          setError(`Selected animation could not be played: ${requestedAnimation}. No alternate animation was played.`);
+          setStatus("Preview blocked.");
+          return;
+        }
+        setError("");
+        installLoopButton(player, loopEnabledRef.current, toggleLoopEnabled, playActiveAnimationFromStart);
+        rememberCurrentViewport();
+        applyZoomToPlayer(zoomRef.current, false);
+        if (!currentLibraryEntry) void publishToGitHub(configuredSpine, names, requestedAnimation);
+        setStatus(`Ready. Animations found: ${names.length}. Creating permanent link...`);
       },
       error: (_player: SpinePlayerInstance, message: unknown) => {
         const runtimeMessage = message as unknown;
@@ -5384,7 +5376,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             atlas: prepared.atlasName,
             atlasUrl: prepared.atlasName,
             rawDataURIs: prepared.rawDataURIs,
-            animation: prepared.defaultAnimation,
+            animation: typeof prepared.defaultAnimation === "string" ? prepared.defaultAnimation : "",
             ...(prepared.defaultSkin ? { skin: prepared.defaultSkin } : {}),
             premultipliedAlpha: prepared.premultipliedAlpha,
             showControls: true,
@@ -5401,13 +5393,25 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
             },
             success: (player: SpinePlayerInstance) => {
               if (cancelled) return;
-              const names = player.skeleton?.data.animations.map((a: { name: string }) => a.name) ?? [];
-              const initial = prepared.defaultAnimation && names.includes(prepared.defaultAnimation) ? prepared.defaultAnimation : names[0];
+              const names = player.skeleton?.data.animations.map((animation: { name: string }) => animation.name) ?? [];
+              const requestedAnimation = typeof prepared.defaultAnimation === "string" ? prepared.defaultAnimation : "";
               setModalAnimations(names);
-              setModalActiveAnimation(initial || "");
+              setModalActiveAnimation(requestedAnimation);
               setModalIsLoading(false);
-              if (initial) {
-                try { player.setAnimation(initial, true); player.play(); } catch {}
+              if (!requestedAnimation || !names.includes(requestedAnimation)) {
+                player.pause();
+                setModalError(requestedAnimation
+                  ? "Selected animation is unavailable. No alternate animation was played."
+                  : "No default animation is selected. No animation was played.");
+                return;
+              }
+              try {
+                const trackEntry = player.setAnimation(requestedAnimation, true);
+                if (!trackEntry) throw new Error("Selected animation is unavailable.");
+                player.play();
+              } catch {
+                player.pause();
+                setModalError("Selected animation could not be played. No alternate animation was played.");
               }
             },
             error: (_player: SpinePlayerInstance, message: unknown) => {

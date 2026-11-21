@@ -63,8 +63,12 @@ function entryVideoAsset(value = '', entry = {}, fallback = '') {
   return appendAssetVersion(safeVideo(value), assetVersionForEntry(entry, fallback));
 }
 
+function hasExplicitDefaultAnimation(entry = {}) {
+  return typeof entry?.defaultAnimation === 'string' && entry.defaultAnimation.trim().length > 0;
+}
+
 function selectedAnimationVideo(entry = {}) {
-  const name = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+  const name = hasExplicitDefaultAnimation(entry) ? entry.defaultAnimation : '';
   const previews = entry?.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
     ? entry.allAnimationPreviews
     : null;
@@ -80,14 +84,17 @@ function selectedAnimationVideo(entry = {}) {
   };
 }
 
+
 function entryVideoSrc(origin, entry = {}) {
   const selected = selectedAnimationVideo(entry);
-  return selected.full || selected.medium || selected.low;
+  const hasPoster = Boolean(selected.poster || selected.posterMedium || selected.posterLow);
+  return hasPoster ? selected.full || selected.medium || selected.low : '';
 }
 
 function entryVideoLowSrc(origin, entry = {}) {
   const selected = selectedAnimationVideo(entry);
-  return selected.low || selected.medium || selected.full;
+  const hasPoster = Boolean(selected.poster || selected.posterMedium || selected.posterLow);
+  return hasPoster ? selected.low || selected.medium || selected.full : '';
 }
 function safeAsset(value = '') {
   const url = String(value).trim();
@@ -234,15 +241,6 @@ function isGeneratedWebmUrl(value = '', entry = {}) {
   return /\/(?:preview|preview-medium|preview-low)\.webm$/i.test(pathname);
 }
 
-
-function generatedThumbnailUrl(origin, entry) {
-  const id = String(entry?.id || '').trim();
-  const previewPath = cleanRepoPath(entry?.previewPath || (id ? `library/${id}` : ''));
-  const poster = String(entry?.webpPosterLow || entry?.webpPosterMedium || entry?.webpPoster || entry?.thumbnailPoster || '');
-  if (!origin || !id || !/^data:image\/webp;base64,/i.test(poster)) return '';
-  if (!/^library(?:_\d+)?\/[a-z0-9][a-z0-9._-]{0,180}$/i.test(previewPath)) return '';
-  return appendAssetVersion(`${origin}/assets/${encodeRepoPath(`${previewPath}/generated-preview.webp`)}`, assetVersionForEntry(entry, 'generated-preview'));
-}
 
 function isoDate(value) {
   const date = value ? new Date(value) : null;
@@ -486,6 +484,16 @@ function previewDurationSeconds(entry) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+function hasArchivePreviewMetadata(entry = {}) {
+  const previews = entry?.allAnimationPreviews;
+  return Boolean(
+    entry?.webmPreview || entry?.webmPreviewMedium || entry?.webmPreviewLow ||
+    entry?.webpPoster || entry?.webpPosterMedium || entry?.webpPosterLow ||
+    entry?.thumbnail || entry?.thumbnailPoster ||
+    (previews && typeof previews === 'object' && !Array.isArray(previews) && Object.keys(previews).length > 0)
+  );
+}
+
 function homepageFeedEntries(origin, entries, metrics) {
   const scoredEntries = entries
     .filter((entry) => entry?.hiddenFromPublicLibrary !== true && (entryVideoSrc(origin, entry) || '').length > 0)
@@ -498,10 +506,8 @@ function homepageFeedEntries(origin, entries, metrics) {
   return randomEntries.map((entry) => {
     const id = String(entry?.id || '');
     const metric = metricCountsForId(metrics, id);
-    const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-    const thumbnail = isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
     const selectedPreview = selectedAnimationVideo(entry);
-    const poster = selectedPreview.posterMedium || selectedPreview.poster;
+    const poster = selectedPreview.posterMedium || selectedPreview.poster || selectedPreview.posterLow;
     return {
       id,
       title: String(entry?.title || id || 'Spine preview'),
@@ -511,8 +517,8 @@ function homepageFeedEntries(origin, entries, metrics) {
       webmPreview: entryVideoLowSrc(origin, entry),
       previewAnimation: selectedPreview.name,
       thumbnailPoster: poster,
-      thumbnail,
-      thumbnailType: isGifThumbnail ? 'gif' : 'image',
+      thumbnail: poster,
+      thumbnailType: 'image',
       previewWidth: Number(entry?.previewWidth || 0) || undefined,
       previewHeight: Number(entry?.previewHeight || 0) || undefined,
       // The feed filters on this, so it has to reach the client-facing entry.
@@ -681,7 +687,8 @@ async function enrichArchiveEntryLayout(settings, origin, entry) {
     return { ...entry, mediaAspectRatio: width / height };
   }
 
-  const posterUrl = entryImageAsset(entry.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry.webpPoster || '', entry, 'poster') || entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail') || fallbackPosterAssetUrl(origin, entry);
+  const selected = selectedAnimationVideo(entry);
+  const posterUrl = selected.posterMedium || selected.poster || selected.posterLow || '';
   const repoPath = repoPathFromAssetUrl(entry, posterUrl);
   if (!repoPath || repoPath.includes('/generated-preview.webp')) return entry;
   const buffer = await githubBuffer(settings, repoPath);
@@ -744,43 +751,30 @@ function tileClassForEntry(entry, index = 0) {
   return `tile ${ratio ? tileClassForRatio(ratio) : fallbackTileClass(index)}`;
 }
 
-// Canonical poster fallback used when every poster field is empty or the blocked 360px
-// file. preview.webp is written by the exporter for every entry, so its
-// canonical name is the reliable guess; thumbnailPath is only tried after it
-// because many entries still point at an idle-preview.webp that no longer
-// exists in the repository.
-function fallbackPosterAssetUrl(origin, entry = {}) {
-  const id = String(entry?.id || '').trim();
-  if (!id || !origin) return '';
-  // Keep fallback within the same work and correct library collection.
-  const ownPath = cleanRepoPath(entry?.previewPath || `library/${id}`);
-  if (!/^library(?:_\d+)?\/[a-z0-9][a-z0-9._-]{0,180}$/i.test(ownPath)) return '';
-  const direct = `${origin}/assets/${encodeRepoPath(`${ownPath}/preview.webp`)}`;
-  return isBlockedPosterUrl(direct) ? '' : appendAssetVersion(direct, assetVersionForEntry(entry, 'thumbnail'));
-}
-
 function entryImageUrl(origin, entry) {
-  const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-  return entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || (isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail')) || fallbackPosterAssetUrl(origin, entry);
+  if (!hasExplicitDefaultAnimation(entry)) return '';
+  const selected = selectedAnimationVideo(entry);
+  return selected.posterMedium || selected.poster || selected.posterLow || '';
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, altText = '', fetchpriority = '' } = {}) {
-  const video = entryVideoSrc(origin, entry);
-  const poster = entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry?.webpPoster || '', entry, 'poster') || entryImageAsset(entry?.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry);
-  const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-  const thumbnail = isGifThumbnail ? poster : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
+  const selected = selectedAnimationVideo(entry);
+  const poster = selected.posterMedium || selected.poster || selected.posterLow;
+  const video = poster ? selected.full || selected.medium || selected.low : '';
   const alt = altText || escapeHtml(entry?.title || entry?.id || 'Spine animation preview');
   const fp = fetchpriority ? ` fetchpriority="${escapeHtml(fetchpriority)}"` : '';
   const loading = fetchpriority === 'high' ? '' : ' loading="lazy"';
   if (video) {
-    const videoSource = ` src="${escapeHtml(video)}"`;
-    const preload = eagerVideo ? 'metadata' : 'metadata';
-    const posterAttr = poster || thumbnail ? ` poster="${escapeHtml(poster || thumbnail)}"` : '';
-    return `<video class="${posterClass}"${posterAttr}${videoSource} muted playsinline preload="${preload}" loop aria-label="${alt}"${fp} data-video-src="${escapeHtml(video)}"></video>`;
+    // Archive tiles show the WebP poster immediately; only the detail page opts
+    // into a WebM src. The viewport controller attaches tile src after decoding
+    // the exact poster, so the initial card render never requests video bytes.
+    const videoSource = eagerVideo ? ` src="${escapeHtml(video)}"` : '';
+    const preload = eagerVideo ? 'metadata' : 'none';
+    const posterAttr = ` poster="${escapeHtml(poster)}"`;
+    return `<video class="${posterClass}"${posterAttr}${videoSource} muted playsinline preload="${preload}" loop aria-label="${alt}"${fp} data-video-src="${escapeHtml(video)}" data-poster="${escapeHtml(poster)}"></video>`;
   }
-  if (thumbnail) {
-    const fallback = poster && poster !== thumbnail ? ` data-fallback-src="${escapeHtml(poster)}"` : '';
-    return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="${alt}"${loading} decoding="async"${fp} data-poster="${escapeHtml(poster || thumbnail)}"${fallback} onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried='1';this.src=this.dataset.fallbackSrc;}else{this.style.display='none';}" />`;
+  if (poster) {
+    return `<img class="${posterClass}" src="${escapeHtml(poster)}" alt="${alt}"${loading} decoding="async"${fp} data-poster="${escapeHtml(poster)}" onerror="this.style.display='none';" />`;
   }
   return `<div class="media-fallback" aria-label="${alt}">${Array.isArray(entry?.animations) ? entry.animations.length : 0}</div>`;
 }
@@ -868,7 +862,7 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
     const itemUrl = `${origin}/world-spine-archive/${encodeURIComponent(id)}`;
     const title = cleanPublicText(entry?.title || id || 'Spine animation work', 120);
     const image = entryImageUrl(origin, entry);
-    const video = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+    const video = entryVideoSrc(origin, entry);
     const work = {
       '@type': video ? 'VideoObject' : 'CreativeWork',
       '@id': `${itemUrl}${video ? '#video' : '#work'}`,
@@ -1353,22 +1347,61 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
         const visibleTiles = new Set();
         const playingTiles = new Set();
         function ensureReady(video) {
-          if (!video) return;
-          if (!video.getAttribute("src")) {
-            const src = video.dataset.videoSrc || video.getAttribute("data-video-src") || "";
-            if (src) video.setAttribute("src", src);
+          if (!video) return false;
+          const src = video.dataset.videoSrc || video.getAttribute("data-video-src") || "";
+          const posterUrl = video.dataset.poster || video.getAttribute("poster") || "";
+          if (!src || !posterUrl) {
+            video.dataset.previewStatus = "blocked-no-webm-poster";
+            delete video.dataset.videoSrc;
+            return false;
           }
+          if (video.dataset.posterReady !== "true") {
+            if (video.dataset.posterLoading !== "true") {
+              video.dataset.posterLoading = "true";
+              const image = new Image();
+              let settled = false;
+              let decoding = false;
+              const fail = () => {
+                if (settled) return;
+                settled = true;
+                video.dataset.previewStatus = "blocked-poster-load-failed";
+                delete video.dataset.videoSrc;
+                video.removeAttribute("poster");
+              };
+              const decoded = async () => {
+                if (settled || decoding) return;
+                decoding = true;
+                try {
+                  if (image.naturalWidth <= 0) throw new Error("POSTER_EMPTY");
+                  if (typeof image.decode === "function") await image.decode();
+                  if (image.naturalWidth <= 0) throw new Error("POSTER_DECODE_FAILED");
+                  settled = true;
+                  video.dataset.posterReady = "true";
+                  video.dispatchEvent(new Event("posterready"));
+                } catch {
+                  fail();
+                }
+              };
+              image.onload = decoded;
+              image.onerror = fail;
+              image.src = posterUrl;
+              if (image.complete && image.naturalWidth > 0) void decoded();
+            }
+            return false;
+          }
+          if (!video.getAttribute("src")) video.setAttribute("src", src);
           video.muted = true;
           video.loop = true;
           video.playsInline = true;
+          return Boolean(video.getAttribute("src"));
         }
         function playArchiveVideo(video) {
-          if (!video) return;
-          ensureReady(video);
+          if (!ensureReady(video)) return false;
           const src = video.dataset.videoSrc || video.getAttribute("src") || "";
-          if (!src) return;
+          if (!src) return false;
           try { video.currentTime = 0; } catch {}
           video.play().catch(() => {});
+          return true;
         }
         function stopArchiveVideo(video) {
           if (!video) return;
@@ -1403,25 +1436,25 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
             stopArchiveVideo(video);
             playingTiles.delete(tile);
           });
-          toPlay.slice(0, limit).forEach((tile) => {
+          toPlay.forEach((tile) => {
             const video = tile.querySelector("video");
-            playArchiveVideo(video);
-            playingTiles.add(tile);
+            if (playingTiles.size >= limit && !playingTiles.has(tile)) return;
+            if (playArchiveVideo(video)) playingTiles.add(tile);
+            else playingTiles.delete(tile);
           });
         }
         document.querySelectorAll(".tile").forEach((tile) => {
           const video = tile.querySelector("video");
           if (!video) return;
+          video.addEventListener("posterready", updateAutoplay);
           tile.addEventListener("pointerenter", () => {
-            ensureReady(video);
-            playArchiveVideo(video);
-            playingTiles.add(tile);
+            if (playArchiveVideo(video)) playingTiles.add(tile);
+            else playingTiles.delete(tile);
             updateAutoplay();
           });
           tile.addEventListener("focusin", () => {
-            ensureReady(video);
-            playArchiveVideo(video);
-            playingTiles.add(tile);
+            if (playArchiveVideo(video)) playingTiles.add(tile);
+            else playingTiles.delete(tile);
             updateAutoplay();
           });
           tile.addEventListener("pointerleave", () => {
@@ -1875,7 +1908,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
   const videoPageUrl = `${origin}${videoWatchUrl(entry)}`;
   const playerPageUrl = absoluteSpineUrl;
   const mediaImage = entryImageUrl(origin, entry) || `${origin}/spine-link-video-thumbnail.png`;
-  const mediaVideo = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const mediaVideo = entryVideoSrc(origin, entry);
   const ownerName = cleanPublicText(entry?.ownerName || 'Spine creator', 100);
   const description = cleanPublicText(
     entry?.note ||
@@ -2120,7 +2153,7 @@ function archiveVideoHtml({ origin, entry, metrics }) {
   const archivePageUrl = `${origin}${archiveItemUrl(entry)}`;
   const playerPageUrl = `${origin}${previewUrl(entry)}`;
   const mediaImage = entryImageUrl(origin, entry) || `${origin}/spine-link-video-thumbnail.png`;
-  const mediaVideo = entryVideoAsset(entry?.webmPreview || '', entry, 'webm');
+  const mediaVideo = entryVideoSrc(origin, entry);
   const ownerName = cleanPublicText(entry?.ownerName || 'Spine creator', 100);
   const description = cleanPublicText(
     entry?.note ||
@@ -2392,7 +2425,7 @@ export default async function handler(request, response) {
     const entries = Array.isArray(allEntries)
       ? dedupeArchiveEntries(allEntries.filter((entry) => (
           entry?.hiddenFromPublicLibrary !== true &&
-          (entry?.webmPreview || entry?.thumbnail || entry?.thumbnailPoster) &&
+          hasArchivePreviewMetadata(entry) &&
           !entryExcludedFromArchive(entry, exclusions)
         )))
       : [];
@@ -2441,7 +2474,7 @@ export default async function handler(request, response) {
         return response.status(entry ? 200 : 404).send('');
       }
       const isVideoWatchPage = request.query?.view === 'video' || request.query?.video === '1';
-      if (isVideoWatchPage && (!entry || !entryVideoAsset(entry?.webmPreview || '', entry, 'webm'))) {
+      if (isVideoWatchPage && (!entry || !entryVideoSrc(origin, entry))) {
         response.setHeader('X-Robots-Tag', 'noindex, follow');
       }
       return response.status(entry ? 200 : 404).send(
