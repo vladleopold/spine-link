@@ -401,8 +401,8 @@ test('archive feed includes per-animation-only entries and blocks absent or unma
     const selected=byId['map-only-selected'];
     assert.ok(selected);
     assert.equal(selected.quality,'medium');
-    assert.equal(selected.video,'https://spine-link.vercel.app/assets/library_02/map-only-selected/preview-medium.webm');
-    assert.equal(selected.poster,'https://spine-link.vercel.app/assets/library_02/map-only-selected/preview-medium.webp');
+    assert.ok(selected.video.startsWith('https://spine-link.vercel.app/assets/library_02/map-only-selected/preview-medium.webm?v='));
+    assert.ok(selected.poster.startsWith('https://spine-link.vercel.app/assets/library_02/map-only-selected/preview-medium.webp?v='));
     for(const id of ['map-only-no-default','map-only-unmatched']){
       assert.ok(byId[id],'unavailable exact selections remain visible as blocked cards');
       assert.equal(byId[id].video,'','another map key must never be substituted');
