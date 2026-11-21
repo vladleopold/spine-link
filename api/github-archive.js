@@ -241,15 +241,6 @@ function isGeneratedWebmUrl(value = '', entry = {}) {
 }
 
 
-function generatedThumbnailUrl(origin, entry) {
-  const id = String(entry?.id || '').trim();
-  const previewPath = cleanRepoPath(entry?.previewPath || (id ? `library/${id}` : ''));
-  const poster = String(entry?.webpPosterLow || entry?.webpPosterMedium || entry?.webpPoster || entry?.thumbnailPoster || '');
-  if (!hasExplicitDefaultAnimation(entry) || !origin || !id || !/^data:image\/webp;base64,/i.test(poster)) return '';
-  if (!/^library(?:_\d+)?\/[a-z0-9][a-z0-9._-]{0,180}$/i.test(previewPath)) return '';
-  return appendAssetVersion(`${origin}/assets/${encodeRepoPath(`${previewPath}/generated-preview.webp`)}`, assetVersionForEntry(entry, 'generated-preview'));
-}
-
 function isoDate(value) {
   const date = value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date.toISOString() : '';
@@ -504,10 +495,8 @@ function homepageFeedEntries(origin, entries, metrics) {
   return randomEntries.map((entry) => {
     const id = String(entry?.id || '');
     const metric = metricCountsForId(metrics, id);
-    const isGifThumbnail = entry?.thumbnailType === 'gif' || /^data:image\/gif;base64,/i.test(String(entry?.thumbnail || ''));
-    const thumbnail = isGifThumbnail ? '' : entryImageAsset(entry?.thumbnail || '', entry, 'thumbnail');
     const selectedPreview = selectedAnimationVideo(entry);
-    const poster = selectedPreview.posterMedium || selectedPreview.poster;
+    const poster = selectedPreview.posterMedium || selectedPreview.poster || selectedPreview.posterLow;
     return {
       id,
       title: String(entry?.title || id || 'Spine preview'),
@@ -517,8 +506,8 @@ function homepageFeedEntries(origin, entries, metrics) {
       webmPreview: entryVideoLowSrc(origin, entry),
       previewAnimation: selectedPreview.name,
       thumbnailPoster: poster,
-      thumbnail,
-      thumbnailType: isGifThumbnail ? 'gif' : 'image',
+      thumbnail: poster,
+      thumbnailType: 'image',
       previewWidth: Number(entry?.previewWidth || 0) || undefined,
       previewHeight: Number(entry?.previewHeight || 0) || undefined,
       // The feed filters on this, so it has to reach the client-facing entry.
@@ -687,7 +676,8 @@ async function enrichArchiveEntryLayout(settings, origin, entry) {
     return { ...entry, mediaAspectRatio: width / height };
   }
 
-  const posterUrl = entryImageAsset(entry.webpPosterMedium || '', entry, 'preview-medium') || entryImageAsset(entry.webpPoster || '', entry, 'poster') || entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || entryImageAsset(entry.thumbnail || '', entry, 'thumbnail') || fallbackPosterAssetUrl(origin, entry);
+  const selected = selectedAnimationVideo(entry);
+  const posterUrl = selected.posterMedium || selected.poster || selected.posterLow || '';
   const repoPath = repoPathFromAssetUrl(entry, posterUrl);
   if (!repoPath || repoPath.includes('/generated-preview.webp')) return entry;
   const buffer = await githubBuffer(settings, repoPath);
@@ -748,21 +738,6 @@ function tileClassForEntry(entry, index = 0) {
   if (manualClass) return `tile ${manualClass}`;
   const ratio = Number(entry?.mediaAspectRatio || 0) || fallbackRatio;
   return `tile ${ratio ? tileClassForRatio(ratio) : fallbackTileClass(index)}`;
-}
-
-// Canonical poster fallback used when every poster field is empty or the blocked 360px
-// file. preview.webp is written by the exporter for every entry, so its
-// canonical name is the reliable guess; thumbnailPath is only tried after it
-// because many entries still point at an idle-preview.webp that no longer
-// exists in the repository.
-function fallbackPosterAssetUrl(origin, entry = {}) {
-  const id = String(entry?.id || '').trim();
-  if (!hasExplicitDefaultAnimation(entry) || !id || !origin) return '';
-  // Keep fallback within the same work and correct library collection.
-  const ownPath = cleanRepoPath(entry?.previewPath || `library/${id}`);
-  if (!/^library(?:_\d+)?\/[a-z0-9][a-z0-9._-]{0,180}$/i.test(ownPath)) return '';
-  const direct = `${origin}/assets/${encodeRepoPath(`${ownPath}/preview.webp`)}`;
-  return isBlockedPosterUrl(direct) ? '' : appendAssetVersion(direct, assetVersionForEntry(entry, 'thumbnail'));
 }
 
 function entryImageUrl(origin, entry) {
