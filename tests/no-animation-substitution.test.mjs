@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { hasSelectedPreviewMedia } = require('../scripts/lib/preview-export-status.cjs');
+const { resolvePreviewWorkPath } = require('../scripts/lib/preview-work-path.cjs');
 import { choosePreviewAnimation } from '../scripts/preview-animation-choice.mjs';
 import { chooseSourceSet } from '../scripts/lib/source-set-choice.mjs';
 import { chooseSourceSkeleton } from '../scripts/source-skeleton-choice.mjs';
@@ -93,6 +94,10 @@ test('post-publish export keeps the exact indexed animation and blocks a missing
   assert.match(workflow, /const chosenPreview = chosenAnim \? allAnimPreviews\[chosenAnim\] : null/);
   assert.match(workflow, /fullExportStatus: hasChosenExport \? 'ready' : 'failed'/);
   assert.match(workflow, /const hasChosenExport = hasSelectedPreviewMedia\(chosenPreview\)/);
+  assert.match(workflow, /resolvePreviewWorkPath\(basePath, uploadId, entry\.previewPath\)/);
+  assert.match(workflow, /path\.join\(workPath, 'animations', safeName\)/);
+  assert.match(workflow, /git add "\$BASE_PATH" "\$WORK_PATH\/animations"/);
+  assert.doesNotMatch(workflow, /path\.join\(basePath, uploadId, 'animations', safeName\)/);
   assert.match(workflow, /require\('\.\/scripts\/lib\/preview-export-status\.cjs'\)/);
   assert.match(workflow, /previewStatus: 'blocked'/);
   assert.doesNotMatch(workflow, /const hasChosenExport = Boolean\(chosenPreview\)/);
@@ -156,4 +161,16 @@ test('full-export readiness requires a real same-tier opaque WebM and WebP URL p
     webmPreview: 'https://cdn.example/preview.mp4',
     webpPoster: 'https://cdn.example/preview.webp',
   }), false);
+});
+
+
+test('full export writes beside the indexed source bundle, including legacy root-level paths', () => {
+  assert.equal(resolvePreviewWorkPath('library_02', 'legacy-work', 'legacy-work'), 'legacy-work');
+  assert.equal(resolvePreviewWorkPath('library_02', 'new-work', 'library_02/new-work'), 'library_02/new-work');
+  assert.equal(resolvePreviewWorkPath('library_02', 'new-work', ''), 'library_02/new-work');
+  assert.throws(() => resolvePreviewWorkPath('library_02', 'new-work', '../../other'), /UNSAFE_PREVIEW_PATH/);
+  assert.throws(() => resolvePreviewWorkPath('library_02', 'new-work', 'library_01/new-work'), /UNSAFE_PREVIEW_PATH/);
+  assert.throws(() => resolvePreviewWorkPath('library_02', 'new-work', 'library_02/other-work'), /UNSAFE_PREVIEW_PATH/);
+  assert.throws(() => resolvePreviewWorkPath('../library_02', 'new-work', 'new-work'), /UNSAFE_PREVIEW_PATH/);
+  assert.throws(() => resolvePreviewWorkPath('library_02', '../other', '../other'), /UNSAFE_PREVIEW_PATH/);
 });
