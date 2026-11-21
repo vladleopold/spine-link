@@ -191,8 +191,7 @@ function skinNamesFromSkeletonJson(skeletonJson) {
 }
 
 function preferredSkinName(skinNames) {
-  if (!skinNames.length) return '';
-  return skinNames.includes('default') ? 'default' : skinNames[0] || '';
+  return Array.isArray(skinNames) && skinNames.includes('default') ? 'default' : '';
 }
 
 function extractAtlasPages(atlasText = '') {
