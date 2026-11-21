@@ -46,6 +46,8 @@ test('hourly archive audit traverses every page and checks real poster/video med
   assert.match(workflow,/video\.play\(\)/,'representative videos must load and play');
   assert.match(workflow,/posterDiff/,'representative poster must match its own WebM first frame');
   assert.match(workflow,/motionDiff/,'representative playback must show changing frames');
+  assert.match(workflow,/frameHashes\\.size>=8/,'representative videos must expose eight distinct frames');
+  assert.match(workflow,/nonzeroFrames>=8/,'representative videos must expose eight nonzero frames');
   assert.match(workflow,/lazyOrderFailures/,'WebM must not be requested before its own poster');
   assert.match(workflow,/unexpectedMissing/,'missing previews must have explicit blocked/failed status');
   assert.match(workflow,/maxAppendMs<=1000/,'each archive page batch must meet the one-second target');
