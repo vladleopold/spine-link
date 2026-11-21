@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { previewMediaStatusAllowsPlayback } from '../lib/preview-media-status.js';
+import { resolvePreviewAnimationTarget } from '../lib/preview-animation-target.js';
 
 const preview = fs.readFileSync(new URL('../api/github-preview.js', import.meta.url), 'utf8');
 const archive = fs.readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
@@ -29,19 +30,43 @@ test('default animation comes only from the index, never idle or the first runti
   assert.doesNotMatch(preview, /skeleton\.data\.animations\[0\]/);
 });
 
-test('video target is restricted to the indexed defaultAnimation', () => {
-  const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
-  assert.match(resolver, /const chosen = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : '';/);
-  assert.doesNotMatch(resolver, /entry\?\.webmPreview/);
-  assert.match(resolver, /lowUrl: shortClip/);
-  assert.doesNotMatch(resolver, /for \(const a of animations\)/);
-  assert.doesNotMatch(resolver, /candidates\.find|animations\.find/);
-  assert.match(resolver, /isFallback: false/);
-  const metadata = section(preview, 'function videoMetadataForEntry(', 'function ');
-  assert.match(metadata, /const contentUrl = target\.url \? entryVideoAsset\(target\.url, entry, 'webm'\) : ''/);
-  assert.match(metadata, /previewAnimation: target\.name/);
-});
+test('URL-selected video preview is exact and never falls back to the indexed default', () => {
+  const entry = {
+    defaultAnimation: 'Run',
+    allAnimationPreviews: {
+      Run: { webmPreview: '/run.webm' },
+      Walk: { webmPreview: '/walk.webm' },
+    },
+  };
+  assert.deepEqual(resolvePreviewAnimationTarget(entry, 'Walk'), {
+    name: 'Walk', preview: entry.allAnimationPreviews.Walk,
+  });
+  assert.deepEqual(resolvePreviewAnimationTarget(entry, 'Missing'), {
+    name: 'Missing', preview: null,
+  }, 'a missing explicit animation must not fall back to the indexed default');
+  assert.equal(resolvePreviewAnimationTarget(entry, '').name, 'Run');
+  assert.equal(resolvePreviewAnimationTarget(entry, ' Walk ').name, ' Walk ',
+    'animation names are byte-for-byte exact');
 
+  const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
+  assert.match(resolver, /resolvePreviewAnimationTarget\\(entry, requestedAnimation\\)/);
+  assert.match(resolver, /previewMediaStatusAllowsPlayback\\(entry\\)/);
+  assert.doesNotMatch(resolver, /entry\\?\\.webmPreview/);
+  assert.match(resolver, /lowUrl: shortClip/);
+  assert.match(resolver, /isFallback: false/);
+
+  const metadata = section(preview, 'function videoMetadataForEntry(', 'function ');
+  assert.match(metadata, /resolvePreviewTarget\\(entry, origin, requestedAnimation\\)/);
+  assert.match(metadata, /previewAnimation: target\\.name/);
+  const fallback = section(preview, 'function createVideoFallbackHtml(', 'async function createDynamicPreview(');
+  assert.match(fallback, /resolvePreviewTarget\\(entry, origin, requestedAnimation\\)/);
+  const dynamic = section(preview, 'async function createDynamicPreview(', '// Finds the folder of a work');
+  assert.match(dynamic, /videoMetadataForEntry\\([^;]*requestedAnimation\\)/);
+  assert.match(dynamic, /createVideoFallbackHtml\\([^;]*requestedAnimation\\)/);
+  const handler = preview.slice(preview.indexOf('export default async function handler('));
+  assert.match(handler, /request\\.query\\?\\.animation/);
+  assert.match(handler, /createDynamicPreview\\(settings, path, origin, entryRecord, requestedAnimation\\)/);
+});
 
 test('failed or blocked preview media cannot leak stale WebM/WebP URLs', () => {
   const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
@@ -115,15 +140,15 @@ test('archive cards use only the indexed default animation and its exact media p
   assert.doesNotMatch(home, /entryVideoAsset\(entry\?\.webmPreview/);
 });
 
-test('video watch and owner-library previews use only the selected default clip', () => {
-  const videoPage = section(preview, 'function createVideoFallbackHtml(', 'function ');
-  assert.match(videoPage, /const target = resolvePreviewTarget\(entry, origin\)/);
-  assert.match(videoPage, /const video = target\.url \? entryVideoAsset\(target\.url, entry, 'webm'\) : ''/);
-  assert.match(preview, /webmPreviewFull: target\.url \? entryVideoAsset\(target\.url, item, 'webm'\) : ''/);
+test('video watch uses the exact URL selection while owner-library cards keep their own defaults', () => {
+  const videoPage = section(preview, 'function createVideoFallbackHtml(', 'async function createDynamicPreview(');
+  assert.match(videoPage, /resolvePreviewTarget\\(entry, origin, requestedAnimation\\)/);
+  assert.match(videoPage, /const video = target\\.url \\? entryVideoAsset\\(target\\.url, entry, 'webm'\\) : ''/);
+  assert.match(preview, /webmPreviewFull: target\\.url \\? entryVideoAsset\\(target\\.url, item, 'webm'\\) : ''/);
   const owner = section(preview, 'const lowWebm = target.lowUrl', 'return {');
-  assert.match(owner, /target\.lowUrl/);
-  assert.doesNotMatch(owner, /item\?\.webmPreviewLow/);
-  assert.match(preview, /previewAnimation: target\.name \|\| ''/);
+  assert.match(owner, /target\\.lowUrl/);
+  assert.doesNotMatch(owner, /item\\?\\.webmPreviewLow/);
+  assert.match(preview, /previewAnimation: target\\.name \\|\\| ''/);
 });
 
 test('indexed animation names remain byte-for-byte exact in URLs, media lookup and viewport refit', () => {
