@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { isGeneratedWebmUrl, isGeneratedWebpPosterUrl, isMatchingPreviewRenditionPair } from '../api/github-archive.js';
 
 const preview = fs.readFileSync(new URL('../api/github-preview.js', import.meta.url), 'utf8');
 const archive = fs.readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
@@ -87,8 +88,8 @@ test('archive cards use only the indexed default animation and its exact media p
   assert.match(feed, /hasDefaultAnimation = typeof entry\?\.defaultAnimation === 'string' && entry\.defaultAnimation\.trim\(\)\.length > 0/);
   assert.match(feed, /selectedPreview = hasDefaultAnimation \? selectedAnimationVideo\(entry\) : null/);
   assert.match(feed, /video: selected\?\.video \|\| ''/);
-  assert.match(feed, /isGeneratedWebmUrl\(candidate\.video, entry\)/);
-  assert.match(feed, /isGeneratedWebpPosterUrl\(candidate\.poster, entry\)/);
+  assert.match(feed, /isMatchingPreviewRenditionPair\(candidate\.video, candidate\.poster, entry, candidate\.quality\)/);
+  assert.doesNotMatch(feed, /videoName|posterName/);
   const selected = section(archive, 'function selectedAnimationVideo(', 'function safeAsset(');
   assert.match(selected, /allAnimationPreviews/);
   assert.match(selected, /defaultAnimation/);
@@ -125,4 +126,35 @@ test('indexed animation names remain byte-for-byte exact in URLs, media lookup a
   assert.match(selected, /const name = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
   assert.match(selected, /previews\[name\]/);
   assert.doesNotMatch(selected, /String\(entry\?\.defaultAnimation \|\| ''\)\.trim\(\)/);
+});
+
+
+test('legacy animation-prefixed WebM/WebP renditions are accepted only as exact same-work pairs', () => {
+  const entry = { id: 'legacy-work', previewPath: 'legacy-work' };
+  const base = 'https://spine-link.vercel.app/assets/legacy-work/animations/selected/';
+  const prefix = 'legacy-work-anim-selected-';
+  const mediumVideo = base + prefix + 'preview-medium.webm';
+  const mediumPoster = base + prefix + 'preview-medium.webp';
+  const lowVideo = base + prefix + 'preview-low.webm';
+  const lowPoster = base + prefix + 'preview-low.webp';
+
+  assert.equal(isGeneratedWebmUrl(mediumVideo, entry), true);
+  assert.equal(isGeneratedWebpPosterUrl(mediumPoster, entry), true);
+  assert.equal(isMatchingPreviewRenditionPair(mediumVideo, mediumPoster, entry, 'medium'), true);
+  assert.equal(isMatchingPreviewRenditionPair(lowVideo, lowPoster, entry, 'low'), true);
+  assert.equal(isMatchingPreviewRenditionPair(
+    base + 'preview-medium.webm', base + 'preview-medium.webp', entry, 'medium'), true,
+    'canonical renditions remain supported');
+
+  assert.equal(isMatchingPreviewRenditionPair(
+    mediumVideo, mediumPoster.replace('/legacy-work/', '/other-work/'), entry, 'medium'), false);
+  assert.equal(isMatchingPreviewRenditionPair(
+    mediumVideo, mediumPoster.replace('/animations/selected/', '/animations/other/'), entry, 'medium'), false);
+  assert.equal(isMatchingPreviewRenditionPair(
+    mediumVideo, mediumPoster.replace('legacy-work-anim-selected-', 'other-'), entry, 'medium'), false);
+  assert.equal(isMatchingPreviewRenditionPair(
+    mediumVideo, mediumPoster.replace('spine-link.vercel.app', 'cdn.example.invalid'), entry, 'medium'), false);
+  assert.equal(isMatchingPreviewRenditionPair(mediumVideo, mediumPoster, entry, 'full'), false);
+  assert.equal(isGeneratedWebmUrl('data:video/webm;base64,AAAA', entry), false);
+  assert.equal(isGeneratedWebpPosterUrl('https://evil.example/assets/legacy-work/preview-low.webp', entry), false);
 });

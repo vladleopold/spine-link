@@ -204,37 +204,59 @@ function entryExcludedFromArchive(entry, exclusions) {
   return !allowRuleMatches(entry, allow);
 }
 
-function sameWorkAssetPath(value = '', entry = {}) {
-  const id = String(entry?.id || '').trim();
-  const previewPath = cleanRepoPath(entry?.previewPath || (id ? `library/${id}` : ''));
+function sameWorkAssetPath(value = "", entry = {}) {
+  const id = String(entry?.id || "").trim();
+  const previewPath = cleanRepoPath(entry?.previewPath || (id ? \`library/\${id}\` : ""));
   if (!id || !previewPath) return false;
-  let pathname = '';
-  try { pathname = decodeURIComponent(new URL(String(value || '')).pathname); }
-  catch { return false; }
-  return pathname.includes(`/${previewPath}/`) || pathname.includes(`/library/${id}/`);
+  let url;
+  let pathname = "";
+  try {
+    url = new URL(String(value || ""));
+    pathname = decodeURIComponent(url.pathname);
+  } catch { return false; }
+  if (url.protocol !== "https:" || url.username || url.password) return false;
+  return pathname.includes(\`/\${previewPath}/\`) || pathname.includes(\`/library/\${id}/\`);
 }
 
-function isGeneratedWebpPosterUrl(value = '', entry = {}) {
-  const url = String(value || '').trim();
-  // Data URIs and generic thumbnails do not prove that the image is a generated
-  // same-work animation poster. Require an explicit stored preview asset path.
+export function isGeneratedWebpPosterUrl(value = "", entry = {}) {
+  const url = String(value || "").trim();
   if (!sameWorkAssetPath(url, entry)) return false;
-  let pathname = '';
-  try { pathname = decodeURIComponent(new URL(url).pathname); }
+  let filename = "";
+  try { filename = decodeURIComponent(new URL(url).pathname).split("/").pop()?.toLowerCase() || ""; }
   catch { return false; }
-  const filename = pathname.split('/').pop()?.toLowerCase() || '';
-  return ['preview-medium.webp', 'preview-low.webp'].includes(filename);
+  return /(?:^|-)preview-(?:medium|low)\.webp$/i.test(filename);
 }
 
-function isGeneratedWebmUrl(value = '', entry = {}) {
-  const url = String(value || '').trim();
+export function isGeneratedWebmUrl(value = "", entry = {}) {
+  const url = String(value || "").trim();
   if (!sameWorkAssetPath(url, entry)) return false;
-  let pathname = '';
-  try { pathname = decodeURIComponent(new URL(url).pathname); }
+  let filename = "";
+  try { filename = decodeURIComponent(new URL(url).pathname).split("/").pop()?.toLowerCase() || ""; }
   catch { return false; }
-  return /\/(?:preview|preview-medium|preview-low)\.webm$/i.test(pathname);
+  return /(?:^|-)preview(?:-(?:medium|low))?\.webm$/i.test(filename);
 }
 
+export function isMatchingPreviewRenditionPair(video, poster, entry = {}, quality = "") {
+  if (!["medium", "low"].includes(String(quality))) return false;
+  if (!isGeneratedWebmUrl(video, entry) || !isGeneratedWebpPosterUrl(poster, entry)) return false;
+  try {
+    const videoUrl = new URL(String(video));
+    const posterUrl = new URL(String(poster));
+    if (videoUrl.origin !== posterUrl.origin) return false;
+    const videoPath = decodeURIComponent(videoUrl.pathname);
+    const posterPath = decodeURIComponent(posterUrl.pathname);
+    const videoDirectory = videoPath.slice(0, videoPath.lastIndexOf("/"));
+    const posterDirectory = posterPath.slice(0, posterPath.lastIndexOf("/"));
+    if (!videoDirectory || videoDirectory !== posterDirectory) return false;
+    const videoName = videoPath.split("/").pop() || "";
+    const posterName = posterPath.split("/").pop() || "";
+    const videoStem = videoName.replace(/\.webm$/i, "").toLowerCase();
+    const posterStem = posterName.replace(/\.webp$/i, "").toLowerCase();
+    const suffix = \`preview-\${quality}\`;
+    return videoStem === posterStem &&
+      (videoStem === suffix || videoStem.endsWith("-" + suffix));
+  } catch { return false; }
+}
 
 function generatedThumbnailUrl(origin, entry) {
   const id = String(entry?.id || '').trim();
@@ -554,25 +576,16 @@ function archiveFeedEntry(origin, entry, metrics) {
       quality: 'medium',
       video: selectedPreview.medium,
       poster: selectedPreview.posterMedium,
-      videoName: 'preview-medium.webm',
-      posterName: 'preview-medium.webp',
     },
     {
       quality: 'low',
       video: selectedPreview.low,
       poster: selectedPreview.posterLow,
-      videoName: 'preview-low.webm',
-      posterName: 'preview-low.webp',
     },
   ] : [];
   const selected = candidates.find(candidate =>
     candidate.video && candidate.poster &&
-    isGeneratedWebmUrl(candidate.video, entry) &&
-    isGeneratedWebpPosterUrl(candidate.poster, entry) &&
-    new URL(candidate.video).pathname.toLowerCase().endsWith('/' + candidate.videoName) &&
-    new URL(candidate.poster).pathname.toLowerCase().endsWith('/' + candidate.posterName) &&
-    new URL(candidate.video).pathname.replace(/\.webm$/i, '').toLowerCase() ===
-      new URL(candidate.poster).pathname.replace(/\.webp$/i, '').toLowerCase()
+    isMatchingPreviewRenditionPair(candidate.video, candidate.poster, entry, candidate.quality)
   ) || null;
   return {
     id,
