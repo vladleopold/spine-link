@@ -419,6 +419,21 @@ test('archive feed includes per-animation-only entries and blocks absent or unma
   }
 });
 
+test('archive WebM starts only after its exact poster decode succeeds',()=>{
+  const archive=fs.readFileSync(new URL('../api/github-archive.js',import.meta.url),'utf8');
+  const start=archive.slice(archive.indexOf('async function startVideo(card)'),archive.indexOf('function updateAutoplay()'));
+  assert.ok(start.includes('await poster.decode()'),'video attachment must await successful poster decode');
+  assert.ok(start.indexOf('await poster.decode()')<start.indexOf('video.src=card.dataset.videoSrc'),
+    'WebM network activity must begin only after the paired WebP decode resolves');
+  assert.match(start,/starting\.has\(card\)/,'concurrent visibility updates must not start duplicate video loads');
+  assert.match(start,/blocked-poster-decode-failed/,'a decode failure must block the same preview without substitution');
+
+  const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
+  assert.match(workflow,/__archivePosterDecodeAt/,'live browser proof must capture actual poster decode completion');
+  assert.match(workflow,/decodedPosterByPath/,'live browser proof must pair each WebM with its own poster decode');
+  assert.match(workflow,/decodedAt>request\.at/,'live browser proof must reject WebM requests before poster decode');
+});
+
 test('live archive acceptance requires a real exact-animation WebM and playback sample',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
   assert.match(workflow,/assert\.ok\(videoUrls\.length>0,/,

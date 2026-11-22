@@ -1654,7 +1654,7 @@ function archiveHtml({ origin, entries, metrics }) {
           }catch{}
           nextPageData.remove();
         }
-        const visible=new Set(),active=new Set();
+        const visible=new Set(),active=new Set(),starting=new Set();
         const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
         let queued=false;
         const queueUpdate=()=>{
@@ -1675,14 +1675,31 @@ function archiveHtml({ origin, entries, metrics }) {
         function isGeneratedPosterUrl(url){
           return /\\/(?:preview-medium|preview-low)\\.webp(?:[?#]|$)/i.test(String(url||''));
         }
-        function startVideo(card){
-          if(active.has(card)||!card.dataset.videoSrc||reducedMotion)return;
+        async function startVideo(card){
+          if(active.has(card)||starting.has(card)||!card.dataset.videoSrc||reducedMotion)return;
           const poster=card.querySelector('img');
           if(!poster||!poster.complete||poster.naturalWidth<=0)return;
           const posterUrl=poster.currentSrc||poster.src;
           if(!isGeneratedPosterUrl(posterUrl)||card.dataset.previewStatus!=='ready-poster-lazy-video')return;
           const host=card.querySelector('.feed-media');
           if(!host)return;
+          starting.add(card);
+          try{
+            // Do not attach a WebM source until this exact WebP has decoded.
+            await poster.decode();
+          }catch{
+            card.dataset.previewStatus='blocked-poster-decode-failed';
+            delete card.dataset.videoSrc;
+            queueUpdate();
+            return;
+          }finally{
+            starting.delete(card);
+          }
+          // The card may have left the viewport while decode() was pending.
+          // Revalidate identity and visibility before starting network activity.
+          if(active.has(card)||!card.isConnected||!visible.has(card)||document.hidden||reducedMotion||
+             !card.dataset.videoSrc||card.dataset.previewStatus!=='ready-poster-lazy-video'||
+             !poster.complete||poster.naturalWidth<=0||(poster.currentSrc||poster.src)!==posterUrl)return;
           const video=document.createElement('video');
           video.muted=true;video.loop=true;video.playsInline=true;
           video.preload='none';

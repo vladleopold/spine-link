@@ -49,6 +49,21 @@ jobs:
           try {
             for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
               const page=await browser.newPage({viewport,reducedMotion:'no-preference'});
+              await page.addInitScript(() => {
+                window.__archivePosterDecodeAt = new Map();
+                const originalDecode = HTMLImageElement.prototype.decode;
+                HTMLImageElement.prototype.decode = function (...args) {
+                  return originalDecode.apply(this,args).then(value => {
+                    try {
+                      const path = new URL(this.currentSrc || this.src, location.href).pathname;
+                      const at = Date.now();
+                      const previous = window.__archivePosterDecodeAt.get(path);
+                      if (previous === undefined || at < previous) window.__archivePosterDecodeAt.set(path,at);
+                    } catch {}
+                    return value;
+                  });
+                };
+              });
               const pageErrors=[],mediaRequests=[];
               let blockedApiRequests=0;
               // Prove the first lazy page is supplied in HTML, without
@@ -365,13 +380,16 @@ jobs:
                 Boolean(row.poster)===Boolean(row.video)&&!row.fallback),
                 'An archive card contains partial or fallback media');
               const lazyRequestEvidence=mediaRequests.slice();
+              const decodedPosterTimes=await page.evaluate(()=>
+                Array.from(window.__archivePosterDecodeAt.entries()));
+              const decodedPosterByPath=new Map(decodedPosterTimes);
               const earlyVideos=lazyRequestEvidence.filter(request=>request.type==='webm').filter(request=>{
                 const videoUrl=new URL(request.url);
                 const expectedPosterPath=videoUrl.pathname.replace(/\.webm$/i,'.webp');
-                return !lazyRequestEvidence.some(candidate=>candidate.type==='webp'&&
-                  new URL(candidate.url).pathname===expectedPosterPath&&candidate.at<=request.at);
+                const decodedAt=decodedPosterByPath.get(expectedPosterPath);
+                return !Number.isFinite(decodedAt)||decodedAt>request.at;
               });
-              assert.deepEqual(earlyVideos,[],'A WebM request occurred before its exact paired WebP poster');
+              assert.deepEqual(earlyVideos,[],'A WebM request occurred before its exact paired WebP poster decoded');
               const videoUrls=Array.from(new Set(cardRows.map(row=>row.video).filter(Boolean)));
               const videoChecks=[];
               for(let offset=0;offset<videoUrls.length;offset+=12){
