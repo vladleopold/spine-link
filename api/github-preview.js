@@ -1916,8 +1916,12 @@ const pinchDistance = { value: null };
         const p = targetPlayer || player;
         const skeleton = p?.skeleton;
         if (!skeleton?.data) return null;
-        const animation = skeleton.data.findAnimation(activeAnimation.name);
-        if (!animation) return null;
+        const animationName = typeof activeAnimation.name === "string" ? activeAnimation.name.trim() : "";
+        // Spine 4.3 throws when findAnimation receives null/empty; older 3.8
+        // runtimes returned null. A work with no indexed default is valid and
+        // should wait for the user to choose a track.
+        if (!animationName) return null;
+        const animation = skeleton.data.findAnimation(animationName);
         if (!animation) return null;
         const ns = window.spine || {};
         const MixFrom = ns.MixFrom || p.constructor?.MixFrom;
