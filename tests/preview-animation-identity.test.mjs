@@ -63,7 +63,7 @@ test('player startup never replaces the requested track with the first runtime t
   const missingTrackGuard = startup.indexOf('if (selectedAnimation && names.length && !names.includes(selectedAnimation))');
   const blocked = startup.indexOf('markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE")', missingTrackGuard);
   const blockedReturn = startup.indexOf('return;', blocked);
-  const playback = startup.indexOf('playActiveAnimationFromStart()');
+  const playback = startup.indexOf('playActiveAnimationFromStart()', blockedReturn);
   assert.ok(missingTrackGuard >= 0 && blocked > missingTrackGuard && blockedReturn > blocked && playback > blockedReturn,
     'missing requested tracks must be blocked before playback starts');
   assert.doesNotMatch(startup, /(?:names|animations|filteredNames)\s*\[\s*0\s*\]/);
@@ -169,7 +169,7 @@ test('missing index default loads the verified skeleton and exposes its runtime 
   assert.match(startup, /requestedAnimation \? \{ animation: requestedAnimation \} : \{\}/);
   assert.match(startup, /if \(requestedAnimation\) \{[\s\S]*playActiveAnimationFromStart\(\)/);
   const playback = section(preview, 'function playActiveAnimationFromStart()', 'function togglePlayback()');
-  assert.match(playback, /if \(!player \|\| !activeAnimation\.name\) return false/);
+  assert.match(playback, /if \(!activeAnimation\.name\) return false/);\n  assert.match(playback, /if \(!playerReady\) return true/);\n  assert.match(playback, /if \(!player\) return false/);
 });
 
 test('stale indexed default is recoverable but an explicit missing URL selection stays blocked', () => {
