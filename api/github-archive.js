@@ -2137,7 +2137,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
       </header>
       <section class="viewer">
         <h1 class="visually-hidden">${displayTitle} — Spine animation preview on Spine-Link</h1>
-        <div class="media-panel">${mediaHtml(entry, { origin, posterClass: 'media-main', eagerVideo: true })}</div>
+        <div class="media-panel">${mediaHtml(entry, { origin, posterClass: 'media-main' })}</div>
         <div class="side">
           <div>
             <p class="muted">Spine media preview</p>
