@@ -2612,7 +2612,19 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       skeletonVersion = spineBinaryVersionFromBase64(await githubFileHead(settings, skeleton.path, 256));
     }
 
-    const animations = animationNamesFromJson(skeletonJson);
+    const runtimeAnimationNames = animationNamesFromJson(skeletonJson);
+    // Binary .skel files cannot be enumerated server-side as JSON. The public
+    // index already stores the exact animation names for this work; pass them
+    // to Spine Player so its selectable-animation validation does not receive
+    // an empty list and reject a valid indexed default animation.
+    const indexedAnimationNames = Array.isArray(entry?.animations)
+      ? entry.animations.filter((name) => typeof name === 'string' && name.trim())
+      : [];
+    const animations = runtimeAnimationNames.length
+      ? runtimeAnimationNames
+      : skeleton.name.toLowerCase().endsWith('.skel')
+        ? indexedAnimationNames
+        : runtimeAnimationNames;
     const skinNames = skinNamesFromSkeletonJson(skeletonJson);
     const atlasPages = extractAtlasPages(atlasText);
     // Historical Spine 3.8 exports can reference DXT5 .dds page files.
