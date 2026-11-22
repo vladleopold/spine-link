@@ -74,14 +74,16 @@ test('editable library entries never substitute another source set or animation'
   const end = app.indexOf('void loadEditableEntry();', start);
   assert.ok(start >= 0 && end > start, 'editable-entry loader must remain discoverable');
   const loader = app.slice(start, end);
-  assert.match(loader, /const indexedSkeletonStem = typeof entry\\.skeleton === "string" \\? assetStem\\(entry\\.skeleton\\) : ""/);
-  assert.match(loader, /matchingSpineSets\\.length !== 1/);
-  assert.match(loader, /refusing to select another Spine set/);
-  assert.match(loader, /const selectedAnimation = typeof entry\\.defaultAnimation === "string" \\? entry\\.defaultAnimation : ""/);
-  assert.match(loader, /setActiveAnimation\\(selectedAnimation\\)/);
-  assert.match(loader, /previewUrlForEntry\\(entry\\.id, selectedAnimation\\)/);
-  assert.doesNotMatch(loader, /chooseInitialSet\\(nextSpineOptions\\)|entry\\.defaultAnimation\\s*\\|\\|\\s*nextSpine\\?\\.defaultAnimation/,
-    'an unavailable indexed skeleton or animation must stay blocked instead of borrowing another set');
+  assert.ok(loader.includes('const indexedSkeletonStem = typeof entry.skeleton === "string" ? assetStem(entry.skeleton) : ""'));
+  assert.ok(loader.includes('matchingSpineSets.length !== 1'));
+  assert.ok(loader.includes('refusing to select another Spine set'));
+  assert.ok(loader.includes('const selectedAnimation = typeof entry.defaultAnimation === "string" ? entry.defaultAnimation : ""'));
+  assert.ok(loader.includes('setActiveAnimation(selectedAnimation)'));
+  assert.ok(loader.includes('previewUrlForEntry(entry.id, selectedAnimation)'));
+  assert.equal(loader.includes('chooseInitialSet(nextSpineOptions)'), false,
+    'an unavailable indexed skeleton must not borrow a different source set');
+  assert.equal(loader.includes('entry.defaultAnimation || nextSpine?.defaultAnimation'), false,
+    'an empty exact selection must not borrow another set default');
 });
 
 test('manual skeleton import never infers idle or the first animation as the default', () => {
