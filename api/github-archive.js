@@ -87,16 +87,39 @@ function selectedAnimationVideo(entry = {}) {
 }
 
 
-function entryVideoSrc(origin, entry = {}) {
+function selectedAnimationMediaPair(entry = {}) {
+  if (entry?.webmStatus !== 'ready' || entry?.previewStatus !== 'ready') return null;
   const selected = selectedAnimationVideo(entry);
-  const hasPoster = Boolean(selected.poster || selected.posterMedium || selected.posterLow);
-  return hasPoster ? selected.full || selected.medium || selected.low : '';
+  const candidates = [
+    { quality: 'medium', video: selected.medium, poster: selected.posterMedium,
+      videoName: 'preview-medium.webm', posterName: 'preview-medium.webp' },
+    { quality: 'low', video: selected.low, poster: selected.posterLow,
+      videoName: 'preview-low.webm', posterName: 'preview-low.webp' },
+    { quality: 'full', video: selected.full, poster: selected.poster,
+      videoName: 'preview.webm', posterName: 'preview.webp' },
+  ];
+  return candidates.find(candidate => {
+    if (!candidate.video || !candidate.poster ||
+        !sameWorkAssetPath(candidate.video, entry) ||
+        !sameWorkAssetPath(candidate.poster, entry)) return false;
+    try {
+      const videoUrl = new URL(candidate.video);
+      const posterUrl = new URL(candidate.poster);
+      if (videoUrl.protocol !== 'https:' || posterUrl.protocol !== 'https:') return false;
+      const videoPath = decodeURIComponent(videoUrl.pathname).toLowerCase();
+      const posterPath = decodeURIComponent(posterUrl.pathname).toLowerCase();
+      return videoPath.endsWith('/' + candidate.videoName) &&
+        posterPath.endsWith('/' + candidate.posterName) &&
+        videoPath.slice(0, videoPath.lastIndexOf('/')) ===
+          posterPath.slice(0, posterPath.lastIndexOf('/'));
+    } catch {
+      return false;
+    }
+  }) || null;
 }
 
-function entryVideoLowSrc(origin, entry = {}) {
-  const selected = selectedAnimationVideo(entry);
-  const hasPoster = Boolean(selected.poster || selected.posterMedium || selected.posterLow);
-  return hasPoster ? selected.low || selected.medium || selected.full : '';
+function entryVideoSrc(origin, entry = {}) {
+  return selectedAnimationMediaPair(entry)?.video || '';
 }
 function safeAsset(value = '') {
   const url = String(value).trim();
@@ -509,14 +532,15 @@ function homepageFeedEntries(origin, entries, metrics) {
     const id = String(entry?.id || '');
     const metric = metricCountsForId(metrics, id);
     const selectedPreview = selectedAnimationVideo(entry);
-    const poster = selectedPreview.posterMedium || selectedPreview.poster || selectedPreview.posterLow;
+    const mediaPair = selectedAnimationMediaPair(entry);
+    const poster = mediaPair?.poster || '';
     return {
       id,
       title: String(entry?.title || id || 'Spine preview'),
       ownerName: String(entry?.ownerName || 'Spine creator'),
       ownerUrl: entry?.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
       previewUrl: `${origin}${previewUrl(entry)}`,
-      webmPreview: entryVideoLowSrc(origin, entry),
+      webmPreview: mediaPair?.video || '',
       previewAnimation: selectedPreview.name,
       thumbnailPoster: poster,
       thumbnail: poster,
@@ -755,15 +779,13 @@ function tileClassForEntry(entry, index = 0) {
 }
 
 function entryImageUrl(origin, entry) {
-  if (!hasExplicitDefaultAnimation(entry)) return '';
-  const selected = selectedAnimationVideo(entry);
-  return selected.posterMedium || selected.poster || selected.posterLow || '';
+  return selectedAnimationMediaPair(entry)?.poster || '';
 }
 
 function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, altText = '', fetchpriority = '' } = {}) {
-  const selected = selectedAnimationVideo(entry);
-  const poster = selected.posterMedium || selected.poster || selected.posterLow;
-  const video = poster ? selected.full || selected.medium || selected.low : '';
+  const mediaPair = selectedAnimationMediaPair(entry);
+  const poster = mediaPair?.poster || '';
+  const video = mediaPair?.video || '';
   const alt = altText || escapeHtml(entry?.title || entry?.id || 'Spine animation preview');
   const fp = fetchpriority ? ` fetchpriority="${escapeHtml(fetchpriority)}"` : '';
   const loading = fetchpriority === 'high' ? '' : ' loading="lazy"';
