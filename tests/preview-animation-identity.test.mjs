@@ -46,6 +46,8 @@ test('player selects exact requested animations without requiring a version-spec
   assert.doesNotMatch(playback, /skeleton\.data\.findAnimation\(/);
   assert.match(playback, /player\.setAnimation\(name, loopEnabled\.value\)/);
   assert.match(playback, /player\.animationState\?\.getCurrent\?\.\(0\)/);
+  assert.match(playback, /if \(entry\) \{/);
+  assert.doesNotMatch(playback, /if \(!entry\)/);
   assert.doesNotMatch(playback, /names\[0\]|animations\[0\]|filteredNames\[0\]/);
   const player = section(preview, 'function markPreviewBlocked(code)', 'function renderAnimationList()');
   assert.match(player, /animation: requestedAnimation/);
