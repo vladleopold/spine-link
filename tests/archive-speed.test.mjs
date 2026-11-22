@@ -492,6 +492,10 @@ test('archive detail, video and home feeds use one exact same-work WebM/WebP qua
     assert.ok(mediumHtml.includes('poster="'+asset('pair-medium','preview-medium.webp')));
     assert.ok(mediumHtml.includes('data-video-src="'+asset('pair-medium','preview-medium.webm')));
     assert.ok(mediumHtml.includes('src="'+asset('pair-medium','preview-medium.webm')));
+    const mediumVideoTag=mediumHtml.match(/<video\b[^>]*>/)?.[0]||'';
+    assert.ok(mediumVideoTag.includes('preload="none"'),'detail WebM must remain lazy');
+    assert.ok(mediumVideoTag.includes('data-video-src='));
+    assert.ok(!/\ssrc=/.test(mediumVideoTag),'WebM src must be attached only after the poster decodes');
     assert.ok(!mediumHtml.includes('poster="'+asset('pair-medium','preview-medium.webp')+'" src="'+asset('pair-medium','preview.webm')));
 
     const lowDetail=response();
