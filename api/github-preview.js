@@ -1608,7 +1608,7 @@ const pinchDistance = { value: null };
             } else if (runtime === "3.7") {
               // Use the official 3.7 player build pinned to an immutable commit;
               // the old /vendor-spine-player-3.7.* files are not in this repo.
-              const base = "https://cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@be656896bdbc55ed0c925ec74995bdf7d3c38fed/spine-ts/";
+              const base = "https://cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@9639bcc81722d7178fd9d1cdc1a3d55a4c91f989/spine-ts/";
               setPlayerStylesheet(base + "player/css/spine-player.css");
               await loadScriptOnce(base + "build/spine-player.js");
             } else if (runtime === "3.8") {
