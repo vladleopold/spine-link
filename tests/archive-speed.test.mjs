@@ -421,7 +421,10 @@ test('archive feed includes per-animation-only entries and blocks absent or unma
 
 test('archive WebM starts only after its exact poster decode succeeds',()=>{
   const archive=fs.readFileSync(new URL('../api/github-archive.js',import.meta.url),'utf8');
-  const start=archive.slice(archive.indexOf('async function startVideo(card)'),archive.indexOf('function updateAutoplay()'));
+  const startIndex=archive.indexOf('async function startVideo(card)');
+  const endIndex=archive.indexOf('function updateAutoplay()',startIndex);
+  assert.ok(startIndex>=0&&endIndex>startIndex,'archive autoplay function boundaries must be present');
+  const start=archive.slice(startIndex,endIndex);
   assert.ok(start.includes('await poster.decode()'),'video attachment must await successful poster decode');
   assert.ok(start.indexOf('await poster.decode()')<start.indexOf('video.src=card.dataset.videoSrc'),
     'WebM network activity must begin only after the paired WebP decode resolves');
