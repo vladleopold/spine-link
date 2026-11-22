@@ -2111,9 +2111,11 @@ const pinchDistance = { value: null };
           ? "Selected Spine animation is unavailable. Preview blocked."
           : code === "UNSUPPORTED_SPINE_3_8_75"
             ? "This export uses Spine 3.8.75, which the official runtime rejects because of a known export bug. Re-export the original Spine project with Spine 3.8.99."
-            : code === "UNSUPPORTED_SPINE_VERSION"
-              ? "This export uses Spine " + String(activeSet.value?.skeletonVersion || "unknown") + ". Spine-Link supports Web Player exports from Spine 3.7 through 4.3. Re-export the original .spine project with a supported editor version."
-              : "Spine preview is blocked.";
+            : code === "UNSUPPORTED_SPINE_3_7_BINARY"
+              ? "This Spine 3.7 export is binary (.skel), but the bundled Spine 3.7 Web Player accepts JSON skeletons only. Re-export the original project as JSON."
+              : code === "UNSUPPORTED_SPINE_VERSION"
+                ? "This export uses Spine " + String(activeSet.value?.skeletonVersion || "unknown") + ". Spine-Link supports Web Player exports from Spine 3.7 through 4.3. Re-export the original .spine project with a supported editor version."
+                : "Spine preview is blocked.";
         box.replaceChildren(message);
       }
 
@@ -2127,6 +2129,12 @@ const pinchDistance = { value: null };
         // explicitly rejected by the official 3.8 runtime.
         if (skeletonVersion === "3.8.75") {
           markPreviewBlocked("UNSUPPORTED_SPINE_3_8_75");
+          return;
+        }
+        // The bundled Spine 3.7 Web Player accepts JSON skeletons only;
+        // binary .skel exports need a JSON re-export from the source project.
+        if (/^3\.7(?:\.|$)/.test(skeletonVersion) && activeSet.value.skelUrl && !activeSet.value.jsonUrl) {
+          markPreviewBlocked("UNSUPPORTED_SPINE_3_7_BINARY");
           return;
         }
         // Do not silently feed 2.x / 3.0-3.6 / future unknown exports to 4.3:
