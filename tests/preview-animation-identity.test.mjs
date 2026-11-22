@@ -230,3 +230,7 @@ test('preview builds Spine set file lists from the indexed file manifest when Gi
   assert.match(dynamic, /findSpineSetDirectories\(settings, uploadPath, 3, entry\)/);
   assert.match(dynamic, /Array\.isArray\(directory\.items\) \? directory\.items : await githubList/);
 });
+
+test('Spine version preflight accepts supported major.minor strings without a patch number', () => {
+  assert.match(preview, /\^\(\?:3\\\.\(\?:7\|8\)\(\?:\\\.\|\$\)\|4\\\.\[0-3\]\(\?:\\\.\|\$\)\)/);
+});
