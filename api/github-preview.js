@@ -1541,6 +1541,7 @@ const pinchDistance = { value: null };
        const swipeStart = { value: null };
        const touchPanPosition = { value: null };
       let player;
+      let playerReady = false;
       // A URL may select an animation whose owning skeleton is not the first
       // set when the library index is stale or incomplete. Probe each set once.
       const attemptedAnimationSets = new Set();
@@ -1922,7 +1923,12 @@ const pinchDistance = { value: null };
       function setTrackLoop() { const entry = player?.animationState?.getCurrent?.(0); if (entry) entry.loop = loopEnabled.value; }
       function disableMix() { if (player?.animationState?.data) player.animationState.data.defaultMix = 0; }
       function playAnimationEntry(name) {
-        if (!player || !name) return false;
+        if (!name) return false;
+        // The custom animation list is available before Spine Player finishes
+        // loading its skeleton. Queue the current selection instead of calling
+        // setAnimation against an uninitialized player instance.
+        if (!playerReady) return true;
+        if (!player) return false;
         // Do not require skeleton.data.findAnimation here: that method is
         // not exposed consistently by the 3.8/4.1 Spine Player wrappers even
         // though their own animation menus list the tracks. Let the runtime
@@ -1955,10 +1961,12 @@ const pinchDistance = { value: null };
         return true;
       }
       function playActiveAnimationFromStart() {
-        if (!player || !activeAnimation.name) return false;
+        if (!activeAnimation.name) return false;
+        if (!playerReady) return true;
+        if (!player) return false;
         return playAnimationEntry(activeAnimation.name);
       }
-      function togglePlayback() { if (!player || !activeAnimation.name) return; if (player.paused === false) { player.pause(); return; } playActiveAnimationFromStart(); }
+      function togglePlayback() { if (!playerReady || !player || !activeAnimation.name) return; if (player.paused === false) { player.pause(); return; } playActiveAnimationFromStart(); }
       function installLoopButton() { const buttons = player?.dom?.querySelector(".spine-player-buttons"); const playButton = buttons?.querySelector(".spine-player-button"); if (!buttons || !playButton) return; playButton.onclick = (event) => { event.preventDefault(); event.stopPropagation(); togglePlayback(); }; if (buttons.querySelector(".spine-link-loop-button")) return; const button = document.createElement("button"); button.type = "button"; button.className = "spine-player-button spine-link-loop-button"; updateLoopButtonState(button); button.onclick = (event) => { event.preventDefault(); event.stopPropagation(); loopEnabled.value = !loopEnabled.value; setTrackLoop(); updateLoopButtonState(button); }; playButton.insertAdjacentElement("afterend", button); }
       function panByPixels(deltaX, deltaY) { const v = player?.currentViewport, b = baseViewport.value, canvas = player?.canvas; if (!v || !b || !canvas) return; const totalWidth = v.width + v.padLeft + v.padRight, totalHeight = v.height + v.padTop + v.padBottom; const worldDeltaX = deltaX / Math.max(1, canvas.clientWidth) * totalWidth, worldDeltaY = deltaY / Math.max(1, canvas.clientHeight) * totalHeight; v.x -= worldDeltaX; v.y += worldDeltaY; b.x -= worldDeltaX * currentZoom.value; b.y += worldDeltaY * currentZoom.value; player.previousViewport = { ...v }; player.viewportTransitionStart = performance.now(); }
 
@@ -2099,6 +2107,7 @@ const pinchDistance = { value: null };
       }
 
       function markPreviewBlocked(code, detail = "") {
+        playerReady = false;
         clearPreviewVideoFallback();
         try { player?.dispose?.(); } catch {}
         player = null;
@@ -2127,6 +2136,7 @@ const pinchDistance = { value: null };
       }
 
       async function createPlayer() {
+        playerReady = false;
         if (!activeSet.value) {
           markPreviewBlocked("NO_SKELETON_SET");
           return;
@@ -2210,6 +2220,7 @@ const pinchDistance = { value: null };
             backgroundColor: "00000000",
             success: (loadedPlayer) => {
               player = loadedPlayer;
+              playerReady = true;
               limitPlayerFps(loadedPlayer, 30);
               releaseRuntimeWheelCapture();
               clearPreviewVideoFallback();
@@ -2225,7 +2236,8 @@ const pinchDistance = { value: null };
               if (names.length) {
                 animationNames.value = names.filter(name => !name.startsWith("Backup/") || name === requestedAnimation);
               }
-              if (requestedAnimation && names.length && !names.includes(requestedAnimation)) {
+              const selectedAnimation = activeAnimation.name || requestedAnimation;
+              if (selectedAnimation && names.length && !names.includes(selectedAnimation)) {
                 // The selected clip can belong to another skeleton set in this
                 // work. Try the remaining sets before reporting it unavailable.
                 const nextSet = sets.find((set) => !attemptedAnimationSets.has(animationSetKey(set)));
@@ -2260,7 +2272,8 @@ const pinchDistance = { value: null };
               // A missing index default is not a broken skeleton. Load the
               // verified runtime animation list and wait for an explicit choice.
               // Never silently substitute the first track or an "idle" track.
-              if (requestedAnimation) {
+              if (selectedAnimation) {
+                activeAnimation.name = selectedAnimation;
                 syncUrl();
                 disableMix();
                 installLoopButton();
@@ -2280,6 +2293,7 @@ const pinchDistance = { value: null };
               });
             },
             error: (_player, reason) => {
+              playerReady = false;
               if (showPreviewVideoFallback()) {
                 const video = document.getElementById("preview-loading-video");
                 if (video) {
