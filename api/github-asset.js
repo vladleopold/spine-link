@@ -380,6 +380,56 @@ function sendAssetBuffer(request, response, { path, assetVersion, buffer, etag }
   return response.status(200).send(buffer);
 }
 
+function rawGithubAssetUrl({ owner, repo, branch, path }) {
+  const ref = String(branch || defaultBranch).split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  const encodedPath = cleanRepoPath(path).split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${ref}/${encodedPath}`;
+}
+
+async function serveRawAssetFallback(request, response, { owner, repo, branch, path, assetVersion, cacheKey }) {
+  let rawResponse;
+  try {
+    rawResponse = await fetch(rawGithubAssetUrl({ owner, repo, branch, path }), {
+      method: request.method,
+      headers: request.method === 'GET' && request.headers.range ? { Range: request.headers.range } : {},
+    });
+  } catch {
+    return null;
+  }
+  if (rawResponse.status !== 200 && rawResponse.status !== 206) return null;
+  const etag = rawResponse.headers.get('etag') || '';
+
+  if (rawResponse.status === 206) {
+    const earlyResponse = setAssetResponseHeaders(request, response, { path, assetVersion, etag });
+    if (earlyResponse) return earlyResponse;
+    const chunk = Buffer.from(await rawResponse.arrayBuffer());
+    setNoStoreHeaders(response);
+    response.setHeader('Accept-Ranges', 'bytes');
+    response.setHeader('X-Spine-Link-Asset-Range', 'raw');
+    const contentRange = rawResponse.headers.get('content-range');
+    if (contentRange) response.setHeader('Content-Range', contentRange);
+    response.setHeader('Content-Length', String(chunk.length));
+    return response.status(206).send(request.method === 'HEAD' ? '' : chunk);
+  }
+
+  if (request.method === 'HEAD') {
+    const earlyResponse = setAssetResponseHeaders(request, response, { path, assetVersion, etag });
+    if (earlyResponse) return earlyResponse;
+    const size = Number(rawResponse.headers.get('content-length') || 0);
+    if (size > 0) response.setHeader('Content-Length', String(size));
+    if (isVideoPath(path)) response.setHeader('Accept-Ranges', 'bytes');
+    response.setHeader('X-Spine-Link-Asset-Head', 'raw');
+    return response.status(200).end();
+  }
+
+  const rawSize = Number(rawResponse.headers.get('content-length') || 0);
+  if (isVideoPath(path) && request.headers.range && rawSize > directRangeProxyMinBytes) return null;
+  const buffer = Buffer.from(await rawResponse.arrayBuffer());
+  if (!buffer.length) return null;
+  putMemoryCacheEntry(cacheKey, { buffer, etag });
+  return sendAssetBuffer(request, response, { path, assetVersion, buffer, etag });
+}
+
 export default async function handler(request, response) {
   // CORS headers for headless browser (origin: null)
   response.setHeader('Access-Control-Allow-Origin', '*');
@@ -423,9 +473,24 @@ export default async function handler(request, response) {
   }
 
   try {
-    let githubResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`, {
-      headers: githubHeaders(token),
-    });
+    let githubResponse;
+    try {
+      githubResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`, {
+        headers: githubHeaders(token),
+      });
+    } catch {
+      const rawFallback = await serveRawAssetFallback(request, response, {
+        owner, repo, branch, path: assetPath, assetVersion, cacheKey,
+      });
+      if (rawFallback) return rawFallback;
+      throw new Error('GitHub asset source is unavailable');
+    }
+    if ([403, 429, 500, 502, 503].includes(githubResponse.status)) {
+      const rawFallback = await serveRawAssetFallback(request, response, {
+        owner, repo, branch, path: assetPath, assetVersion, cacheKey,
+      });
+      if (rawFallback) return rawFallback;
+    }
     // Spine atlases exported from DXT5 packs sometimes still reference
     // page.dds although the upload contains page.png of the SAME name.
     // Only try the identical pathname with its extension changed, never

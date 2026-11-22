@@ -637,6 +637,9 @@ async function githubJson(settings, path) {
 // without a code change or a deploy.
 async function libraryCollectionPaths(settings) {
   const paths = new Set([cleanRepoPath(settings.basePath || defaultBasePath)]);
+  if (settings.owner === defaultOwner && settings.repo === defaultRepo) {
+    for (const name of ['library', 'library_01', 'library_02']) paths.add(name);
+  }
   try {
     const response = await fetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
@@ -646,20 +649,15 @@ async function libraryCollectionPaths(settings) {
       const items = await response.json();
       if (Array.isArray(items)) {
         for (const item of items) {
-          if (item?.type === 'dir' && /^library(_\d+)?$/.test(String(item.name || ''))) {
-            paths.add(item.name);
-          }
+          if (item?.type === 'dir' && /^library(_[0-9]+)?$/.test(String(item.name || ''))) paths.add(item.name);
         }
       }
     }
   } catch {
-    // Fall back to the configured collection if the root listing is unavailable.
+    // The configured and known collections remain usable through raw public reads.
   }
-  // New uploads are in the newest collection. Searching library_01 first can
-  // download a 20+ MB legacy index, time out the Vercel invocation, and make a
-  // successfully uploaded /p/<id> appear missing. Put the newest first.
-  const rank = (name) => /^library_(\d+)$/.test(name)
-    ? Number(name.match(/^library_(\d+)$/)[1])
+  const rank = (name) => /^library_([0-9]+)$/.test(name)
+    ? Number(name.match(/^library_([0-9]+)$/)[1])
     : name === 'library' ? 0 : -1;
   return [...paths].filter(Boolean).sort((a, b) => rank(b) - rank(a));
 }
@@ -712,6 +710,36 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3) {
   }
   await visit(uploadPath, 0);
   return found;
+}
+
+function indexedAssetPath(basePath, value) {
+  const base = cleanRepoPath(basePath);
+  const candidate = cleanRepoPath(typeof value === 'string' ? value : value?.path || value?.name || '');
+  if (!base || !candidate || candidate.split('/').some((part) => part === '.' || part === '..')) return '';
+  if (candidate === base || candidate.startsWith(`${base}/`)) return candidate;
+  return joinRepoPath(base, candidate);
+}
+
+function indexedSpineSetDirectory(entry, uploadPath) {
+  const basePath = cleanRepoPath(entry?.previewPath || uploadPath);
+  if (!basePath) return null;
+  const listedFiles = Array.isArray(entry?.files) ? entry.files : [];
+  const listedTextures = Array.isArray(entry?.textures) && entry.textures.length
+    ? entry.textures
+    : listedFiles.filter((value) => isImage(basename(String(value?.path || value?.name || value || ''))));
+  const values = [...listedFiles, ...listedTextures, entry?.skeleton, entry?.atlas];
+  const paths = [...new Set(values.map((value) => indexedAssetPath(basePath, value)).filter(Boolean))];
+  const files = paths.map((path) => ({ type: 'file', name: basename(path), path }));
+  const expectedSkeleton = basename(String(entry?.skeleton || ''));
+  const expectedAtlas = basename(String(entry?.atlas || ''));
+  const skeletonCandidates = files.filter((file) => isSkeleton(file.name) && (!expectedSkeleton || file.name === expectedSkeleton));
+  const atlasCandidates = files.filter((file) => isAtlas(file.name) && (!expectedAtlas || file.name === expectedAtlas));
+  const texturePaths = new Set(listedTextures.map((value) => indexedAssetPath(basePath, value)).filter(Boolean));
+  const textureCandidates = files.filter((file) => isImage(file.name) && texturePaths.has(file.path));
+  if (skeletonCandidates.length !== 1 || atlasCandidates.length !== 1 || textureCandidates.length === 0) return null;
+  const skeleton = selectSpineRuntimeSkeleton(skeletonCandidates, atlasCandidates[0].name);
+  if (!skeleton || skeleton.path !== skeletonCandidates[0].path) return null;
+  return { name: basename(basePath) || basePath, path: basePath, files: [skeletonCandidates[0], atlasCandidates[0], ...textureCandidates] };
 }
 
 // Download buttons for the work page sidebar — mirrors the editor block in
@@ -2568,7 +2596,7 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
 }
 
 async function createDynamicPreview(settings, uploadPath, origin, knownEntryRecord = undefined) {
-  const setDirectories = await findSpineSetDirectories(settings, uploadPath);
+  let setDirectories = [];
   const sets = [];
   let note = '';
   let ownerProfile = null;
@@ -2592,9 +2620,14 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     entry = entryRecord.entry;
     entries = entryRecord.entries;
   }
+  setDirectories = await findSpineSetDirectories(settings, uploadPath);
+  if (!setDirectories.length && entryRecord?.entry) {
+    const indexedDirectory = indexedSpineSetDirectory(entryRecord.entry, uploadPath);
+    if (indexedDirectory) setDirectories = [indexedDirectory];
+  }
 
   for (const directory of setDirectories) {
-    const items = await githubList(settings, directory.path);
+    const items = Array.isArray(directory.files) ? directory.files : await githubList(settings, directory.path);
     const skeleton = selectSpineRuntimeSkeleton(items.filter(item => item.type === 'file'),
       items.find(item => item.type === 'file' && isAtlas(item.name))?.name);
     const atlas = items.find((item) => item.type === 'file' && isAtlas(item.name));

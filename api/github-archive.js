@@ -301,34 +301,46 @@ function githubHeaders(token) {
 // GitHub limit. They are listed at runtime so a folder added by a rotation shows up
 // without a code change or a deploy.
 const archiveCollectionCache = { key: '', expiresAt: 0, value: null };
+const knownArchiveCollections = ['library', 'library_01', 'library_02'];
+
+function fallbackArchiveCollectionPaths(settings, cacheKey) {
+  const paths = new Set([cleanRepoPath(settings.basePath || defaultBasePath)]);
+  if (settings.owner === defaultOwner && settings.repo === defaultRepo) {
+    for (const name of knownArchiveCollections) paths.add(name);
+  }
+  if (archiveCollectionCache.key === cacheKey && Array.isArray(archiveCollectionCache.value)) {
+    for (const name of archiveCollectionCache.value) paths.add(cleanRepoPath(name));
+  }
+  return [...paths].filter(Boolean).sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+}
+
 async function libraryCollectionPaths(settings) {
   const cacheKey = [settings.owner,settings.repo,settings.branch,settings.basePath].join('/');
   if (archiveCollectionCache.key === cacheKey && archiveCollectionCache.expiresAt > Date.now()) {
     return archiveCollectionCache.value;
   }
-  const paths = [cleanRepoPath(settings.basePath || defaultBasePath)];
+  const fallbackPaths = fallbackArchiveCollectionPaths(settings, cacheKey);
   try {
     const response = await fetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
       { headers: githubHeaders(settings.token) },
     );
-    if (!response.ok) return paths;
+    if (!response.ok) return fallbackPaths;
     const items = await response.json();
-    if (!Array.isArray(items)) return paths;
-    const folders = items
-      .filter((item) => item && item.type === "dir" && /^library(_\d+)?$/.test(String(item.name || "")))
-      .map((item) => item.name)
-      .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
-    for (const name of folders) if (!paths.includes(name)) paths.push(name);
+    if (!Array.isArray(items)) return fallbackPaths;
+    const paths = new Set(fallbackPaths);
+    for (const item of items) {
+      if (item?.type === 'dir' && /^library(_[0-9]+)?$/.test(String(item.name || ''))) paths.add(item.name);
+    }
+    const value = [...paths].filter(Boolean).sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
     archiveCollectionCache.key = cacheKey;
-    archiveCollectionCache.value = paths;
+    archiveCollectionCache.value = value;
     archiveCollectionCache.expiresAt = Date.now() + 60000;
-  } catch (e) {
-    // Listing failed: the configured folder alone still beats an empty site.
+    return value;
+  } catch {
+    return fallbackPaths;
   }
-  return paths;
 }
-
 
 async function githubText(settings, path, options = {}) {
   return cachedGithubText(settings, path, options);

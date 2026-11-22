@@ -613,3 +613,39 @@ test('archive detail, video and home feeds use one exact same-work WebM/WebP qua
   }
 });
 
+
+
+test('archive feed retains every known collection when GitHub Contents API returns 403',async()=>{
+ const oldFetch=globalThis.fetch,oldToken=process.env.GITHUB_TOKEN,oldBranch=process.env.GITHUB_BRANCH;
+ const branch='test-archive-403-fallback';
+ const legacy={...entries[0],id:'legacy-403',previewPath:'library_01/legacy-403',skeleton:'legacy-403.skel'};
+ const current={...entries[1],id:'current-403',previewPath:'library_02/current-403',skeleton:'current-403.skel'};
+ const indexes={library:[],library_01:[legacy],library_02:[current]};
+ const requests=[];
+ globalThis.fetch=async input=>{
+  const url=String(input);requests.push(url);
+  if(url.startsWith('https://api.github.com/'))return new Response('rate limited',{status:403});
+  if(url.startsWith('https://raw.githubusercontent.com/')){
+   const path=new URL(url).pathname;
+   const collection=['library','library_01','library_02'].find(name=>path.endsWith('/'+name+'/index.json'));
+   if(collection)return new Response(JSON.stringify(indexes[collection]||[]));
+   if(path.endsWith('/archive-exclusions.json'))return new Response(JSON.stringify({rules:[],allow:[]}));
+   if(path.endsWith('/metrics.json')||path.endsWith('/censorship.json'))return new Response('{}');
+  }
+  return new Response('not found',{status:404});
+ };
+ process.env.GITHUB_TOKEN='test-only-placeholder';process.env.GITHUB_BRANCH=branch;
+ try{
+  const res=response();
+  await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'12'}},res);
+  assert.equal(res.code,200);
+  assert.equal(res.body.total,2);
+  assert.deepEqual(res.body.entries.map(item=>item.id).sort(),['current-403','legacy-403']);
+  assert.ok(requests.some(url=>url.startsWith('https://raw.githubusercontent.com/')&&url.endsWith('/library_01/index.json')));
+  assert.ok(requests.some(url=>url.startsWith('https://raw.githubusercontent.com/')&&url.endsWith('/library_02/index.json')));
+ }finally{
+  globalThis.fetch=oldFetch;
+  if(oldToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=oldToken;
+  if(oldBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=oldBranch;
+ }
+});
