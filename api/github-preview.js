@@ -2129,7 +2129,7 @@ const pinchDistance = { value: null };
         // Do not silently feed 2.x / 3.0-3.6 / future unknown exports to 4.3:
         // those formats require their matching historical runtime and otherwise
         // fail with misleading parser errors such as "Slot name must not be null".
-        if (skeletonVersion && !/^(?:3\.(?:7|8)|4\.[0-3])\./.test(skeletonVersion)) {
+        if (skeletonVersion && !/^(?:3\.(?:7|8)(?:\.|$)|4\.[0-3](?:\.|$))/.test(skeletonVersion)) {
           markPreviewBlocked("UNSUPPORTED_SPINE_VERSION");
           return;
         }
