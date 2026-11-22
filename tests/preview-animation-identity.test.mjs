@@ -79,8 +79,9 @@ test('URL-selected animations are resolved across all skeleton sets before block
 test('player does not pass an empty or incomplete selectable-animation list to Spine Player', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.match(startup, /const playerSet = \{ \.\.\.activeSet\.value \}/);
-  assert.match(startup, /if \(indexedAnimations\.length\)/);
+  assert.match(startup, /if \(requestedAnimation\) \{/);
   assert.match(startup, /new Set\(\[\.\.\.indexedAnimations, requestedAnimation\]\)/);
+  assert.match(startup, /delete playerSet\.animation/);
   assert.match(startup, /delete playerSet\.animations/);
   assert.match(startup, /\.\.\.playerSet,/);
   assert.match(startup, /names\.includes\(requestedAnimation\)/,
@@ -183,4 +184,18 @@ test('Spine Player 3.8 void setAnimation return is handled via AnimationState cu
   assert.match(playback, /const entry = setResult \|\| player\.animationState\?\.getCurrent\?\.\(0\)/);
   assert.match(playback, /if \(!entry\)/);
   assert.match(playback, /entry\.listener =/);
+});
+
+test('missing default does not pass empty animation strings or silently select the first track', () => {
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /if \(requestedAnimation\) \{[\s\S]*playerSet\.animation = requestedAnimation/);
+  assert.match(startup, /else \{[\s\S]*delete playerSet\.animation;[\s\S]*delete playerSet\.animations/);
+  assert.match(startup, /\.\.\.\(requestedAnimation \? \{ animation: requestedAnimation \} : \{\}\)/);
+});
+
+test('known-bad Spine 3.8.75 exports are identified before runtime initialization', () => {
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /String\(activeSet\.value\.skeletonVersion \|\| ""\) === "3\.8\.75"/);
+  assert.match(startup, /markPreviewBlocked\("UNSUPPORTED_SPINE_3_8_75"\)/);
+  assert.match(preview, /Re-export the original Spine project with Spine 3\.8\.99/);
 });
