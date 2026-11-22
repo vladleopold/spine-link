@@ -2826,11 +2826,20 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     });
     const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
 
-    const assetVersion = [skeleton.sha, atlas.sha, ...textures.map((texture) => texture.sha),
-      ...(atlasPages.some((page) => /\.dds$/i.test(page)) ? ['dds-png-v1'] : [])].filter(Boolean).join('-');
+    const assetVersion = [
+      skeleton.sha,
+      atlas.sha,
+      ...textures.map((texture) => texture.sha),
+      ...(atlasPages.some((page) => /\.dds$/i.test(page)) ? ['dds-png-v1'] : []),
+      ...(/^3\.8\./.test(skeletonVersion) ? ['spine38-atlas-compat-v1'] : []),
+    ].filter(Boolean).join('-');
 
     const skeletonUrl = `${origin}/assets/${encodeRepoPath(skeleton.path)}`;
-    const atlasUrl = versionedAssetUrl(origin, atlas, assetVersion);
+    const atlasUrlBase = versionedAssetUrl(origin, atlas, assetVersion);
+    // Spine 3.8 predates the pma page field; the asset route strips it for 3.8 only.
+    const atlasUrl = /^3\.8\./.test(skeletonVersion)
+      ? `${atlasUrlBase}&spineRuntime=3.8`
+      : atlasUrlBase;
     sets.push({
       label: directory.name,
       skeleton: skeletonUrl,
