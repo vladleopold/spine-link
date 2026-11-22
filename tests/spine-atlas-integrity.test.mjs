@@ -38,7 +38,7 @@ test('manual Spine import blocks incomplete or ambiguous atlas textures instead 
  assert.match(source,/matchAtlasPagesToTextures\(\s*atlasPages,\s*images,/);
  assert.match(source,/SPINE_ATLAS_TEXTURE_SET_INCOMPLETE/);
  assert.match(source,/const matchedImage = textureMatches\[pageIndex\]/);
- assert.match(source,/atlasPageMatchesTexture\\(imageAsset\\.file\\.name,\\s*pageName\\)/);
+ assert.match(source,/return atlasPageMatchesTexture\(imageName,\s*pageName\)/);
  assert.doesNotMatch(source,/transparentPngDataUri/);
 });
 
