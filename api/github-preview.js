@@ -2213,9 +2213,19 @@ const pinchDistance = { value: null };
               limitPlayerFps(loadedPlayer, 30);
               releaseRuntimeWheelCapture();
               clearPreviewVideoFallback();
-              const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? [];
-              animationNames.value = names.filter(name => !name.startsWith("Backup/") || name === requestedAnimation);
-              if (requestedAnimation && !names.includes(requestedAnimation)) {
+              const runtimeNames = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? [];
+              const indexedNames = Array.isArray(activeSet.value?.animations)
+                ? activeSet.value.animations.filter((name) => typeof name === "string" && name.trim())
+                : [];
+              // Legacy 3.8/4.1 player wrappers do not consistently expose
+              // skeleton.data on the public instance. Prefer runtime names
+              // when available, otherwise retain the names extracted from
+              // the uploaded JSON/index manifest.
+              const names = runtimeNames.length ? runtimeNames : indexedNames;
+              if (names.length) {
+                animationNames.value = names.filter(name => !name.startsWith("Backup/") || name === requestedAnimation);
+              }
+              if (requestedAnimation && names.length && !names.includes(requestedAnimation)) {
                 // The selected clip can belong to another skeleton set in this
                 // work. Try the remaining sets before reporting it unavailable.
                 const nextSet = sets.find((set) => !attemptedAnimationSets.has(animationSetKey(set)));
