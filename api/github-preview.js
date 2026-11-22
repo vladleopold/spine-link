@@ -2075,7 +2075,14 @@ const pinchDistance = { value: null };
             ...(/^4[.][01](?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))
               ? { binaryUrl: activeSet.value.skelUrl || undefined, atlasUrl: activeSet.value.atlasUrl }
               : {}),
-            viewport: measuredViewport(activeSet.value),
+            // Spine Player 4.1 tries to calculate bounds for an empty animation
+            // when a skeleton has no indexed default track. Keep the skeleton
+            // loadable and expose its tracks for manual selection instead.
+            // A generous setup-pose viewport prevents the runtime's empty-bounds
+            // exception; selecting a real animation later calls setViewport().
+            viewport: requestedAnimation
+              ? measuredViewport(activeSet.value)
+              : { ...measuredViewport(activeSet.value), x: -4096, y: -4096, width: 8192, height: 8192 },
             showControls: true,
             showLoading: true,
             alpha: true,
