@@ -2032,9 +2032,23 @@ const pinchDistance = { value: null };
           return;
         }
         const requestedAnimation = activeAnimation.name;
+        // The index can lag behind the actual skeleton (especially for binary
+        // .skel uploads). An explicit empty selectable list makes Spine Player
+        // reject even a valid URL-selected animation before its success callback.
+        // Omit an unknown list; when a list exists, always include the exact
+        // requested name and let the loaded skeleton verify it below.
+        const playerSet = { ...activeSet.value };
+        const indexedAnimations = Array.isArray(playerSet.animations)
+          ? playerSet.animations.filter((name) => typeof name === "string" && name.trim())
+          : [];
+        if (indexedAnimations.length) {
+          playerSet.animations = [...new Set([...indexedAnimations, requestedAnimation])];
+        } else {
+          delete playerSet.animations;
+        }
         try {
           player = new SpinePlayer("player", {
-            ...activeSet.value,
+            ...playerSet,
             animation: requestedAnimation,
             ...(/^4[.][01](?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))
               ? { binaryUrl: activeSet.value.skelUrl || undefined, atlasUrl: activeSet.value.atlasUrl }
