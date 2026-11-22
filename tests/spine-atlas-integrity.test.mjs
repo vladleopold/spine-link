@@ -31,3 +31,13 @@ test('preview runtime never injects a transparent placeholder for an unmatched a
  assert.match(source,/SPINE_ATLAS_TEXTURE_SET_INCOMPLETE/);
  assert.doesNotMatch(source,/data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB/);
 });
+
+test('manual Spine import blocks incomplete or ambiguous atlas textures instead of inventing transparent pages', async () => {
+ const {readFileSync}=await import('node:fs');
+ const source=readFileSync(new URL('../src/SpineApp.tsx',import.meta.url),'utf8');
+ assert.match(source,/matchAtlasPagesToTextures\\(\\s*atlasPages,\\s*images,/);
+ assert.match(source,/SPINE_ATLAS_TEXTURE_SET_INCOMPLETE/);
+ assert.match(source,/const matchedImage = textureMatches\\[pageIndex\\]/);
+ assert.match(source,/imageBase === pageBase/);
+ assert.doesNotMatch(source,/transparentPngDataUri/);
+});
