@@ -2171,6 +2171,9 @@ const pinchDistance = { value: null };
           player = new SpinePlayer("player", {
             ...playerSet,
             ...(requestedAnimation ? { animation: requestedAnimation } : {}),
+            ...(/^4[.]3(?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))
+              ? { skeleton: activeSet.value.jsonUrl || activeSet.value.skelUrl || activeSet.value.skeleton, atlasUrl: activeSet.value.atlasUrl }
+              : {}),
             ...(/^4[.][01](?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))
               ? { binaryUrl: activeSet.value.skelUrl || undefined, atlasUrl: activeSet.value.atlasUrl }
               : {}),
