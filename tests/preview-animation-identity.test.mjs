@@ -51,7 +51,7 @@ test('player selects exact requested animations without requiring a version-spec
   assert.doesNotMatch(playback, /names\[0\]|animations\[0\]|filteredNames\[0\]/);
   const player = section(preview, 'function markPreviewBlocked(code, detail = "")', 'function renderAnimationList()');
   assert.match(player, /animation: requestedAnimation/);
-  assert.match(player, /names\.includes\(requestedAnimation\)/);
+  assert.match(player, /names\.includes\(selectedAnimation\)/);
   assert.match(player, /SELECTED_SPINE_ANIMATION_UNAVAILABLE/);
   assert.doesNotMatch(preview, /syncScenario|scenarioState|playNextScenarioStep|isScenarioStep/);
 });
@@ -165,7 +165,7 @@ test('binary skeletons use the indexed animation list when server-side JSON pars
 test('missing index default loads the verified skeleton and exposes its runtime animation list', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.doesNotMatch(startup, /if \(!activeAnimation\.name\)/);
-  assert.match(startup, /if \(requestedAnimation && names\.length && !names\.includes\(requestedAnimation\)\)/);
+  assert.match(startup, /if \(selectedAnimation && names\.length && !names\.includes\(selectedAnimation\)\)/);
   assert.match(startup, /requestedAnimation \? \{ animation: requestedAnimation \} : \{\}/);
   assert.match(startup, /if \(requestedAnimation\) \{[\s\S]*playActiveAnimationFromStart\(\)/);
   const playback = section(preview, 'function playActiveAnimationFromStart()', 'function togglePlayback()');
