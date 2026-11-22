@@ -479,36 +479,36 @@ test('archive detail, video and home feeds use one exact same-work WebM/WebP qua
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'home'}},home);
     assert.equal(home.code,200);
     const homeById=new Map(home.body.entries.map(item=>[item.id,item]));
-    assert.equal(homeById.get('pair-medium')?.webmPreview,asset('pair-medium','preview-medium.webm'));
-    assert.equal(homeById.get('pair-medium')?.thumbnailPoster,asset('pair-medium','preview-medium.webp'));
-    assert.equal(homeById.get('pair-low')?.webmPreview,asset('pair-low','preview-low.webm'));
-    assert.equal(homeById.get('pair-low')?.thumbnailPoster,asset('pair-low','preview-low.webp'));
+    assert.ok(homeById.get('pair-medium')?.webmPreview.includes(asset('pair-medium','preview-medium.webm')));
+    assert.ok(homeById.get('pair-medium')?.thumbnailPoster.includes(asset('pair-medium','preview-medium.webp')));
+    assert.ok(homeById.get('pair-low')?.webmPreview.includes(asset('pair-low','preview-low.webm')));
+    assert.ok(homeById.get('pair-low')?.thumbnailPoster.includes(asset('pair-low','preview-low.webp')));
     assert.equal(homeById.has('pair-blocked'),false,'blocked media must not enter the moving home feed');
 
     const mediumDetail=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{id:'pair-medium'}},mediumDetail);
     assert.equal(mediumDetail.code,200);
     const mediumHtml=String(mediumDetail.body);
-    assert.ok(mediumHtml.includes('poster="'+asset('pair-medium','preview-medium.webp')+'"'));
-    assert.ok(mediumHtml.includes('data-video-src="'+asset('pair-medium','preview-medium.webm')+'"'));
-    assert.ok(mediumHtml.includes('src="'+asset('pair-medium','preview-medium.webm')+'"'));
-    assert.ok(!mediumHtml.includes('poster="'+asset('pair-medium','preview-medium.webp')+'" src="'+asset('pair-medium','preview.webm')+'"'));
+    assert.ok(mediumHtml.includes('poster="'+asset('pair-medium','preview-medium.webp')));
+    assert.ok(mediumHtml.includes('data-video-src="'+asset('pair-medium','preview-medium.webm')));
+    assert.ok(mediumHtml.includes('src="'+asset('pair-medium','preview-medium.webm')));
+    assert.ok(!mediumHtml.includes('poster="'+asset('pair-medium','preview-medium.webp')+'" src="'+asset('pair-medium','preview.webm')));
 
     const lowDetail=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{id:'pair-low'}},lowDetail);
     assert.equal(lowDetail.code,200);
     const lowHtml=String(lowDetail.body);
-    assert.ok(lowHtml.includes('poster="'+asset('pair-low','preview-low.webp')+'"'));
-    assert.ok(lowHtml.includes('data-video-src="'+asset('pair-low','preview-low.webm')+'"'));
-    assert.ok(lowHtml.includes('src="'+asset('pair-low','preview-low.webm')+'"'));
+    assert.ok(lowHtml.includes('poster="'+asset('pair-low','preview-low.webp')));
+    assert.ok(lowHtml.includes('data-video-src="'+asset('pair-low','preview-low.webm')));
+    assert.ok(lowHtml.includes('src="'+asset('pair-low','preview-low.webm')));
     assert.ok(!lowHtml.includes('preview-medium.webp'));
-    assert.ok(!lowHtml.includes('src="'+asset('pair-low','preview.webm')+'"'));
+    assert.ok(!lowHtml.includes('src="'+asset('pair-low','preview.webm')));
 
     const videoPage=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{id:'pair-low',view:'video'}},videoPage);
     assert.equal(videoPage.code,200);
     const videoHtml=String(videoPage.body);
-    assert.ok(videoHtml.includes('<video src="'+asset('pair-low','preview-low.webm')+'" poster="'+asset('pair-low','preview-low.webp')+'"'));
+    assert.ok(videoHtml.includes('<video src="'+asset('pair-low','preview-low.webm')+'?v=') && videoHtml.includes('poster="'+asset('pair-low','preview-low.webp')));
 
     const blockedDetail=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{id:'pair-blocked'}},blockedDetail);
