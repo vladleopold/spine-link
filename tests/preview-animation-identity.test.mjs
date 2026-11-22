@@ -66,6 +66,17 @@ test('player startup never replaces the requested track with the first runtime t
   assert.doesNotMatch(startup, /(?:names|animations|filteredNames)\s*\[\s*0\s*\]/);
 });
 
+test('player does not pass an empty or incomplete selectable-animation list to Spine Player', () => {
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /const playerSet = \{ \.\.\.activeSet\.value \}/);
+  assert.match(startup, /if \(indexedAnimations\.length\)/);
+  assert.match(startup, /new Set\(\[\.\.\.indexedAnimations, requestedAnimation\]\)/);
+  assert.match(startup, /delete playerSet\.animations/);
+  assert.match(startup, /\.\.\.playerSet,/);
+  assert.match(startup, /names\.includes\(requestedAnimation\)/,
+    'the loaded skeleton remains the source of truth for whether the track exists');
+});
+
 test('viewport healing measures only the selected animation', () => {
   const refit = section(preview, 'function refitToContent(', 'function measuredAnimationBounds(');
   const measured = section(preview, 'function measuredAnimationBounds(', 'let healAttempts');
