@@ -41,10 +41,11 @@ test('video target is restricted to the indexed defaultAnimation', () => {
   assert.match(metadata, /previewAnimation: target\.name/);
 });
 
-test('player keeps the exact requested animation and marks missing tracks blocked', () => {
+test('player selects exact requested animations without requiring a version-specific findAnimation wrapper', () => {
   const playback = section(preview, 'function playAnimationEntry(name)', 'function togglePlayback()');
-  assert.match(playback, /findAnimation\?\.\(name\)/);
+  assert.doesNotMatch(playback, /findAnimation/);
   assert.match(playback, /player\.setAnimation\(name, loopEnabled\.value\)/);
+  assert.match(playback, /player\.animationState\?\.getCurrent\?\.\(0\)/);
   assert.doesNotMatch(playback, /names\[0\]|animations\[0\]|filteredNames\[0\]/);
   const player = section(preview, 'function markPreviewBlocked(code)', 'function renderAnimationList()');
   assert.match(player, /animation: requestedAnimation/);
