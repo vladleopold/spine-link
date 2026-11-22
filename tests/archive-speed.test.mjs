@@ -54,9 +54,16 @@ function stubFetch(log, sourceEntries=entries){
     if(url.includes('/contents/library_02/index.json?'))return json({
       encoding:'base64',content:Buffer.from(JSON.stringify(sourceEntries)).toString('base64'),
     });
+    // Missing collection indexes are a normal GitHub 404. The production
+    // cache then tries raw.githubusercontent.com; model that request explicitly
+    // instead of turning an expected missing file into a test-only exception.
     if(url.includes('/contents/library/index.json?'))return {ok:false,status:404};
+    if(url.includes('/contents/library_01/index.json?'))return {ok:false,status:404};
     if(url.includes('/contents/library/'))return {ok:false,status:404};
-    throw Error('Unexpected per-card remote request '+url);
+    if(url.startsWith('https://raw.githubusercontent.com/vladleopold/spine/')) {
+      return {ok:false,status:404,text:async()=>''};
+    }
+    throw Error('Unexpected GitHub request '+url);
   };
 }
 test('archive feed paginates without probing every media card, caches public responses',async()=>{
