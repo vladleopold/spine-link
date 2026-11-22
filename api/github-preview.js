@@ -1527,6 +1527,13 @@ const pinchDistance = { value: null };
               const base = "https://unpkg.com/@esotericsoftware/spine-player@" + runtime + ".*/dist/";
               setPlayerStylesheet(base + "spine-player.css");
               await loadScriptOnce(base + "iife/spine-player.js");
+            } else if (runtime === "3.8") {
+              // The legacy 3.8 Web Player is hosted by Esoteric Software, not
+              // shipped in this repository. Loading the old /vendor-* paths
+              // returned 404 and blocked every 3.8 preview.
+              const base = "https://esotericsoftware.com/files/spine-player/3.8/";
+              setPlayerStylesheet(base + "spine-player.css");
+              await loadScriptOnce(base + "spine-player.js");
             } else if (runtime) {
               setPlayerStylesheet("/vendor-spine-player-" + runtime + ".css");
               await loadScriptOnce("/vendor-spine-player-" + runtime + ".js");
