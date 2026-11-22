@@ -216,3 +216,7 @@ test('binary Spine skeletons mislabeled with a .json extension use the binary ru
   assert.match(loader, /if \(binaryVersion\) \{\s*skeletonVersion = binaryVersion;\s*skeletonIsBinary = true;/);
   assert.match(preview, /skeletonIsBinary \? \{ skelUrl: skeletonUrl \} : \{ jsonUrl: skeletonUrl \}/);
 });
+
+test('missing default animation uses an explicit safe viewport for Spine 4.1 setup pose', () => {
+  assert.match(preview, /viewport: requestedAnimation\s*\? measuredViewport\(activeSet\.value\)\s*:\s*\{ \.\.\.measuredViewport\(activeSet\.value\), x: -4096, y: -4096, width: 8192, height: 8192 \}/);
+});
