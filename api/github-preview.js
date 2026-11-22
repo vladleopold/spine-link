@@ -1839,7 +1839,12 @@ const pinchDistance = { value: null };
           return false;
         }
         disableMix();
-        const entry = player.setAnimation(name, loopEnabled.value);
+        // Spine Player 3.8's setAnimation() updates AnimationState but
+        // intentionally returns void. Newer runtimes may return a TrackEntry.
+        // Accept either contract and read the active track from AnimationState
+        // when the wrapper has no return value.
+        const setResult = player.setAnimation(name, loopEnabled.value);
+        const entry = setResult || player.animationState?.getCurrent?.(0);
         if (!entry) {
           markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE");
           return false;
