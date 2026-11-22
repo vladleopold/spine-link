@@ -199,3 +199,11 @@ test('known-bad Spine 3.8.75 exports are identified before runtime initializatio
   assert.match(startup, /markPreviewBlocked\("UNSUPPORTED_SPINE_3_8_75"\)/);
   assert.match(preview, /Re-export the original Spine project with Spine 3\.8\.99/);
 });
+
+test('empty animation names are guarded before Spine 4.3 findAnimation viewport measurement', () => {
+  const measured = section(preview, 'function measuredAnimationBounds(', 'let healAttempts');
+  assert.match(measured, /const animationName = typeof activeAnimation\.name === "string" \? activeAnimation\.name\.trim\(\) : ""/);
+  assert.match(measured, /if \(!animationName\) return null/);
+  assert.match(measured, /findAnimation\(animationName\)/);
+  assert.doesNotMatch(measured, /findAnimation\(activeAnimation\.name\)/);
+});
