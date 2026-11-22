@@ -236,3 +236,9 @@ test('preview builds Spine set file lists from the indexed file manifest when Gi
 test('Spine version preflight accepts supported major.minor strings without a patch number', () => {
   assert.match(preview, /\^\(\?:3\\\.\(\?:7\|8\)\(\?:\\\.\|\$\)\|4\\\.\[0-3\]\(\?:\\\.\|\$\)\)/);
 });
+
+test('Spine 3.7 binary skeletons receive a specific JSON re-export diagnostic', () => {
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /UNSUPPORTED_SPINE_3_7_BINARY/);
+  assert.match(preview, /bundled Spine 3\.7 Web Player accepts JSON skeletons only/);
+});
