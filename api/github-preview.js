@@ -2078,6 +2078,18 @@ const pinchDistance = { value: null };
                   createPlayer();
                   return;
                 }
+                // If the index supplied a stale default, but the URL did not
+                // explicitly request that track, keep the verified skeleton
+                // loaded and expose its real animation list for manual choice.
+                // An explicitly requested missing animation remains blocked.
+                if (!queryValue("animation")) {
+                  activeAnimation.name = "";
+                  attemptedAnimationSets.clear();
+                  renderAnimationList();
+                  disableMix();
+                  installLoopButton();
+                  return;
+                }
                 renderAnimationList();
                 markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE");
                 return;
