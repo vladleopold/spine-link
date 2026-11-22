@@ -141,6 +141,8 @@ test('archive cards, detail pages and video pages never expose global media with
 
   const detail = section(archive, 'function archiveItemHtml(', 'function archiveVideoHtml(');
   assert.match(detail, /const mediaVideo = entryVideoSrc\(origin, entry\)/);
+  assert.match(detail, /mediaHtml\(entry, \{ origin, posterClass: 'media-main' \}\)/);
+  assert.doesNotMatch(detail, /eagerVideo:\s*true/);
   assert.doesNotMatch(detail, /entryVideoAsset\(entry\?\.webmPreview/);
   const watch = archive.slice(archive.indexOf('function archiveVideoHtml('), archive.indexOf('export default async function handler'));
   assert.match(watch, /const mediaVideo = entryVideoSrc\(origin, entry\)/);
