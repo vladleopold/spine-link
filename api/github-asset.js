@@ -43,9 +43,7 @@ async function contentBufferFromGitHubContent(data, token) {
   }
 
   if (typeof data?.download_url === 'string' && data.download_url) {
-    const rawResponse = await fetch(data.download_url, {
-      headers: githubHeaders(token),
-    });
+    const rawResponse = await githubRawFetch(data.download_url, token);
     if (!rawResponse.ok) throw new Error(`Raw asset did not load: ${rawResponse.status}`);
     return Buffer.from(await rawResponse.arrayBuffer());
   }
@@ -245,6 +243,24 @@ function githubHeaders(token) {
   return headers;
 }
 
+async function githubApiFetch(url, token) {
+  let response = await fetch(url, { headers: githubHeaders(token) });
+  if (!response.ok && token && (response.status === 401 || response.status === 403)) {
+    response = await fetch(url, { headers: githubHeaders('') });
+  }
+  return response;
+}
+
+async function githubRawFetch(url, token, extraHeaders = {}) {
+  let response = await fetch(url, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extraHeaders },
+  });
+  if (!response.ok && token && (response.status === 401 || response.status === 403)) {
+    response = await fetch(url, { headers: extraHeaders });
+  }
+  return response;
+}
+
 async function findFallbackGitHubPath({ owner, repo, branch, token, path }) {
   const basename = path.split('/').filter(Boolean).pop() || '';
   const basenameParts = basename.split('.');
@@ -270,9 +286,10 @@ async function findFallbackGitHubPath({ owner, repo, branch, token, path }) {
   const suffixAfterTextures = path.includes('/textures/')
     ? path.slice(path.indexOf('/textures/') + '/textures/'.length)
     : '';
-  const treeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`, {
-    headers: githubHeaders(token),
-  });
+  const treeResponse = await githubApiFetch(
+    `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+    token,
+  );
   if (!treeResponse.ok) return '';
   const treeJson = await treeResponse.json();
   const tree = Array.isArray(treeJson?.tree) ? treeJson.tree : [];
@@ -329,12 +346,7 @@ async function sendGitHubRangeAsset(request, response, { path, assetVersion, dat
   const size = githubContentSize(data);
   if (request.method !== 'GET' || !isVideoPath(path) || !rangeHeader || !data?.download_url || size <= directRangeProxyMinBytes) return null;
 
-  const rawResponse = await fetch(data.download_url, {
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      Range: rangeHeader,
-    },
-  });
+  const rawResponse = await githubRawFetch(data.download_url, token, { Range: rangeHeader });
 
   if (rawResponse.status !== 206) return null;
 
@@ -423,9 +435,10 @@ export default async function handler(request, response) {
   }
 
   try {
-    let githubResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`, {
-      headers: githubHeaders(token),
-    });
+    let githubResponse = await githubApiFetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`,
+      token,
+    );
     // Spine atlases exported from DXT5 packs sometimes still reference
     // page.dds although the upload contains page.png of the SAME name.
     // Only try the identical pathname with its extension changed, never
@@ -433,9 +446,9 @@ export default async function handler(request, response) {
     if (!githubResponse.ok && /\.dds$/i.test(assetPath)) {
       const pngPath = assetPath.replace(/\.dds$/i, '.png');
       const pngEncoded = encodeURIComponent(pngPath).replace(/%2F/g, '/');
-      const sameFolderPng = await fetch(
+      const sameFolderPng = await githubApiFetch(
         `https://api.github.com/repos/${owner}/${repo}/contents/${pngEncoded}?ref=${encodeURIComponent(branch)}`,
-        { headers: githubHeaders(token) },
+        token,
       );
       if (sameFolderPng.ok) {
         githubResponse = sameFolderPng;
@@ -443,13 +456,44 @@ export default async function handler(request, response) {
       }
     }
 
+    if (!githubResponse.ok && (githubResponse.status === 401 || githubResponse.status === 403)) {
+      const rawPath = encodeURIComponent(assetPath).replace(/%2F/g, '/');
+      const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${rawPath}`;
+      let rawResponse = await githubRawFetch(rawUrl, token);
+      if (!rawResponse.ok && /\\.dds$/i.test(assetPath)) {
+        const pngPath = assetPath.replace(/\\.dds$/i, '.png');
+        const pngRawPath = encodeURIComponent(pngPath).replace(/%2F/g, '/');
+        rawResponse = await githubRawFetch(
+          `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${pngRawPath}`,
+          token,
+        );
+        if (rawResponse.ok) response.setHeader('X-Spine-Link-DDS-PNG-Alias', 'same-stem');
+      }
+      if (rawResponse.ok) {
+        let buffer = Buffer.from(await rawResponse.arrayBuffer());
+        if (/\\.dds$/i.test(assetPath)) {
+          const alreadyPng = buffer.length >= 8 && buffer.subarray(0, 8)
+            .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+          if (!alreadyPng) buffer = ddsToPng(buffer);
+          response.setHeader('X-Spine-Link-Texture-Transcoded', 'DXT-to-PNG-v1');
+        }
+        if (isAtlasPath(assetPath)) buffer = withAtlasPageCacheBuster(buffer, assetVersion);
+        if (assetPath === 'library/index.json') buffer = sanitizeLibraryIndex(buffer);
+        const etag = rawResponse.headers.get('etag') || '';
+        putMemoryCacheEntry(cacheKey, { buffer, etag });
+        response.setHeader('X-Spine-Link-Asset-Memory', 'raw-fallback');
+        return sendAssetBuffer(request, response, { path: assetPath, assetVersion, buffer, etag });
+      }
+    }
+
     if (!githubResponse.ok) {
       const fallbackPath = await findFallbackGitHubPath({ owner, repo, branch, token, path: assetPath });
       if (!fallbackPath || fallbackPath === assetPath) return response.status(githubResponse.status).send('Asset not found');
       const fallbackEncodedPath = encodeURIComponent(fallbackPath).replace(/%2F/g, '/');
-      githubResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${fallbackEncodedPath}?ref=${encodeURIComponent(branch)}`, {
-        headers: githubHeaders(token),
-      });
+      githubResponse = await githubApiFetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${fallbackEncodedPath}?ref=${encodeURIComponent(branch)}`,
+        token,
+      );
       if (!githubResponse.ok) return response.status(githubResponse.status).send('Asset not found');
     }
 
