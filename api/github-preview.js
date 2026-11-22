@@ -2665,6 +2665,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
 
     let skeletonJson = null;
     let skeletonVersion = '';
+    let skeletonIsBinary = /\.(?:skel|bytes)$/i.test(skeleton.name);
     const atlasText = await githubText(settings, atlas.path);
     // This is a text atlas, never binary; do not interpret control bytes as
     // texture filenames and leak corrupted URLs into the browser.
@@ -2678,8 +2679,15 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
         skeletonVersion = typeof skeletonJson?.skeleton?.spine === 'string' ? skeletonJson.skeleton.spine : '';
       } catch {
         skeletonJson = null;
+        // Some uploads contain genuine Spine binary data with a .json suffix.
+        // Detect the binary header instead of telling Spine Player to JSON.parse it.
+        const binaryVersion = spineBinaryVersionFromBase64(await githubFileHead(settings, skeleton.path, 256));
+        if (binaryVersion) {
+          skeletonVersion = binaryVersion;
+          skeletonIsBinary = true;
+        }
       }
-    } else if (skeleton.name.toLowerCase().endsWith('.skel')) {
+    } else if (skeletonIsBinary) {
       skeletonVersion = spineBinaryVersionFromBase64(await githubFileHead(settings, skeleton.path, 256));
     }
 
@@ -2717,7 +2725,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     sets.push({
       label: directory.name,
       skeleton: skeletonUrl,
-      ...(skeleton.name.toLowerCase().endsWith('.skel') ? { skelUrl: skeletonUrl } : { jsonUrl: skeletonUrl }),
+      ...(skeletonIsBinary ? { skelUrl: skeletonUrl } : { jsonUrl: skeletonUrl }),
       atlas: atlasUrl,
       atlasUrl,
       animation: defaultAnimation,
