@@ -165,7 +165,7 @@ test('binary skeletons use the indexed animation list when server-side JSON pars
 test('missing index default loads the verified skeleton and exposes its runtime animation list', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.doesNotMatch(startup, /if \(!activeAnimation\.name\)/);
-  assert.match(startup, /if \(requestedAnimation && !names\.includes\(requestedAnimation\)\)/);
+  assert.match(startup, /if \(requestedAnimation && names\.length && !names\.includes\(requestedAnimation\)\)/);
   assert.match(startup, /requestedAnimation \? \{ animation: requestedAnimation \} : \{\}/);
   assert.match(startup, /if \(requestedAnimation\) \{[\s\S]*playActiveAnimationFromStart\(\)/);
   const playback = section(preview, 'function playActiveAnimationFromStart()', 'function togglePlayback()');
