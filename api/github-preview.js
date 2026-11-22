@@ -636,30 +636,32 @@ async function githubJson(settings, path) {
 // GitHub limit. They are listed at runtime so a folder added by a rotation shows up
 // without a code change or a deploy.
 async function libraryCollectionPaths(settings) {
-  const paths = new Set([cleanRepoPath(settings.basePath || defaultBasePath)]);
+  const basePath = cleanRepoPath(settings.basePath || defaultBasePath);
+  const fallbackPaths = new Set([basePath]);
   if (settings.owner === defaultOwner && settings.repo === defaultRepo) {
-    for (const name of ['library', 'library_01', 'library_02']) paths.add(name);
+    for (const name of ['library', 'library_01', 'library_02']) fallbackPaths.add(name);
   }
+  const rank = (name) => /^library_([0-9]+)$/.test(name)
+    ? Number(name.match(/^library_([0-9]+)$/)[1])
+    : name === 'library' ? 0 : -1;
+  const sortPaths = (paths) => [...paths].filter(Boolean).sort((a, b) => rank(b) - rank(a));
   try {
     const response = await fetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
       { headers: githubHeaders(settings.token) },
     );
-    if (response.ok) {
-      const items = await response.json();
-      if (Array.isArray(items)) {
-        for (const item of items) {
-          if (item?.type === 'dir' && /^library(_[0-9]+)?$/.test(String(item.name || ''))) paths.add(item.name);
-        }
-      }
+    if (!response.ok) return sortPaths(fallbackPaths);
+    const items = await response.json();
+    if (!Array.isArray(items)) return sortPaths(fallbackPaths);
+    const paths = new Set([basePath]);
+    for (const item of items) {
+      if (item?.type === 'dir' && /^library(_[0-9]+)?$/.test(String(item.name || ''))) paths.add(item.name);
     }
+    return sortPaths(paths);
   } catch {
     // The configured and known collections remain usable through raw public reads.
+    return sortPaths(fallbackPaths);
   }
-  const rank = (name) => /^library_([0-9]+)$/.test(name)
-    ? Number(name.match(/^library_([0-9]+)$/)[1])
-    : name === 'library' ? 0 : -1;
-  return [...paths].filter(Boolean).sort((a, b) => rank(b) - rank(a));
 }
 
 async function githubText(settings, path, options = {}) {

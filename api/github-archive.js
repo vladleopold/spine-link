@@ -328,7 +328,7 @@ async function libraryCollectionPaths(settings) {
     if (!response.ok) return fallbackPaths;
     const items = await response.json();
     if (!Array.isArray(items)) return fallbackPaths;
-    const paths = new Set(fallbackPaths);
+    const paths = new Set([cleanRepoPath(settings.basePath || defaultBasePath)]);
     for (const item of items) {
       if (item?.type === 'dir' && /^library(_[0-9]+)?$/.test(String(item.name || ''))) paths.add(item.name);
     }
