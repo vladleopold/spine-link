@@ -22,3 +22,10 @@ test('Spine 3.7 previews use the official branch runtime pinned to its commit', 
     /@9639bcc81722d7178fd9d1cdc1a3d55a4c91f989\/spine-ts\//,
   );
 });
+
+test('Spine skeleton JSON and binary URLs are versioned to avoid stale CDN exports', () => {
+  assert.match(
+    previewSource,
+    /const skeletonUrl = versionedAssetUrl\(origin, skeleton, assetVersion\);/,
+  );
+});

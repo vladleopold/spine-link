@@ -2886,7 +2886,10 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       ...(/^3\.8\./.test(skeletonVersion) ? ['spine38-atlas-compat-v1'] : []),
     ].filter(Boolean).join('-');
 
-    const skeletonUrl = `${origin}/assets/${encodeRepoPath(skeleton.path)}`;
+    // Version the skeleton JSON/binary as well as atlas pages and textures.
+    // Without this query, replacing a broken export at the same path can leave
+    // the old cached binary in the browser even after GitHub has the new JSON.
+    const skeletonUrl = versionedAssetUrl(origin, skeleton, assetVersion);
     const atlasUrlBase = versionedAssetUrl(origin, atlas, assetVersion);
     // Spine 3.8 predates the pma page field; the asset route strips it for 3.8 only.
     const atlasUrl = /^3\.8\./.test(skeletonVersion)
