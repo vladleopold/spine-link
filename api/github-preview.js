@@ -2012,13 +2012,22 @@ const pinchDistance = { value: null };
         message.style.cssText = "display:grid;place-items:center;height:100%;padding:24px;color:#ffb088;font-weight:900;text-align:center;";
         message.textContent = code === "SELECTED_SPINE_ANIMATION_UNAVAILABLE"
           ? "Selected Spine animation is unavailable. Preview blocked."
-          : "Spine preview is blocked.";
+          : code === "UNSUPPORTED_SPINE_3_8_75"
+            ? "This export uses Spine 3.8.75, which the official runtime rejects because of a known export bug. Re-export the original Spine project with Spine 3.8.99."
+            : "Spine preview is blocked.";
         box.replaceChildren(message);
       }
 
       async function createPlayer() {
         if (!activeSet.value) {
           markPreviewBlocked("NO_SKELETON_SET");
+          return;
+        }
+        // Spine 3.8.75 exports contain a known upstream IK/export bug and are
+        // explicitly rejected by the official 3.8 runtime. Do not repeatedly
+        // instantiate a player that cannot parse this source format.
+        if (String(activeSet.value.skeletonVersion || "") === "3.8.75") {
+          markPreviewBlocked("UNSUPPORTED_SPINE_3_8_75");
           return;
         }
         resetHealAttempts();
@@ -2041,12 +2050,18 @@ const pinchDistance = { value: null };
         // Omit an unknown list; when a list exists, always include the exact
         // requested name and let the loaded skeleton verify it below.
         const playerSet = { ...activeSet.value };
-        const indexedAnimations = Array.isArray(playerSet.animations)
-          ? playerSet.animations.filter((name) => typeof name === "string" && name.trim())
-          : [];
-        if (indexedAnimations.length) {
+        if (requestedAnimation) {
+          const indexedAnimations = Array.isArray(playerSet.animations)
+            ? playerSet.animations.filter((name) => typeof name === "string" && name.trim())
+            : [];
+          // Only pass selectable tracks when a concrete track is requested.
+          // An empty string is rejected by both legacy 3.8 and current 4.3
+          // runtimes ("animation '' does not exist" / "animationName cannot be null").
           playerSet.animations = [...new Set([...indexedAnimations, requestedAnimation])];
+          playerSet.animation = requestedAnimation;
         } else {
+          // Keep the skeleton loadable without silently starting its first track.
+          delete playerSet.animation;
           delete playerSet.animations;
         }
         try {
