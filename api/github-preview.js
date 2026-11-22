@@ -2137,6 +2137,11 @@ const pinchDistance = { value: null };
 
       async function createPlayer() {
         playerReady = false;
+        const playerContainer = document.getElementById("player");
+        if (playerContainer) {
+          playerContainer.dataset.previewStatus = "loading";
+          delete playerContainer.dataset.previewError;
+        }
         if (!activeSet.value) {
           markPreviewBlocked("NO_SKELETON_SET");
           return;
@@ -2221,6 +2226,11 @@ const pinchDistance = { value: null };
             success: (loadedPlayer) => {
               player = loadedPlayer;
               playerReady = true;
+              const playerContainer = document.getElementById("player");
+              if (playerContainer) {
+                playerContainer.dataset.previewStatus = "ready";
+                delete playerContainer.dataset.previewError;
+              }
               limitPlayerFps(loadedPlayer, 30);
               releaseRuntimeWheelCapture();
               clearPreviewVideoFallback();
