@@ -24,8 +24,13 @@ jobs:
           set -euo pipefail
           jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")"
           deployed="$(printf '%s' "$jobs" | jq -r '[.jobs[].steps[]? | select(.name == "Deploy to Vercel" and .conclusion == "success")] | length > 0')"
-          echo "deployed=$deployed" >> "$GITHUB_OUTPUT"
-          echo "REAL_PRODUCTION_DEPLOY=$deployed"
+          if [ "$deployed" != "true" ]; then
+            echo "::error::PRODUCTION_BROWSER_PROOF_BLOCKED_NO_REAL_DEPLOYMENT"
+            echo "The upstream workflow completed without a successful Deploy to Vercel step; Chromium production checks must not be reported as passed."
+            exit 1
+          fi
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+          echo "REAL_PRODUCTION_DEPLOY=true"
   chromium:
     needs: release_gate
     if: ${{ always() && (github.event_name != 'workflow_run' || needs.release_gate.outputs.deployed == 'true') }}

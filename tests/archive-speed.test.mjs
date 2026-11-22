@@ -443,6 +443,15 @@ test('archive WebM starts only after its exact poster decode succeeds',()=>{
   assert.match(workflow,/decodedAt>request\.at/,'live browser proof must reject WebM requests before poster decode');
 });
 
+test('live production proof fails closed when upstream skipped the actual Vercel deploy',()=>{
+  const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
+  const gate=workflow.slice(workflow.indexOf('id: inspect'),workflow.indexOf('chromium:'));
+  assert.match(gate,/select\(\.name == "Deploy to Vercel" and \.conclusion == "success"\)/);
+  assert.match(gate,/if \[ "\$deployed" != "true" \]; then/);
+  assert.match(gate,/PRODUCTION_BROWSER_PROOF_BLOCKED_NO_REAL_DEPLOYMENT/);
+  assert.match(gate,/exit 1/,'a skipped deploy must fail the production-proof workflow instead of making it green');
+});
+
 test('live archive acceptance requires a real exact-animation WebM and playback sample',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
   assert.match(workflow,/assert\.ok\(videoUrls\.length>0,/,
