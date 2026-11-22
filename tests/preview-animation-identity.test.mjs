@@ -56,7 +56,7 @@ test('player keeps the exact requested animation and marks missing tracks blocke
 test('player startup never replaces the requested track with the first runtime track', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.ok(startup.includes('const requestedAnimation = activeAnimation.name'));
-  assert.ok(startup.includes('animation: requestedAnimation'));
+  assert.ok(startup.includes('...(requestedAnimation ? { animation: requestedAnimation } : {})'));
   const missingTrackGuard = startup.indexOf('if (!names.includes(requestedAnimation))');
   const blocked = startup.indexOf('markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE")', missingTrackGuard);
   const blockedReturn = startup.indexOf('return;', blocked);
@@ -155,4 +155,14 @@ test('binary skeletons use the indexed animation list when server-side JSON pars
   assert.match(dynamic, /runtimeAnimationNames\.length\s*\?\s*runtimeAnimationNames/);
   assert.match(dynamic, /indexedAnimationNames/);
   assert.match(dynamic, /const defaultAnimation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+});
+
+test('missing index default loads the verified skeleton and exposes its runtime animation list', () => {
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.doesNotMatch(startup, /if \(!activeAnimation\.name\)/);
+  assert.match(startup, /if \(requestedAnimation && !names\.includes\(requestedAnimation\)\)/);
+  assert.match(startup, /requestedAnimation \? \{ animation: requestedAnimation \} : \{\}/);
+  assert.match(startup, /if \(requestedAnimation\) \{[\s\S]*playActiveAnimationFromStart\(\)/);
+  const playback = section(preview, 'function playActiveAnimationFromStart()', 'function togglePlayback()');
+  assert.match(playback, /if \(!player \|\| !activeAnimation\.name\) return false/);
 });
