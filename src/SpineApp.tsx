@@ -4094,12 +4094,14 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         const entryFiles = Array.isArray(entry.files) ? entry.files : [];
         if (!entryFiles.length) throw new Error("This preview has no editable files.");
         const files = await Promise.all(entryFiles.map((fileName) => fileFromLibraryPath(entry, fileName)));
+        const indexedSkeletonStem = typeof entry.skeleton === "string" ? assetStem(entry.skeleton) : "";
         const nextSpineOptions = (await loadFiles(files)).map((set) => {
-          const isEntrySet = basename(set.skeletonName) === basename(entry.skeleton);
-          return isEntrySet && entry.defaultAnimation ? { ...set, defaultAnimation: entry.defaultAnimation } : set;
+          const isEntrySet = Boolean(indexedSkeletonStem) && assetStem(set.skeletonName) === indexedSkeletonStem;
+          return isEntrySet && typeof entry.defaultAnimation === "string"
+            ? { ...set, defaultAnimation: entry.defaultAnimation }
+            : set;
         });
         if (isCancelled) return;
-        const indexedSkeletonStem = typeof entry.skeleton === "string" ? assetStem(entry.skeleton) : "";
         const matchingSpineSets = indexedSkeletonStem
           ? nextSpineOptions.filter((set) => assetStem(set.skeletonName) === indexedSkeletonStem)
           : [];

@@ -75,6 +75,8 @@ test('editable library entries never substitute another source set or animation'
   assert.ok(start >= 0 && end > start, 'editable-entry loader must remain discoverable');
   const loader = app.slice(start, end);
   assert.ok(loader.includes('const indexedSkeletonStem = typeof entry.skeleton === "string" ? assetStem(entry.skeleton) : ""'));
+  assert.ok(loader.includes('const isEntrySet = Boolean(indexedSkeletonStem) && assetStem(set.skeletonName) === indexedSkeletonStem'));
+  assert.ok(loader.includes('return isEntrySet && typeof entry.defaultAnimation === "string"'));
   assert.ok(loader.includes('matchingSpineSets.length !== 1'));
   assert.ok(loader.includes('refusing to select another Spine set'));
   assert.ok(loader.includes('const selectedAnimation = typeof entry.defaultAnimation === "string" ? entry.defaultAnimation : ""'));
