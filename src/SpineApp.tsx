@@ -4099,11 +4099,18 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           return isEntrySet && entry.defaultAnimation ? { ...set, defaultAnimation: entry.defaultAnimation } : set;
         });
         if (isCancelled) return;
-        const nextSpine =
-          nextSpineOptions.find((set) => basename(set.skeletonName) === basename(entry.skeleton)) ?? chooseInitialSet(nextSpineOptions);
+        const indexedSkeletonStem = typeof entry.skeleton === "string" ? assetStem(entry.skeleton) : "";
+        const matchingSpineSets = indexedSkeletonStem
+          ? nextSpineOptions.filter((set) => assetStem(set.skeletonName) === indexedSkeletonStem)
+          : [];
+        if (matchingSpineSets.length !== 1) {
+          throw new Error("The indexed skeleton is missing or ambiguous; refusing to select another Spine set.");
+        }
+        const nextSpine = matchingSpineSets[0];
+        const selectedAnimation = typeof entry.defaultAnimation === "string" ? entry.defaultAnimation : "";
         resetPlayer();
         setAnimations([]);
-        setActiveAnimation(entry.defaultAnimation || nextSpine?.defaultAnimation || "");
+        setActiveAnimation(selectedAnimation);
         setZoom(1);
         setSpineOptions(nextSpineOptions);
         setPreparedSpine(nextSpine);
@@ -4111,7 +4118,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         setLibraryEntries((currentEntries) => [entry, ...currentEntries.filter((currentEntry) => currentEntry.id !== entry.id)]);
         setPreviewNote(entry.note || "");
         setSelectedCardSize(entry.cardSize || "auto");
-        setGeneratedPreviewUrl(previewUrlForEntry(entry.id, entry.defaultAnimation || nextSpine?.defaultAnimation || ""));
+        setGeneratedPreviewUrl(previewUrlForEntry(entry.id, selectedAnimation));
         setIsLinkBannerOpen(false);
         setCopyStatus("");
         setPreviewNoteStatus("");
