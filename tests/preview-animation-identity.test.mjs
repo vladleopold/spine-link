@@ -49,7 +49,7 @@ test('player selects exact requested animations without requiring a version-spec
   assert.match(playback, /if \(entry\) \{/);
   assert.doesNotMatch(playback, /if \(!entry\)/);
   assert.doesNotMatch(playback, /names\[0\]|animations\[0\]|filteredNames\[0\]/);
-  const player = section(preview, 'function markPreviewBlocked(code)', 'function renderAnimationList()');
+  const player = section(preview, 'function markPreviewBlocked(code, detail = "")', 'function renderAnimationList()');
   assert.match(player, /animation: requestedAnimation/);
   assert.match(player, /names\.includes\(requestedAnimation\)/);
   assert.match(player, /SELECTED_SPINE_ANIMATION_UNAVAILABLE/);
