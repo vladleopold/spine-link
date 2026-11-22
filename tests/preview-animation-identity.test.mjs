@@ -196,7 +196,8 @@ test('missing default does not pass empty animation strings or silently select t
 
 test('known-bad Spine 3.8.75 exports are identified before runtime initialization', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
-  assert.match(startup, /String\(activeSet\.value\.skeletonVersion \|\| ""\) === "3\.8\.75"/);
+  assert.match(startup, /const skeletonVersion = String\(activeSet\.value\.skeletonVersion \|\| ""\)/);
+  assert.match(startup, /if \(skeletonVersion === "3\.8\.75"\)/);
   assert.match(startup, /markPreviewBlocked\("UNSUPPORTED_SPINE_3_8_75"\)/);
   assert.match(preview, /Re-export the original Spine project with Spine 3\.8\.99/);
 });
