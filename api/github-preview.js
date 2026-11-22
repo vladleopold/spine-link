@@ -1923,17 +1923,20 @@ const pinchDistance = { value: null };
       function disableMix() { if (player?.animationState?.data) player.animationState.data.defaultMix = 0; }
       function playAnimationEntry(name) {
         if (!player || !name) return false;
-        const available = player?.skeleton?.data?.findAnimation?.(name);
-        if (!available) {
+        // Do not require skeleton.data.findAnimation here: that method is
+        // not exposed consistently by the 3.8/4.1 Spine Player wrappers even
+        // though their own animation menus list the tracks. Let the runtime
+        // validate the exact indexed name through setAnimation and its track.
+        disableMix();
+        let setResult;
+        try {
+          // Spine Player 3.8 updates AnimationState but returns void; newer
+          // runtimes may return a TrackEntry. Both contracts are supported.
+          setResult = player.setAnimation(name, loopEnabled.value);
+        } catch {
           markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE");
           return false;
         }
-        disableMix();
-        // Spine Player 3.8's setAnimation() updates AnimationState but
-        // intentionally returns void. Newer runtimes may return a TrackEntry.
-        // Accept either contract and read the active track from AnimationState
-        // when the wrapper has no return value.
-        const setResult = player.setAnimation(name, loopEnabled.value);
         const entry = setResult || player.animationState?.getCurrent?.(0);
         if (!entry) {
           markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE");
