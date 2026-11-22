@@ -1938,15 +1938,17 @@ const pinchDistance = { value: null };
           return false;
         }
         const entry = setResult || player.animationState?.getCurrent?.(0);
-        if (!entry) {
-          markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE");
-          return false;
+        // Spine Player 3.8 applies the animation but exposes neither the
+        // TrackEntry return value nor animationState on its public wrapper.
+        // A successful setAnimation call is therefore sufficient; customize
+        // the TrackEntry only on runtimes that expose it.
+        if (entry) {
+          entry.mixDuration = 0;
+          entry.mixTime = 0;
+          entry.listener = { ...(entry.listener || {}), complete: () => {
+            if (!loopEnabled.value) player.pause();
+          } };
         }
-        entry.mixDuration = 0;
-        entry.mixTime = 0;
-        entry.listener = { ...(entry.listener || {}), complete: () => {
-          if (!loopEnabled.value) player.pause();
-        } };
         player.play();
         rememberBaseViewport();
         applyStageAnchor();
