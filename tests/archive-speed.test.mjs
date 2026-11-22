@@ -428,3 +428,97 @@ test('live archive acceptance requires a real exact-animation WebM and playback 
   assert.doesNotMatch(workflow,/videoUrls\.length===0/,
     'zero media must never be treated as a successful playback check');
 });
+
+test('archive detail, video and home feeds use one exact same-work WebM/WebP quality pair',async()=>{
+  const asset=(id,name)=>'https://spine-link.vercel.app/assets/library_02/'+id+'/'+name;
+  const makeEntry=(id,previews,status='ready')=>({
+    ...entries[0],id,previewPath:'library_02/'+id,
+    defaultAnimation:'walk',webmStatus:status,previewStatus:status,
+    previewDuration:2.5,previewFrameCount:60,previewWidth:960,previewHeight:720,
+    webmPreview:asset(id,'preview.webm'),
+    webmPreviewMedium:asset(id,'preview-medium.webm'),
+    webmPreviewLow:asset(id,'preview-low.webm'),
+    webpPoster:asset(id,'preview.webp'),
+    webpPosterMedium:asset(id,'preview-medium.webp'),
+    webpPosterLow:asset(id,'preview-low.webp'),
+    allAnimationPreviews:{walk:previews},
+  });
+  const medium=makeEntry('pair-medium',{
+    webmPreview:asset('pair-medium','preview.webm'),
+    webpPoster:asset('pair-medium','preview.webp'),
+    webmPreviewMedium:asset('pair-medium','preview-medium.webm'),
+    webpPosterMedium:asset('pair-medium','preview-medium.webp'),
+    webmPreviewLow:asset('pair-medium','preview-low.webm'),
+    webpPosterLow:asset('pair-medium','preview-low.webp'),
+  });
+  // A wrong-work medium poster and a missing matching medium video must not
+  // be combined with the full video. The valid low pair is the next candidate.
+  const low=makeEntry('pair-low',{
+    webmPreview:asset('pair-low','preview.webm'),
+    webpPoster:asset('pair-low','preview.webp'),
+    webmPreviewMedium:asset('pair-low','preview-medium.webm'),
+    webpPosterMedium:asset('other-work','preview-medium.webp'),
+    webmPreviewLow:asset('pair-low','preview-low.webm'),
+    webpPosterLow:asset('pair-low','preview-low.webp'),
+  });
+  const blocked=makeEntry('pair-blocked',{
+    webmPreview:asset('pair-blocked','preview.webm'),
+    webpPoster:asset('pair-blocked','preview.webp'),
+    webmPreviewMedium:asset('pair-blocked','preview-medium.webm'),
+    webpPosterMedium:asset('pair-blocked','preview-medium.webp'),
+    webmPreviewLow:asset('pair-blocked','preview-low.webm'),
+    webpPosterLow:asset('pair-blocked','preview-low.webp'),
+  },'blocked-missing-animation-selection');
+  const source=[medium,low,blocked];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-archive-quality-paired-media';
+  try{
+    const home=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'home'}},home);
+    assert.equal(home.code,200);
+    const homeById=new Map(home.body.entries.map(item=>[item.id,item]));
+    assert.equal(homeById.get('pair-medium')?.webmPreview,asset('pair-medium','preview-medium.webm'));
+    assert.equal(homeById.get('pair-medium')?.thumbnailPoster,asset('pair-medium','preview-medium.webp'));
+    assert.equal(homeById.get('pair-low')?.webmPreview,asset('pair-low','preview-low.webm'));
+    assert.equal(homeById.get('pair-low')?.thumbnailPoster,asset('pair-low','preview-low.webp'));
+    assert.equal(homeById.has('pair-blocked'),false,'blocked media must not enter the moving home feed');
+
+    const mediumDetail=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{id:'pair-medium'}},mediumDetail);
+    assert.equal(mediumDetail.code,200);
+    const mediumHtml=String(mediumDetail.body);
+    assert.ok(mediumHtml.includes('poster="'+asset('pair-medium','preview-medium.webp')+'"'));
+    assert.ok(mediumHtml.includes('data-video-src="'+asset('pair-medium','preview-medium.webm')+'"'));
+    assert.ok(mediumHtml.includes('src="'+asset('pair-medium','preview-medium.webm')+'"'));
+    assert.ok(!mediumHtml.includes('poster="'+asset('pair-medium','preview-medium.webp')+'" src="'+asset('pair-medium','preview.webm')+'"'));
+
+    const lowDetail=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{id:'pair-low'}},lowDetail);
+    assert.equal(lowDetail.code,200);
+    const lowHtml=String(lowDetail.body);
+    assert.ok(lowHtml.includes('poster="'+asset('pair-low','preview-low.webp')+'"'));
+    assert.ok(lowHtml.includes('data-video-src="'+asset('pair-low','preview-low.webm')+'"'));
+    assert.ok(lowHtml.includes('src="'+asset('pair-low','preview-low.webm')+'"'));
+    assert.ok(!lowHtml.includes('preview-medium.webp'));
+    assert.ok(!lowHtml.includes('src="'+asset('pair-low','preview.webm')+'"'));
+
+    const videoPage=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{id:'pair-low',view:'video'}},videoPage);
+    assert.equal(videoPage.code,200);
+    const videoHtml=String(videoPage.body);
+    assert.ok(videoHtml.includes('<video src="'+asset('pair-low','preview-low.webm')+'" poster="'+asset('pair-low','preview-low.webp')+'"'));
+
+    const blockedDetail=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{id:'pair-blocked'}},blockedDetail);
+    assert.equal(blockedDetail.code,200);
+    assert.doesNotMatch(String(blockedDetail.body),/<video|<img/,'blocked status must not expose stale media');
+    assert.ok(log.length<=24,'unexpected GitHub request fanout: '+log.length);
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
+
