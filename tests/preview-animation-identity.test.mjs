@@ -57,7 +57,7 @@ test('player startup never replaces the requested track with the first runtime t
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.ok(startup.includes('const requestedAnimation = activeAnimation.name'));
   assert.ok(startup.includes('...(requestedAnimation ? { animation: requestedAnimation } : {})'));
-  const missingTrackGuard = startup.indexOf('if (!names.includes(requestedAnimation))');
+  const missingTrackGuard = startup.indexOf('if (requestedAnimation && !names.includes(requestedAnimation))');
   const blocked = startup.indexOf('markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE")', missingTrackGuard);
   const blockedReturn = startup.indexOf('return;', blocked);
   const playback = startup.indexOf('playActiveAnimationFromStart()');
@@ -175,4 +175,12 @@ test('stale indexed default is recoverable but an explicit missing URL selection
   assert.ok(mismatch >= 0 && recovery > mismatch && blocked > recovery);
   assert.match(startup.slice(recovery, blocked), /activeAnimation\.name = ""/);
   assert.match(startup.slice(recovery, blocked), /renderAnimationList\(\)/);
+});
+
+test('Spine Player 3.8 void setAnimation return is handled via AnimationState current track', () => {
+  const playback = section(preview, 'function playAnimationEntry(name)', 'function playActiveAnimationFromStart()');
+  assert.match(playback, /const setResult = player\.setAnimation\(name, loopEnabled\.value\)/);
+  assert.match(playback, /const entry = setResult \|\| player\.animationState\?\.getCurrent\?\.\(0\)/);
+  assert.match(playback, /if \(!entry\)/);
+  assert.match(playback, /entry\.listener =/);
 });
