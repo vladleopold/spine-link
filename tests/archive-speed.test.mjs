@@ -80,6 +80,31 @@ test('archive feed paginates without probing every media card, caches public res
   }
 });
 
+test('public archive excludes test-only entries even when their media is ready',async()=>{
+  const source=[
+    {...entries[0],id:'test-only-card',testOnly:true,previewPath:'library_02/test-only-card'},
+    {...entries[1],id:'public-card',testOnly:false,previewPath:'library_02/public-card'},
+  ];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-archive-testOnly-filter';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive'}},res);
+    assert.equal(res.code,200);
+    assert.ok(res.body.entries.some(item=>item.id==='public-card'));
+    assert.equal(res.body.entries.some(item=>item.id==='test-only-card'),false,
+      'test-only media must never become a public archive card');
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;
+    else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
+
 test('source textures and guessed posters never unlock archive WebM or render a fallback',async()=>{
   const source=[{
     ...entries[0],

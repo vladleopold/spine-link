@@ -2481,6 +2481,7 @@ export default async function handler(request, response) {
     const entries = Array.isArray(allEntries)
       ? dedupeArchiveEntries(allEntries.filter((entry) => (
           entry?.hiddenFromPublicLibrary !== true &&
+          entry?.testOnly !== true &&
           hasArchivePreviewMetadata(entry) &&
           !entryExcludedFromArchive(entry, exclusions)
         )))
