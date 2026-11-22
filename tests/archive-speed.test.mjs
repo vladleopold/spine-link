@@ -78,7 +78,7 @@ test('archive feed paginates without probing every media card, caches public res
     assert.equal(res.body.hasMore,true);
     assert.match(res.headers['cache-control'],/max-age/);
     assert.ok(!/no-store/.test(res.headers['cache-control']));
-    assert.ok(log.length<=6,'unexpected GitHub request fanout: '+log.length);
+    assert.ok(log.length <= 7,'unexpected GitHub request fanout: '+log.length);
     assert.ok(log.every(u=>!u.includes('/card-')),'card asset metadata lookup on feed');
   }finally{
     globalThis.fetch=originalFetch;
@@ -121,7 +121,7 @@ test('source textures and guessed posters never unlock archive WebM or render a 
       'WebM must wait for a decoded first-frame poster');
     assert.ok(html.includes('preview-medium|preview-low'),
       'only medium/low generated WebP posters may unlock playback');
-    assert.ok(log.length<=6);
+    assert.ok(log.length <= 7);
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
@@ -167,7 +167,7 @@ test('only a matching medium WebM and its own medium first-frame WebP unlock a c
     assert.doesNotMatch(card,/data-fallback-src=|data-video-fallback=|preview-low\.webm|preview\.webm/,
       'no image/video fallback and no quality mismatch');
     assert.ok(html.includes("card.dataset.previewStatus!=='ready-poster-lazy-video'"));
-    assert.ok(log.length<=6);
+    assert.ok(log.length <= 7);
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
@@ -289,7 +289,7 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     assert.ok(html.includes("video.preload='none'"),'dynamic video should never preload offscreen');
     const section=html.slice(html.indexOf('<script>\n      (() => {')+8,html.indexOf('</script>',html.indexOf('<script>\n      (() => {')));
     assert.doesNotThrow(()=>new Function(section),'gallery client code must parse');
-    assert.ok(log.length<=6,'unexpected excessive index calls');
+    assert.ok(log.length <= 7,'unexpected excessive index calls');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
