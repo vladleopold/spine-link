@@ -714,8 +714,8 @@ async function enrichArchiveEntryLayout(settings, origin, entry) {
     return { ...entry, mediaAspectRatio: width / height };
   }
 
-  const selected = selectedAnimationVideo(entry);
-  const posterUrl = selected.posterMedium || selected.poster || selected.posterLow || '';
+  const mediaPair = selectedAnimationMediaPair(entry);
+  const posterUrl = mediaPair?.poster || '';
   const repoPath = repoPathFromAssetUrl(entry, posterUrl);
   if (!repoPath || repoPath.includes('/generated-preview.webp')) return entry;
   const buffer = await githubBuffer(settings, repoPath);
