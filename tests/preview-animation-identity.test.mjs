@@ -220,3 +220,13 @@ test('binary Spine skeletons mislabeled with a .json extension use the binary ru
 test('missing default animation uses an explicit safe viewport for Spine 4.1 setup pose', () => {
   assert.match(preview, /viewport: requestedAnimation\s*\? measuredViewport\(activeSet\.value\)\s*:\s*\{ \.\.\.measuredViewport\(activeSet\.value\), x: -4096, y: -4096, width: 8192, height: 8192 \}/);
 });
+
+test('preview builds Spine set file lists from the indexed file manifest when GitHub directory listing is throttled', () => {
+  const discovery = section(preview, 'async function findSpineSetDirectories(', '// Download buttons');
+  assert.match(discovery, /Array\.isArray\(indexedEntry\?\.files\)/);
+  assert.match(discovery, /descendantTextures/);
+  assert.match(discovery, /path: joinRepoPath\(uploadPath, filePath\)/);
+  const dynamic = section(preview, 'async function createDynamicPreview(', '// Finds the folder of a work by id');
+  assert.match(dynamic, /findSpineSetDirectories\(settings, uploadPath, 3, entry\)/);
+  assert.match(dynamic, /Array\.isArray\(directory\.items\) \? directory\.items : await githubList/);
+});
