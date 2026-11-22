@@ -100,25 +100,33 @@ test('archive cards, detail pages and video pages never expose global media with
   assert.match(selected, /defaultAnimation/);
   assert.doesNotMatch(selected, /entry\?\.webmPreview/);
   const home = section(archive, 'function homepageFeedEntries(', 'function mergeArchiveEntries(');
-  assert.match(home, /entryVideoLowSrc\(origin, entry\)/);
+  assert.match(home, /const mediaPair = selectedAnimationMediaPair\(entry\)/);
+  assert.match(home, /webmPreview: mediaPair\?\.video \|\| ''/);
   assert.match(home, /previewAnimation: selectedPreview\.name/);
-  assert.match(home, /const poster = selectedPreview\.posterMedium \|\| selectedPreview\.poster \|\| selectedPreview\.posterLow/);
+  assert.match(home, /const poster = mediaPair\?\.poster \|\| ''/);
   assert.match(home, /thumbnail: poster/);
   assert.doesNotMatch(home, /entryImageAsset\(entry\?\.thumbnail/);
   assert.doesNotMatch(home, /entryVideoAsset\(entry\?\.webmPreview/);
 
+  const pair = section(archive, 'function selectedAnimationMediaPair(', 'function safeAsset(');
+  assert.match(pair, /entry\?\.webmStatus !== 'ready'/);
+  assert.match(pair, /entry\?\.previewStatus !== 'ready'/);
+  assert.match(pair, /sameWorkAssetPath\(candidate\.video, entry\)/);
+  assert.match(pair, /sameWorkAssetPath\(candidate\.poster, entry\)/);
+  assert.match(pair, /candidate\.videoName/);
+  assert.match(pair, /candidate\.posterName/);
+
   const videoSrc = section(archive, 'function entryVideoSrc(', 'function safeAsset(');
-  assert.match(videoSrc, /hasPoster = Boolean\(selected\.poster \|\| selected\.posterMedium \|\| selected\.posterLow\)/);
-  assert.match(videoSrc, /return hasPoster \? selected\.full \|\| selected\.medium \|\| selected\.low : ''/);
+  assert.match(videoSrc, /selectedAnimationMediaPair\(entry\)\?\.video/);
 
   const imageUrl = section(archive, 'function entryImageUrl(', 'function baseStyles(');
-  assert.match(imageUrl, /selectedAnimationVideo\(entry\)/);
-  assert.match(imageUrl, /if \(!hasExplicitDefaultAnimation\(entry\)\) return ''/);
+  assert.match(imageUrl, /selectedAnimationMediaPair\(entry\)\?\.poster/);
   assert.doesNotMatch(imageUrl, /entry\?\.webpPoster|entry\?\.thumbnailPoster|entry\?\.thumbnail|generatedThumbnailUrl|fallbackPosterAssetUrl/);
 
   const media = section(archive, 'function mediaHtml(', 'function baseStyles(');
-  assert.match(media, /const selected = selectedAnimationVideo\(entry\)/);
-  assert.match(media, /const video = poster \? selected\.full \|\| selected\.medium \|\| selected\.low : ''/);
+  assert.match(media, /const mediaPair = selectedAnimationMediaPair\(entry\)/);
+  assert.match(media, /const poster = mediaPair\?\.poster \|\| ''/);
+  assert.match(media, /const video = mediaPair\?\.video \|\| ''/);
   assert.match(media, /const videoSource = eagerVideo \? .* : ''/);
   assert.match(media, /const preload = eagerVideo \? 'metadata' : 'none'/);
   assert.match(media, /data-video-src=.*data-poster=/);
@@ -141,8 +149,8 @@ test('archive cards, detail pages and video pages never expose global media with
   assert.match(legacy, /const video = entryVideoSrc\(origin, entry\)/);
   assert.doesNotMatch(legacy, /entryVideoAsset\(entry\?\.webmPreview/);
   const layout = section(archive, 'async function enrichArchiveEntryLayout(', 'async function enrichArchiveLayout(');
-  assert.match(layout, /const selected = selectedAnimationVideo\(entry\)/);
-  assert.match(layout, /selected\.posterMedium \|\| selected\.poster \|\| selected\.posterLow/);
+  assert.match(layout, /const mediaPair = selectedAnimationMediaPair\(entry\)/);
+  assert.match(layout, /mediaPair\?\.poster \|\| ''/);
   assert.doesNotMatch(layout, /entry\.webpPoster|entry\.thumbnailPoster|generatedThumbnailUrl|fallbackPosterAssetUrl/);
   const handler = archive.slice(archive.indexOf('export default async function handler'));
   assert.match(handler, /isVideoWatchPage && \(!entry \|\| !entryVideoSrc\(origin, entry\)\)/);
