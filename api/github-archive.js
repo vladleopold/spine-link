@@ -271,6 +271,14 @@ function githubHeaders(token) {
   return headers;
 }
 
+async function githubApiFetch(url, token) {
+  let response = await fetch(url, { headers: githubHeaders(token) });
+  if (!response.ok && token && (response.status === 401 || response.status === 403)) {
+    response = await fetch(url, { headers: githubHeaders('') });
+  }
+  return response;
+}
+
 // Постоянные сборки лежат в папках library_NN. Перечисляем их вместо того,
 // чтобы держать список в коде: ротация создаёт новую папку, и сайт начинает
 // видеть её сразу, без правки кода и деплоя.
@@ -283,11 +291,14 @@ async function libraryCollectionPaths(settings) {
   if (archiveCollectionCache.key === cacheKey && archiveCollectionCache.expiresAt > Date.now()) {
     return archiveCollectionCache.value;
   }
-  const paths = [cleanRepoPath(settings.basePath || defaultBasePath)];
+  // Keep the two existing public collections discoverable if GitHub's
+  // authenticated root listing is throttled. New collections are still
+  // discovered dynamically whenever the API responds.
+  const paths = [cleanRepoPath(settings.basePath || defaultBasePath), 'library_02', 'library_01'];
   try {
-    const response = await fetch(
+    const response = await githubApiFetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
-      { headers: githubHeaders(settings.token) },
+      settings.token,
     );
     if (!response.ok) return paths;
     const items = await response.json();
