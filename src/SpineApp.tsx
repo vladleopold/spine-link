@@ -37,6 +37,7 @@ import type { SpinePlayer as SpinePlayerInstance, SpinePlayerConfig } from "@eso
 import { startParticleField } from "./particles";
 import { normalizeSpineTextureFiles } from "./dds-import";
 import { supplyMissingAtlas, type InferredAtlasReceipt } from "./atlas-inference-import";
+import { matchAtlasPagesToTextures } from "../lib/spine-atlas-integrity.js";
 
 type AppProps = {
   initialFiles?: File[];
@@ -1372,11 +1373,7 @@ function canonicalAtlasPageName(pageName = "") {
 function imageMatchesAtlasPage(imageName = "", pageName = "") {
   const imageBase = basename(String(imageName || "").replace(/\\/g, "/").trim()).toLowerCase();
   const pageBase = canonicalAtlasPageName(pageName).toLowerCase();
-  if (!imageBase || !pageBase) return false;
-  if (imageBase === pageBase) return true;
-  if (pageBase.endsWith(imageBase)) return true;
-  if (imageBase.endsWith(pageBase)) return true;
-  return false;
+  return Boolean(imageBase && pageBase && imageBase === pageBase);
 }
 
 function atlasTextWithCanonicalPageNames(atlasText = "") {
@@ -1630,9 +1627,6 @@ function decodePackedSkeletonJson(text?: string) {
 function textDataUri(mime: string, text: string) {
   return `data:${mime};charset=utf-8,${text}`;
 }
-
-const transparentPngDataUri =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6Xn4cAAAAASUVORK5CYII=";
 
 function textFromDataUri(dataUri = "") {
   const commaIndex = dataUri.indexOf(",");
@@ -2513,6 +2507,14 @@ if (extensionOf(file.name) === "json" && text) {
       }
 
       const atlasPages = extractAtlasPages(atlas.text);
+      const textureMatches = matchAtlasPagesToTextures(
+        atlasPages,
+        images,
+        (imageAsset, pageName) => imageMatchesAtlasPage(imageAsset.file.name, pageName),
+      );
+      if (!textureMatches) {
+        throw new Error("SPINE_ATLAS_TEXTURE_SET_INCOMPLETE: every atlas page must match one unique source texture.");
+      }
       const premultipliedAlpha = hasPremultipliedAlpha(atlas.text);
       let usesRebuiltStraightAlphaTexture = false;
       const skeletonJson =
@@ -2543,14 +2545,9 @@ if (extensionOf(file.name) === "json" && text) {
           : undefined;
       const viewport = skeletonViewport?.width && skeletonViewport.height ? skeletonViewport : fallbackViewportFromAtlas(atlas.text);
 
-      for (const pageName of atlasPages) {
+      for (const [pageIndex, pageName] of atlasPages.entries()) {
         const canonicalPageName = canonicalAtlasPageName(pageName);
-        const pageBase = canonicalPageName.toLowerCase();
-        const matchedImage =
-          images.find((imageAsset) => imageMatchesAtlasPage(imageAsset.file.name, pageName)) ??
-          (images.length === 1 ? images[0] : undefined);
-
-        if (matchedImage) {
+        const matchedImage = textureMatches[pageIndex];
           if (!premultipliedAlpha && matchedImage.hasBlackMatte) usesRebuiltStraightAlphaTexture = true;
           const imageDataUri = premultipliedAlpha
             ? await transparentizeAtlasEffectRegions(matchedImage.dataUri, atlas.text, pageName)
@@ -2559,10 +2556,6 @@ if (extensionOf(file.name) === "json" && text) {
           rawDataURIs[basename(matchedImage.file.name)] = imageDataUri;
           rawDataURIs[canonicalPageName] = imageDataUri;
           rawDataURIs[pageName] = imageDataUri;
-        } else {
-          rawDataURIs[canonicalPageName] = transparentPngDataUri;
-          rawDataURIs[pageName] = transparentPngDataUri;
-        }
       }
 
       const atlasTextForPreview = atlasTextWithCanonicalPageNames(
