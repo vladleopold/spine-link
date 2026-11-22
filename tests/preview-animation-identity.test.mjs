@@ -94,7 +94,8 @@ test('viewport healing measures only the selected animation', () => {
   assert.match(refit, /const active = typeof activeAnimation\.name === 'string' \? activeAnimation\.name : ''/);
   assert.match(refit, /if \(!active \|\| !names\.includes\(active\)\) return false/);
   assert.doesNotMatch(refit, /names\[0\]/);
-  assert.match(measured, /findAnimation\(activeAnimation\.name\)/);
+  assert.match(measured, /findAnimation\(animationName\)/);
+  assert.match(measured, /if \(!animationName\) return null/);
   assert.doesNotMatch(measured, /animations\[0\]/);
 });
 
