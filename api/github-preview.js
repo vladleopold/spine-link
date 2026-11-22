@@ -1528,12 +1528,12 @@ const pinchDistance = { value: null };
               setPlayerStylesheet(base + "spine-player.css");
               await loadScriptOnce(base + "iife/spine-player.js");
             } else if (runtime === "3.8") {
-              // The legacy 3.8 Web Player is hosted by Esoteric Software, not
-              // shipped in this repository. Loading the old /vendor-* paths
-              // returned 404 and blocked every 3.8 preview.
-              const base = "https://esotericsoftware.com/files/spine-player/3.8/";
-              setPlayerStylesheet(base + "spine-player.css");
-              await loadScriptOnce(base + "spine-player.js");
+              // The official 3.8 endpoint is no longer reliably accessible
+              // (403 from the production client network). Serve the bundled
+              // Spine 3.8 runtime from this origin instead.
+              const base = "/vendor-spine-player-3.8";
+              setPlayerStylesheet(base + ".css");
+              await loadScriptOnce(base + ".js");
             } else if (runtime) {
               setPlayerStylesheet("/vendor-spine-player-" + runtime + ".css");
               await loadScriptOnce("/vendor-spine-player-" + runtime + ".js");
