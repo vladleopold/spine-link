@@ -237,7 +237,7 @@ function stripPmaMetadataForSpine38(buffer) {
   // Keep the premultipliedAlpha setting on the player config; remove only this
   // unsupported atlas metadata line from the response sent to the 3.8 runtime.
   const text = buffer.toString('utf8');
-  const normalized = text.replace(/^[ \\t]*pma[ \\t]*:[ \\t]*(?:true|false)[ \\t]*(?:\\r?\\n|$)/im, '');
+  const normalized = text.replace(/^[ \t]*pma[ \t]*:[ \t]*(?:true|false)[ \t]*(?:\r?\n|$)/im, '');
   return normalized === text ? buffer : Buffer.from(normalized, 'utf8');
 }
 
