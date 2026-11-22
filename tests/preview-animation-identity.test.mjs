@@ -126,3 +126,12 @@ test('indexed animation names remain byte-for-byte exact in URLs, media lookup a
   assert.match(selected, /previews\[name\]/);
   assert.doesNotMatch(selected, /String\(entry\?\.defaultAnimation \|\| ''\)\.trim\(\)/);
 });
+
+test('binary skeletons use the indexed animation list when server-side JSON parsing is unavailable', () => {
+  const dynamic = section(preview, 'const runtimeAnimationNames = animationNamesFromJson(skeletonJson);', 'const skinNames = skinNamesFromSkeletonJson(skeletonJson);');
+  assert.match(dynamic, /Array\.isArray\(entry\?\.animations\)/);
+  assert.match(dynamic, /skeleton\.name\.toLowerCase\(\)\.endsWith\('\.skel'\)/);
+  assert.match(dynamic, /runtimeAnimationNames\.length\s*\?\s*runtimeAnimationNames/);
+  assert.match(dynamic, /indexedAnimationNames/);
+  assert.match(dynamic, /const defaultAnimation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+});
