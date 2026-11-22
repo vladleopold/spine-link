@@ -713,7 +713,69 @@ async function githubList(settings, path) {
   return Array.isArray(data) ? data : [];
 }
 
-async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3) {
+async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3, indexedEntry = null) {
+  // The collection index already records every file belonging to this work.
+  // Prefer that manifest when GitHub's directory Contents API is throttled;
+  // public raw-file reads can still load the actual skeleton, atlas and images.
+  const indexedFiles = Array.isArray(indexedEntry?.files)
+    ? indexedEntry.files.map(cleanRepoPath).filter(Boolean)
+    : [];
+  if (indexedFiles.length) {
+    const uploadPrefix = `${cleanRepoPath(uploadPath)}/`;
+    const normalizedFiles = indexedFiles.map((filePath) =>
+      filePath.startsWith(uploadPrefix) ? filePath.slice(uploadPrefix.length) : filePath
+    ).filter(Boolean);
+    const groups = new Map();
+    const fileVersion = String(indexedEntry?.uploadedAt || indexedEntry?.updatedAt || '');
+    for (const filePath of normalizedFiles) {
+      const slash = filePath.lastIndexOf('/');
+      const parent = slash >= 0 ? filePath.slice(0, slash) : '';
+      const name = slash >= 0 ? filePath.slice(slash + 1) : filePath;
+      if (!name) continue;
+      const items = groups.get(parent) || [];
+      items.push({
+        type: 'file',
+        name,
+        path: joinRepoPath(uploadPath, filePath),
+        sha: fileVersion,
+      });
+      groups.set(parent, items);
+    }
+
+    const indexedDirectories = [];
+    for (const [relativeDir, directItems] of groups) {
+      const hasSkeleton = directItems.some((item) => isSkeleton(item.name));
+      const hasAtlas = directItems.some((item) => isAtlas(item.name));
+      if (!hasSkeleton || !hasAtlas) continue;
+
+      // Texture pages may live in an images/ subfolder while the skeleton and
+      // atlas stay at the work root. Include descendant images using paths
+      // relative to the skeleton/atlas directory so atlas page names still match.
+      const prefix = relativeDir ? `${relativeDir}/` : '';
+      const descendantTextures = normalizedFiles
+        .filter((filePath) => {
+          const slash = filePath.lastIndexOf('/');
+          const parent = slash >= 0 ? filePath.slice(0, slash) : '';
+          return parent !== relativeDir && parent.startsWith(prefix) && isImage(filePath);
+        })
+        .map((filePath) => ({
+          type: 'file',
+          name: filePath.slice(prefix.length),
+          path: joinRepoPath(uploadPath, filePath),
+          sha: fileVersion,
+        }));
+      const items = [...directItems, ...descendantTextures];
+      if (!items.some((item) => isImage(item.name))) continue;
+      indexedDirectories.push({
+        name: relativeDir.split('/').filter(Boolean).pop() || cleanRepoPath(uploadPath).split('/').pop() || uploadPath,
+        path: joinRepoPath(uploadPath, relativeDir),
+        items,
+      });
+    }
+    if (indexedDirectories.length) return indexedDirectories;
+  }
+
+  // Older records without a file manifest retain the directory-listing path.
   const found = [];
   const seen = new Set();
   async function visit(path, depth) {
@@ -725,7 +787,7 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3) {
     const hasAtlas = items.some((item) => item.type === 'file' && isAtlas(item.name));
     const hasTexture = items.some((item) => item.type === 'file' && isImage(item.name));
     if (hasSkeleton && hasAtlas && hasTexture) {
-      found.push({ name: cleanPath.split('/').pop() || cleanPath, path: cleanPath });
+      found.push({ name: cleanPath.split('/').pop() || cleanPath, path: cleanPath, items });
       return;
     }
     const directories = items.filter((item) => item.type === 'dir');
@@ -2659,7 +2721,6 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
 }
 
 async function createDynamicPreview(settings, uploadPath, origin, knownEntryRecord = undefined) {
-  const setDirectories = await findSpineSetDirectories(settings, uploadPath);
   const sets = [];
   let note = '';
   let ownerProfile = null;
@@ -2684,8 +2745,9 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     entries = entryRecord.entries;
   }
 
+  const setDirectories = await findSpineSetDirectories(settings, uploadPath, 3, entry);
   for (const directory of setDirectories) {
-    const items = await githubList(settings, directory.path);
+    const items = Array.isArray(directory.items) ? directory.items : await githubList(settings, directory.path);
     const skeleton = selectSpineRuntimeSkeleton(items.filter(item => item.type === 'file'),
       items.find(item => item.type === 'file' && isAtlas(item.name))?.name);
     const atlas = items.find((item) => item.type === 'file' && isAtlas(item.name));
