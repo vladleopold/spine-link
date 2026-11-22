@@ -432,7 +432,7 @@ test('live archive acceptance requires a real exact-animation WebM and playback 
 test('archive detail, video and home feeds use one exact same-work WebM/WebP quality pair',async()=>{
   const asset=(id,name)=>'https://spine-link.vercel.app/assets/library_02/'+id+'/'+name;
   const makeEntry=(id,previews,status='ready')=>({
-    ...entries[0],id,previewPath:'library_02/'+id,
+    ...entries[0],id,skeleton:id+'.skel',previewPath:'library_02/'+id,
     defaultAnimation:'walk',webmStatus:status,previewStatus:status,
     previewDuration:2.5,previewFrameCount:60,previewWidth:960,previewHeight:720,
     webmPreview:asset(id,'preview.webm'),
@@ -451,8 +451,8 @@ test('archive detail, video and home feeds use one exact same-work WebM/WebP qua
     webmPreviewLow:asset('pair-medium','preview-low.webm'),
     webpPosterLow:asset('pair-medium','preview-low.webp'),
   });
-  // A wrong-work medium poster and a missing matching medium video must not
-  // be combined with the full video. The valid low pair is the next candidate.
+  // A wrong-work medium poster must invalidate that tier; the valid low pair
+  // is the next candidate and must not be combined with the full video.
   const low=makeEntry('pair-low',{
     webmPreview:asset('pair-low','preview.webm'),
     webpPoster:asset('pair-low','preview.webp'),
