@@ -322,35 +322,35 @@ test('production deploys are queued instead of cancelled by later workflow_run c
 test('live archive browser proof fails closed when upstream skipped the actual Vercel deploy',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml',import.meta.url),'utf8');
   const gate=workflow.slice(workflow.indexOf('id: inspect'),workflow.indexOf('chromium:'));
-  assert.match(gate,/select\\(\\.name == "Deploy to Vercel" and \\.conclusion == "success"\\)/);
-  assert.match(gate,/if \\[ "\\$deployed" != "true" \\]; then/);
-  assert.match(gate,/PRODUCTION_BROWSER_PROOF_BLOCKED_NO_REAL_DEPLOYMENT/);
-  assert.match(gate,/exit 1/,'a skipped deploy must fail the production-proof workflow');
+  assert.ok(gate.includes('select(.name == "Deploy to Vercel" and .conclusion == "success")'));
+  assert.ok(gate.includes('if [ "$deployed" != "true" ]; then'));
+  assert.ok(gate.includes('PRODUCTION_BROWSER_PROOF_BLOCKED_NO_REAL_DEPLOYMENT'));
+  assert.ok(gate.includes('exit 1'),'a skipped deploy must fail the production-proof workflow');
 });
 
 test('production Chromium smoke fails closed when upstream skipped the actual Vercel deploy',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml',import.meta.url),'utf8');
   const gate=workflow.slice(workflow.indexOf('id: inspect'),workflow.indexOf('chromium:'));
-  assert.match(gate,/select\\(\\.name == "Deploy to Vercel" and \\.conclusion == "success"\\)/);
-  assert.match(gate,/if \\[ "\\$deployed" != "true" \\]; then/);
-  assert.match(gate,/PRODUCTION_BROWSER_PROOF_BLOCKED_NO_REAL_DEPLOYMENT/);
-  assert.match(gate,/exit 1/,'a skipped deploy must fail the Chromium production smoke');
+  assert.ok(gate.includes('select(.name == "Deploy to Vercel" and .conclusion == "success")'));
+  assert.ok(gate.includes('if [ "$deployed" != "true" ]; then'));
+  assert.ok(gate.includes('PRODUCTION_BROWSER_PROOF_BLOCKED_NO_REAL_DEPLOYMENT'));
+  assert.ok(gate.includes('exit 1'),'a skipped deploy must fail the Chromium production smoke');
 });
 
 test('production upload E2E fails closed when Chromium verification was skipped',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/spine-link-upload-e2e.yml',import.meta.url),'utf8');
   const gate=workflow.slice(workflow.indexOf('id: inspect'),workflow.indexOf('live-upload:'));
-  assert.match(gate,/select\\(\\.name == "chromium" and \\.conclusion == "success"\\)/);
-  assert.match(gate,/if \\[ "\\$verified" != "true" \\]; then/);
-  assert.match(gate,/PRODUCTION_UPLOAD_E2E_BLOCKED_NO_CHROMIUM_VERIFICATION/);
-  assert.match(gate,/exit 1/,'a skipped Chromium job must fail the upload E2E');
+  assert.ok(gate.includes('select(.name == "chromium" and .conclusion == "success")'));
+  assert.ok(gate.includes('if [ "$verified" != "true" ]; then'));
+  assert.ok(gate.includes('PRODUCTION_UPLOAD_E2E_BLOCKED_NO_CHROMIUM_VERIFICATION'));
+  assert.ok(gate.includes('exit 1'),'a skipped Chromium job must fail the upload E2E');
 });
 
 test('production browser-gate workflow changes trigger their regression suite',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/archive-performance.yml',import.meta.url),'utf8');
-  assert.equal((workflow.match(/- \.github\\/workflows\\/spine-link-browser-smoke\\.yml/g)||[]).length,2,
+  assert.equal(workflow.split('- .github/workflows/spine-link-browser-smoke.yml').length-1,2,
     'browser smoke workflow changes must trigger archive regression on push and pull_request');
-  assert.equal((workflow.match(/- \.github\\/workflows\\/spine-link-upload-e2e\\.yml/g)||[]).length,2,
+  assert.equal(workflow.split('- .github/workflows/spine-link-upload-e2e.yml').length-1,2,
     'upload E2E workflow changes must trigger archive regression on push and pull_request');
 });
 
