@@ -311,6 +311,12 @@ test('production deploys are queued instead of cancelled by later workflow_run c
     'the deploy workflow needs permission to record its verified production status');
   assert.doesNotMatch(workflow,/last_success=.*status=success/,
     'a skipped workflow run must never be mistaken for a production deployment');
+  assert.ok(workflow.includes('actions/runs?head_sha=$deploy_sha&per_page=100'),
+    'release readiness must be checked against the exact source SHA');
+  assert.ok(workflow.includes('for required in "Spine-Link Agent API CI" "Spine archive WebP-first performance regression"'),
+    'a push affecting both release surfaces must wait for both CI workflows');
+  assert.ok(workflow.includes('completed/success|not-triggered'),
+    'only successful applicable workflows or path-filtered workflows may allow deployment');
 });
 
 test('preview sidebar keeps all supporting panels below the animation picker on desktop',()=>{
