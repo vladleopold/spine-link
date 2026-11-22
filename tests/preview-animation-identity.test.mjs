@@ -66,6 +66,16 @@ test('player startup never replaces the requested track with the first runtime t
   assert.doesNotMatch(startup, /(?:names|animations|filteredNames)\s*\[\s*0\s*\]/);
 });
 
+test('URL-selected animations are resolved across all skeleton sets before blocking', () => {
+  assert.match(preview, /const attemptedAnimationSets = new Set\(\)/);
+  assert.match(preview, /attemptedAnimationSets\.add\(animationSetKey\(activeSet\.value\)\)/);
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /const nextSet = sets\.find\(\(set\) => !attemptedAnimationSets\.has\(animationSetKey\(set\)\)\)/);
+  assert.match(startup, /activeSet\.value = nextSet/);
+  assert.match(startup, /createPlayer\(\)/);
+  assert.match(startup, /attemptedAnimationSets\.clear\(\)/);
+});
+
 test('player does not pass an empty or incomplete selectable-animation list to Spine Player', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.match(startup, /const playerSet = \{ \.\.\.activeSet\.value \}/);
