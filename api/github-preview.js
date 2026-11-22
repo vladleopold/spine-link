@@ -2098,7 +2098,7 @@ const pinchDistance = { value: null };
         video.style.display = "none";
       }
 
-      function markPreviewBlocked(code) {
+      function markPreviewBlocked(code, detail = "") {
         clearPreviewVideoFallback();
         try { player?.dispose?.(); } catch {}
         player = null;
@@ -2106,6 +2106,9 @@ const pinchDistance = { value: null };
         if (!box) return;
         box.dataset.previewStatus = "blocked";
         box.dataset.previewError = code;
+        const detailText = String(detail || "").replace(/<[^>]*>/g, " ").trim();
+        if (detailText) box.dataset.previewErrorDetail = detailText.slice(0, 500);
+        const missingAtlasRegion = detailText.match(/Region not found in atlas:\s*([^\s]+)/i)?.[1] || "";
         const message = document.createElement("div");
         message.dataset.previewBlocked = code;
         message.style.cssText = "display:grid;place-items:center;height:100%;padding:24px;color:#ffb088;font-weight:900;text-align:center;";
@@ -2117,7 +2120,9 @@ const pinchDistance = { value: null };
               ? "This Spine 3.7 export is binary (.skel), but the bundled Spine 3.7 Web Player accepts JSON skeletons only. Re-export the original project as JSON."
               : code === "UNSUPPORTED_SPINE_VERSION"
                 ? "This export uses Spine " + String(activeSet.value?.skeletonVersion || "unknown") + ". Spine-Link supports Web Player exports from Spine 3.7 through 4.3. Re-export the original .spine project with a supported editor version."
-                : "Spine preview is blocked.";
+                : code === "SPINE_PLAYER_ERROR" && missingAtlasRegion
+                  ? "The skeleton references atlas region " + missingAtlasRegion + ", but that region is missing from the selected atlas. Re-export the skeleton and atlas together."
+                  : "Spine preview is blocked.";
         box.replaceChildren(message);
       }
 
@@ -2264,7 +2269,7 @@ const pinchDistance = { value: null };
                 window.setTimeout(applyStageAnchor, 900);
               });
             },
-            error: () => {
+            error: (_player, reason) => {
               if (showPreviewVideoFallback()) {
                 const video = document.getElementById("preview-loading-video");
                 if (video) {
@@ -2273,7 +2278,7 @@ const pinchDistance = { value: null };
                 }
                 return;
               }
-              markPreviewBlocked("SPINE_PLAYER_ERROR");
+              markPreviewBlocked("SPINE_PLAYER_ERROR", reason);
             },
           });
         } catch {
