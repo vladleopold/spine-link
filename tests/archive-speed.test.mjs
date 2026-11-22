@@ -326,6 +326,15 @@ test('live production proof fails closed when upstream skipped the actual Vercel
   assert.match(gate,/exit 1/,'a skipped deploy must fail the production-proof workflow instead of making it green');
 });
 
+test('production upload E2E fails closed when Chromium verification was skipped',()=>{
+  const workflow=fs.readFileSync(new URL('../.github/workflows/spine-link-upload-e2e.yml',import.meta.url),'utf8');
+  const gate=workflow.slice(workflow.indexOf('id: inspect'),workflow.indexOf('live-upload:'));
+  assert.match(gate,/select\(\.name == "chromium" and \.conclusion == "success"\)/);
+  assert.match(gate,/if \[ "\$verified" != "true" \]; then/);
+  assert.match(gate,/PRODUCTION_UPLOAD_E2E_BLOCKED_NO_CHROMIUM_VERIFICATION/);
+  assert.match(gate,/exit 1/,'a skipped Chromium job must not make the live-upload workflow green');
+});
+
 test('preview sidebar keeps all supporting panels below the animation picker on desktop',()=>{
   const preview=fs.readFileSync(new URL('../api/github-preview.js',import.meta.url),'utf8');
   assert.equal((preview.match(/@media\s*\(max-width:\s*1024px\)/g)||[]).length,0,
