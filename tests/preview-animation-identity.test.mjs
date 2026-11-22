@@ -87,7 +87,7 @@ test('player does not pass an empty or incomplete selectable-animation list to S
   assert.match(startup, /delete playerSet\.animation/);
   assert.match(startup, /delete playerSet\.animations/);
   assert.match(startup, /\.\.\.playerSet,/);
-  assert.match(startup, /names\.includes\(requestedAnimation\)/,
+  assert.match(startup, /names\.includes\(selectedAnimation\)/,
     'the loaded skeleton remains the source of truth for whether the track exists');
 });
 
@@ -244,7 +244,7 @@ test('legacy Spine Player wrappers fall back to indexed animation names when ske
   assert.match(startup, /const runtimeNames = player\?\.skeleton\?\.data\?\.animations/);
   assert.match(startup, /const indexedNames = Array\.isArray\(activeSet\.value\?\.animations\)/);
   assert.match(startup, /const names = runtimeNames\.length \? runtimeNames : indexedNames/);
-  assert.match(startup, /if \(requestedAnimation && names\.length && !names\.includes\(requestedAnimation\)\)/);
+  assert.match(startup, /if \(selectedAnimation && names\.length && !names\.includes\(selectedAnimation\)\)/);
 });
 
 test('missing default animation uses an explicit safe viewport for Spine 4.1 setup pose', () => {
