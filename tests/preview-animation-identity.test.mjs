@@ -169,7 +169,9 @@ test('missing index default loads the verified skeleton and exposes its runtime 
   assert.match(startup, /requestedAnimation \? \{ animation: requestedAnimation \} : \{\}/);
   assert.match(startup, /if \(requestedAnimation\) \{[\s\S]*playActiveAnimationFromStart\(\)/);
   const playback = section(preview, 'function playActiveAnimationFromStart()', 'function togglePlayback()');
-  assert.match(playback, /if \(!activeAnimation\.name\) return false/);\n  assert.match(playback, /if \(!playerReady\) return true/);\n  assert.match(playback, /if \(!player\) return false/);
+  assert.match(playback, /if \(!activeAnimation\.name\) return false/);
+  assert.match(playback, /if \(!playerReady\) return true/);
+  assert.match(playback, /if \(!player\) return false/);
 });
 
 test('stale indexed default is recoverable but an explicit missing URL selection stays blocked', () => {
