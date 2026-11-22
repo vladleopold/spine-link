@@ -1463,6 +1463,10 @@ const pinchDistance = { value: null };
        const swipeStart = { value: null };
        const touchPanPosition = { value: null };
       let player;
+      // A URL may select an animation whose owning skeleton is not the first
+      // set when the library index is stale or incomplete. Probe each set once.
+      const attemptedAnimationSets = new Set();
+      const animationSetKey = (set) => String(set?.label || set?.skeleton || "");
       const runtimeLoaders = new Map();
       function legacyRuntimeForSet(set) {
         const version = String(set?.skeletonVersion || "");
@@ -2032,6 +2036,7 @@ const pinchDistance = { value: null };
           return;
         }
         const requestedAnimation = activeAnimation.name;
+        attemptedAnimationSets.add(animationSetKey(activeSet.value));
         // The index can lag behind the actual skeleton (especially for binary
         // .skel uploads). An explicit empty selectable list makes Spine Player
         // reject even a valid URL-selected animation before its success callback.
@@ -2067,10 +2072,24 @@ const pinchDistance = { value: null };
               const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? [];
               animationNames.value = names.filter(name => !name.startsWith("Backup/") || name === requestedAnimation);
               if (!names.includes(requestedAnimation)) {
+                // The selected clip can belong to another skeleton set in this
+                // work. Try the remaining sets before reporting it unavailable.
+                const nextSet = sets.find((set) => !attemptedAnimationSets.has(animationSetKey(set)));
+                if (nextSet) {
+                  try { loadedPlayer?.dispose?.(); } catch {}
+                  player = null;
+                  activeSet.value = nextSet;
+                  animationNames.value = nextSet.animations || [];
+                  syncSetInfo();
+                  renderAnimationList();
+                  createPlayer();
+                  return;
+                }
                 renderAnimationList();
                 markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE");
                 return;
               }
+              attemptedAnimationSets.clear();
               renderAnimationList();
               syncUrl();
               disableMix();
@@ -2116,6 +2135,7 @@ const pinchDistance = { value: null };
           button.className = animationName === activeAnimation.name ? "active" : "";
           button.onclick = () => {
             activeAnimation.name = animationName;
+            attemptedAnimationSets.clear();
             syncUrl();
             playActiveAnimationFromStart();
             renderAnimationList();
@@ -2221,7 +2241,7 @@ playerElement.addEventListener("touchstart", (event) => {
        }, true);
        window.addEventListener("mousemove", (event) => { if (!panPosition.value) return; event.preventDefault(); event.stopImmediatePropagation(); const deltaX = event.clientX - panPosition.value.x, deltaY = event.clientY - panPosition.value.y; panPosition.value = { x: event.clientX, y: event.clientY }; panByPixels(deltaX, deltaY); }, { passive: false, capture: true });
        window.addEventListener("mouseup", (event) => { if (event.button !== 0) return; event.preventDefault(); event.stopImmediatePropagation(); panPosition.value = null; }, true);
-      setSelect.onchange = () => { activeSet.value = sets.find((set) => set.label === setSelect.value) || null; activeAnimation.name = activeSet.value?.animation || ""; animationNames.value = activeSet.value?.animations || []; syncSetInfo(); renderAnimationList(); syncUrl(); createPlayer(); };
+      setSelect.onchange = () => { attemptedAnimationSets.clear(); activeSet.value = sets.find((set) => set.label === setSelect.value) || null; activeAnimation.name = activeSet.value?.animation || ""; animationNames.value = activeSet.value?.animations || []; syncSetInfo(); renderAnimationList(); syncUrl(); createPlayer(); };
       window.addEventListener("popstate", applySelectionFromUrl);
       // Compact download picker: Format -> Size -> Files, each step sliding
       // the track sideways. The user picks a format and a size, then either
