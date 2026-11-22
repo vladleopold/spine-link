@@ -291,13 +291,16 @@ async function libraryCollectionPaths(settings) {
   if (archiveCollectionCache.key === cacheKey && archiveCollectionCache.expiresAt > Date.now()) {
     return archiveCollectionCache.value;
   }
-  const paths = [cleanRepoPath(settings.basePath || defaultBasePath)];
+  // Always include the established public collections. GitHub root listings can
+  // succeed while being truncated by pagination, which would otherwise hide
+  // library_01/library_02 and make existing user works disappear from the archive.
+  const paths = [cleanRepoPath(settings.basePath || defaultBasePath), 'library_02', 'library_01'];
   try {
     const response = await githubApiFetch(
-      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
+      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}&per_page=100`,
       settings.token,
     );
-    if (!response.ok) return [...paths, 'library_02', 'library_01'];
+    if (!response.ok) return paths;
     const items = await response.json();
     if (!Array.isArray(items)) return paths;
     const folders = items
