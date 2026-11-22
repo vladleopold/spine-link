@@ -326,6 +326,14 @@ test('live production proof fails closed when upstream skipped the actual Vercel
   assert.match(gate,/exit 1/,'a skipped deploy must fail the production-proof workflow instead of making it green');
 });
 
+test('production browser-gate workflow changes trigger their regression suite',()=>{
+  const workflow=fs.readFileSync(new URL('../.github/workflows/archive-performance.yml',import.meta.url),'utf8');
+  assert.equal((workflow.match(/- \.github\/workflows\/spine-link-browser-smoke\.yml/g)||[]).length,2,
+    'browser smoke workflow changes must trigger archive regression on push and pull_request');
+  assert.equal((workflow.match(/- \.github\/workflows\/spine-link-upload-e2e\.yml/g)||[]).length,2,
+    'upload E2E workflow changes must trigger archive regression on push and pull_request');
+});
+
 test('production upload E2E fails closed when Chromium verification was skipped',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/spine-link-upload-e2e.yml',import.meta.url),'utf8');
   const gate=workflow.slice(workflow.indexOf('id: inspect'),workflow.indexOf('live-upload:'));
