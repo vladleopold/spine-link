@@ -60,7 +60,7 @@ test('player startup never replaces the requested track with the first runtime t
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.ok(startup.includes('const requestedAnimation = activeAnimation.name'));
   assert.ok(startup.includes('...(requestedAnimation ? { animation: requestedAnimation } : {})'));
-  const missingTrackGuard = startup.indexOf('if (requestedAnimation && !names.includes(requestedAnimation))');
+  const missingTrackGuard = startup.indexOf('if (requestedAnimation && names.length && !names.includes(requestedAnimation))');
   const blocked = startup.indexOf('markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE")', missingTrackGuard);
   const blockedReturn = startup.indexOf('return;', blocked);
   const playback = startup.indexOf('playActiveAnimationFromStart()');
@@ -174,7 +174,7 @@ test('missing index default loads the verified skeleton and exposes its runtime 
 
 test('stale indexed default is recoverable but an explicit missing URL selection stays blocked', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
-  const mismatch = startup.indexOf('if (requestedAnimation && !names.includes(requestedAnimation))');
+  const mismatch = startup.indexOf('if (requestedAnimation && names.length && !names.includes(requestedAnimation))');
   const recovery = startup.indexOf('if (!queryValue("animation"))', mismatch);
   const blocked = startup.indexOf('markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE")', mismatch);
   assert.ok(mismatch >= 0 && recovery > mismatch && blocked > recovery);
@@ -182,11 +182,12 @@ test('stale indexed default is recoverable but an explicit missing URL selection
   assert.match(startup.slice(recovery, blocked), /renderAnimationList\(\)/);
 });
 
-test('Spine Player 3.8 void setAnimation return is handled via AnimationState current track', () => {
+test('Spine Player 3.8 void setAnimation return is accepted without a public TrackEntry', () => {
   const playback = section(preview, 'function playAnimationEntry(name)', 'function playActiveAnimationFromStart()');
   assert.match(playback, /setResult = player\.setAnimation\(name, loopEnabled\.value\)/);
   assert.match(playback, /const entry = setResult \|\| player\.animationState\?\.getCurrent\?\.\(0\)/);
-  assert.match(playback, /if \(!entry\)/);
+  assert.match(playback, /if \(entry\) \{/);
+  assert.doesNotMatch(playback, /if \(!entry\)/);
   assert.match(playback, /entry\.listener =/);
 });
 
@@ -219,6 +220,14 @@ test('binary Spine skeletons mislabeled with a .json extension use the binary ru
   assert.match(loader, /const binaryVersion = spineBinaryVersionFromBase64\(await githubFileHead\(settings, skeleton\.path, 256\)\)/);
   assert.match(loader, /if \(binaryVersion\) \{\s*skeletonVersion = binaryVersion;\s*skeletonIsBinary = true;/);
   assert.match(preview, /skeletonIsBinary \? \{ skelUrl: skeletonUrl \} : \{ jsonUrl: skeletonUrl \}/);
+});
+
+test('legacy Spine Player wrappers fall back to indexed animation names when skeleton.data is not public', () => {
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /const runtimeNames = player\?\.skeleton\?\.data\?\.animations/);
+  assert.match(startup, /const indexedNames = Array\.isArray\(activeSet\.value\?\.animations\)/);
+  assert.match(startup, /const names = runtimeNames\.length \? runtimeNames : indexedNames/);
+  assert.match(startup, /if \(requestedAnimation && names\.length && !names\.includes\(requestedAnimation\)\)/);
 });
 
 test('missing default animation uses an explicit safe viewport for Spine 4.1 setup pose', () => {
