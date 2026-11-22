@@ -166,3 +166,13 @@ test('missing index default loads the verified skeleton and exposes its runtime 
   const playback = section(preview, 'function playActiveAnimationFromStart()', 'function togglePlayback()');
   assert.match(playback, /if \(!player \|\| !activeAnimation\.name\) return false/);
 });
+
+test('stale indexed default is recoverable but an explicit missing URL selection stays blocked', () => {
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  const mismatch = startup.indexOf('if (requestedAnimation && !names.includes(requestedAnimation))');
+  const recovery = startup.indexOf('if (!queryValue("animation"))', mismatch);
+  const blocked = startup.indexOf('markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE")', mismatch);
+  assert.ok(mismatch >= 0 && recovery > mismatch && blocked > recovery);
+  assert.match(startup.slice(recovery, blocked), /activeAnimation\.name = ""/);
+  assert.match(startup.slice(recovery, blocked), /renderAnimationList\(\)/);
+});
