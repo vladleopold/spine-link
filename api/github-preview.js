@@ -650,16 +650,16 @@ async function githubJson(settings, path) {
 // GitHub limit. They are listed at runtime so a folder added by a rotation shows up
 // without a code change or a deploy.
 async function libraryCollectionPaths(settings) {
-  const paths = new Set([
-    cleanRepoPath(settings.basePath || defaultBasePath),
-    'library_02',
-    'library_01',
-  ]);
+  const paths = new Set([cleanRepoPath(settings.basePath || defaultBasePath)]);
   try {
     const response = await githubApiFetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}&per_page=100`,
       settings.token,
     );
+    if (!response.ok) {
+      paths.add('library_02');
+      paths.add('library_01');
+    }
     if (response.ok) {
       const items = await response.json();
       if (Array.isArray(items)) {
