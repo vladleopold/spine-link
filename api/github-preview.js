@@ -1605,6 +1605,12 @@ const pinchDistance = { value: null };
               const base = "https://unpkg.com/@esotericsoftware/spine-player@" + runtime + ".*/dist/";
               setPlayerStylesheet(base + "spine-player.css");
               await loadScriptOnce(base + "iife/spine-player.js");
+            } else if (runtime === "3.7") {
+              // Use the official 3.7 player build pinned to an immutable commit;
+              // the old /vendor-spine-player-3.7.* files are not in this repo.
+              const base = "https://cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@be656896bdbc55ed0c925ec74995bdf7d3c38fed/spine-ts/";
+              setPlayerStylesheet(base + "player/css/spine-player.css");
+              await loadScriptOnce(base + "build/spine-player.js");
             } else if (runtime === "3.8") {
               // The legacy 3.8 endpoint was retired. Load the official 3.8
               // player build from a commit-pinned CDN source instead.
@@ -2102,7 +2108,9 @@ const pinchDistance = { value: null };
           ? "Selected Spine animation is unavailable. Preview blocked."
           : code === "UNSUPPORTED_SPINE_3_8_75"
             ? "This export uses Spine 3.8.75, which the official runtime rejects because of a known export bug. Re-export the original Spine project with Spine 3.8.99."
-            : "Spine preview is blocked.";
+            : code === "UNSUPPORTED_SPINE_VERSION"
+              ? "This export uses Spine " + String(activeSet.value?.skeletonVersion || "unknown") + ". Spine-Link supports Web Player exports from Spine 3.7 through 4.3. Re-export the original .spine project with a supported editor version."
+              : "Spine preview is blocked.";
         box.replaceChildren(message);
       }
 
@@ -2111,11 +2119,18 @@ const pinchDistance = { value: null };
           markPreviewBlocked("NO_SKELETON_SET");
           return;
         }
+        const skeletonVersion = String(activeSet.value.skeletonVersion || "");
         // Spine 3.8.75 exports contain a known upstream IK/export bug and are
-        // explicitly rejected by the official 3.8 runtime. Do not repeatedly
-        // instantiate a player that cannot parse this source format.
-        if (String(activeSet.value.skeletonVersion || "") === "3.8.75") {
+        // explicitly rejected by the official 3.8 runtime.
+        if (skeletonVersion === "3.8.75") {
           markPreviewBlocked("UNSUPPORTED_SPINE_3_8_75");
+          return;
+        }
+        // Do not silently feed 2.x / 3.0-3.6 / future unknown exports to 4.3:
+        // those formats require their matching historical runtime and otherwise
+        // fail with misleading parser errors such as "Slot name must not be null".
+        if (skeletonVersion && !/^(?:3\.(?:7|8)|4\.[0-3])\./.test(skeletonVersion)) {
+          markPreviewBlocked("UNSUPPORTED_SPINE_VERSION");
           return;
         }
         resetHealAttempts();
