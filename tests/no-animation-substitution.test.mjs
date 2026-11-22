@@ -10,7 +10,7 @@ import { choosePreviewAnimation } from '../scripts/preview-animation-choice.mjs'
 import { chooseSourceSet } from '../scripts/lib/source-set-choice.mjs';
 import { chooseSourceSkeleton } from '../scripts/source-skeleton-choice.mjs';
 import { chooseAtlasForSkeleton } from '../scripts/atlas-pages.mjs';
-import { safeAnimations, hasExplicitAnimationSelection, previewDispatchState } from '../lib/agent-animation.js';
+import { safeAnimations, hasExplicitAnimationSelection, previewDispatchState, shouldDispatchEntryPreview } from '../lib/agent-animation.js';
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -154,6 +154,48 @@ test('upload preview state blocks missing or unavailable exact selections before
   assert.equal(convertedProject.webmStatus, 'pending');
   assert.equal(convertedProject.previewStatus, 'pending');
   assert.equal(convertedProject.dispatchStatus, 'pending');
+});
+
+test('preview dispatch deduplicates the same in-flight source and exact animation', () => {
+  const pending = {
+    id: 'upload-1', uploadedAt: '2026-11-22T00:00:00.000Z',
+    defaultAnimation: 'Walk', sourceKind: 'runtime', conversionStatus: 'ready',
+    sourceProof: { proofHash: 'a'.repeat(64) }, files: ['rig.skel', 'rig.atlas', 'page.png'],
+    webmStatus: 'pending', previewStatus: 'pending', dispatchStatus: 'pending',
+  };
+  assert.equal(shouldDispatchEntryPreview(pending, pending), false,
+    'the same pending upload must not enqueue a duplicate workflow');
+  assert.equal(shouldDispatchEntryPreview({ ...pending, uploadedAt: '2026-11-22T00:01:00.000Z' }, pending), true,
+    'a new upload attempt must be dispatched');
+  assert.equal(shouldDispatchEntryPreview({ ...pending, defaultAnimation: 'Run' }, pending), true,
+    'a changed exact animation selection must be dispatched');
+  assert.equal(shouldDispatchEntryPreview({ ...pending, sourceProof: { proofHash: 'b'.repeat(64) } }, pending), true,
+    'changed source bytes must be dispatched even when the upload id is reused');
+  assert.equal(shouldDispatchEntryPreview({ ...pending, webmStatus: 'ready', previewStatus: 'ready' }, pending), false);
+  assert.equal(shouldDispatchEntryPreview(pending, { ...pending, dispatchStatus: 'failed' }), true,
+    'a recorded dispatch failure remains retryable');
+
+  const project = {
+    ...pending, sourceKind: 'spine-project', conversionStatus: 'pending',
+    webmStatus: 'waiting-for-editor', dispatchStatus: 'project-export-pending',
+  };
+  assert.equal(shouldDispatchEntryPreview(project, project), false,
+    'the same pending editor conversion must not be dispatched twice');
+  assert.equal(shouldDispatchEntryPreview({ ...project, conversionStatus: 'ready', webmStatus: 'pending' }, project), true,
+    'a completed editor conversion must dispatch the exact runtime preview');
+});
+
+test('layout-only updates await and deduplicate preview dispatch instead of fire-and-forget', () => {
+  const upload = read('../api/github-upload.js');
+  const start = upload.indexOf("if (action === 'update-layout')");
+  const end = upload.indexOf("if (action === 'update-entry-visibility')", start);
+  assert.ok(start >= 0 && end > start, 'layout update route must remain identifiable');
+  const route = upload.slice(start, end);
+  assert.match(route, /shouldDispatchEntryPreview\(nextEntry, currentEntries\[entryIndex\]\)/);
+  assert.match(route, /await dispatchEntryPreview\(settings, nextEntry, origin\)/);
+  assert.doesNotMatch(route, /dispatchEntryPreview\([^;]+\.catch/);
+  assert.doesNotMatch(upload, /dispatchEntryPreview\([^;]+\.catch/,
+    'no preview workflow dispatch may be abandoned when a serverless response ends');
 });
 
 test('agent and upload APIs preserve the supplied name and do not dispatch without a selection', () => {

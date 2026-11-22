@@ -32,8 +32,13 @@ jobs:
           set -euo pipefail
           jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")"
           verified="$(printf '%s' "$jobs" | jq -r '[.jobs[] | select(.name == "chromium" and .conclusion == "success")] | length > 0')"
-          echo "verified=$verified" >> "$GITHUB_OUTPUT"
-          echo "REAL_CHROMIUM_VERIFICATION=$verified"
+          if [ "$verified" != "true" ]; then
+            echo "::error::PRODUCTION_UPLOAD_E2E_BLOCKED_NO_CHROMIUM_VERIFICATION"
+            echo "The upstream production browser workflow did not complete Chromium successfully; live upload must not be reported as passed."
+            exit 1
+          fi
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+          echo "REAL_CHROMIUM_VERIFICATION=true"
   live-upload:
     needs: release_gate
     if: ${{ always() && (github.event_name != 'workflow_run' || needs.release_gate.outputs.verified == 'true') }}

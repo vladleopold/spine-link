@@ -1,4 +1,4 @@
-import agentAnimationHandler, { hasExplicitAnimationSelection, previewDispatchState } from '../lib/agent-animation.js';
+import agentAnimationHandler, { hasExplicitAnimationSelection, previewDispatchState, shouldDispatchEntryPreview } from '../lib/agent-animation.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -1542,12 +1542,14 @@ export default async function handler(request, response) {
       }
       const indexPath = joinRepoPath(settings.basePath, 'index.json');
       let nextEntry = null;
+      let existingEntryForDispatch = null;
       let commit;
       for (let attempt = 0; attempt < 3; attempt++) {
         const index = await getGitHubContent(settings, indexPath);
         const currentEntries = index?.content && index.encoding === 'base64'
           ? JSON.parse(base64ToText(index.content)) : [];
         const existing = currentEntries.find(item => item.id === uploadId);
+        existingEntryForDispatch = existing || null;
         nextEntry = publicLibraryEntry(origin, {
           ...body?.entry,
           files: relativeFiles,
@@ -1582,7 +1584,8 @@ export default async function handler(request, response) {
       // Serverless invocations do not guarantee fire-and-forget network calls
       // survive the response. Await the GitHub dispatch and expose its actual
       // outcome rather than falsely telling the user preview generation began.
-      const dispatch = await dispatchEntryPreview(settings, nextEntry, origin);
+      const dispatch = shouldDispatchEntryPreview(nextEntry, existingEntryForDispatch)
+        ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
       if (dispatch?.status === 'failed') {
         console.error('[UPLOAD] Preview dispatch failed for committed upload', uploadId,
           String(dispatch.error || '').slice(0, 300));
@@ -1626,7 +1629,8 @@ export default async function handler(request, response) {
           if (attempt < 2 && [409, 422].includes(Number(error?.status))) continue;
           throw error;
         }
-        const dispatch = await dispatchEntryPreview(settings, nextEntry, origin);
+        const dispatch = shouldDispatchEntryPreview(nextEntry, existingEntry)
+          ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
         return response.status(200).json({ ok: true, indexed: nextEntries.length, dispatch });
       }
     }
@@ -1877,9 +1881,8 @@ export default async function handler(request, response) {
       const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
       const dataScience = await updateDataScienceCatalog(settings, body, nextEntry, commitPrefix, origin);
-      const isNewUpload = nextEntry.webmStatus === 'pending' ||
-        (nextEntry.sourceKind === 'spine-project' && nextEntry.conversionStatus === 'pending');
-      const dispatch = isNewUpload ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
+      const shouldDispatch = shouldDispatchEntryPreview(nextEntry, existingEntry);
+      const dispatch = shouldDispatch ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
       return response.status(200).json({ ok: true, indexed: nextEntries.length, dataScience, dispatch });
     }
 
@@ -2050,9 +2053,8 @@ export default async function handler(request, response) {
       ];
 
       if (finalize && nextEntry) {
-        const isNewUpload = nextEntry.webmStatus === 'pending' ||
-          (nextEntry.sourceKind === 'spine-project' && nextEntry.conversionStatus === 'pending');
-        dispatch = isNewUpload ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
+        const shouldDispatch = shouldDispatchEntryPreview(nextEntry, existingEntry);
+        dispatch = shouldDispatch ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
       }
 
       return response.status(200).json({
@@ -2112,8 +2114,9 @@ export default async function handler(request, response) {
       const nextEntries = [...currentEntries];
       nextEntries[entryIndex] = nextEntry;
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update preview layout`, currentIndex?.sha, origin);
-      if (nextEntry.webmStatus === 'pending') dispatchEntryPreview(settings, nextEntry, origin).catch(() => {});
-      return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry) });
+      const dispatch = shouldDispatchEntryPreview(nextEntry, currentEntries[entryIndex])
+        ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
+      return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry), dispatch });
     }
 
     if (action === 'update-entry-visibility') {
@@ -2450,8 +2453,7 @@ export default async function handler(request, response) {
 
     await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
     const dataScience = await updateDataScienceCatalog(settings, body, nextEntry, commitPrefix, origin);
-    const shouldDispatch = nextEntry.webmStatus === 'pending' ||
-      (nextEntry.sourceKind === 'spine-project' && nextEntry.conversionStatus === 'pending');
+    const shouldDispatch = shouldDispatchEntryPreview(nextEntry, existingEntry);
     const dispatch = shouldDispatch ? await dispatchEntryPreview(settings, nextEntry, origin) : null;
 
     return response.status(200).json({

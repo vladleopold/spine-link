@@ -29,6 +29,8 @@ on:
       - .github/workflows/archive-performance.yml
       - .github/workflows/vercel-deploy-and-alias.yml
       - .github/workflows/archive-live-speed.yml
+      - .github/workflows/spine-link-browser-smoke.yml
+      - .github/workflows/spine-link-upload-e2e.yml
   pull_request:
     paths:
       - api/github-archive.js
@@ -51,6 +53,8 @@ on:
       - .github/workflows/archive-performance.yml
       - .github/workflows/vercel-deploy-and-alias.yml
       - .github/workflows/archive-live-speed.yml
+      - .github/workflows/spine-link-browser-smoke.yml
+      - .github/workflows/spine-link-upload-e2e.yml
   workflow_dispatch:
 permissions:
   contents: read
