@@ -574,6 +574,14 @@ function githubHeaders(token) {
   return headers;
 }
 
+async function githubApiFetch(url, token) {
+  let response = await fetch(url, { headers: githubHeaders(token) });
+  if (!response.ok && token && (response.status === 401 || response.status === 403)) {
+    response = await fetch(url, { headers: githubHeaders('') });
+  }
+  return response;
+}
+
 function isSkeleton(name) {
   const lower = name.toLowerCase();
   return lower.endsWith('.json') || lower.endsWith('.skel');
@@ -628,9 +636,10 @@ function compareLibraryEntries(a, b) {
 
 async function githubJson(settings, path) {
   const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
-  const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`, {
-    headers: githubHeaders(settings.token),
-  });
+  const response = await githubApiFetch(
+    `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`,
+    settings.token,
+  );
   if (!response.ok) return null;
   return response.json();
 }
@@ -641,11 +650,15 @@ async function githubJson(settings, path) {
 // GitHub limit. They are listed at runtime so a folder added by a rotation shows up
 // without a code change or a deploy.
 async function libraryCollectionPaths(settings) {
-  const paths = new Set([cleanRepoPath(settings.basePath || defaultBasePath)]);
+  const paths = new Set([
+    cleanRepoPath(settings.basePath || defaultBasePath),
+    'library_02',
+    'library_01',
+  ]);
   try {
-    const response = await fetch(
+    const response = await githubApiFetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
-      { headers: githubHeaders(settings.token) },
+      settings.token,
     );
     if (response.ok) {
       const items = await response.json();
@@ -680,13 +693,16 @@ async function githubFileContent(settings, path) {
 
 async function githubFileHead(settings, path, maxBytes = 256) {
   const rawUrl = `https://raw.githubusercontent.com/${settings.owner}/${settings.repo}/${settings.branch}/${encodeRepoPath(path)}`;
-  const response = await fetch(rawUrl, {
-    headers: {
-      ...(settings.token ? { Authorization: `Bearer ${settings.token}` } : {}),
-      Range: `bytes=0-${maxBytes - 1}`,
-      Accept: 'application/octet-stream',
-    },
+  const rangeHeaders = {
+    Range: `bytes=0-${maxBytes - 1}`,
+    Accept: 'application/octet-stream',
+  };
+  let response = await fetch(rawUrl, {
+    headers: { ...(settings.token ? { Authorization: `Bearer ${settings.token}` } : {}), ...rangeHeaders },
   });
+  if (!response.ok && response.status !== 206 && settings.token && (response.status === 401 || response.status === 403)) {
+    response = await fetch(rawUrl, { headers: rangeHeaders });
+  }
   if (!response.ok && response.status !== 206) return '';
   const buffer = Buffer.from(await response.arrayBuffer());
   return buffer.toString('base64');
