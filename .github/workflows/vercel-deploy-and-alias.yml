@@ -59,6 +59,29 @@ jobs:
             fi
           fi
           deploy_sha="${{ github.event.workflow_run.head_sha || github.sha }}"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            # Both release workflows can be triggered by the same push. Do not
+            # deploy after the first one succeeds while the other is still
+            # running or has failed for this exact main-branch SHA.
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$deploy_sha&per_page=100")"
+            for required in "Spine-Link Agent API CI" "Spine archive WebP-first performance regression"; do
+              state="$(printf '%s' "$runs" | jq -r --arg name "$required" --arg sha "$deploy_sha" '
+                [.workflow_runs[] | select(.name == $name and .head_sha == $sha and .head_branch == "main")]
+                | sort_by(.created_at) | last
+                | if . == null then "not-triggered"
+                  else (.status + "/" + (.conclusion // "pending"))
+                  end
+              ')"
+              case "$state" in
+                completed/success|not-triggered) ;;
+                *)
+                  echo "skip=true" >> "$GITHUB_OUTPUT"
+                  echo "Waiting for $required on $deploy_sha ($state); no deployment."
+                  exit 0
+                  ;;
+              esac
+            done
+          fi
           already_deployed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$deploy_sha/status" --jq '[.statuses[]? | select(.context == "vercel/production" and .state == "success")][0] // empty' || true)
           if [ -n "$already_deployed" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
