@@ -232,6 +232,15 @@ function withAtlasPageCacheBuster(buffer, version) {
   return Buffer.from(nextText, 'utf8');
 }
 
+function stripPmaMetadataForSpine38(buffer) {
+  // The official 3.8 TextureAtlas parser predates the newer pma page field.
+  // Keep the premultipliedAlpha setting on the player config; remove only this
+  // unsupported atlas metadata line from the response sent to the 3.8 runtime.
+  const text = buffer.toString('utf8');
+  const normalized = text.replace(/^[ \\t]*pma[ \\t]*:[ \\t]*(?:true|false)[ \\t]*(?:\\r?\\n|$)/im, '');
+  return normalized === text ? buffer : Buffer.from(normalized, 'utf8');
+}
+
 function githubHeaders(token) {
   const headers = {
     Accept: 'application/vnd.github+json',
@@ -477,7 +486,10 @@ export default async function handler(request, response) {
           if (!alreadyPng) buffer = ddsToPng(buffer);
           response.setHeader('X-Spine-Link-Texture-Transcoded', 'DXT-to-PNG-v1');
         }
-        if (isAtlasPath(assetPath)) buffer = withAtlasPageCacheBuster(buffer, assetVersion);
+        if (isAtlasPath(assetPath)) {
+          buffer = withAtlasPageCacheBuster(buffer, assetVersion);
+          if (String(request.query?.spineRuntime || '') === '3.8') buffer = stripPmaMetadataForSpine38(buffer);
+        }
         if (assetPath === 'library/index.json') buffer = sanitizeLibraryIndex(buffer);
         const etag = rawResponse.headers.get('etag') || '';
         putMemoryCacheEntry(cacheKey, { buffer, etag });
@@ -524,6 +536,7 @@ export default async function handler(request, response) {
     }
     if (isAtlasPath(assetPath)) {
       buffer = withAtlasPageCacheBuster(buffer, assetVersion);
+      if (String(request.query?.spineRuntime || '') === '3.8') buffer = stripPmaMetadataForSpine38(buffer);
     }
     if (assetPath === 'library/index.json') {
       buffer = sanitizeLibraryIndex(buffer);
