@@ -315,8 +315,27 @@ test('production deploys are queued instead of cancelled by later workflow_run c
     'release readiness must be checked against the exact source SHA');
   assert.ok(workflow.includes('for required in "Spine-Link Agent API CI" "Spine archive WebP-first performance regression"'),
     'a push affecting both release surfaces must wait for both CI workflows');
-  assert.ok(workflow.includes('completed/success|not-triggered'),
-    'only successful applicable workflows or path-filtered workflows may allow deployment');
+  assert.ok(workflow.includes('completed/success) ;;'),
+    'only a completed successful exact-SHA CI run may pass the release gate');
+  assert.doesNotMatch(workflow,/completed\\/success\\|not-triggered/,
+    'a workflow that has not appeared yet must never count as success');
+  assert.ok(workflow.includes('current_main=') && workflow.includes('if [ "$deploy_sha" != "$current_main" ]; then'),
+    'scheduled and manual releases must target the current main SHA');
+});
+
+test('both required CI workflows always run on main pushes and the release gate waits for both',()=>{
+  const archive=fs.readFileSync(new URL('../.github/workflows/archive-performance.yml',import.meta.url),'utf8');
+  const agent=fs.readFileSync(new URL('../.github/workflows/spine-link-agent-api.yml',import.meta.url),'utf8');
+  const archivePush=archive.slice(archive.indexOf('  push:'),archive.indexOf('  pull_request:'));
+  const agentPush=agent.slice(agent.indexOf('  push:'),agent.indexOf('  workflow_dispatch:'));
+  assert.doesNotMatch(archivePush,/^\\s+paths:/m,'archive CI must always create a main-branch run');
+  assert.doesNotMatch(agentPush,/^\\s+paths:/m,'Agent API CI must always create a main-branch run');
+  const deploy=fs.readFileSync(new URL('../.github/workflows/vercel-deploy-and-alias.yml',import.meta.url),'utf8');
+  const gate=deploy.slice(deploy.indexOf('id: quota_recovery'),deploy.indexOf('      - name: Validate Vercel secrets'));
+  assert.doesNotMatch(gate,/^\\s+if:/m,'the exact-SHA gate must run for schedule, manual, and workflow_run events');
+  assert.ok(gate.includes('if [ "$event_name" != "workflow_dispatch" ]; then'),'manual release bypasses cooldown only');
+  assert.ok(gate.includes('completed/success) ;;'));
+  assert.doesNotMatch(gate,/completed\\/success\\|not-triggered/);
 });
 
 test('live archive browser proof fails closed when upstream skipped the actual Vercel deploy',()=>{

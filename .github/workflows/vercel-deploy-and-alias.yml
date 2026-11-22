@@ -8,7 +8,7 @@ name: Vercel deploy and alias
 # periodic no-op releases or on edits to this workflow itself.
 on:
   workflow_dispatch:
-  # Deploy only after a relevant CI workflow has completed successfully.
+  # Deploy only after both exact-SHA CI workflows have completed successfully.
   workflow_run:
     workflows: ["Spine-Link Agent API CI", "Spine archive WebP-first performance regression"]
     types: [completed]
@@ -33,55 +33,58 @@ jobs:
     if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Skip scheduled or CI-gated release when commit is already deployed
+      - name: Gate exact-SHA release on both CI workflows and quota cooldown
         id: quota_recovery
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_run'
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           set -euo pipefail
-          # After a failed automatic deployment, do not hammer Vercel while its
-          # rolling 24-hour deployment quota is still exhausted. Manual dispatch
-          # intentionally bypasses this cooldown.
-          latest=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-deploy-and-alias.yml/runs?status=completed&per_page=100")
-          # Ignore successful cooldown skips: only a real failed deployment starts the 24h hold.
-          latest_failure=$(printf '%s' "$latest" | jq -c '[.workflow_runs[] | select(.conclusion == "failure")][0] // {}')
-          latest_conclusion=$(printf '%s' "$latest_failure" | jq -r '.conclusion // ""')
-          latest_updated=$(printf '%s' "$latest_failure" | jq -r '.updated_at // ""')
-          if [ "$latest_conclusion" = "failure" ] && [ -n "$latest_updated" ]; then
-            failed_at=$(date -u -d "$latest_updated" +%s)
-            now=$(date -u +%s)
-            age=$((now - failed_at))
-            if [ "$age" -ge 0 ] && [ "$age" -lt 86400 ]; then
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              echo "Previous automatic deployment failed less than 24h ago; waiting for quota recovery."
-              exit 0
+          event_name="${{ github.event_name }}"
+          # Manual dispatch bypasses only the deployment cooldown, never CI.
+          if [ "$event_name" != "workflow_dispatch" ]; then
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-deploy-and-alias.yml/runs?status=completed&per_page=100")
+            latest_failure=$(printf '%s' "$latest" | jq -c '[.workflow_runs[] | select(.conclusion == "failure")][0] // {}')
+            latest_updated=$(printf '%s' "$latest_failure" | jq -r '.updated_at // ""')
+            if [ -n "$latest_updated" ]; then
+              failed_at=$(date -u -d "$latest_updated" +%s)
+              now=$(date -u +%s)
+              age=$((now - failed_at))
+              if [ "$age" -ge 0 ] && [ "$age" -lt 86400 ]; then
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                echo "Previous automatic deployment failed less than 24h ago; waiting for quota recovery."
+                exit 0
+              fi
             fi
           fi
+
           deploy_sha="${{ github.event.workflow_run.head_sha || github.sha }}"
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            # Both release workflows can be triggered by the same push. Do not
-            # deploy after the first one succeeds while the other is still
-            # running or has failed for this exact main-branch SHA.
-            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$deploy_sha&per_page=100")"
-            for required in "Spine-Link Agent API CI" "Spine archive WebP-first performance regression"; do
-              state="$(printf '%s' "$runs" | jq -r --arg name "$required" --arg sha "$deploy_sha" '
-                [.workflow_runs[] | select(.name == $name and .head_sha == $sha and .head_branch == "main")]
-                | sort_by(.created_at) | last
-                | if . == null then "not-triggered"
-                  else (.status + "/" + (.conclusion // "pending"))
-                  end
-              ')"
-              case "$state" in
-                completed/success|not-triggered) ;;
-                *)
-                  echo "skip=true" >> "$GITHUB_OUTPUT"
-                  echo "Waiting for $required on $deploy_sha ($state); no deployment."
-                  exit 0
-                  ;;
-              esac
-            done
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha')"
+          if [ "$deploy_sha" != "$current_main" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Release SHA $deploy_sha is not current main ($current_main); no deployment."
+            exit 0
           fi
+
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$deploy_sha&per_page=100")"
+          for required in "Spine-Link Agent API CI" "Spine archive WebP-first performance regression"; do
+            state="$(printf '%s' "$runs" | jq -r --arg name "$required" --arg sha "$deploy_sha" '
+              [.workflow_runs[] | select(.name == $name and .head_sha == $sha and .head_branch == "main")]
+              | sort_by(.created_at) | last
+              | if . == null then "not-triggered"
+                else (.status + "/" + (.conclusion // "pending"))
+                end
+            ')"
+            case "$state" in
+              completed/success) ;;
+              *)
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                echo "Waiting for $required on $deploy_sha ($state); no deployment."
+                exit 0
+                ;;
+            esac
+          done
+
           already_deployed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$deploy_sha/status" --jq '[.statuses[]? | select(.context == "vercel/production" and .state == "success")][0] // empty' || true)
           if [ -n "$already_deployed" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -107,6 +110,8 @@ jobs:
       - name: Check out repo
         if: steps.quota_recovery.outputs.skip != 'true'
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Ensure source has not changed since the successful CI run
         if: ${{ github.event_name == 'workflow_run' && steps.quota_recovery.outputs.skip != 'true' }}

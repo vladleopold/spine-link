@@ -5,27 +5,6 @@ name: Spine-Link Agent API CI
 on:
   push:
     branches: [main]
-    paths:
-      - 'api/github-upload.js'
-      - 'lib/agent-animation.js'
-      - 'lib/agent-user-keys.js'
-      - 'public/api-keys.html'
-      - 'public/api-keys.js'
-      - 'public/sdk/spine-link-agent.mjs'
-      - 'public/api-docs.html'
-      - 'public/sdk.html'
-      - 'src/main.tsx'
-      - 'src/SpineApp.tsx'
-      - 'tests/agent-api-pages.test.mjs'
-      - 'tests/google-auth-guard.test.mjs'
-      - 'tests/api-keys-browser.test.mjs'
-      - 'tests/google-session-persistence.test.mjs'
-      - 'tests/spine-link-agent-sdk.test.mjs'
-      - 'tests/agent-animation-api.test.mjs'
-      - 'scripts/spine-link-agent-publish.mjs'
-      - 'docs/agent-animation-api.md'
-      - 'vercel.json'
-      - '.github/workflows/spine-link-agent-api.yml'
   workflow_dispatch:
 
 permissions:

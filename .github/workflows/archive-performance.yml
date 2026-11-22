@@ -2,35 +2,6 @@ name: Spine archive WebP-first performance regression
 on:
   push:
     branches: [main, 'fix/archive-*']
-    paths:
-      - api/github-archive.js
-      - api/github-preview.js
-      - api/github-upload.js
-      - tests/preview-animation-identity.test.mjs
-      - tests/animation-menu-scroll.test.mjs
-      - tests/archive-speed.test.mjs
-      - tests/archive-initial-timing.test.mjs
-      - tests/spine-runtime-file-selection.test.mjs
-      - tests/spine-atlas-integrity.test.mjs
-      - tests/no-animation-substitution.test.mjs
-      - scripts/preview-animation-choice.mjs
-      - scripts/spine-export-webm.mjs
-      - scripts/lib/preview-export-status.cjs
-      - scripts/lib/preview-work-path.cjs
-      - src/SpineApp.tsx
-      - lib/agent-animation.js
-      - lib/spine-data-science.js
-      - scripts/spine-project-cloud-export.mjs
-      - .github/workflows/spine-export-full.yml
-      - lib/spine-atlas-integrity.js
-      - lib/spine-runtime-file-selection.js
-      - api/github-preview.js
-      - src/main.tsx
-      - .github/workflows/archive-performance.yml
-      - .github/workflows/vercel-deploy-and-alias.yml
-      - .github/workflows/archive-live-speed.yml
-      - .github/workflows/spine-link-browser-smoke.yml
-      - .github/workflows/spine-link-upload-e2e.yml
   pull_request:
     paths:
       - api/github-archive.js
