@@ -60,7 +60,7 @@ test('player startup never replaces the requested track with the first runtime t
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.ok(startup.includes('const requestedAnimation = activeAnimation.name'));
   assert.ok(startup.includes('...(requestedAnimation ? { animation: requestedAnimation } : {})'));
-  const missingTrackGuard = startup.indexOf('if (requestedAnimation && names.length && !names.includes(requestedAnimation))');
+  const missingTrackGuard = startup.indexOf('if (selectedAnimation && names.length && !names.includes(selectedAnimation))');
   const blocked = startup.indexOf('markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE")', missingTrackGuard);
   const blockedReturn = startup.indexOf('return;', blocked);
   const playback = startup.indexOf('playActiveAnimationFromStart()');
@@ -174,7 +174,7 @@ test('missing index default loads the verified skeleton and exposes its runtime 
 
 test('stale indexed default is recoverable but an explicit missing URL selection stays blocked', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
-  const mismatch = startup.indexOf('if (requestedAnimation && names.length && !names.includes(requestedAnimation))');
+  const mismatch = startup.indexOf('if (selectedAnimation && names.length && !names.includes(selectedAnimation))');
   const recovery = startup.indexOf('if (!queryValue("animation"))', mismatch);
   const blocked = startup.indexOf('markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE")', mismatch);
   assert.ok(mismatch >= 0 && recovery > mismatch && blocked > recovery);
@@ -220,6 +220,21 @@ test('binary Spine skeletons mislabeled with a .json extension use the binary ru
   assert.match(loader, /const binaryVersion = spineBinaryVersionFromBase64\(await githubFileHead\(settings, skeleton\.path, 256\)\)/);
   assert.match(loader, /if \(binaryVersion\) \{\s*skeletonVersion = binaryVersion;\s*skeletonIsBinary = true;/);
   assert.match(preview, /skeletonIsBinary \? \{ skelUrl: skeletonUrl \} : \{ jsonUrl: skeletonUrl \}/);
+});
+
+test('animation selections made during loading are queued until the Spine Player success callback', () => {
+  const playback = section(preview, 'function playAnimationEntry(name)', 'function togglePlayback()');
+  assert.match(playback, /if \(!playerReady\) return true/);
+  const start = section(preview, 'function playActiveAnimationFromStart()', 'function togglePlayback()');
+  assert.match(start, /if \(!playerReady\) return true/);
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /playerReady = false/);
+  const success = section(preview, 'success: (loadedPlayer) =>', 'error: (_player, reason)');
+  assert.match(success, /playerReady = true/);
+  assert.match(success, /const selectedAnimation = activeAnimation\.name \|\| requestedAnimation/);
+  assert.match(success, /if \(selectedAnimation\)/);
+  const error = section(preview, 'error: (_player, reason) =>', '});\n        } catch');
+  assert.match(error, /playerReady = false/);
 });
 
 test('legacy Spine Player wrappers fall back to indexed animation names when skeleton.data is not public', () => {
