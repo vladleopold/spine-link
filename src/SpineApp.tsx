@@ -2543,14 +2543,14 @@ if (extensionOf(file.name) === "json" && text) {
       for (const [pageIndex, pageName] of atlasPages.entries()) {
         const canonicalPageName = canonicalAtlasPageName(pageName);
         const matchedImage = textureMatches[pageIndex];
-          if (!premultipliedAlpha && matchedImage.hasBlackMatte) usesRebuiltStraightAlphaTexture = true;
-          const imageDataUri = premultipliedAlpha
-            ? await transparentizeAtlasEffectRegions(matchedImage.dataUri, atlas.text, pageName)
-            : matchedImage.transparentizedDataUri ?? matchedImage.dataUri;
-          rawDataURIs[matchedImage.file.name] = imageDataUri;
-          rawDataURIs[basename(matchedImage.file.name)] = imageDataUri;
-          rawDataURIs[canonicalPageName] = imageDataUri;
-          rawDataURIs[pageName] = imageDataUri;
+        if (!premultipliedAlpha && matchedImage.hasBlackMatte) usesRebuiltStraightAlphaTexture = true;
+        const imageDataUri = premultipliedAlpha
+          ? await transparentizeAtlasEffectRegions(matchedImage.dataUri, atlas.text, pageName)
+          : matchedImage.transparentizedDataUri ?? matchedImage.dataUri;
+        rawDataURIs[matchedImage.file.name] = imageDataUri;
+        rawDataURIs[basename(matchedImage.file.name)] = imageDataUri;
+        rawDataURIs[canonicalPageName] = imageDataUri;
+        rawDataURIs[pageName] = imageDataUri;
       }
 
       const atlasTextForPreview = atlasTextWithCanonicalPageNames(
@@ -2569,10 +2569,10 @@ if (extensionOf(file.name) === "json" && text) {
         label: skeletonStem,
         skeletonName: skeleton.file.name,
         atlasName: atlas.file.name,
-      atlasPages,
-      skeletonVersion: skeleton.skeletonVersion,
-      animations: animationNames,
-      defaultAnimation,
+        atlasPages,
+        skeletonVersion: skeleton.skeletonVersion,
+        animations: animationNames,
+        defaultAnimation,
         defaultSkin,
         premultipliedAlpha,
         viewport,
