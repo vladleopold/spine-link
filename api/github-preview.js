@@ -1855,13 +1855,10 @@ const pinchDistance = { value: null };
         return true;
       }
       function playActiveAnimationFromStart() {
-        if (!player || !activeAnimation.name) {
-          markPreviewBlocked("NO_DEFAULT_ANIMATION");
-          return false;
-        }
+        if (!player || !activeAnimation.name) return false;
         return playAnimationEntry(activeAnimation.name);
       }
-      function togglePlayback() { if (!player) return; if (player.paused === false) { player.pause(); return; } playActiveAnimationFromStart(); }
+      function togglePlayback() { if (!player || !activeAnimation.name) return; if (player.paused === false) { player.pause(); return; } playActiveAnimationFromStart(); }
       function installLoopButton() { const buttons = player?.dom?.querySelector(".spine-player-buttons"); const playButton = buttons?.querySelector(".spine-player-button"); if (!buttons || !playButton) return; playButton.onclick = (event) => { event.preventDefault(); event.stopPropagation(); togglePlayback(); }; if (buttons.querySelector(".spine-link-loop-button")) return; const button = document.createElement("button"); button.type = "button"; button.className = "spine-player-button spine-link-loop-button"; updateLoopButtonState(button); button.onclick = (event) => { event.preventDefault(); event.stopPropagation(); loopEnabled.value = !loopEnabled.value; setTrackLoop(); updateLoopButtonState(button); }; playButton.insertAdjacentElement("afterend", button); }
       function panByPixels(deltaX, deltaY) { const v = player?.currentViewport, b = baseViewport.value, canvas = player?.canvas; if (!v || !b || !canvas) return; const totalWidth = v.width + v.padLeft + v.padRight, totalHeight = v.height + v.padTop + v.padBottom; const worldDeltaX = deltaX / Math.max(1, canvas.clientWidth) * totalWidth, worldDeltaY = deltaY / Math.max(1, canvas.clientHeight) * totalHeight; v.x -= worldDeltaX; v.y += worldDeltaY; b.x -= worldDeltaX * currentZoom.value; b.y += worldDeltaY * currentZoom.value; player.previousViewport = { ...v }; player.viewportTransitionStart = performance.now(); }
 
@@ -2019,10 +2016,6 @@ const pinchDistance = { value: null };
           markPreviewBlocked("NO_SKELETON_SET");
           return;
         }
-        if (!activeAnimation.name) {
-          markPreviewBlocked("NO_DEFAULT_ANIMATION");
-          return;
-        }
         resetHealAttempts();
         try { player?.dispose?.(); } catch {}
         player = null;
@@ -2054,7 +2047,7 @@ const pinchDistance = { value: null };
         try {
           player = new SpinePlayer("player", {
             ...playerSet,
-            animation: requestedAnimation,
+            ...(requestedAnimation ? { animation: requestedAnimation } : {}),
             ...(/^4[.][01](?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))
               ? { binaryUrl: activeSet.value.skelUrl || undefined, atlasUrl: activeSet.value.atlasUrl }
               : {}),
@@ -2071,7 +2064,7 @@ const pinchDistance = { value: null };
               clearPreviewVideoFallback();
               const names = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? [];
               animationNames.value = names.filter(name => !name.startsWith("Backup/") || name === requestedAnimation);
-              if (!names.includes(requestedAnimation)) {
+              if (requestedAnimation && !names.includes(requestedAnimation)) {
                 // The selected clip can belong to another skeleton set in this
                 // work. Try the remaining sets before reporting it unavailable.
                 const nextSet = sets.find((set) => !attemptedAnimationSets.has(animationSetKey(set)));
@@ -2091,10 +2084,18 @@ const pinchDistance = { value: null };
               }
               attemptedAnimationSets.clear();
               renderAnimationList();
-              syncUrl();
-              disableMix();
-              installLoopButton();
-              if (!playActiveAnimationFromStart()) return;
+              // A missing index default is not a broken skeleton. Load the
+              // verified runtime animation list and wait for an explicit choice.
+              // Never silently substitute the first track or an "idle" track.
+              if (requestedAnimation) {
+                syncUrl();
+                disableMix();
+                installLoopButton();
+                if (!playActiveAnimationFromStart()) return;
+              } else {
+                disableMix();
+                installLoopButton();
+              }
               requestAnimationFrame(() => {
                 rememberBaseViewport();
                 captureStageOffset();
