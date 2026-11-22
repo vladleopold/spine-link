@@ -657,7 +657,7 @@ async function libraryCollectionPaths(settings) {
   ]);
   try {
     const response = await githubApiFetch(
-      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
+      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}&per_page=100`,
       settings.token,
     );
     if (response.ok) {
