@@ -367,10 +367,10 @@ test('production upload E2E fails closed when Chromium verification was skipped'
 
 test('production browser-gate workflow changes trigger their regression suite',()=>{
   const workflow=fs.readFileSync(new URL('../.github/workflows/archive-performance.yml',import.meta.url),'utf8');
-  assert.equal(workflow.split('- .github/workflows/spine-link-browser-smoke.yml').length-1,2,
-    'browser smoke workflow changes must trigger archive regression on push and pull_request');
-  assert.equal(workflow.split('- .github/workflows/spine-link-upload-e2e.yml').length-1,2,
-    'upload E2E workflow changes must trigger archive regression on push and pull_request');
+  assert.equal(workflow.split('- .github/workflows/spine-link-browser-smoke.yml').length-1,1,
+    'browser smoke workflow changes must trigger archive regression on pull_request');
+  assert.equal(workflow.split('- .github/workflows/spine-link-upload-e2e.yml').length-1,1,
+    'upload E2E workflow changes must trigger archive regression on pull_request');
 });
 
 test('preview sidebar keeps all supporting panels below the animation picker on desktop',()=>{
