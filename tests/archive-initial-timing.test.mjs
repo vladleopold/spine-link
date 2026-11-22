@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { classifyArchiveCardMediaState } from '../lib/archive-card-media-state.mjs';
 
 const workflow = readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
 
@@ -99,6 +100,21 @@ test('archive cards expose source-level blocked status without exposing preview 
     'private source error details must not be copied into public card markup');
 });
 
+
+test('all archive pages require exact source status before accepting blank or populated cards', () => {
+  const blocked = { poster: '', video: '', sourceWebmStatus: 'blocked-missing-source', sourcePreviewStatus: 'blocked' };
+  const failed = { poster: '', video: '', sourceWebmStatus: 'failed', sourcePreviewStatus: 'failed' };
+  assert.equal(classifyArchiveCardMediaState(blocked), 'blocked');
+  assert.equal(classifyArchiveCardMediaState(failed), 'failed');
+  assert.equal(classifyArchiveCardMediaState({ ...blocked, sourceWebmStatus: 'ready', sourcePreviewStatus: 'ready' }), 'missing');
+  assert.equal(classifyArchiveCardMediaState({ ...blocked, sourceWebmStatus: 'pending', sourcePreviewStatus: 'pending' }), 'missing');
+  assert.equal(classifyArchiveCardMediaState({ ...blocked, poster: 'poster.webp' }), 'partial');
+  assert.equal(classifyArchiveCardMediaState({ ...blocked, poster: 'poster.webp', video: 'preview.webm' }), 'stale-media');
+  assert.equal(classifyArchiveCardMediaState({ poster: 'poster.webp', video: 'preview.webm', sourceWebmStatus: 'ready', sourcePreviewStatus: 'ready' }), 'ready');
+  assert.match(workflow, /sourceWebmStatus:card\.dataset\.sourceWebmStatus/);
+  assert.match(workflow, /sourcePreviewStatus:card\.dataset\.sourcePreviewStatus/);
+  assert.match(workflow, /classifyArchiveCardMediaState\(row\)/);
+});
 
 test('live archive verification traverses every page and validates every displayed poster/video pair', () => {
   assert.match(workflow,/const blockArchiveFeed = url =>/);

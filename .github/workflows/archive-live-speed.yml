@@ -50,6 +50,7 @@ jobs:
           import assert from 'node:assert/strict';
           import { createHash } from 'node:crypto';
           import { chromium } from 'playwright';
+          import { classifyArchiveCardMediaState } from './lib/archive-card-media-state.mjs';
           const browser=await chromium.launch({headless:true});
           try {
             for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
@@ -357,11 +358,16 @@ jobs:
                 poster:card.querySelector('.feed-media img')?.currentSrc||card.querySelector('.feed-media img')?.src||'',
                 video:card.dataset.videoSrc||'',
                 status:card.dataset.previewStatus||'',
+                sourceWebmStatus:card.dataset.sourceWebmStatus||'',
+                sourcePreviewStatus:card.dataset.sourcePreviewStatus||'',
                 fallback:Boolean(card.querySelector('[data-fallback-src],[data-video-fallback],.feed-placeholder,.media-fallback')),
               })));
               const invalidCards=cardRows.filter(row=>{
-                if(!row.poster&&!row.video)return !row.status.startsWith('blocked-')||row.fallback;
-                if(!row.poster||!row.video||row.fallback||row.status!=='ready-poster-lazy-video')return true;
+                const mediaState=classifyArchiveCardMediaState(row);
+                if(mediaState==='blocked'||mediaState==='failed')
+                  return row.fallback||row.status!=='blocked-no-webm-poster';
+                if(mediaState!=='ready')return true;
+                if(row.fallback||row.status!=='ready-poster-lazy-video')return true;
                 try{
                   const poster=new URL(row.poster),video=new URL(row.video),player=new URL(row.playerUrl,site);
                   const videoName=video.pathname.split('/').pop().toLowerCase();

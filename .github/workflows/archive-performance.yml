@@ -19,6 +19,7 @@ on:
       - src/SpineApp.tsx
       - lib/agent-animation.js
       - lib/spine-data-science.js
+      - lib/archive-card-media-state.mjs
       - scripts/spine-project-cloud-export.mjs
       - .github/workflows/spine-export-full.yml
       - .github/workflows/archive-performance.yml
