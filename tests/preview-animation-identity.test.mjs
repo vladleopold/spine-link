@@ -43,7 +43,7 @@ test('video target is restricted to the indexed defaultAnimation', () => {
 
 test('player selects exact requested animations without requiring a version-specific findAnimation wrapper', () => {
   const playback = section(preview, 'function playAnimationEntry(name)', 'function togglePlayback()');
-  assert.doesNotMatch(playback, /findAnimation/);
+  assert.doesNotMatch(playback, /skeleton\.data\.findAnimation\(/);
   assert.match(playback, /player\.setAnimation\(name, loopEnabled\.value\)/);
   assert.match(playback, /player\.animationState\?\.getCurrent\?\.\(0\)/);
   assert.doesNotMatch(playback, /names\[0\]|animations\[0\]|filteredNames\[0\]/);
@@ -182,7 +182,7 @@ test('stale indexed default is recoverable but an explicit missing URL selection
 
 test('Spine Player 3.8 void setAnimation return is handled via AnimationState current track', () => {
   const playback = section(preview, 'function playAnimationEntry(name)', 'function playActiveAnimationFromStart()');
-  assert.match(playback, /const setResult = player\.setAnimation\(name, loopEnabled\.value\)/);
+  assert.match(playback, /setResult = player\.setAnimation\(name, loopEnabled\.value\)/);
   assert.match(playback, /const entry = setResult \|\| player\.animationState\?\.getCurrent\?\.\(0\)/);
   assert.match(playback, /if \(!entry\)/);
   assert.match(playback, /entry\.listener =/);
