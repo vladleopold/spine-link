@@ -154,7 +154,7 @@ test('binary skeletons use the indexed animation list when server-side JSON pars
   assert.match(dynamic, /skeleton\.name\.toLowerCase\(\)\.endsWith\('\.skel'\)/);
   assert.match(dynamic, /runtimeAnimationNames\.length\s*\?\s*runtimeAnimationNames/);
   assert.match(dynamic, /indexedAnimationNames/);
-  assert.match(dynamic, /const defaultAnimation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+  assert.match(preview, /const defaultAnimation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
 });
 
 test('missing index default loads the verified skeleton and exposes its runtime animation list', () => {
