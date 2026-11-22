@@ -1,5 +1,5 @@
 import { selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
-import { isValidSpineAtlasHeader, matchAtlasPagesToTextures } from '../lib/spine-atlas-integrity.js';
+import { extractAtlasPageNames, atlasPageMatchesTexture, isValidSpineAtlasHeader, matchAtlasPagesToTextures } from '../lib/spine-atlas-integrity.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
@@ -200,10 +200,7 @@ function preferredSkinName(skinNames) {
 }
 
 function extractAtlasPages(atlasText = '') {
-  return String(atlasText)
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => /\.(png|jpe?g|webp|dds)$/i.test(line));
+  return extractAtlasPageNames(atlasText);
 }
 
 function canonicalAtlasPageName(pageName = '') {
@@ -211,9 +208,7 @@ function canonicalAtlasPageName(pageName = '') {
 }
 
 function imageMatchesAtlasPage(imageName = '', pageName = '') {
-  const imageBase = basename(String(imageName || '').replace(/\\/g, '/').trim()).toLowerCase();
-  const pageBase = canonicalAtlasPageName(pageName).toLowerCase();
-  return Boolean(imageBase && pageBase && imageBase === pageBase);
+  return atlasPageMatchesTexture(imageName, pageName);
 }
 
 function safePublicVideo(value = '') {

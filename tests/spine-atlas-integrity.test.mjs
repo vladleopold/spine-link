@@ -38,6 +38,26 @@ test('manual Spine import blocks incomplete or ambiguous atlas textures instead 
  assert.match(source,/matchAtlasPagesToTextures\(\s*atlasPages,\s*images,/);
  assert.match(source,/SPINE_ATLAS_TEXTURE_SET_INCOMPLETE/);
  assert.match(source,/const matchedImage = textureMatches\[pageIndex\]/);
- assert.match(source,/imageBase === pageBase/);
+ assert.match(source,/atlasPageMatchesTexture\\(imageAsset\\.file\\.name,\\s*pageName\\)/);
  assert.doesNotMatch(source,/transparentPngDataUri/);
+});
+
+test('atlas page parser ignores region names that happen to end in image extensions', () => {
+ const atlas = [
+  'page.png', 'size:1024,1024', 'format:RGBA8888', 'filter:Linear,Linear', 'repeat:none', '',
+  'region.png', 'rotate:false', 'xy:0,0', 'size:32,32', 'orig:32,32', 'offset:0,0', 'index:-1',
+ ].join('\n');
+ assert.deepEqual(extractAtlasPageNames(atlas), ['page.png']);
+});
+
+test('server upload acceptance requires every atlas page to have one unique exact texture', async () => {
+ const texturePaths = ['images/body.png', 'images/face.png'];
+ const exact = (texture, page) => atlasPageMatchesTexture(texture, page);
+ assert.deepEqual(matchAtlasPagesToTextures(['body.png', 'face.png'], texturePaths, exact), texturePaths);
+ assert.equal(matchAtlasPagesToTextures(['body.png', 'missing.png'], texturePaths, exact), null);
+ assert.equal(matchAtlasPagesToTextures(['body.png', 'face.png'], ['images/body.png'], exact), null);
+ const {readFileSync}=await import('node:fs');
+ const upload=readFileSync(new URL('../api/github-upload.js',import.meta.url),'utf8');
+ assert.match(upload,/matchAtlasPagesToTextures\(\s*atlasPages,\s*texturePaths,/);
+ assert.match(upload,/rejected-incomplete-atlas-texture-set/);
 });

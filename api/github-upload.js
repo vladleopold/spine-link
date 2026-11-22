@@ -13,7 +13,7 @@ import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-s
 import { metricCountsForIds, parseMetricsJson, sanitizeMetricId, sanitizeMetricIds } from '../lib/spine-metrics.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 import { inspectRuntimeAssetSet } from '../lib/runtime-acceptance.js';
-import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
+import { extractAtlasPageNames, atlasPageMatchesTexture, isValidSpineAtlasHeader, matchAtlasPagesToTextures } from '../lib/spine-atlas-integrity.js';
 
 const CENSORSHIP_FILE = 'library/censorship.json';
 
@@ -1473,11 +1473,15 @@ export default async function handler(request, response) {
         Array.isArray(body?.stagedBlobs) ? body.stagedBlobs : [],
         Array.isArray(body?.stagedAssemblies) ? body.stagedAssemblies : []);
       if (!prepared.committed.length) return response.status(400).json({ error: 'No staged Spine files' });
+      const relativeFiles = prepared.receipts.map(item =>
+        item.path.startsWith(workPath + '/') ? item.path.slice(workPath.length + 1) : '');
+      const isEditorProject = body?.entry?.sourceKind === 'spine-project';
+      const texturePaths = relativeFiles.filter(name => /\.(?:png|jpe?g|webp|dds)$/i.test(name));
       // Validate server-side as well as in the browser: remote clients and
       // agents can stage arbitrary blobs without running the drag/drop checks.
       // A binary payload named .atlas otherwise becomes control-character
       // texture URLs in the public Web Player.
-      if (body?.entry?.sourceKind !== 'spine-project') {
+      if (!isEditorProject) {
         for (const asset of prepared.committed) {
           if (!/\.atlas(?:\.txt|\.docx)?$/i.test(asset.path)) continue;
           if (asset.bytes < 24 || asset.bytes > 2_000_000) {
@@ -1489,19 +1493,30 @@ export default async function handler(request, response) {
             return response.status(422).json({ error: 'Staged Spine atlas could not be validated' });
           }
           const bytes = Buffer.from(String(blob.content).replace(/\s/g, ''), 'base64');
+          const atlasText = bytes.toString('utf8');
           if (bytes.byteLength !== asset.bytes ||
               createHash('sha256').update(bytes).digest('hex') !== asset.sha256 ||
-              !isValidSpineAtlasHeader(bytes.toString('utf8'))) {
+              !isValidSpineAtlasHeader(atlasText)) {
             return response.status(422).json({
               error: 'Invalid Spine atlas: expected text page declarations and image filenames',
               acceptance: 'rejected-corrupt-atlas',
             });
           }
+          const atlasPages = extractAtlasPageNames(atlasText);
+          const textureMatches = matchAtlasPagesToTextures(
+            atlasPages,
+            texturePaths,
+            (texturePath, pageName) => atlasPageMatchesTexture(texturePath, pageName),
+          );
+          if (!textureMatches) {
+            return response.status(422).json({
+              error: 'Spine atlas texture set is incomplete or ambiguous',
+              acceptance: 'rejected-incomplete-atlas-texture-set',
+              required: ['every-atlas-page', 'one-unique-source-texture'],
+            });
+          }
         }
       }
-      const relativeFiles = prepared.receipts.map(item =>
-        item.path.startsWith(workPath + '/') ? item.path.slice(workPath.length + 1) : '');
-      const isEditorProject = body?.entry?.sourceKind === 'spine-project';
       // Source import is NOT a playable project without all three required
       // asset classes. Never create a public entry for an isolated .skel.
       const assetAcceptance = isEditorProject ? null : inspectRuntimeAssetSet(relativeFiles);

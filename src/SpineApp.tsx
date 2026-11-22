@@ -37,7 +37,7 @@ import type { SpinePlayer as SpinePlayerInstance, SpinePlayerConfig } from "@eso
 import { startParticleField } from "./particles";
 import { normalizeSpineTextureFiles } from "./dds-import";
 import { supplyMissingAtlas, type InferredAtlasReceipt } from "./atlas-inference-import";
-import { matchAtlasPagesToTextures } from "../lib/spine-atlas-integrity.js";
+import { extractAtlasPageNames, atlasPageMatchesTexture, matchAtlasPagesToTextures } from "../lib/spine-atlas-integrity.js";
 
 type AppProps = {
   initialFiles?: File[];
@@ -1360,10 +1360,7 @@ async function readAtlasText(file: File) {
 }
 
 function extractAtlasPages(atlasText = "") {
-  return atlasText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => /\.(png|jpe?g|webp)$/i.test(line));
+  return extractAtlasPageNames(atlasText);
 }
 
 function canonicalAtlasPageName(pageName = "") {
@@ -1371,9 +1368,7 @@ function canonicalAtlasPageName(pageName = "") {
 }
 
 function imageMatchesAtlasPage(imageName = "", pageName = "") {
-  const imageBase = basename(String(imageName || "").replace(/\\/g, "/").trim()).toLowerCase();
-  const pageBase = canonicalAtlasPageName(pageName).toLowerCase();
-  return Boolean(imageBase && pageBase && imageBase === pageBase);
+  return atlasPageMatchesTexture(imageName, pageName);
 }
 
 function atlasTextWithCanonicalPageNames(atlasText = "") {
