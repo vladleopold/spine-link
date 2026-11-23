@@ -94,7 +94,7 @@ jobs:
                 const expectedCards=Math.min(40,Math.max(0,pageTotal));
                 const embeddedMatch=firstHtml.match(/id="archive-next-page">([\s\S]*?)<\/script>/);
                 const embeddedBatch=embeddedMatch?JSON.parse(embeddedMatch[1]):{entries:[]};
-                const embeddedCount=Array.isArray(embeddedBatch.entries)?embeddedBatch.entries.length:0;
+                const embeddedCount=Array.isArray(embeddedBatch)?embeddedBatch.length:(Array.isArray(embeddedBatch.entries)?embeddedBatch.entries.length:0);
                 const domCardCount=await page.locator('.feed-card').count();
                 assert.ok(expectedCards>0,'Public archive returned no entries');
                 console.log('ARCHIVE_PAGE_TOTAL_EVIDENCE '+JSON.stringify({
