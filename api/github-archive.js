@@ -2562,7 +2562,15 @@ export default async function handler(request, response) {
     if (request.method === 'HEAD') {
       return response.status(200).send('');
     }
-    return response.status(200).send(archiveHtml({ origin, entries: layoutEntries, metrics }));
+    const html = archiveHtml({ origin, entries: layoutEntries, metrics });
+    // Start the same real poster download from response headers, before the
+    // browser has to finish parsing the HTML body and reach the <head> link.
+    const preloadMatch = html.match(/<link rel="preload" as="image" href="([^"]+)"/);
+    if (preloadMatch) {
+      const preloadUrl = preloadMatch[1].replace(/&amp;/g, '&');
+      response.setHeader('Link', `<${preloadUrl}>; rel=preload; as=image; fetchpriority=high`);
+    }
+    return response.status(200).send(html);
   } catch (error) {
     return response.status(500).send(error instanceof Error ? error.message : 'Archive failed');
   }
