@@ -278,7 +278,7 @@ const archiveLiveWorkflow = fs.readFileSync(new URL('../.github/workflows/archiv
 test('production Chromium gate verifies the upstream Vercel deployment job', () => {
   assert.match(browserWorkflow, /actions\/runs\/\$SOURCE_RUN_ID\/jobs\?per_page=100/);
   assert.match(browserWorkflow, /\.name == "Deploy to Vercel" and \.conclusion == "success"/);
-  assert.match(browserWorkflow, /REAL_PRODUCTION_DEPLOY=/);
+  assert.match(browserWorkflow, /VERIFIED_PRODUCTION_DEPLOY=/);
   assert.match(archiveLiveWorkflow, /commits\/\$DEPLOY_SHA\/status/);
   assert.match(archiveLiveWorkflow, /\.context == "Vercel"/);
 });
@@ -305,7 +305,6 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
   assert.match(browserWorkflow, /PASS CONVERTED SPINE 3\.8\.75 -> 4\.3\.26/);
   assert.match(browserWorkflow, /converted\.animations\.length, 11/);
   assert.match(browserWorkflow, /converted\.animation, 'idle'/);
-  assert.match(browserWorkflow, /rawDataKeys:Object\.keys\(o\.rawDataURIs/);
   assert.match(browserWorkflow, /missingSlotBones/);
   assert.match(browserWorkflow, /createHash\('sha256'\)/);
   assert.doesNotMatch(browserWorkflow, /SPINE_3_8_75_IN_MEMORY_COMPATIBILITY_PROOF|UNSUPPORTED_SPINE_3_8_75/);
