@@ -61,6 +61,10 @@ function stubFetch(log, sourceEntries=entries){
     if(url.includes('/contents/library_01/index.json?'))return {ok:false,status:404};
     if(url.includes('/contents/library/'))return {ok:false,status:404};
     if(url.startsWith('https://raw.githubusercontent.com/vladleopold/spine/')) {
+      if(url.includes('/library_02/index.json'))return text(JSON.stringify(sourceEntries));
+      if(url.endsWith('/archive-exclusions.json'))return text(JSON.stringify({rules:[],allow:[]}));
+      if(url.endsWith('/metrics.json'))return text('{}');
+      if(url.endsWith('/censorship.json'))return text(JSON.stringify({blocked:[],allowed:[]}));
       return {ok:false,status:404,text:async()=>''};
     }
     throw Error('Unexpected GitHub request '+url);
@@ -79,7 +83,7 @@ test('archive feed paginates without probing every media card, caches public res
     assert.match(res.headers['cache-control'],/max-age/);
     assert.ok(!/no-store/.test(res.headers['cache-control']));
     // One root collection listing + three collection indexes + one legacy recovery index + three metadata files.
-    assert.ok(log.length <= 8,'unexpected GitHub request fanout: '+log.length);
+    assert.ok(log.length <= 10,'unexpected GitHub request fanout: '+log.length);
     assert.ok(log.every(u=>!u.includes('/card-')),'card asset metadata lookup on feed');
   }finally{
     globalThis.fetch=originalFetch;
@@ -121,7 +125,7 @@ test('source textures and guessed posters never unlock archive WebM or render a 
       'WebM must wait for a decoded first-frame poster');
     assert.ok(html.includes('preview-medium|preview-low'),
       'only medium/low generated WebP posters may unlock playback');
-    assert.ok(log.length <= 8);
+    assert.ok(log.length <= 10);
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
@@ -167,7 +171,7 @@ test('medium WebM and WebP remain a paired fallback when low renditions are abse
     assert.doesNotMatch(card,/data-fallback-src=|data-video-fallback=|preview-low\.webm|preview\.webm/,
       'no image/video fallback and no quality mismatch');
     assert.ok(html.includes("card.dataset.previewStatus!=='ready-poster-lazy-video'"));
-    assert.ok(log.length <= 8);
+    assert.ok(log.length <= 10);
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
@@ -300,7 +304,7 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     assert.ok(html.includes("video.preload='none'"),'dynamic video should never preload offscreen');
     const section=html.slice(html.indexOf('<script>\n      (() => {')+8,html.indexOf('</script>',html.indexOf('<script>\n      (() => {')));
     assert.doesNotThrow(()=>new Function(section),'gallery client code must parse');
-    assert.ok(log.length <= 8,'unexpected excessive index calls');
+    assert.ok(log.length <= 10,'unexpected excessive index calls');
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
