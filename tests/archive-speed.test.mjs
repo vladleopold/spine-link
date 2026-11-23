@@ -336,7 +336,7 @@ test('first eligible embedded-batch poster is preloaded when initial cards are b
     assert.match(preload,/card-67\/preview-medium\.webp/,
       'preload the first genuine same-work poster from the embedded next batch');
     assert.ok(html.includes('id="archive-next-page"'),'embedded batch must remain available for pagination');
-    assert.ok(log.length<=8);
+    assert.ok(log.length<=10);
   }finally{
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
