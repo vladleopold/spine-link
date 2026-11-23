@@ -87,7 +87,7 @@ jobs:
                   waitUntil:'domcontentloaded',timeout:45000,
                 });
                 assert.equal(response?.status(),200);
-                const archiveMetaResponse=await fetch('https://spine-link.vercel.app/api/github-archive?feed=archive&offset=0&limit=1',{headers:{'Cache-Control':'no-cache'}});
+                const archiveMetaResponse=await fetch(site+'/api/github-archive?feed=archive&offset=0&limit=1',{headers:{'Cache-Control':'no-cache'}});
                 assert.equal(archiveMetaResponse.status,200,'Archive metadata API HTTP '+archiveMetaResponse.status);
                 const archiveMeta=await archiveMetaResponse.json();
                 const firstHtml=await page.content();
