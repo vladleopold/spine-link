@@ -1,16 +1,9 @@
 name: Spine-Link 4-file end-to-end production upload
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/spine-link-upload-e2e.yml'
+  # This workflow writes and deletes a real production test upload. Keep it
+  # manual so ordinary deployments and workflow edits never mutate production.
   workflow_dispatch:
-  # Exercise the actual production storage pipeline only after the deployed
-  # homepage and Spine preview have passed an independent Chromium check.
-  workflow_run:
-    workflows: ["Spine-Link Chromium production verification"]
-    types: [completed]
 
 permissions:
   contents: read
