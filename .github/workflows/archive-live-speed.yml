@@ -122,32 +122,41 @@ jobs:
                 const firstWebm=mediaRequests.find(r=>r.type==='webm');
                 if(firstWebm&&firstWebp)assert.ok(firstWebm.at>=firstWebp.at,
                   'WebM requested before WebP');
-                // Normal users spend time looking at the first cards, which is
-                // when the one-page-ahead JSON and six WebP posters are warmed.
-                await page.waitForTimeout(1900);
-                const before=await page.locator('.feed-card').count();
-              const scrollStart=Date.now();
-              await page.locator('#sentinel').scrollIntoViewIfNeeded();
-              await page.waitForFunction(n=>document.querySelectorAll('.feed-card').length>n,
-                before,{timeout:9500});
-              const latency=Date.now()-scrollStart;
-              const after=await page.locator('.feed-card').count();
-              const newBatchPosters=await page.locator('.feed-card').evaluateAll((cards,n)=>cards.slice(n,n+6)
-                .filter(card=>card.querySelector('.feed-media img')).length,before);
-              let posterMs=null;
-              if(newBatchPosters>=3){
-                await page.waitForFunction(n=>{
-                  const newCards=Array.from(document.querySelectorAll('.feed-card')).slice(n,n+6);
-                  return newCards.filter(card=>{
-                    const image=card.querySelector('.feed-media img');
-                    return image && image.complete && image.naturalWidth>0;
-                  }).length>=3;
-                },before,{timeout:9000});
-                posterMs=Date.now()-scrollStart;
+                // The sentinel uses a large root margin and may prefetch one or
+              // more batches during the warm-up. Measure from the actual state
+              // after warm-up; never wait for a batch that has already loaded.
+              await page.waitForTimeout(1900);
+              const before=await page.locator('.feed-card').count();
+              const sentinelBefore=(await page.locator('#sentinel').textContent()||'').trim();
+              let latency=0,after=before,posterMs=null;
+              if(before<40&&sentinelBefore!=='End of archive'){
+                const scrollStart=Date.now();
+                await page.locator('#sentinel').scrollIntoViewIfNeeded();
+                await page.waitForFunction(n=>document.querySelectorAll('.feed-card').length>n,
+                  before,{timeout:9500});
+                latency=Date.now()-scrollStart;
+                after=await page.locator('.feed-card').count();
+                const newBatchPosters=await page.locator('.feed-card').evaluateAll((cards,n)=>cards.slice(n,n+6)
+                  .filter(card=>card.querySelector('.feed-media img')).length,before);
+                if(newBatchPosters>=3){
+                  await page.waitForFunction(n=>{
+                    const newCards=Array.from(document.querySelectorAll('.feed-card')).slice(n,n+6);
+                    return newCards.filter(card=>{
+                      const image=card.querySelector('.feed-media img');
+                      return image && image.complete && image.naturalWidth>0;
+                    }).length>=3;
+                  },before,{timeout:9000});
+                  posterMs=Date.now()-scrollStart;
+                }else{
+                  console.log('ARCHIVE_NEXT_BATCH_POSTER_EVIDENCE no three eligible WebP posters in this batch');
+                }
+                assert.ok(after>before);
+                assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
               }else{
-                console.log('ARCHIVE_NEXT_BATCH_POSTER_EVIDENCE no three eligible WebP posters in this batch');
+                console.log('ARCHIVE_NEXT_BATCH_EVIDENCE '+JSON.stringify({
+                  alreadyPrefetched:before>=40,sentinel:sentinelBefore,cards:before
+                }));
               }
-              assert.ok(after>before);
               assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
               // Continue through the live archive until the first 40 newest
               // public animation cards are present in the DOM.
