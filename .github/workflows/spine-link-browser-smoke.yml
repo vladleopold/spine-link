@@ -545,9 +545,12 @@ jobs:
               process.exitCode = 1;
             }
           } finally {
-            await browser.close();
+            await page.close();
           }
-          NODE
+        } finally {
+          await browser.close();
+        }
+        NODE
       - name: Verify production rejects invalid Google credentials
         shell: bash
         env:
