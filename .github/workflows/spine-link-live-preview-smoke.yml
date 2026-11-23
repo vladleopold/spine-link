@@ -8,9 +8,29 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  release_gate:
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    outputs:
+      deployed: ${{ steps.inspect.outputs.deployed }}
+    steps:
+      - name: Confirm upstream run performed a real production deployment
+        id: inspect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")"
+          deployed="$(printf '%s' "$jobs" | jq -r '[.jobs[].steps[]? | select(.name == "Deploy to Vercel" and .conclusion == "success")] | length > 0')"
+          echo "deployed=$deployed" >> "$GITHUB_OUTPUT"
+          echo "VERIFIED_PRODUCTION_DEPLOY=$deployed"
   production-preview:
+    needs: release_gate
+    if: ${{ always() && (github.event_name != 'workflow_run' || needs.release_gate.outputs.deployed == 'true') }}
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
