@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const workflow = readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
+const livePreviewWorkflow = readFileSync(new URL('../.github/workflows/spine-link-live-preview-smoke.yml', import.meta.url), 'utf8');
 
 test('initial archive poster timing excludes intentional prefetch warm-up when a poster exists', () => {
   const firstPoster = workflow.indexOf('initialPosterMs=Date.now()-started;');
@@ -46,6 +47,17 @@ test('first available archive poster decodes within one second when the initial 
 });
 
 const lifecycleWorkflow = readFileSync(new URL('../.github/workflows/keep-pull-requests-empty.yml', import.meta.url), 'utf8');
+test('live preview smoke skips cooldown-only deploy workflow runs',()=>{
+  assert.match(livePreviewWorkflow,/release_gate:/);
+  assert.match(livePreviewWorkflow,/Deploy to Vercel/);
+  assert.match(livePreviewWorkflow,/needs\.release_gate\.outputs\.deployed == 'true'/);
+  const job=livePreviewWorkflow.split('  production-preview:')[1]||'';
+  assert.equal((job.match(/^\s+if:/gm)||[]).length,1,
+    'production-preview must have exactly one job condition');
+  assert.doesNotMatch(livePreviewWorkflow,/commits\/\$DEPLOY_SHA\/status/,
+    'a stale success status must not trigger another production smoke run');
+});
+
 test('repository lifecycle workflow cannot close or mutate pull requests', () => {
   assert.match(lifecycleWorkflow, /workflow_dispatch:/);
   assert.doesNotMatch(lifecycleWorkflow, /pull_request_target:|schedule:|pull-requests:\s*write|issues:\s*write|pulls\.update/,
