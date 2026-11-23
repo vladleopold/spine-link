@@ -1,6 +1,10 @@
 # Live benchmark after deploying all-page embedded archive metadata.
 name: Spine archive live one-second lazy-card browser proof
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/archive-live-speed.yml'
   workflow_run:
     workflows: ["Vercel deploy and alias"]
     types: [completed]
