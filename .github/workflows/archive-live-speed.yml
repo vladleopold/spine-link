@@ -259,8 +259,10 @@ jobs:
               const newest20=first40.slice(0,20);
               const newest20Missing=newest20.filter(item=>!item.video||!item.poster);
               const newest20Blocked=newest20.filter(item=>
-                item.sourceWebmStatus.startsWith('blocked-')&&
-                item.sourcePreviewStatus==='blocked'&&!item.video&&!item.poster);
+                !item.video&&!item.poster&&(
+                  item.status==='blocked-no-webm-poster'||
+                  (item.sourceWebmStatus.startsWith('blocked-')&&item.sourcePreviewStatus==='blocked')
+                ));
               const newest20UnexpectedMissing=newest20Missing.filter(item=>!newest20Blocked.includes(item));
               const newest20InvalidBlocked=newest20.filter(item=>
                 item.sourceWebmStatus.startsWith('blocked-')&&
