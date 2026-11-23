@@ -34,6 +34,8 @@ test('Spine 4.2 and 4.3 JSON URLs keep a query-free extension for the official p
   assert.ok(previewSource.includes('const isSpine42Or43 = /^4[.][23](?:[.]|$)/'));
   assert.ok(previewSource.includes('if (isSpine42Or43)'));
   assert.ok(previewSource.includes('playerOptions.jsonUrl = skeletonPath'));
-  assert.ok(previewSource.includes('playerOptions.rawDataURIs ='));
-  assert.ok(previewSource.includes('Could not load Spine 4.x JSON skeleton'));
+  assert.ok(previewSource.includes('rawDataURIs[skeletonPath] = skeletonSource'));
+  assert.ok(previewSource.includes('rawDataURIs[atlasPath] = atlasSource'));
+  assert.ok(previewSource.includes('rawDataURIs[textureName] = textureSource'));
+  assert.ok(previewSource.includes('playerOptions.rawDataURIs = rawDataURIs'));
 });
