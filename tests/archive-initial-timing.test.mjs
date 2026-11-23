@@ -4,6 +4,7 @@ import { test } from 'node:test';
 
 const workflow = readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
 const livePreviewWorkflow = readFileSync(new URL('../.github/workflows/spine-link-live-preview-smoke.yml', import.meta.url), 'utf8');
+const archiveSource = readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
 
 test('initial archive poster timing excludes intentional prefetch warm-up when a poster exists', () => {
   const firstPoster = workflow.indexOf('initialPosterMs=Date.now()-started;');
@@ -13,6 +14,13 @@ test('initial archive poster timing excludes intentional prefetch warm-up when a
   assert.ok(warmup > firstPoster, 'first-poster timing includes warm-up delay');
   assert.ok(evidence > firstPoster && evidence < warmup, 'logged metric must use the captured checkpoint before warm-up');
   assert.ok(!workflow.includes('initialMs:Date.now()-started'), 'old inflated metric must not return');
+});
+
+test('archive continues from embedded cards to API pages while the sentinel remains near the viewport',()=>{
+  assert.match(archiveSource,/const embeddedStart=offset-initialItems\.length/);
+  assert.match(archiveSource,/if\(embeddedBatch\.length\)/);
+  assert.match(archiveSource,/if\(!data\)data=await fetchPage\(offset\)/);
+  assert.match(archiveSource,/if\(rect\.top<=window\.innerHeight\+2200\)void loadMore\(\)/);
 });
 
 test('first available archive poster decodes within one second when the initial batch has one', () => {
