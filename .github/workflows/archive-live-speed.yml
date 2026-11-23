@@ -29,7 +29,7 @@ jobs:
           jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")"
           deployed="$(printf '%s' "$jobs" | jq -r '[.jobs[].steps[]? | select(.name == "Deploy to Vercel" and .conclusion == "success")] | length > 0')"
           echo "deployed=$deployed" >> "$GITHUB_OUTPUT"
-          echo "VERIFIED_PRODUCTION_DEPLOY=$deployed for $DEPLOY_SHA"
+          echo "VERIFIED_PRODUCTION_DEPLOY=$deployed"
   chromium:
     needs: release_gate
     if: ${{ always() && (github.event_name != 'workflow_run' || needs.release_gate.outputs.deployed == 'true') }}
