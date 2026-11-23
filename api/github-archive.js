@@ -2362,10 +2362,13 @@ export default async function handler(request, response) {
     // Gallery pages read independent public indexes in parallel. Keep a brief
     // read cache: a scrolling user should not wait for multiple GitHub roundtrips
     // per page. The CDN also refreshes this snapshot after publication.
-    const [indexTexts, exclusionsText, metricsText, censorshipText] = await Promise.all([
+    const [indexTexts, recoveredIndexText, exclusionsText, metricsText, censorshipText] = await Promise.all([
       Promise.all(basePaths.map(basePath =>
         githubText(settings, `${basePath}/index.json`, { ttlMs: 20000 }).catch(() => '')
       )),
+      // Recover the few legacy uploads whose folders survived the library rotation
+      // but whose records were omitted from the new collection indexes.
+      githubText({ ...settings, branch: recoveredArchiveRef }, `${settings.basePath}/index.json`, { ttlMs: 60000 }).catch(() => ''),
       githubText(settings, `${settings.basePath}/archive-exclusions.json`),
       githubText(settings, `${settings.basePath}/metrics.json`),
       githubText(settings, 'library/censorship.json'),
@@ -2378,16 +2381,35 @@ export default async function handler(request, response) {
         if (Array.isArray(parsed)) collectedEntries.push(...parsed);
       } catch (err) {}
     }
-    const indexText = collectedEntries.length ? JSON.stringify(collectedEntries) : '';
+    const recoveredIds = new Set([
+      '1036_1-2026-07-24T21-06-04-535Z',
+      '8000021-2026-07-02T04-52-57-380Z',
+      '8000021-2026-07-02T04-43-24-403Z',
+    ]);
+    if (recoveredIndexText) {
+      try {
+        const recovered = JSON.parse(recoveredIndexText);
+        if (Array.isArray(recovered)) {
+          for (const entry of recovered) {
+            const id = String(entry?.id || '');
+            if (!recoveredIds.has(id)) continue;
+            const oldPath = `library/${id}/`;
+            const newPath = `library_01/${id}/`;
+            const restored = { ...entry, previewPath: newPath.slice(0, -1) };
+            for (const [key, value] of Object.entries(restored)) {
+              if (typeof value === 'string') restored[key] = value.replaceAll(oldPath, newPath);
+            }
+            collectedEntries.push(restored);
+          }
+        }
+      } catch (error) {}
+    }
     const exclusions = await withCensorshipLists(settings, exclusionsText ? JSON.parse(exclusionsText) : { rules: [], allow: [] }, censorshipText);
     const metrics = parseMetricsJson(metricsText);
-    const allEntries = indexText ? JSON.parse(indexText) : [];
-    const entries = Array.isArray(allEntries)
-      ? dedupeArchiveEntries(allEntries.filter((entry) => (
-          entry?.hiddenFromPublicLibrary !== true &&
-          !entryExcludedFromArchive(entry, exclusions)
-        )))
-      : [];
+    const entries = dedupeArchiveEntries(collectedEntries.filter((entry) => (
+      entry?.hiddenFromPublicLibrary !== true &&
+      !entryExcludedFromArchive(entry, exclusions)
+    )));
     entries.sort(compareArchiveEntries);
 
     if (request.query?.feed === 'home') {
