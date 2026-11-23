@@ -52,6 +52,14 @@ jobs:
           echo "deployed=$deployed" >> "$GITHUB_OUTPUT"
           echo "VERIFIED_PRODUCTION_DEPLOY=$deployed"
 
+      - name: Warm production archive HTML CDN cache before browser timing
+        if: steps.inspect.outputs.deployed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 25 'https://spine-link.vercel.app/world-spine-archive' -o /dev/null
+          echo "PASS production archive HTML cache warmed for the browser timing run"
+
   chromium:
     needs: release_gate
     if: ${{ always() && (github.event_name != 'workflow_run' || needs.release_gate.outputs.deployed == 'true') }}
