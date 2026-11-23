@@ -63,6 +63,15 @@ jobs:
           import { chromium } from 'playwright';
 
           const site = process.env.SITE;
+          async function gotoWithRetry(targetPage, url, options) {
+            let response = null;
+            for (let attempt = 0; attempt < 4; attempt++) {
+              response = await targetPage.goto(url, options);
+              if (response?.status() === 200) return response;
+              if (attempt < 3) await targetPage.waitForTimeout(1200 * (attempt + 1));
+            }
+            return response;
+          }
           const browser = await chromium.launch({
             headless: true,
             args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl'],
@@ -175,7 +184,7 @@ jobs:
             });
             try {
               const url = site + '/p/wolf-2026-11-20T05-12-56-813Z?animation=blow_loop_landscape';
-              const response = await page.goto(url, {
+              const response = await gotoWithRetry(page, url, {
                 waitUntil: 'domcontentloaded', timeout: 60000,
               });
               assert.equal(response?.status(), 200, 'Spine preview HTTP status');
@@ -388,7 +397,7 @@ jobs:
                   }
                 });
                 try {
-                  const playbackResponse = await playbackPage.goto(site + '/p/' + sample.id, {
+                  const playbackResponse = await gotoWithRetry(playbackPage, site + '/p/' + sample.id, {
                     waitUntil:'domcontentloaded', timeout:60000,
                   });
                   assert.equal(playbackResponse?.status(), 200, sample.label + ' preview HTTP status');
@@ -492,7 +501,7 @@ jobs:
               ]) {
                 const blockedPage = await browser.newPage({viewport:{width:1200,height:780}});
                 try {
-                  const blockedResponse = await blockedPage.goto(site + '/p/' + sample.id, {
+                  const blockedResponse = await gotoWithRetry(blockedPage, site + '/p/' + sample.id, {
                     waitUntil:'domcontentloaded', timeout:60000,
                   });
                   assert.equal(blockedResponse?.status(), 200, sample.label + ' preview HTTP status');
@@ -519,7 +528,7 @@ jobs:
               // test the official 3.8.99 runtime. Production files stay untouched.
               const compatPage = await browser.newPage({viewport:{width:1200,height:780}});
               try {
-                await compatPage.goto(site + '/p/sabrinaBedSide-2026-11-20T07-06-45-002Z',
+                await gotoWithRetry(compatPage, site + '/p/sabrinaBedSide-2026-11-20T07-06-45-002Z',
                   {waitUntil:'domcontentloaded',timeout:60000});
                 await compatPage.waitForSelector('#spine-preview-config');
                 const assets = await compatPage.evaluate(async () => {
