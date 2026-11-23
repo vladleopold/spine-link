@@ -284,8 +284,8 @@ test('production Chromium gate verifies the upstream Vercel deployment job', () 
   assert.match(browserWorkflow, /actions\/runs\/\$SOURCE_RUN_ID\/jobs\?per_page=100/);
   assert.match(browserWorkflow, /\.name == "Deploy to Vercel" and \.conclusion == "success"/);
   assert.match(browserWorkflow, /VERIFIED_PRODUCTION_DEPLOY=/);
-  assert.match(archiveLiveWorkflow, /commits\/\$DEPLOY_SHA\/status/);
-  assert.match(archiveLiveWorkflow, /\.context == "Vercel"/);
+  assert.match(archiveLiveWorkflow, /\.name == "Deploy to Vercel" and \.conclusion == "success"/);
+  assert.doesNotMatch(archiveLiveWorkflow, /commits\/\$DEPLOY_SHA\/status/);
 });
 
 test('production Chromium smoke performs real playback checks for Spine 3.8 through 4.3', () => {
