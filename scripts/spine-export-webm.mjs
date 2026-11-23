@@ -6,6 +6,10 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { trimBlackLead } from './lib/black-lead.mjs';
 import { collectionPathForUpload, entryForUpload } from './resolve-library.mjs';
+import { choosePreviewAnimation } from './preview-animation-choice.mjs';
+import { chooseSourceSet } from './lib/source-set-choice.mjs';
+import { chooseSourceSkeleton } from './source-skeleton-choice.mjs';
+import { chooseAtlasForSkeleton } from './atlas-pages.mjs';
 
 const args = {
   uploadId: '',
@@ -91,18 +95,40 @@ const previewDir = path.join(repoRoot, uploadPath);
 const sets = findSetDirectories(previewDir);
 
 if (sets.length === 0) {
-  console.error(`No Spine sets found in ${previewDir}`);
+  console.error('NO_SPINE_SOURCE_SET_FOUND');
   process.exit(1);
 }
 
-const firstSet = sets[0];
+const requestedSkeleton = String(entry.skeleton || entry.skeletonFile || '');
+const firstSet = chooseSourceSet(sets, requestedSkeleton, (set) => fs.readdirSync(set.path));
+if (!firstSet) {
+  console.error(requestedSkeleton
+    ? 'REQUESTED_SOURCE_SET_MISSING_OR_AMBIGUOUS'
+    : 'AMBIGUOUS_SOURCE_SKELETON_SET');
+  process.exit(1);
+}
+
 const setFiles = fs.readdirSync(firstSet.path);
-const skeletonFile = setFiles.find(f => /\.(json|skel)$/i.test(f));
-const atlasFile = setFiles.find(f => /\.(atlas|atlas\.txt|atlas\.docx)$/i.test(f));
+const isValidJsonSkeleton = (file) => {
+  if (!/\.json$/i.test(file)) return false;
+  try {
+    return Array.isArray(JSON.parse(fs.readFileSync(path.join(firstSet.path, file), 'utf8')).bones);
+  } catch {
+    return false;
+  }
+};
+let skeletonFile;
+try {
+  skeletonFile = chooseSourceSkeleton(requestedSkeleton, setFiles, isValidJsonSkeleton);
+} catch {
+  console.error('REQUESTED_SOURCE_SKELETON_MISSING_OR_AMBIGUOUS');
+  process.exit(1);
+}
+const atlasFile = chooseAtlasForSkeleton(skeletonFile, setFiles);
 const textureFiles = setFiles.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f));
 
 if (!skeletonFile || !atlasFile || textureFiles.length === 0) {
-  console.error(`Set ${firstSet.name} is missing required files`);
+  console.error('SOURCE_SKELETON_ATLAS_OR_TEXTURE_MISSING');
   process.exit(1);
 }
 
@@ -415,12 +441,20 @@ function sanitizedSkelBuffer(buffer, version = "") {
 const skeletonFilePath = path.join(firstSet.path, skeletonFile);
 const skeletonVersion = detectSkeletonVersion(skeletonFilePath);
 const skeletonBounds = readSkeletonBounds(skeletonFilePath);
-let targetAnimation = args.animation || entry.defaultAnimation || '';
+const requestedAnimation = args.animation !== ''
+  ? args.animation
+  : args.defaultAnimation !== ''
+    ? args.defaultAnimation
+    : (typeof entry.defaultAnimation === 'string' ? entry.defaultAnimation : '');
 const availableAnimations = readAnimationNames(skeletonFilePath);
-if (availableAnimations.length > 0) {
-  if (!targetAnimation || !availableAnimations.includes(targetAnimation)) {
-    targetAnimation = availableAnimations[0] || '';
-  }
+const targetAnimation = choosePreviewAnimation(availableAnimations, requestedAnimation);
+if (!targetAnimation) {
+  console.error('No explicit selected/default Spine animation; export blocked.');
+  process.exit(1);
+}
+if (!availableAnimations.includes(targetAnimation)) {
+  console.error('Selected Spine animation is unavailable in the source skeleton; export blocked.');
+  process.exit(1);
 }
 
 // --- Calculate dynamic video dimensions from skeleton bounds ---
@@ -522,30 +556,15 @@ console.error(`Skeleton: ${skeletonFile} (v${skeletonVersion})`);
 console.error(`Skeleton bounds: ${rawSkelWidth}x${rawSkelHeight}`);
 console.error(`Video dimensions: ${videoWidth}x${videoHeight} (from bounds + ${PAD_RATIO * 100}% padding)`);
 console.error(`Atlas: ${atlasFile}`);
-// Works that ship begin/end (or in/out) plus idle are recorded as a loop of the
-// whole scenario, so the preview video shows the same cycle the player runs.
-const animationToken = (name) => String(name || '').trim().toLowerCase().split('/').pop();
-const tokenIndex = new Map();
-for (const name of availableAnimations) {
-  const token = animationToken(name);
-  if (token && !tokenIndex.has(token)) tokenIndex.set(token, name);
-}
-const scenarioEntry = tokenIndex.has('in') ? tokenIndex.get('in') : tokenIndex.get('begin');
-const scenarioExit = tokenIndex.has('out') ? tokenIndex.get('out') : tokenIndex.get('end');
-const scenarioIdle = tokenIndex.has('idle') ? tokenIndex.get('idle') : tokenIndex.get('loop');
-const scenarioCycle = scenarioEntry && scenarioExit ? [scenarioEntry, scenarioIdle, scenarioIdle, scenarioExit].filter(Boolean) : [];
-const captureAnimation = scenarioCycle.length > 1 ? scenarioCycle[0] : targetAnimation;
-if (scenarioCycle.length > 1) {
-  console.error(`Scenario: ${scenarioCycle.join(' -> ')} (запись превью по кругу)`);
-}
+// Export exactly the selected animation. Do not compose a begin/idle/end
+// sequence or replace the selected track with another animation.
+const captureAnimation = targetAnimation;
 console.error(`Animation: ${captureAnimation}`);
 console.error(`Is default: ${isDefault}`);
 
-// Capture page builder. activeSkin selects the Spine skin to render; when
-// null the player default is used. Some skeletons draw nothing with the
-// default skin, so the export retries with named skins (see skinCandidates).
-function buildCaptureHtml(activeSkin) {
-const skinLine = activeSkin ? `    skin: '${activeSkin}',\n` : '';
+// Capture only the runtime's default skin. A named skin is a different visual
+// selection and must be explicitly selected upstream, never guessed here.
+function buildCaptureHtml() {
 return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -596,9 +615,7 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
     ${isLegacy ? `atlasUrl: '${atlasRawUrl}'` : `atlas: '${atlasRawUrl}'`},
     textures: ${JSON.stringify(textureRawUrls)},
     animation: '${captureAnimation}',
-    scenario: ${JSON.stringify(scenarioCycle)},
-    __spineScenario: ${JSON.stringify(scenarioCycle)},
-${skinLine}    showLoading: false,
+    showLoading: false,
     premultipliedAlpha: false,
     preserveDrawingBuffer: true,
     alpha: true,
@@ -609,31 +626,6 @@ ${skinLine}    showLoading: false,
       window.__ready = true;
       window.__canvasWidth = player.canvas ? player.canvas.width : 0;
       window.__canvasHeight = player.canvas ? player.canvas.height : 0;
-      
-      // begin -> idle -> idle -> end, on repeat, so the recorded preview shows the
-      // same loop the player plays on the work page.
-      try {
-        var cycle = Array.isArray(window.__spineScenario) ? window.__spineScenario : [];
-        if (cycle.length > 1 && player.animationState) {
-          var mixed = 0;
-          cycle.forEach(function (name, i) {
-            if (i === 0) player.setAnimation(0, name, true);
-            else player.animationState.addAnimation(0, name, true, mixed);
-          });
-          var state = player.animationState;
-          var originalSetAnimation = state.setAnimation.bind(state);
-          state.setAnimation = function (trackIndex, name, loop) {
-            var entry = originalSetAnimation(trackIndex, name, loop);
-            // Keep the cycle running: when it ends, restart from the first step.
-            var current = state.getCurrent(0);
-            if (current && !current.next) {
-              current.next = { animation: cycle[0], delay: 0, loop: true, mixDuration: mixed, mixTime: mixed };
-            }
-            return entry;
-          };
-        }
-      } catch (e) {}
-
       try {
         var track = player.animationState ? player.animationState.getCurrent(0) : null;
         if (track && track.animation && typeof track.animation.duration === 'number') {
@@ -782,14 +774,10 @@ try {
       });
     });
   }
-  // Skin fallback: the player default skin sometimes renders nothing but the
-  // background (e.g. a skeleton whose visible attachments live on a named
-  // skin). Capture with the default first to preserve existing renders,
-  // then retry with each named non-default skin until a frame shows content.
+  // Keep the runtime's default skin. If it produces no visible pixels, mark
+  // the preview blocked rather than silently changing the work's appearance.
   const FRAME_PEAK_MIN = 40;
-  const skinNames = readSkinNames(skeletonFilePath);
-  const skinCandidates = [null, ...skinNames.filter((s) => s && s.toLowerCase() !== 'default')];
-  console.error(`Skin candidates: ${JSON.stringify(skinCandidates)}`);
+  const skinCandidates = [null];
 
   let chosenSkin = null;
   let animDuration = 0;
@@ -802,7 +790,7 @@ try {
 
   for (const skin of skinCandidates) {
     const label = skin === null ? '(default)' : `'${skin}'`;
-    await page.setContent(buildCaptureHtml(skin), { waitUntil: 'load', timeout: 60000 });
+    await page.setContent(buildCaptureHtml(), { waitUntil: 'load', timeout: 60000 });
     let ready = true;
     try {
       await page.waitForFunction(() => window.__ready === true || window.__captureError, { timeout: 60000, polling: 200 });
@@ -852,10 +840,10 @@ try {
     canvasHeight = canvasSize[1] || videoHeight;
     const framePeak = await page.evaluate(() => (typeof window.__framePeak === 'function' ? window.__framePeak() : -1));
     console.error(`Skin ${label}: frame peak=${framePeak}, canvas=${canvasWidth}x${canvasHeight}, duration=${animDuration}s`);
-    const moreSkins = skinCandidates.indexOf(skin) < skinCandidates.length - 1;
-    if (framePeak < FRAME_PEAK_MIN && moreSkins) {
-      console.error(`Skin ${label} rendered no visible content, trying next skin...`);
-      continue;
+    if (framePeak < FRAME_PEAK_MIN) {
+      lastCaptureError = 'DEFAULT_SKIN_NO_VISIBLE_CONTENT';
+      console.error('Capture blocked: the selected animation produced no visible content with the runtime default skin.');
+      break;
     }
 
     // Start recording only now, on the settled canvas showing content.
@@ -867,18 +855,6 @@ try {
       break;
     }
 
-    // A scenario is recorded in full: every step plays once, back to back.
-    if (scenarioCycle.length > 1) {
-      let scenarioDuration = 0;
-      for (const stepName of scenarioCycle) {
-        const stepDuration = readJsonAnimationDuration(skeletonFilePath, stepName);
-        scenarioDuration += stepDuration > 0 ? stepDuration : effectiveDuration;
-      }
-      if (scenarioDuration > 0) {
-        captureDuration = scenarioDuration;
-        console.error(`Scenario duration: ${scenarioDuration.toFixed(2)}s (${scenarioCycle.join(' + ')})`);
-      }
-    }
     if (captureDuration <= 0) captureDuration = effectiveDuration > 0 ? effectiveDuration : 1; // Record exactly the animation duration (no artificial minimum)
     await new Promise((resolve) => setTimeout(resolve, captureDuration * 1000));
 
