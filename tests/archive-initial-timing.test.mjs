@@ -39,6 +39,8 @@ test('first available archive poster transfers and decodes within one second whe
     'only measure a first poster when the initial archive batch has an eligible preview');
   assert.match(workflow,/const img=document\.querySelector\('\.feed-card \.feed-media img'\)/,
     'measure the first available media poster');
+  assert.doesNotMatch(workflow,/firstPoster\.waitFor\(\{state:'visible'/,
+    'offscreen visibility must not be confused with poster load latency');
   assert.match(workflow,/await firstPoster\.evaluate\(img=>img\.decode\(\)\)/,
     'wait for actual browser image decoding');
   assert.match(workflow,/no eligible WebP poster in the first card batch/,
