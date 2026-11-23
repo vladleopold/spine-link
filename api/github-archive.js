@@ -357,35 +357,16 @@ function entryBaseTitle(entry) {
 }
 
 function dedupeArchiveEntries(entries) {
-  const byFile = new Map();
-  const result = [];
-  for (const entry of entries) {
-    const file = String(entry?.skeleton || '').trim();
-    if (file) {
-      const base = file.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase();
-      if (!byFile.has(base)) {
-        byFile.set(base, result.length);
-        result.push(entry);
-        continue;
-      }
-      const prev = result[byFile.get(base)];
-      const prevId = entryFileStamp(prev?.id || prev?.uploadedAt || '');
-      const curId = entryFileStamp(entry?.id || entry?.uploadedAt || '');
-      if (curId && (!prevId || curId > prevId)) result[byFile.get(base)] = entry;
-      continue;
-    }
-    const key = entryBaseTitle(entry) || String(entry?.previewPath || '').trim().toLowerCase() || String(entry?.title || '').trim().toLowerCase();
-    if (!byFile.has(key)) {
-      byFile.set(key, result.length);
-      result.push(entry);
-      continue;
-    }
-    const prev = result[byFile.get(key)];
-    const prevId = entryFileStamp(prev?.id || prev?.uploadedAt || '');
-    const curId = entryFileStamp(entry?.id || entry?.uploadedAt || '');
-    if (curId && (!prevId || curId > prevId)) result[byFile.get(key)] = entry;
+  // A repeated skeleton filename is not a duplicate work: users may upload
+  // multiple revisions or separate projects with the same export filename.
+  // Only collapse repeated index records with the exact same immutable work ID.
+  const byId = new Map();
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const id = String(entry?.id || '').trim();
+    if (!id) continue;
+    if (!byId.has(id)) byId.set(id, entry);
   }
-  return result;
+  return Array.from(byId.values());
 }
 
 function previewUrl(entry) {
