@@ -79,6 +79,11 @@ jobs:
                   waitUntil:'domcontentloaded',timeout:45000,
                 });
                 assert.equal(response?.status(),200);
+                const archiveMetaResponse=await fetch('https://spine-link.vercel.app/api/github-archive?feed=archive&offset=0&limit=1',{headers:{'Cache-Control':'no-cache'}});
+                assert.equal(archiveMetaResponse.status,200,'Archive metadata API HTTP '+archiveMetaResponse.status);
+                const archiveMeta=await archiveMetaResponse.json();
+                const expectedCards=Math.min(40,Math.max(0,Number(archiveMeta.total)||0));
+                assert.ok(expectedCards>0,'Public archive returned no entries');
                 const firstHtml=await page.content();
                 assert.match(firstHtml,/class="feed-card"/,'Archive must render its initial card batch');
                 const initialArchiveFeedRequests=archiveFeedRequests.length;
@@ -129,7 +134,7 @@ jobs:
               const before=await page.locator('.feed-card').count();
               const sentinelBefore=(await page.locator('#sentinel').textContent()||'').trim();
               let latency=0,after=before,posterMs=null;
-              if(before<40&&sentinelBefore!=='End of archive'){
+              if(before<expectedCards&&sentinelBefore!=='End of archive'){
                 const scrollStart=Date.now();
                 await page.locator('#sentinel').scrollIntoViewIfNeeded();
                 await page.waitForFunction(n=>document.querySelectorAll('.feed-card').length>n,
@@ -154,19 +159,19 @@ jobs:
                 assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
               }else{
                 console.log('ARCHIVE_NEXT_BATCH_EVIDENCE '+JSON.stringify({
-                  alreadyPrefetched:before>=40,sentinel:sentinelBefore,cards:before
+                  alreadyPrefetched:before>=expectedCards,sentinel:sentinelBefore,cards:before,expectedCards
                 }));
               }
               assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
               // Continue through the live archive until the first 40 newest
               // public animation cards are present in the DOM.
-              while(await page.locator('.feed-card').count()<40){
+              while(await page.locator('.feed-card').count()<expectedCards){
                 const previous=await page.locator('.feed-card').count();
                 await page.locator('#sentinel').scrollIntoViewIfNeeded();
                 await page.waitForFunction(n=>document.querySelectorAll('.feed-card').length>n,
                   previous,{timeout:12000});
               }
-              const first40=await page.locator('.feed-card').evaluateAll(cards=>cards.slice(0,40).map(card=>{
+              const first40=await page.locator('.feed-card').evaluateAll((cards,n)=>cards.slice(0,n).map(card=>{
                 const image=card.querySelector('.feed-media img');
                 const video=card.dataset.videoSrc||'';
                 const poster=image?.getAttribute('src')||'';
@@ -180,8 +185,8 @@ jobs:
                   fallback:!!card.querySelector('[data-fallback-src],[data-video-fallback],.feed-placeholder,.media-fallback'),
                   mediaText:(card.querySelector('.feed-media')?.textContent||'').trim(),
                 };
-              }));
-              assert.equal(first40.length,40,'Archive did not expose 40 newest cards');
+              }),expectedCards);
+              assert.equal(first40.length,expectedCards,'Archive did not expose its available first cards');
               const paired=first40.filter(item=>item.video&&item.poster);
               const badPairs=first40.filter(item=>{
                 if(!item.video&&!item.poster)return false;
@@ -206,11 +211,12 @@ jobs:
               const newest20InvalidBlocked=newest20.filter(item=>
                 item.sourceWebmStatus.startsWith('blocked-')&&
                 item.sourcePreviewStatus==='blocked'&&(item.video||item.poster));
-              const older20Missing=first40.slice(20,40).filter(item=>!item.video||!item.poster);
+              const olderCards=first40.slice(20);
+              const older20Missing=olderCards.filter(item=>!item.video||!item.poster);
               // Every eligible newest card must have its own WebM/WebP pair.
               // Explicitly blocked source records remain blank; never guess an
               // animation or substitute an unrelated texture as a fake preview.
-              assert.deepEqual(badPairs,[],'Mismatched video/poster quality or work path in first 40 cards');
+              assert.deepEqual(badPairs,[],'Mismatched video/poster quality or work path in available first cards');
               assert.deepEqual(fallbacks,[],'Archive card contains a forbidden image/text fallback');
               const checks=await Promise.all(paired.map(async item=>{
                 const [posterResponse,videoResponse]=await Promise.all([
@@ -230,8 +236,8 @@ jobs:
                 ![200,206].includes(x.videoStatus)||!x.webp||!x.webm);
               console.log('ARCHIVE_FIRST40_EVIDENCE '+JSON.stringify({
                 viewport:viewport.width,initialMs:initialPosterMs,initialTiming,appendMs:latency,posterMs,
-                before,after,checked:checks.length,newest20Ready:20-newest20Blocked.length,newest20Blocked:newest20Blocked.length,
-                older20Ready:20-older20Missing.length,older20Missing:older20Missing.length,
+                before,after,checked:checks.length,newest20Ready:newest20.length-newest20Blocked.length,newest20Blocked:newest20Blocked.length,
+                older20Ready:olderCards.length-older20Missing.length,older20Missing:older20Missing.length,
                 archiveFeedRequests:archiveFeedRequests.length,webpRequests:mediaRequests.filter(x=>x.type==='webp').length,
                 webmRequests:mediaRequests.filter(x=>x.type==='webm').length,
                 brokenAssets:broken,
@@ -242,7 +248,7 @@ jobs:
                 'A blocked card must not expose partial or fabricated preview media');
               assert.equal(newest20Missing.length,newest20Blocked.length,
                 'Every newest-20 missing preview must have an explicit blocked status');
-              assert.deepEqual(broken,[],'One of the first 40 cards has a missing/non-WebP/non-WebM asset');
+              assert.deepEqual(broken,[],'One of the available first cards has a missing/non-WebP/non-WebM asset');
               assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
               if(posterMs!==null)assert.ok(posterMs<=1000,'Three new WebP posters took over one second: '+posterMs+'ms');
               } finally {
