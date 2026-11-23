@@ -412,7 +412,9 @@ function dedupeArchiveEntries(entries) {
 
 function previewUrl(entry) {
   const id = encodeURIComponent(String(entry?.id || ''));
-  const animation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+  const previewAnimation = typeof entry?.previewAnimation === 'string' ? entry.previewAnimation : '';
+  const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+  const animation = previewAnimation.trim() ? previewAnimation : defaultAnimation;
   return animation.trim() ? `/p/${id}?animation=${encodeURIComponent(animation)}` : `/p/${id}`;
 }
 
