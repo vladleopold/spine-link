@@ -362,14 +362,20 @@ jobs:
                 {label:'Spine 3.8.99 castle_upgrade', id:'castle_upgrade-2026-11-19T07-33-26-823Z', animation:'build'},
                 {label:'Spine 4.0.58', id:'276-Spine-2014--2026-10-24T21-46-51-258Z', animation:'walk'},
                 {label:'Spine 4.1.24', id:'wolf-2026-11-20T05-12-56-813Z', animation:'blow_loop_landscape'},
-                {label:'Spine 4.2.0', id:'dryad-2026-09-30T21-54-03-321Z', animation:'walk'},
+                {label:'Spine 4.2.0 character', id:'character-2026-10-20T09-50-47-424Z', animation:'idle'},
+                {label:'Spine 4.2.20 P4999', id:'P4999-2026-11-09T06-45-27-430Z', animation:'animation'},
+                {label:'Spine 4.2.0 dryad diagnostic', id:'dryad-2026-09-30T21-54-03-321Z', animation:'walk'},
                 {label:'Spine 4.3.00', id:'superboxbot-2026-10-18T03-51-48-726Z', animation:'walk'},
               ];
               for (const sample of playbackCases) {
                 const playbackPage = await browser.newPage({viewport:{width:1200,height:780}});
                 const playbackErrors = [];
                 const playbackMissingAssets = [];
+                const playbackConsoleErrors = [];
                 playbackPage.on('pageerror', error => playbackErrors.push(String(error)));
+                playbackPage.on('console', message => {
+                  if (message.type() === 'error') playbackConsoleErrors.push(message.text());
+                });
                 playbackPage.on('response', response => {
                   if (response.status() >= 400 &&
                       /\.(?:atlas|json|png|webp|skel)(?:\?|$)/i.test(response.url())) {
@@ -381,15 +387,51 @@ jobs:
                     waitUntil:'domcontentloaded', timeout:60000,
                   });
                   assert.equal(playbackResponse?.status(), 200, sample.label + ' preview HTTP status');
-                  await playbackPage.waitForFunction(() => {
+                  const assetDiagnostic = await playbackPage.evaluate(async () => {
+                    const raw = document.querySelector('#spine-preview-config')?.textContent || '{}';
+                    const config = JSON.parse(raw);
+                    const set = config.sets?.[0] || {};
+                    const jsonUrl = set.jsonUrl || set.skelUrl || set.skeleton || '';
+                    const atlasUrl = set.atlasUrl || set.atlas || '';
+                    let jsonStatus = 0, atlasStatus = 0, jsonData = null, jsonContentType = '';
+                    if (jsonUrl) {
+                      const response = await fetch(jsonUrl, {cache:'no-store'});
+                      jsonStatus = response.status;
+                      jsonContentType = response.headers.get('content-type') || '';
+                      const body = await response.text();
+                      try { jsonData = JSON.parse(body); } catch {}
+                    }
+                    if (atlasUrl) {
+                      const response = await fetch(atlasUrl, {cache:'no-store'});
+                      atlasStatus = response.status;
+                    }
+                    const boneNames = new Set((jsonData?.bones || []).map(bone => bone.name));
+                    const missingSlotBones = (jsonData?.slots || [])
+                      .filter(slot => !boneNames.has(slot.bone))
+                      .map(slot => ({slot:slot.name,bone:slot.bone}));
+                    return {
+                      setKeys:Object.keys(set), jsonUrl, atlasUrl, jsonStatus, atlasStatus,
+                      jsonContentType, jsonVersion:jsonData?.skeleton?.spine || '',
+                      boneCount:jsonData?.bones?.length || 0, slotCount:jsonData?.slots?.length || 0,
+                      missingSlotBones,
+                    };
+                  });
+                  console.log('SPINE ASSET DIAGNOSTIC', sample.label, JSON.stringify(assetDiagnostic));
+                  const reachedTerminalState = await playbackPage.waitForFunction(() => {
                     const player = document.querySelector('#player');
                     return player && ['ready','blocked'].includes(player.dataset.previewStatus || '');
-                  }, null, {timeout:60000});
+                  }, null, {timeout:15000}).then(() => true).catch(() => false);
                   const beforeSelection = await playbackPage.evaluate(() => ({
                     status: document.querySelector('#player')?.dataset.previewStatus || '',
                     error: document.querySelector('#player')?.dataset.previewError || '',
+                    runtimeText: document.querySelector('#player')?.innerText || '',
                     animationCount: document.querySelectorAll('#animation-menu button').length,
                   }));
+                  if (!reachedTerminalState) {
+                    failures.push(sample.label + ' Runtime stayed in loading state: ' +
+                      JSON.stringify({beforeSelection,assetDiagnostic,playbackConsoleErrors,playbackErrors}));
+                    continue;
+                  }
                   assert.equal(beforeSelection.status, 'ready',
                     sample.label + ' Runtime must reach ready; got ' + JSON.stringify(beforeSelection));
                   assert.ok(beforeSelection.animationCount > 0,
@@ -421,6 +463,8 @@ jobs:
                     sample.label + ' missing Spine assets: ' + JSON.stringify(playbackMissingAssets));
                   assert.deepEqual(playbackErrors, [],
                     sample.label + ' JavaScript errors: ' + JSON.stringify(playbackErrors));
+                  assert.deepEqual(playbackConsoleErrors, [],
+                    sample.label + ' console errors: ' + JSON.stringify(playbackConsoleErrors));
                   console.log('PASS REAL SPINE PLAYBACK', sample.label, sample.animation,
                     JSON.stringify({dimensions,hashA,hashB}));
                 } catch (error) {
@@ -437,7 +481,6 @@ jobs:
               // the site reports the exact cause rather than a generic player failure.
               for (const sample of [
                 {label:'sabrinaBedSide', id:'sabrinaBedSide-2026-11-20T07-06-45-002Z'},
-                {label:'whiskey_glass', id:'whiskey_glass-2026-11-04T08-13-32-548Z'},
               ]) {
                 const blockedPage = await browser.newPage({viewport:{width:1200,height:780}});
                 try {

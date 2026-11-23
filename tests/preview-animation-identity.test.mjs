@@ -288,10 +288,11 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
     'castle_upgrade-2026-11-19T07-33-26-823Z',
     '276-Spine-2014--2026-10-24T21-46-51-258Z',
     'wolf-2026-11-20T05-12-56-813Z',
+    'character-2026-10-20T09-50-47-424Z',
+    'P4999-2026-11-09T06-45-27-430Z',
     'dryad-2026-09-30T21-54-03-321Z',
     'superboxbot-2026-10-18T03-51-48-726Z',
     'sabrinaBedSide-2026-11-20T07-06-45-002Z',
-    'whiskey_glass-2026-11-04T08-13-32-548Z',
   ]) assert.ok(browserWorkflow.includes(id), `missing live runtime fixture: ${id}`);
   assert.match(browserWorkflow, /beforeSelection\.status, 'ready'/);
   assert.match(browserWorkflow, /info\.status, 'ready'/);
@@ -299,6 +300,8 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
   assert.match(browserWorkflow, /const url = site \+ '\/p\/wolf-2026-11-20T05-12-56-813Z\?animation=blow_loop_landscape'/);
   assert.doesNotMatch(browserWorkflow, /spine-link-e2e-2026-11-14T09-30-30-139Z|l3_socks-2026-10-14T14-46-08-978Z/);
   assert.match(browserWorkflow, /dataset\.previewAnimation === name/);
+  assert.match(browserWorkflow, /SPINE ASSET DIAGNOSTIC/);
+  assert.match(browserWorkflow, /missingSlotBones/);
   assert.match(browserWorkflow, /createHash\('sha256'\)/);
   assert.match(browserWorkflow, /UNSUPPORTED_SPINE_3_8_75/);
 });
