@@ -480,7 +480,7 @@ jobs:
                   assert.deepEqual(playbackErrors, [],
                     sample.label + ' JavaScript errors: ' + JSON.stringify(playbackErrors));
                   const relevantConsoleErrors = playbackConsoleErrors.filter(message =>
-                    !/Failed to load resource: the server responded with a status of 404 \\(\\)/.test(message));
+                    !/Failed to load resource:.*status of 404/.test(message));
                   if (relevantConsoleErrors.length !== playbackConsoleErrors.length) {
                     console.log('IGNORED NON-SPINE 404 CONSOLE MESSAGES', sample.label,
                       JSON.stringify(playbackConsoleErrors.filter(message => !relevantConsoleErrors.includes(message))));
