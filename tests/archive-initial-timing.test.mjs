@@ -57,6 +57,11 @@ test('live preview smoke skips cooldown-only deploy workflow runs',()=>{
   assert.match(livePreviewWorkflow,/release_gate:/);
   assert.match(livePreviewWorkflow,/Deploy to Vercel/);
   assert.match(livePreviewWorkflow,/needs\.release_gate\.outputs\.deployed == 'true'/);
+  assert.match(livePreviewWorkflow,/commits\/\$DEPLOY_SHA\/status/);
+  assert.match(livePreviewWorkflow,/\.context == "Vercel" and \.state == "success"/);
+  assert.match(livePreviewWorkflow,/WORKFLOW_FILE: spine-link-live-preview-smoke\.yml/);
+  assert.match(livePreviewWorkflow,/SMOKE_JOB_NAME: production-preview/);
+  assert.match(livePreviewWorkflow,/prior_success/);
   const job=livePreviewWorkflow.split('  production-preview:')[1]||'';
   assert.equal((job.match(/^\s+if:/gm)||[]).length,1,
     'production-preview must have exactly one job condition');
