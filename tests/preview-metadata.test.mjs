@@ -11,10 +11,9 @@ test('root-level assets retain collection metadata and Download exports',async()
 
 
 test('restored pre-rotation archive works also resolve from /p links', async () => {
-  const recoverySnippet = source.slice(
-    source.indexOf('async function resolveEntryRecord('),
-    source.indexOf('\\n}\\n\\n// The asset directory'),
-  );
+  const recoveryStart = source.indexOf('async function resolveEntryRecord(');
+  const recoveryEnd = source.indexOf('// The asset directory', recoveryStart);
+  const recoverySnippet = source.slice(recoveryStart, recoveryEnd).trim();
   const recoveredIds = [
     '1036_1-2026-07-24T21-06-04-535Z',
     '8000021-2026-07-02T04-52-57-380Z',
@@ -35,7 +34,7 @@ test('restored pre-rotation archive works also resolve from /p links', async () 
     'githubText',
     `${recoverySnippet}; return resolveEntryRecord;`,
   )(
-    (value) => String(value || '').trim().replace(/^\\/+|\\/+$/g, '').replace(/\\/+/g, '/'),
+    (value) => String(value || '').split('/').filter(Boolean).join('/'),
     async () => ['library_02', 'library_01'],
     async (settings, path) => {
       if (settings.branch === snapshotRef && path === 'library/index.json') {
