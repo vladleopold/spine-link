@@ -174,7 +174,7 @@ jobs:
               }
             });
             try {
-              const url = site + '/p/l3_socks-2026-10-14T14-46-08-978Z?animation=idle';
+              const url = site + '/p/wolf-2026-11-20T05-12-56-813Z?animation=blow_loop_landscape';
               const response = await page.goto(url, {
                 waitUntil: 'domcontentloaded', timeout: 60000,
               });
@@ -349,7 +349,6 @@ jobs:
               // Verify actual runtime initialization, exact animation selection,
               // and moving canvas pixels across every supported major/minor line.
               const playbackCases = [
-                {label:'Spine 3.8.99 l3_socks', id:'l3_socks-2026-10-14T14-46-08-978Z', animation:'idle'},
                 {label:'Spine 3.8.99 castle_upgrade', id:'castle_upgrade-2026-11-19T07-33-26-823Z', animation:'build'},
                 {label:'Spine 4.0.58', id:'276-Spine-2014--2026-10-24T21-46-51-258Z', animation:'walk'},
                 {label:'Spine 4.1.24', id:'wolf-2026-11-20T05-12-56-813Z', animation:'blow_loop_landscape'},

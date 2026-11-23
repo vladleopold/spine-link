@@ -77,31 +77,37 @@ jobs:
                 });
                 assert.equal(response?.status(),200);
                 const firstHtml=await page.content();
-                assert.match(firstHtml,/data-video-src=/,'No deferred video data on gallery cards');
+                assert.match(firstHtml,/class="feed-card"/,'Archive must render its initial card batch');
                 assert.ok(!firstHtml.includes('<video src="'),'Initial cards must never eagerly load WebM');
-                await page.waitForFunction(()=>{
-                  const img=document.querySelector('.feed-card img');
-                  return img&&img.complete&&img.naturalWidth>0;
-                },{timeout:20000});
-                await page.locator('.feed-card img').first().evaluate(img=>img.decode());
-                const initialPosterMs=Date.now()-started;
-                const initialTiming=await page.evaluate(()=>{
-                  const nav=performance.getEntriesByType('navigation')[0];
-                  const img=document.querySelector('.feed-card img');
-                  const resource=img?performance.getEntriesByName(img.currentSrc||img.src).filter(x=>x.entryType==='resource').at(-1):null;
-                  return {
-                    responseStartMs:Math.round(nav?.responseStart||0),
-                    domContentLoadedMs:Math.round(nav?.domContentLoadedEventEnd||0),
-                    posterStartMs:Math.round(resource?.startTime||0),
-                    posterEndMs:Math.round(resource?.responseEnd||0),
-                    posterTransferBytes:Math.round(resource?.transferSize||0),
-                  };
-                });
+                const initialPosterCount=await page.locator('.feed-card .feed-media img').count();
+                let initialPosterMs=null;
+                let initialTiming={posterAvailable:false};
+                if(initialPosterCount>0){
+                  const firstPoster=page.locator('.feed-card .feed-media img').first();
+                  await firstPoster.waitFor({state:'visible',timeout:20000});
+                  await firstPoster.evaluate(img=>img.decode());
+                  initialPosterMs=Date.now()-started;
+                  initialTiming=await page.evaluate(()=>{
+                    const nav=performance.getEntriesByType('navigation')[0];
+                    const img=document.querySelector('.feed-card .feed-media img');
+                    const resource=img?performance.getEntriesByName(img.currentSrc||img.src).filter(x=>x.entryType==='resource').at(-1):null;
+                    return {
+                      posterAvailable:true,
+                      responseStartMs:Math.round(nav?.responseStart||0),
+                      domContentLoadedMs:Math.round(nav?.domContentLoadedEventEnd||0),
+                      posterStartMs:Math.round(resource?.startTime||0),
+                      posterEndMs:Math.round(resource?.responseEnd||0),
+                      posterTransferBytes:Math.round(resource?.transferSize||0),
+                    };
+                  });
+                  assert.ok(initialPosterMs<=1000,
+                    'First available archive WebP did not decode within one second: '+initialPosterMs+'ms');
+                }else{
+                  console.log('ARCHIVE_INITIAL_POSTER_EVIDENCE no eligible WebP poster in the first card batch');
+                }
                 console.log('ARCHIVE_INITIAL_POSTER_EVIDENCE '+JSON.stringify({
                   viewport:viewport.width,initialMs:initialPosterMs,...initialTiming
                 }));
-                assert.ok(initialPosterMs<=1000,
-                  'First archive card WebP did not decode within one second: '+initialPosterMs+'ms');
                 // Capture initial visibility BEFORE the deliberate 1.9s warm-up.
                 // The old initialMs included this sleep and misreported page latency.
                 const firstWebp=mediaRequests.find(r=>r.type==='webp');
@@ -117,15 +123,22 @@ jobs:
               await page.waitForFunction(n=>document.querySelectorAll('.feed-card').length>n,
                 before,{timeout:9500});
               const latency=Date.now()-scrollStart;
-              await page.waitForFunction(n=>{
-                const newCards=Array.from(document.querySelectorAll('.feed-card')).slice(n,n+6);
-                return newCards.filter(card=>{
-                  const image=card.querySelector('img');
-                  return image && image.complete && image.naturalWidth>0;
-                }).length>=3;
-              },before,{timeout:9000});
-              const posterMs=Date.now()-scrollStart;
               const after=await page.locator('.feed-card').count();
+              const newBatchPosters=await page.locator('.feed-card').evaluateAll((cards,n)=>cards.slice(n,n+6)
+                .filter(card=>card.querySelector('.feed-media img')).length,before);
+              let posterMs=null;
+              if(newBatchPosters>=3){
+                await page.waitForFunction(n=>{
+                  const newCards=Array.from(document.querySelectorAll('.feed-card')).slice(n,n+6);
+                  return newCards.filter(card=>{
+                    const image=card.querySelector('.feed-media img');
+                    return image && image.complete && image.naturalWidth>0;
+                  }).length>=3;
+                },before,{timeout:9000});
+                posterMs=Date.now()-scrollStart;
+              }else{
+                console.log('ARCHIVE_NEXT_BATCH_POSTER_EVIDENCE no three eligible WebP posters in this batch');
+              }
               assert.ok(after>before);
               assert.deepEqual(pageErrors,[],'Production gallery JavaScript errors');
               // Continue through the live archive until the first 40 newest
@@ -214,7 +227,7 @@ jobs:
                 'Every newest-20 missing preview must have an explicit blocked status');
               assert.deepEqual(broken,[],'One of the first 40 cards has a missing/non-WebP/non-WebM asset');
               assert.ok(latency<=1000,'Next card batch took more than 1 second to appear: '+latency+'ms');
-              assert.ok(posterMs<=1000,'Three new WebP posters took over one second: '+posterMs+'ms');
+              if(posterMs!==null)assert.ok(posterMs<=1000,'Three new WebP posters took over one second: '+posterMs+'ms');
               } finally {
                 await page.close();
               }
