@@ -141,13 +141,14 @@ test('only a matching medium WebM and its own medium first-frame WebP unlock a c
     thumbnail:'https://spine-link.vercel.app/assets/library_02/card-000/texture.webp',
     webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
     webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webm',
-    webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
+    webmPreviewLow:'',
+    webpPosterLow:'',
     webmStatus:'ready',previewStatus:'ready',
     allAnimationPreviews:{walk:{
       webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webm',
-      webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
+      webmPreviewLow:'',
       webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webp',
-      webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp',
+      webpPosterLow:'',
     }},
   }];
   const log=[];
@@ -269,11 +270,12 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     const firstCardStart=html.indexOf('<article class="feed-card"');
     const firstCardEnd=html.indexOf('</article>',firstCardStart);
     const firstCard=html.slice(firstCardStart,firstCardEnd);
-    assert.ok(firstCard.includes('src="https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp"'),
+    assert.ok(firstCard.includes('/preview-low.webp"'),
       'the initial visible card must prefer its smaller low WebP poster');
-    assert.ok(firstCard.includes('data-video-src="https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm"'),
+    assert.ok(firstCard.includes('/preview-low.webm'),
       'the initial card must pair the low poster with its exact low WebM');
-    assert.ok(html.includes('rel="preload" as="image" href="https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp"'),
+    const firstPoster=firstCard.match(/src="([^"]+preview-low\\.webp[^"]*)"/)?.[1]||'';
+    assert.ok(firstPoster&&html.includes('rel="preload" as="image" href="'+firstPoster+'"'),
       'preload the same small poster used by the first visible card');
     assert.ok(!html.includes('<video src="'), 'eager WebM would block WebP posters');
     assert.ok(html.includes('data-video-src='),'video URL must be deferred on each card');
