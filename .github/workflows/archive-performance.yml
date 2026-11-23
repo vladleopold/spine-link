@@ -18,6 +18,7 @@ on:
       - .github/workflows/archive-performance.yml
       - .github/workflows/vercel-deploy-and-alias.yml
       - .github/workflows/archive-live-speed.yml
+      - .github/workflows/spine-link-live-preview-smoke.yml
   pull_request:
     paths:
       - api/github-archive.js
