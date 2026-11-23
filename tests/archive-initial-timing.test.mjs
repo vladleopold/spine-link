@@ -17,8 +17,8 @@ test('initial archive poster timing excludes intentional prefetch warm-up when a
 });
 
 test('archive continues from embedded cards to API pages while the sentinel remains near the viewport',()=>{
-  assert.match(archiveSource,/const embeddedStart=offset-initialItems\.length/);
-  assert.match(archiveSource,/if\(embeddedBatch\.length\)/);
+  assert.match(archiveSource,/if\(offset<embeddedEnd\)/);
+  assert.match(archiveSource,/else if\(prefetched&&prefetched\.start===offset\)/);
   assert.match(archiveSource,/if\(!data\)data=await fetchPage\(offset\)/);
   assert.match(archiveSource,/if\(rect\.top<=window\.innerHeight\+2200\)void loadMore\(\)/);
 });
