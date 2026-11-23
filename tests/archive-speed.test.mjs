@@ -360,3 +360,26 @@ test('archive never substitutes another animation when defaultAnimation is absen
     if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
+
+test('active library shard preview status supersedes stale recovery-index duplicate',async()=>{
+  const id='duplicate-preview-state-2026-11-20T15-00-00-000Z';
+  const stale={...entries[0],id,defaultAnimation:'',webmStatus:'',previewStatus:'',allAnimationPreviews:{}};
+  const current={...stale,webmStatus:'blocked-missing-animation-selection',previewStatus:'blocked',
+    previewBlockedAt:'2026-11-20T16:00:00.000Z'};
+  const log=[];
+  globalThis.fetch=stubFetch(log,[stale,current]);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-current-preview-state-wins';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'1'}},res);
+    assert.equal(res.code,200);
+    assert.equal(res.body.entries[0].sourceWebmStatus,'blocked-missing-animation-selection');
+    assert.equal(res.body.entries[0].sourcePreviewStatus,'blocked');
+    assert.equal(res.body.entries[0].video,'','blocked duplicate must not expose stale media');
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
