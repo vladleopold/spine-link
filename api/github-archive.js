@@ -580,7 +580,7 @@ function archiveFeedEntry(origin, entry, metrics) {
     width: positiveInteger(entry?.previewWidth),
     height: positiveInteger(entry?.previewHeight),
     mode: entry?.portfolioMode === true ? 'Portfolio' : 'Library',
-    animations: Array.isArray(entry?.animations) ? entry.animations.length : 0,
+    animations: Array.isArray(entry?.animations) && entry.animations.length > 0 ? entry.animations.length : null,
     metrics: metricCountsForId(metrics, id),
   };
 }
