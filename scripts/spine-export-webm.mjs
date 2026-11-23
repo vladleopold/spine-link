@@ -452,7 +452,7 @@ if (!targetAnimation) {
   console.error('No explicit selected/default Spine animation; export blocked.');
   process.exit(1);
 }
-if (!availableAnimations.includes(targetAnimation)) {
+if (availableAnimations.length > 0 && !availableAnimations.includes(targetAnimation)) {
   console.error('Selected Spine animation is unavailable in the source skeleton; export blocked.');
   process.exit(1);
 }
@@ -623,6 +623,7 @@ html, body { width: 100%; height: 100%; background: #050607; overflow: hidden; }
     viewport: { padLeft: '0%', padRight: '0%', padTop: '0%', padBottom: '0%' },
     success: function (p) {
       player = p;
+      window.__player = p;
       window.__ready = true;
       window.__canvasWidth = player.canvas ? player.canvas.width : 0;
       window.__canvasHeight = player.canvas ? player.canvas.height : 0;
@@ -802,6 +803,26 @@ try {
       lastCaptureError = error;
       console.error(`Capture with skin ${label} failed: ${error}`);
       break; // player/skeleton broken — another skin will not fix it
+    }
+
+    // Spine can silently start a fallback track when the requested name is
+    // absent. Validate both the runtime animation list and the active track
+    // before recording; this also covers binary .skel files without JSON.
+    let exactAnimationReady = true;
+    try {
+      await page.waitForFunction((wanted) => {
+        const p = window.__player;
+        const names = p?.skeletonData?.animations?.map((a) => a.name).filter(Boolean) || [];
+        const track = p?.animationState?.getCurrent(0);
+        return names.includes(wanted) && track?.animation?.name === wanted;
+      }, captureAnimation, { timeout: 10000, polling: 100 });
+    } catch {
+      exactAnimationReady = false;
+    }
+    if (!exactAnimationReady) {
+      lastCaptureError = `SELECTED_SPINE_ANIMATION_UNAVAILABLE:${captureAnimation}`;
+      console.error(`Capture with skin ${label} failed: ${lastCaptureError}`);
+      break;
     }
 
     animDuration = await page.evaluate(() => window.__animDuration || 0);

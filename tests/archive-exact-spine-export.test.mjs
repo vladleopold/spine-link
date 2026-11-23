@@ -62,10 +62,13 @@ test('exporter refuses to infer source set, skeleton, or animation', () => {
   assert.match(exporter, /chooseAtlasForSkeleton\(skeletonFile, setFiles\)/);
   assert.match(exporter, /choosePreviewAnimation\(availableAnimations, requestedAnimation\)/);
   assert.match(exporter, /if \(!targetAnimation\)/);
-  assert.match(exporter, /if \(!availableAnimations\.includes\(targetAnimation\)\)/);
+  assert.match(exporter, /if \(availableAnimations\.length > 0 && !availableAnimations\.includes\(targetAnimation\)\)/);
   assert.doesNotMatch(exporter, /const firstSet = sets\[0\]/);
   assert.doesNotMatch(exporter, /availableAnimations\s*\[\s*0\s*\]/);
   assert.match(exporter, /const captureAnimation = targetAnimation/);
+  assert.match(exporter, /window\.__player = p/);
+  assert.match(exporter, /names\.includes\(wanted\) && track\?\.animation\?\.name === wanted/);
+  assert.match(exporter, /SELECTED_SPINE_ANIMATION_UNAVAILABLE/);
   assert.doesNotMatch(exporter, /__spineScenario|scenarioEntry|scenarioIdle/);
 });
 
