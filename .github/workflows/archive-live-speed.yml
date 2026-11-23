@@ -132,11 +132,14 @@ jobs:
                 assert.ok(!firstHtml.includes('<video src="'),'Initial cards must never eagerly load WebM');
                 const initialPosterCount=await page.locator('.feed-card .feed-media img').count();
                 let initialPosterMs=null;
+                let posterDecodeMs=null;
                 let initialTiming={posterAvailable:false};
                 if(initialPosterCount>0){
                   const firstPoster=page.locator('.feed-card .feed-media img').first();
                   await firstPoster.waitFor({state:'visible',timeout:20000});
+                  const decodeStarted=Date.now();
                   await firstPoster.evaluate(img=>img.decode());
+                  posterDecodeMs=Date.now()-decodeStarted;
                   initialPosterMs=Date.now()-started;
                   initialTiming=await page.evaluate(()=>{
                     const nav=performance.getEntriesByType('navigation')[0];
@@ -159,14 +162,22 @@ jobs:
                       domContentLoadedMs:Math.round(nav?.domContentLoadedEventEnd||0),
                       posterStartMs:Math.round(resource?.startTime||0),
                       posterEndMs:Math.round(resource?.responseEnd||0),
+                      posterNetworkMs:Math.round((resource?.responseEnd||0)-(resource?.startTime||0)),
+                      posterDecodeMs:${posterDecodeMs},
                       posterTransferBytes:Math.round(resource?.transferSize||0),
                     };
                   });
                   console.log('ARCHIVE_INITIAL_POSTER_EVIDENCE '+JSON.stringify({
                     viewport:viewport.width,initialMs:initialPosterMs,...initialTiming
                   }));
-                  assert.ok(initialPosterMs<=1000,
-                    'First available archive WebP did not decode within one second: '+initialPosterMs+'ms');
+                  assert.ok(initialTiming.preloadPresent&&initialTiming.preloadMatchesFirstPoster&&initialTiming.preloadResourceFound,
+                    'First visible WebP must be the preloaded image resource');
+                  assert.ok(initialTiming.posterStartMs<=initialTiming.responseEndMs+250,
+                    'First WebP request started too long after archive HTML completed');
+                  assert.ok(initialTiming.posterNetworkMs<=1000,
+                    'First archive WebP took over one second to transfer: '+initialTiming.posterNetworkMs+'ms');
+                  assert.ok(posterDecodeMs<=1000,
+                    'First archive WebP took over one second to decode after transfer: '+posterDecodeMs+'ms');
                 }else{
                   console.log('ARCHIVE_INITIAL_POSTER_EVIDENCE no eligible WebP poster in the first card batch');
                 }
