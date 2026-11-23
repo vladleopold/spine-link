@@ -48,6 +48,8 @@ test('first available archive poster transfers and decodes within one second whe
   assert.match(workflow,/assert\.ok\(initialTiming\.posterNetworkMs\s*<=\s*1000/,
     'first poster network transfer must remain under one second');
   assert.match(workflow,/assert\.ok\(posterDecodeMs\s*<=\s*1000/,
+  assert.match(workflow,/const posterReadyMs=initialTiming\.posterNetworkMs\+posterDecodeMs/,
+    'combined transfer and decode must exclude server response latency');
   assert.match(workflow,/assert\.ok\(posterReadyMs\s*<=\s*1000/, 'combined transfer and decode must remain under one second');
     'decoded poster must remain under one second');
   assert.doesNotMatch(workflow,/assert\.ok\(initialPosterMs\s*<=\s*1000/,
