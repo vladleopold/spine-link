@@ -81,10 +81,10 @@ test('archive cards expose source-level blocked status without exposing preview 
     'private source error details must not be copied into public card markup');
 });
 
-test('archive lazy-pagination proof blocks only a redundant first-page API request', () => {
-  assert.match(workflow, /url\.searchParams\.get\('feed'\)==='archive'/);
-  assert.match(workflow, /url\.searchParams\.get\('offset'\)\|\|'0'\)==='0'/,
-    'only offset zero may be intercepted; subsequent pages must remain loadable');
-  assert.match(workflow, /return route\.abort\(\)/);
+test('archive lazy-pagination proof observes feed traffic without blocking later pages', () => {
+  assert.match(workflow, /const archiveFeedRequests=\[\]/);
+  assert.match(workflow, /page\.on\('request'/);
+  assert.match(workflow, /serverRenderedCards:/);
+  assert.doesNotMatch(workflow, /page\.route\(url=>url\.pathname===['"]\/api\/github-archive/);
   assert.match(workflow, /page\.locator\('#sentinel'\)\.scrollIntoViewIfNeeded\(\)/);
 });
