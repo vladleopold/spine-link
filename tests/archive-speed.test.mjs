@@ -324,11 +324,11 @@ test('first eligible embedded-batch poster is preloaded when initial cards are b
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
     assert.equal(res.code,200);
     const html=String(res.body);
-    const firstCard=html.match(/<article class="feed-card"[\\s\\S]*?<\\/article>/)?.[0]||'';
+    const firstCard=html.match(/<article class="feed-card"[\s\S]*?<\/article>/)?.[0]||'';
     assert.ok(firstCard,'first server-rendered card must exist');
     assert.doesNotMatch(firstCard,/<img/,'blocked initial card must not receive a fabricated poster');
     const preload=html.match(/<link rel="preload" as="image" href="([^"]+)"/)?.[1]||'';
-    assert.match(preload,/card-67\\/preview-medium\\.webp/,
+    assert.match(preload,/card-67\/preview-medium\.webp/,
       'preload the first genuine same-work poster from the embedded next batch');
     assert.ok(html.includes('id="archive-next-page"'),'embedded batch must remain available for pagination');
     assert.ok(log.length<=8);
