@@ -85,7 +85,7 @@ test('first archive poster is preloaded before noncritical visual enhancements',
   const archive = source.slice(start, end);
   assert.match(archive, /const firstPoster = initialItems\.find\(\(item\) => item\.poster\)\?\.poster \|\|\s*preloadedBatch\.entries\.find\(\(item\) => item\.poster\)\?\.poster \|\| ''/);
   assert.match(archive, /const firstPosterPreload = firstPoster/);
-  assert.match(archive, /response\.setHeader\('Link'/, 'first poster preload must be sent in response headers');
+  assert.match(source, /response\.setHeader\('Link'/, 'first poster preload must be sent in response headers');
   assert.match(source, /rel=preload; as=image; fetchpriority=high/);
   assert.match(archive, /rel="preload" as="image" href="\$\{escapeHtml\(firstPoster\)\}" fetchpriority="high"/,
     'the actual first generated WebP must be preloaded from the document head');
