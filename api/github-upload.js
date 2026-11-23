@@ -770,17 +770,24 @@ async function readMetrics(settings, metricsPath) {
 }
 
 async function mutateMetrics(settings, metricsPath, message, mutate, origin = '') {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const { current, metrics } = await readMetrics(settings, metricsPath);
-    const changed = mutate(metrics);
-    if (!changed) return { metrics, changed: false };
-    metrics.updatedAt = new Date().toISOString();
+  // Metric updates are safe to replay because every attempt re-reads the
+  // current file and the mutation is visitor-idempotent. A 409 means the
+  // shared metrics file advanced between read and write; back off, re-read,
+  // and retry instead of surfacing a transient conflict to the preview page.
+  const attempts = 5;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
+      const { current, metrics } = await readMetrics(settings, metricsPath);
+      const changed = mutate(metrics);
+      if (!changed) return { metrics, changed: false };
+      metrics.updatedAt = new Date().toISOString();
       await putGitHubContent(settings, metricsPath, textToBase64(JSON.stringify(metrics, null, 2)), message, current?.sha, origin);
       return { metrics, changed: true };
     } catch (error) {
-      if (String(error?.message || '').includes('sha') && attempt < 2) continue;
-      throw error;
+      const conflict = Number(error?.status) === 409 || /sha/i.test(String(error?.message || ''));
+      if (!conflict || attempt >= attempts - 1) throw error;
+      const delay = Math.min(150 * 2 ** attempt + Math.floor(Math.random() * 250), 1500);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   throw new Error('Could not update metrics after retries');
