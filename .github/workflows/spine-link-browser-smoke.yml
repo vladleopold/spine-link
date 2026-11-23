@@ -378,7 +378,7 @@ jobs:
               // and moving canvas pixels across every supported major/minor line.
               const playbackCases = [
                 {label:'Spine 3.8.99 castle_upgrade', id:'castle_upgrade-2026-11-19T07-33-26-823Z', animation:'build'},
-                {label:'Spine 4.0.58', id:'276-Spine-2014--2026-10-24T21-46-51-258Z', animation:'walk'},
+                {label:'Spine 4.0.58', id:'276-Spine-2014--2026-10-24T21-46-51-258Z', animation:'idle'},
                 {label:'Spine 4.1.24', id:'wolf-2026-11-20T05-12-56-813Z', animation:'blow_loop_landscape'},
                 {label:'Spine 4.2.0 dryad diagnostic', id:'dryad-2026-09-30T21-54-03-321Z', animation:'walk'},
               ];
@@ -396,6 +396,12 @@ jobs:
                   // and JavaScript exceptions are checked separately via pageerror.
                   if (!/Failed to load resource: the server responded with a status of 404/i.test(text)) {
                     playbackConsoleErrors.push(text);
+                  }
+                });
+                const playbackHttpErrors = [];
+                playbackPage.on('response', response => {
+                  if (response.status() >= 400) {
+                    playbackHttpErrors.push({status:response.status(),url:response.url()});
                   }
                 });
                 playbackPage.on('response', response => {
@@ -493,7 +499,7 @@ jobs:
                       JSON.stringify(playbackConsoleErrors.filter(message => !relevantConsoleErrors.includes(message))));
                   }
                   assert.deepEqual(relevantConsoleErrors, [],
-                    sample.label + ' relevant console errors: ' + JSON.stringify(relevantConsoleErrors));
+                    sample.label + ' relevant console errors: ' + JSON.stringify({console:relevantConsoleErrors,http:playbackHttpErrors}));
                   console.log('PASS REAL SPINE PLAYBACK', sample.label, sample.animation,
                     JSON.stringify({dimensions,hashA,hashB}));
                 } catch (error) {
