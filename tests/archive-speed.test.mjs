@@ -319,6 +319,7 @@ test('first eligible embedded-batch poster is preloaded when initial cards are b
   const log=[];
   globalThis.fetch=stubFetch(log,source);
   process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-archive-preload-embedded-batch';
   try{
     const res=response();
     await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{}},res);
@@ -336,6 +337,8 @@ test('first eligible embedded-batch poster is preloaded when initial cards are b
     globalThis.fetch=originalFetch;
     if(originalToken===undefined)delete process.env.GITHUB_TOKEN;
     else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;
+    else process.env.GITHUB_BRANCH=originalBranch;
   }
 });
 
