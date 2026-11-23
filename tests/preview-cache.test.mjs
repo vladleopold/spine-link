@@ -27,6 +27,30 @@ test('new preview bypasses a cached index and invalidates the old cache', async 
   }
 });
 
+test('public archive indexes can bypass the Contents API with a direct raw read', async () => {
+  const oldFetch = globalThis.fetch;
+  const settings = { owner: 'example', repo: 'example', branch: 'main', token: 'test' };
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    if (String(url).startsWith('https://raw.githubusercontent.com/')) {
+      return new Response('[{"id":"raw-first"}]');
+    }
+    throw new Error('Unexpected Contents API request: ' + url);
+  };
+  try {
+    const data = await cachedGithubText(settings, 'library_98768/index.json', {
+      ttlMs: 0,
+      preferRaw: true,
+    });
+    assert.match(data, /raw-first/);
+    assert.equal(urls.length, 1);
+    assert.match(urls[0], /raw\.githubusercontent\.com\/example\/example\/main\/library_98768\/index\.json/);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
+
 test('large collection indexes are resolved through Git blobs', async () => {
   const oldFetch = globalThis.fetch;
   const settings = { owner: 'example', repo: 'example', branch: 'main', token: 'test' };
