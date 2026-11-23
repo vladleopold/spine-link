@@ -69,8 +69,8 @@ test('large collection index falls back to raw when the Git blob endpoint is una
   try {
     const data = await cachedGithubText(settings, 'library_98767/index.json', { ttlMs: 0 });
     assert.match(data, /raw-index-fallback/);
-    assert.equal(urls.length, 3);
-    assert.match(urls[2], /raw\.githubusercontent\.com\/example\/example\/main\/library_98767\/index\.json/);
+    assert.equal(urls.length, 4, 'Contents, authenticated blob, anonymous blob, and raw fallback');
+    assert.match(urls[3], /raw\.githubusercontent\.com\/example\/example\/main\/library_98767\/index\.json/);
   } finally {
     globalThis.fetch = oldFetch;
   }
