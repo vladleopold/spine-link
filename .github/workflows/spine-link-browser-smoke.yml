@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   actions: read
+  statuses: read
   statuses: write
 
 jobs:
@@ -25,12 +26,37 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_FILE: spine-link-browser-smoke.yml
+          SMOKE_JOB_NAME: chromium
         run: |
           set -euo pipefail
           jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")"
           deployed="$(printf '%s' "$jobs" | jq -r '[.jobs[].steps[]? | select(.name == "Deploy to Vercel" and .conclusion == "success")] | length > 0')"
+          if [ "$deployed" != "true" ]; then
+            # Vercel's Git integration may finish production just after the
+            # GitHub deploy workflow's cooldown-only skip.
+            for attempt in $(seq 1 12); do
+              status="$(gh api "repos/$GITHUB_REPOSITORY/commits/$DEPLOY_SHA/status" --jq '[.statuses[]? | select(.context == "Vercel" and .state == "success")][0] // empty' || true)"
+              if [ -n "$status" ]; then deployed=true; break; fi
+              sleep 15
+            done
+          fi
+          if [ "$deployed" = "true" ]; then
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$WORKFLOW_FILE/runs?per_page=100&branch=main")"
+            candidate_ids="$(printf '%s' "$runs" | jq -r --arg sha "$DEPLOY_SHA" --arg current "$GITHUB_RUN_ID" '.workflow_runs[] | select(.head_sha == $sha and (.id|tostring) != $current and .event == "workflow_run" and .status == "completed" and .conclusion == "success") | .id')"
+            already=false
+            while IFS= read -r prior_id; do
+              [ -z "$prior_id" ] && continue
+              prior_jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$prior_id/jobs?per_page=100")"
+              prior_success="$(printf '%s' "$prior_jobs" | jq -r --arg job "$SMOKE_JOB_NAME" '[.jobs[] | select(.name == $job and .conclusion == "success")] | length > 0')"
+              if [ "$prior_success" = "true" ]; then already=true; break; fi
+            done <<< "$candidate_ids"
+            if [ "$already" = "true" ]; then deployed=false; fi
+          fi
           echo "deployed=$deployed" >> "$GITHUB_OUTPUT"
           echo "VERIFIED_PRODUCTION_DEPLOY=$deployed"
+
   chromium:
     needs: release_gate
     if: ${{ always() && (github.event_name != 'workflow_run' || needs.release_gate.outputs.deployed == 'true') }}
