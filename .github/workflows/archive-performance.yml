@@ -19,6 +19,7 @@ on:
       - .github/workflows/vercel-deploy-and-alias.yml
       - .github/workflows/archive-live-speed.yml
       - .github/workflows/spine-link-live-preview-smoke.yml
+      - .github/workflows/spine-link-browser-smoke.yml
   pull_request:
     paths:
       - api/github-archive.js
