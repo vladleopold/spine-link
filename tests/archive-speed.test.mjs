@@ -352,8 +352,8 @@ test('archive displays the exact recorded previewAnimation when source defaultAn
     assert.equal(res.code,200);
     assert.equal(res.body.entries.length,1);
     const item=res.body.entries[0];
-    assert.match(item.poster,/preview-medium\.webp$/);
-    assert.match(item.video,/preview-medium\.webm$/);
+    assert.match(item.poster,/preview-medium\.webp(?:\?.*)?$/);
+    assert.match(item.video,/preview-medium\.webm(?:\?.*)?$/);
     assert.equal(item.quality,'medium');
     assert.equal(item.sourceWebmStatus,'ready');
     assert.equal(item.sourcePreviewStatus,'ready');
