@@ -163,7 +163,6 @@ jobs:
                       posterStartMs:Math.round(resource?.startTime||0),
                       posterEndMs:Math.round(resource?.responseEnd||0),
                       posterNetworkMs:Math.round((resource?.responseEnd||0)-(resource?.startTime||0)),
-                      posterDecodeMs:${posterDecodeMs},
                       posterTransferBytes:Math.round(resource?.transferSize||0),
                     };
                   });
