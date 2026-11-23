@@ -650,7 +650,14 @@ async function githubJson(settings, path) {
 // GitHub limit. They are listed at runtime so a folder added by a rotation shows up
 // without a code change or a deploy.
 async function libraryCollectionPaths(settings) {
-  const paths = new Set([cleanRepoPath(settings.basePath || defaultBasePath)]);
+  // GitHub root Contents listings may be truncated when a repository has many
+  // root entries. Always search the two established public shards as well as
+  // the configured base path, even when the root listing appears successful.
+  const paths = new Set([
+    cleanRepoPath(settings.basePath || defaultBasePath),
+    'library_02',
+    'library_01',
+  ]);
   try {
     const response = await githubApiFetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}&per_page=100`,
