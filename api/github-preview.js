@@ -2205,15 +2205,43 @@ const pinchDistance = { value: null };
           delete playerSet.animations;
         }
         try {
-          player = new SpinePlayer("player", {
+          const isSpine43 = /^4[.]3(?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""));
+          const playerOptions = {
             ...playerSet,
             ...(requestedAnimation ? { animation: requestedAnimation } : {}),
-            ...(/^4[.]3(?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))
+            ...(isSpine43
               ? { skeleton: activeSet.value.jsonUrl || activeSet.value.skelUrl || activeSet.value.skeleton, atlasUrl: activeSet.value.atlasUrl }
               : {}),
             ...(/^4[.][01](?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))
               ? { binaryUrl: activeSet.value.skelUrl || undefined, atlasUrl: activeSet.value.atlasUrl }
               : {}),
+          };
+          // Spine Player 4.3 detects JSON vs binary with skeleton.endsWith(".json").
+          // Our immutable asset URLs carry a ?v= cache key, so the JSON URL no
+          // longer ends with .json and 4.3 incorrectly feeds JSON bytes to its
+          // binary parser ("boneData cannot be null"). Fetch the versioned URL
+          // ourselves, then expose the exact bytes through rawDataURIs under a
+          // query-free .json key so the official runtime selects SkeletonJson.
+          if (isSpine43) {
+            const skeletonSource = String(activeSet.value.jsonUrl || activeSet.value.skelUrl || activeSet.value.skeleton || "");
+            const skeletonPath = skeletonSource.split(/[?#]/, 1)[0];
+            if (/\\.json$/i.test(skeletonPath) && skeletonSource !== skeletonPath) {
+              const response = await fetch(skeletonSource, { cache: "no-store" });
+              if (!response.ok) throw new Error("Could not load Spine 4.3 JSON skeleton: HTTP " + response.status);
+              const bytes = new TextEncoder().encode(await response.text());
+              let binary = "";
+              for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+                binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+              }
+              playerOptions.skeleton = skeletonPath;
+              playerOptions.rawDataURIs = {
+                ...(playerOptions.rawDataURIs || {}),
+                [skeletonPath]: "data:application/json;base64," + btoa(binary),
+              };
+            }
+          }
+          player = new SpinePlayer("player", {
+            ...playerOptions,
             // Spine Player 4.1 tries to calculate bounds for an empty animation
             // when a skeleton has no indexed default track. Keep the skeleton
             // loadable and expose its tracks for manual selection instead.
