@@ -41,7 +41,7 @@ test('first available archive poster decodes within one second when the initial 
     'wait for actual browser image decoding');
   assert.match(workflow,/no eligible WebP poster in the first card batch/,
     'media-free initial batches must be reported rather than treated as a broken poster');
-  assert.match(workflow,/assert\.ok\(initialPosterMs<=1000/,
+  assert.match(workflow,/assert\.ok\(initialPosterMs\s*<=\s*1000/ ,
     'the one-second first-poster requirement must be a hard gate');
   assert.match(workflow,/responseStartMs:[\s\S]*posterEndMs:[\s\S]*posterTransferBytes:/,
     'capture navigation and poster network timings to isolate a regression');
