@@ -14,7 +14,7 @@ function buildMutateMetrics({readMetrics,putGitHubContent,delays}) {
   )(
     readMetrics,putGitHubContent,value=>value,
     (resolve,ms)=>{delays.push(ms);resolve();},
-    {min:Math.min,random:()=>0}
+    {min:Math.min,floor:Math.floor,random:()=>0}
   );
 }
 
