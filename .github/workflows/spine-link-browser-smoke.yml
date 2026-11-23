@@ -206,7 +206,7 @@ jobs:
                     ['set', '#sidebar > #set-card'],
                     ['notes', '#sidebar > .note-card'],
                   ];
-                  if (!menu || !playerFrame || !document.querySelector('#sidebar > .animation-download-block')) return null;
+                  if (!menu || !playerFrame) return null;
                   const originalChildren = Array.from(menu.childNodes);
                   const measure = (count) => {
                     const fragment = document.createDocumentFragment();
