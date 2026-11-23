@@ -133,6 +133,53 @@ test('source textures and guessed posters never unlock archive WebM or render a 
   }
 });
 
+test('legacy root WebM/WebP pairs unlock only the exact indexed default animation',async()=>{
+  const legacy={
+    ...entries[0],
+    id:'legacy-root-default',
+    previewPath:'library_02/legacy-root-default',
+    webmStatus:'ready',previewStatus:'',
+    defaultAnimation:'idle',previewAnimation:'',
+    allAnimationPreviews:undefined,
+    webmPreview:'https://spine-link.vercel.app/assets/library_02/legacy-root-default/preview.webm',
+    webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/legacy-root-default/preview-medium.webm',
+    webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/legacy-root-default/preview-low.webm',
+    webpPoster:'https://spine-link.vercel.app/assets/library_02/legacy-root-default/preview.webp',
+    webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/legacy-root-default/preview-medium.webp',
+    webpPosterLow:'https://spine-link.vercel.app/assets/library_02/legacy-root-default/preview-low.webp',
+  };
+  const explicitMismatch={
+    ...legacy,
+    id:'legacy-explicit-mismatch',
+    previewPath:'library_02/legacy-explicit-mismatch',
+    previewAnimation:'walk',
+    defaultAnimation:'idle',
+    webmPreviewMedium:'https://spine-link.vercel.app/assets/library_02/legacy-explicit-mismatch/preview-medium.webm',
+    webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/legacy-explicit-mismatch/preview-medium.webp',
+  };
+  const log=[];
+  globalThis.fetch=stubFetch(log,[legacy,explicitMismatch]);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-legacy-root-default-preview';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'12'}},res);
+    assert.equal(res.code,200);
+    const a=res.body.entries.find(x=>x.id==='legacy-root-default');
+    const b=res.body.entries.find(x=>x.id==='legacy-explicit-mismatch');
+    assert.match(a.poster,/legacy-root-default\/preview-medium\.webp/);
+    assert.match(a.video,/legacy-root-default\/preview-medium\.webm/);
+    assert.equal(a.quality,'medium');
+    assert.equal(b.poster,'','a root poster for the default must not be reused for another explicit animation');
+    assert.equal(b.video,'','a root video for the default must not be reused for another explicit animation');
+    assert.equal(b.quality,'');
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
+
 test('medium WebM and WebP remain a paired fallback when low renditions are absent',async()=>{
   const source=[{
     ...entries[0],

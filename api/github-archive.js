@@ -74,14 +74,35 @@ function selectedAnimationVideo(entry = {}) {
   // by the renderer may unlock that preview; never guess another map entry.
   const name = previewAnimation.trim() ? previewAnimation : defaultAnimation;
   const selected = name.trim() && previews ? previews[name] : null;
-  return {
-    name,
+  // Older public records may have a verified root media pair but predate
+  // allAnimationPreviews. Reuse those root URLs only when the requested track
+  // is exactly the indexed default; a different explicit previewAnimation
+  // must resolve through its own per-animation map or remain blocked.
+  const isDefaultTrack = Boolean(name.trim() && defaultAnimation.trim() && name === defaultAnimation);
+  const defaultSource = isDefaultTrack ? {
+    poster: entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
+    posterMedium: entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
+    posterLow: entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low'),
+    full: entryVideoAsset(entry?.webmPreview || '', entry, 'webm'),
+    medium: entryVideoAsset(entry?.webmPreviewMedium || '', entry, 'preview-medium'),
+    low: entryVideoAsset(entry?.webmPreviewLow || '', entry, 'preview-low'),
+  } : null;
+  const animationSource = {
     poster: entryImageAsset(selected?.webpPoster || '', entry, 'poster'),
     posterMedium: entryImageAsset(selected?.webpPosterMedium || '', entry, 'preview-medium'),
     posterLow: entryImageAsset(selected?.webpPosterLow || '', entry, 'preview-low'),
     full: entryVideoAsset(selected?.webmPreview || '', entry, 'webm'),
     medium: entryVideoAsset(selected?.webmPreviewMedium || '', entry, 'preview-medium'),
     low: entryVideoAsset(selected?.webmPreviewLow || '', entry, 'preview-low'),
+  };
+  return {
+    name,
+    poster: defaultSource?.poster || animationSource.poster,
+    posterMedium: defaultSource?.posterMedium || animationSource.posterMedium,
+    posterLow: defaultSource?.posterLow || animationSource.posterLow,
+    full: defaultSource?.full || animationSource.full,
+    medium: defaultSource?.medium || animationSource.medium,
+    low: defaultSource?.low || animationSource.low,
   };
 }
 
@@ -583,7 +604,10 @@ function archiveFeedEntry(origin, entry, metrics, preferredQuality = 'medium') {
   const hasPreviewAnimation = (typeof entry?.previewAnimation === 'string' && entry.previewAnimation.trim().length > 0) ||
     (typeof entry?.defaultAnimation === 'string' && entry.defaultAnimation.trim().length > 0);
   const selectedPreview = hasPreviewAnimation ? selectedAnimationVideo(entry) : null;
-  const mediaReady = entry?.webmStatus === 'ready' && entry?.previewStatus === 'ready' && Boolean(selectedPreview?.name);
+  const previewStatus = String(entry?.previewStatus || '').trim();
+  const mediaReady = entry?.webmStatus === 'ready' &&
+    Boolean(selectedPreview?.name) &&
+    (previewStatus === '' || previewStatus === 'ready');
   const mediumCandidate = {
     quality: 'medium',
     video: selectedPreview?.medium || '',

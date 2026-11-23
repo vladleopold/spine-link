@@ -121,7 +121,11 @@ test('archive cards use the exact recorded preview animation or indexed default 
   assert.match(selected, /previewAnimation/);
   assert.match(selected, /defaultAnimation/);
   assert.match(selected, /const name = previewAnimation\.trim\(\) \? previewAnimation : defaultAnimation/);
-  assert.doesNotMatch(selected, /entry\?\.webmPreview/);
+  assert.match(selected, /const isDefaultTrack = Boolean\(name\.trim\(\) && defaultAnimation\.trim\(\) && name === defaultAnimation\)/);
+  assert.match(selected, /const defaultSource = isDefaultTrack \? \{/);
+  assert.match(selected, /entry\?\.webmPreviewMedium/);
+  assert.match(selected, /entry\?\.webpPosterLow/);
+  assert.doesNotMatch(selected, /const isDefaultTrack = Boolean\(name\.trim\(\) && defaultAnimation\.trim\(\) && name !== defaultAnimation\)/);
   const home = section(archive, 'function homepageFeedEntries(', 'function mergeArchiveEntries(');
   assert.match(home, /entryVideoLowSrc\(origin, entry\)/);
   assert.match(home, /previewAnimation: selectedPreview\.name/);
