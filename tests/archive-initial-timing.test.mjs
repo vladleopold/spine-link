@@ -77,6 +77,13 @@ test('repository lifecycle workflow cannot close or mutate pull requests', () =>
     'automatic PR closure and write permissions must remain disabled');
 });
 
+test('live browser proof warms the production HTML CDN cache before timing', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
+  assert.match(workflow,/Warm production archive HTML CDN cache before browser timing/);
+  assert.match(workflow,/curl -fsSL --max-time 25 'https:\/\/spine-link\.vercel\.app\/world-spine-archive' -o \/dev\/null/);
+  assert.match(workflow,/steps\.inspect\.outputs\.deployed == 'true'/);
+});
+
 test('first archive poster is preloaded before noncritical visual enhancements', () => {
   const source = readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
   const start = source.indexOf('function archiveHtml(');
