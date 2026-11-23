@@ -435,8 +435,12 @@ async function dispatchSpineProjectExport(settings, entry, origin) {
 async function dispatchSpineExportWebm(settings, entry, origin) {
   const id = String(entry?.id || '').trim();
   if (!id) return null;
-  const defaultAnimation = String(entry?.defaultAnimation || (Array.isArray(entry?.animations) ? entry.animations[0] : '') || '').trim();
+  const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
   const animations = Array.isArray(entry?.animations) ? entry.animations : [];
+  if (!defaultAnimation.trim()) {
+    console.log('[UPLOAD] skipping WebM export: explicit default animation is missing');
+    return { status: 'blocked', reason: 'missing-explicit-default-animation' };
+  }
   try {
     const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
       method: 'POST',
