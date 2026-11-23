@@ -266,6 +266,15 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     assert.equal(res.code,200);
     const html=String(res.body);
     assert.ok(html.includes('<img src="https://spine-link.vercel.app/assets/library_02/'));
+    const firstCardStart=html.indexOf('<article class="feed-card"');
+    const firstCardEnd=html.indexOf('</article>',firstCardStart);
+    const firstCard=html.slice(firstCardStart,firstCardEnd);
+    assert.ok(firstCard.includes('src="https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp"'),
+      'the initial visible card must prefer its smaller low WebP poster');
+    assert.ok(firstCard.includes('data-video-src="https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm"'),
+      'the initial card must pair the low poster with its exact low WebM');
+    assert.ok(html.includes('rel="preload" as="image" href="https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp"'),
+      'preload the same small poster used by the first visible card');
     assert.ok(!html.includes('<video src="'), 'eager WebM would block WebP posters');
     assert.ok(html.includes('data-video-src='),'video URL must be deferred on each card');
     assert.ok(html.includes('prefetchNext()'),'next page should be fetched before reaching sentinel');
