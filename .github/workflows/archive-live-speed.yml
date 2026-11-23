@@ -59,8 +59,11 @@ jobs:
               let blockedApiRequests=0;
               // Prove the first lazy page is supplied in HTML, without
               // relying on a warm GitHub feed endpoint at all.
+              // Block only a redundant offset-0 feed request. Later pages
+              // must remain available so the sentinel can prove real pagination.
               await page.route(url=>url.pathname==='/api/github-archive' &&
-                url.searchParams.get('feed')==='archive',route=>{
+                url.searchParams.get('feed')==='archive' &&
+                (url.searchParams.get('offset')||'0')==='0',route=>{
                 blockedApiRequests++;
                 return route.abort();
               });
