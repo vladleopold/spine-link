@@ -291,7 +291,7 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
     'sabrinaBedSide-2026-11-20T07-06-45-002Z',
     'whiskey_glass-2026-11-04T08-13-32-548Z',
   ]) assert.ok(browserWorkflow.includes(id), `missing live runtime fixture: ${id}`);
-  assert.match(browserWorkflow, /dataset\.previewStatus === 'ready'/);
+  assert.match(browserWorkflow, /beforeSelection\.status, 'ready'/);
   assert.match(browserWorkflow, /dataset\.previewAnimation === name/);
   assert.match(browserWorkflow, /createHash\('sha256'\)/);
   assert.match(browserWorkflow, /UNSUPPORTED_SPINE_3_8_75/);
