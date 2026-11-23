@@ -29,6 +29,8 @@ on:
       - tests/preview-animation-identity.test.mjs
       - tests/animation-menu-scroll.test.mjs
       - tests/archive-speed.test.mjs
+      - tests/preview-cache.test.mjs
+      - lib/github-content-cache.js
       - tests/archive-initial-timing.test.mjs
       - .github/workflows/archive-performance.yml
       - .github/workflows/vercel-deploy-and-alias.yml
