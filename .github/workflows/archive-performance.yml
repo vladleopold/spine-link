@@ -69,4 +69,5 @@ jobs:
         run: |
           node --check api/github-archive.js
           node --check api/github-preview.js
+          node --check scripts/spine-export-webm.mjs
           node --test tests/preview-cache.test.mjs tests/archive-speed.test.mjs tests/archive-initial-timing.test.mjs tests/preview-animation-identity.test.mjs tests/animation-menu-scroll.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs tests/archive-exact-spine-export.test.mjs
