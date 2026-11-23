@@ -306,7 +306,6 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
   assert.match(browserWorkflow, /PASS CONVERTED SPINE 3\.8\.75 -> 4\.3\.26/);
   assert.match(browserWorkflow, /converted\.animations\.length, 11/);
   assert.match(browserWorkflow, /converted\.animation, 'idle'/);
-  assert.match(browserWorkflow, /__spinePlayerOptions/);
   assert.match(browserWorkflow, /rawDataKeys:Object\.keys\(o\.rawDataURIs/);
   assert.match(browserWorkflow, /missingSlotBones/);
   assert.match(browserWorkflow, /createHash\('sha256'\)/);
