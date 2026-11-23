@@ -277,7 +277,7 @@ const archiveLiveWorkflow = fs.readFileSync(new URL('../.github/workflows/archiv
 
 test('preview lookup always searches established shards when root listings are truncated', () => {
   const lookup = section(preview, 'async function libraryCollectionPaths(', 'async function githubText(');
-  assert.match(lookup, /const paths = new Set\\([\\s\\S]*'library_02'[\\s\\S]*'library_01'/);
+  assert.match(lookup, /const paths = new Set\([\s\S]*'library_02'[\s\S]*'library_01'/);
 });
 
 test('production Chromium gate verifies the upstream Vercel deployment job', () => {
