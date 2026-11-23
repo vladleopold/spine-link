@@ -578,28 +578,32 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
   return fallback;
 }
 
-function archiveFeedEntry(origin, entry, metrics) {
+function archiveFeedEntry(origin, entry, metrics, preferredQuality = 'medium') {
   const id = String(entry?.id || '').trim();
   const hasPreviewAnimation = (typeof entry?.previewAnimation === 'string' && entry.previewAnimation.trim().length > 0) ||
     (typeof entry?.defaultAnimation === 'string' && entry.defaultAnimation.trim().length > 0);
   const selectedPreview = hasPreviewAnimation ? selectedAnimationVideo(entry) : null;
   const mediaReady = entry?.webmStatus === 'ready' && entry?.previewStatus === 'ready' && Boolean(selectedPreview?.name);
-  const candidates = mediaReady ? [
-    {
-      quality: 'medium',
-      video: selectedPreview.medium,
-      poster: selectedPreview.posterMedium,
-      videoName: 'preview-medium.webm',
-      posterName: 'preview-medium.webp',
-    },
-    {
-      quality: 'low',
-      video: selectedPreview.low,
-      poster: selectedPreview.posterLow,
-      videoName: 'preview-low.webm',
-      posterName: 'preview-low.webp',
-    },
-  ] : [];
+  const mediumCandidate = {
+    quality: 'medium',
+    video: selectedPreview?.medium || '',
+    poster: selectedPreview?.posterMedium || '',
+    videoName: 'preview-medium.webm',
+    posterName: 'preview-medium.webp',
+  };
+  const lowCandidate = {
+    quality: 'low',
+    video: selectedPreview?.low || '',
+    poster: selectedPreview?.posterLow || '',
+    videoName: 'preview-low.webm',
+    posterName: 'preview-low.webp',
+  };
+  // Initial archive cards prioritize the smaller low rendition so the first
+  // real poster decodes quickly on mobile and cold CDN caches. Keep the
+  // medium rendition as a strict paired fallback when low is unavailable.
+  const candidates = mediaReady
+    ? (preferredQuality === 'low' ? [lowCandidate, mediumCandidate] : [mediumCandidate, lowCandidate])
+    : [];
   const selected = candidates.find(candidate =>
     candidate.video && candidate.poster &&
     isGeneratedWebmUrl(candidate.video, entry) &&
@@ -1519,7 +1523,7 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
 }
 
 function archiveHtml({ origin, entries, metrics }) {
-  const initialItems = entries.slice(0, archivePageSize).map((entry) => archiveFeedEntry(origin, entry, metrics));
+  const initialItems = entries.slice(0, archivePageSize).map((entry) => archiveFeedEntry(origin, entry, metrics, 'low'));
   const cards = initialItems.map(lightweightCardHtml).join('');
   // Embed the compact metadata of all remaining cards. Scroll pagination
   // requires zero API round trips; assets are separately demand-loaded.
