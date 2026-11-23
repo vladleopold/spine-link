@@ -2362,13 +2362,16 @@ export default async function handler(request, response) {
     // Gallery pages read independent public indexes in parallel. Keep a brief
     // read cache: a scrolling user should not wait for multiple GitHub roundtrips
     // per page. The CDN also refreshes this snapshot after publication.
-    const [indexTexts, recoveredIndexText, exclusionsText, metricsText, censorshipText] = await Promise.all([
+    const [indexTexts, exclusionsText, metricsText, censorshipText] = await Promise.all([
       Promise.all(basePaths.map(basePath =>
-        githubText(settings, `${basePath}/index.json`, { ttlMs: 20000 }).catch(() => '')
+        // The old library index is no longer on main after rotation. Read its
+        // immutable recovery snapshot in place of the now-missing current index.
+        githubText(
+          basePath === settings.basePath ? { ...settings, branch: recoveredArchiveRef } : settings,
+          `${basePath}/index.json`,
+          { ttlMs: basePath === settings.basePath ? 60000 : 20000 },
+        ).catch(() => '')
       )),
-      // Recover the few legacy uploads whose folders survived the library rotation
-      // but whose records were omitted from the new collection indexes.
-      githubText({ ...settings, branch: recoveredArchiveRef }, `${settings.basePath}/index.json`, { ttlMs: 60000 }).catch(() => ''),
       githubText(settings, `${settings.basePath}/archive-exclusions.json`),
       githubText(settings, `${settings.basePath}/metrics.json`),
       githubText(settings, 'library/censorship.json'),
@@ -2386,6 +2389,7 @@ export default async function handler(request, response) {
       '8000021-2026-07-02T04-52-57-380Z',
       '8000021-2026-07-02T04-43-24-403Z',
     ]);
+    const recoveredIndexText = indexTexts[basePaths.indexOf(settings.basePath)] || '';
     if (recoveredIndexText) {
       try {
         const recovered = JSON.parse(recoveredIndexText);
