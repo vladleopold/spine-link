@@ -4,8 +4,8 @@ import { test } from 'node:test';
 
 const workflow = readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
 
-test('initial archive poster timing excludes intentional prefetch warm-up', () => {
-  const firstPoster = workflow.indexOf('const initialPosterMs=Date.now()-started;');
+test('initial archive poster timing excludes intentional prefetch warm-up when a poster exists', () => {
+  const firstPoster = workflow.indexOf('initialPosterMs=Date.now()-started;');
   const warmup = workflow.indexOf('await page.waitForTimeout(1900);');
   const evidence = workflow.indexOf('initialMs:initialPosterMs');
   assert.ok(firstPoster > 0, 'missing first-poster timing checkpoint');
@@ -14,7 +14,7 @@ test('initial archive poster timing excludes intentional prefetch warm-up', () =
   assert.ok(!workflow.includes('initialMs:Date.now()-started'), 'old inflated metric must not return');
 });
 
-test('first available archive poster decodes within one second after a real deployment', () => {
+test('first available archive poster decodes within one second when the initial batch has one', () => {
   assert.match(workflow,/release_gate:/,
     'live proof must have a deployment gate');
   assert.match(workflow,/Deploy to Vercel/);
@@ -24,10 +24,14 @@ test('first available archive poster decodes within one second after a real depl
     'live proof must not repeatedly benchmark stale production during quota cooldown');
   assert.doesNotMatch(workflow,/^\s+push:/m,
     'live proof must not race the production deploy on main push');
-  assert.match(workflow,/const img=document\.querySelector\('\.feed-card img'\)/,
-    'measure the first available poster, not an arbitrary later image');
-  assert.match(workflow,/await page\.locator\('\.feed-card img'\)\.first\(\)\.evaluate\(img=>img\.decode\(\)\)/,
+  assert.match(workflow,/if\(initialPosterCount>0\)/,
+    'only measure a first poster when the initial archive batch has an eligible preview');
+  assert.match(workflow,/const img=document\.querySelector\('\.feed-card \.feed-media img'\)/,
+    'measure the first available media poster');
+  assert.match(workflow,/await firstPoster\.evaluate\(img=>img\.decode\(\)\)/,
     'wait for actual browser image decoding');
+  assert.match(workflow,/no eligible WebP poster in the first card batch/,
+    'media-free initial batches must be reported rather than treated as a broken poster');
   assert.match(workflow,/assert\.ok\(initialPosterMs<=1000/,
     'the one-second first-poster requirement must be a hard gate');
   assert.match(workflow,/responseStartMs:[\s\S]*posterEndMs:[\s\S]*posterTransferBytes:/,
