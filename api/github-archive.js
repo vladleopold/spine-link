@@ -510,7 +510,7 @@ function homepageFeedEntries(origin, entries, metrics) {
       // The feed filters on this, so it has to reach the client-facing entry.
       previewDuration: Number(entry?.previewDuration || 0) || undefined,
       mediaAspectRatio: Number(entry?.mediaAspectRatio || 0) || undefined,
-      animations: Array.isArray(entry?.animations) ? entry.animations.length : 0,
+      animations: Array.isArray(entry?.animations) && entry.animations.length > 0 ? entry.animations.length : null,
       uploadedAt: entry?.uploadedAt || '',
       pageMode: entry?.portfolioMode === true ? 'Portfolio' : 'Library',
       metrics: metric,
@@ -590,6 +590,7 @@ function lightweightCardHtml(item, index = 0) {
   const poster = escapeHtml(item.poster);
   const video = escapeHtml(item.video);
   const ratio = item.width && item.height ? Math.min(1.8, Math.max(0.62, item.width / item.height)) : 1;
+  const animationLabel = item.animations > 0 ? item.animations + ' animations' : 'Open player for animations';
   const posterOnError = `onerror="const c=this.closest('.feed-card');if(c){c.dataset.previewStatus='blocked-poster-load-failed';delete c.dataset.videoSrc;}this.remove();"`;
   // Never mix assets from different works: the preview poster and WebM must be
   // the matching pair selected by archiveFeedEntry.
@@ -606,7 +607,7 @@ function lightweightCardHtml(item, index = 0) {
     <div class="feed-media">${media}</div>
     <div class="feed-info">
       <div class="feed-title-row"><span class="feed-title">${title}</span><span class="feed-mode">${escapeHtml(item.mode)}</span></div>
-      <div class="feed-meta"><span>${escapeHtml(item.ownerName)}</span><span>${item.animations} animations</span><span>♡ ${item.metrics.likes}</span><span>◉ ${item.metrics.views}</span></div>
+      <div class="feed-meta"><span>${escapeHtml(item.ownerName)}</span><span>${escapeHtml(animationLabel)}</span><span>♡ ${item.metrics.likes}</span><span>◉ ${item.metrics.views}</span></div>
     </div>
     ${openLink}
   </article>`;
@@ -775,7 +776,7 @@ function mediaHtml(entry, { origin = '', posterClass = '', eagerVideo = false, a
     const fallback = poster && poster !== thumbnail ? ` data-fallback-src="${escapeHtml(poster)}"` : '';
     return `<img class="${posterClass}" src="${escapeHtml(thumbnail)}" alt="${alt}"${loading} decoding="async"${fp} data-poster="${escapeHtml(poster || thumbnail)}"${fallback} onerror="if(!this.dataset.fallbackTried&&this.dataset.fallbackSrc){this.dataset.fallbackTried='1';this.src=this.dataset.fallbackSrc;}else{this.style.display='none';}" />`;
   }
-  return `<div class="media-fallback" aria-label="${alt}">${Array.isArray(entry?.animations) ? entry.animations.length : 0}</div>`;
+  return `<div class="media-fallback" aria-label="${alt}">${Array.isArray(entry?.animations) && entry.animations.length > 0 ? entry.animations.length : 'Spine'}</div>`;
 }
 
 function baseStyles() {
@@ -1730,7 +1731,8 @@ function archiveHtml({ origin, entries, metrics }) {
           heading.append(title,mode);
           const meta=document.createElement('div');meta.className='feed-meta';
           const metrics=item.metrics||{likes:0,views:0};
-          [item.ownerName,item.animations+' animations',metrics.likes+' likes',metrics.views+' views'].forEach(value=>{
+          const animationLabel=item.animations>0?item.animations+' animations':'Open player for animations';
+          [item.ownerName,animationLabel,metrics.likes+' likes',metrics.views+' views'].forEach(value=>{
             const span=document.createElement('span');span.textContent=value;meta.append(span);
           });
           info.append(heading,meta);card.append(media,info);
@@ -1858,7 +1860,11 @@ function archiveItemHtml({ origin, entry, metrics }) {
   const seoTitle = seoTitleForEntry(entry);
   const displayTitle = escapeHtml(rawTitle);
   const seoTitleEscaped = escapeHtml(seoTitle);
-  const animations = Array.isArray(entry?.animations) ? entry.animations.length : 0;
+  const animationCount = Array.isArray(entry?.animations) && entry.animations.length > 0 ? entry.animations.length : null;
+  const animationLabel = animationCount === null ? 'Open player to view animations' : animationCount + ' animations';
+  const animationDescription = animationCount === null
+    ? 'with animation options listed in the interactive player'
+    : 'with ' + animationCount + ' animations available';
   const spineUrl = previewUrl(entry);
   const absoluteSpineUrl = `${origin}${spineUrl}`;
   const entryId = String(entry?.id || '');
@@ -2075,7 +2081,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
           <div>
             <p class="muted">Spine media preview</p>
             <h2 class="item-title">${displayTitle}</h2>
-            <p class="muted">${animations} animations</p>
+            <p class="muted">${escapeHtml(animationLabel)}</p>
             <div class="metric-row" data-metric-id="${safeEntryId}" data-metric-label="stats" aria-label="${metric.likes} likes and ${metric.views} views">
               <span class="metric-pill metric-like-button" data-metric-id="${safeEntryId}" data-metric-like data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}" role="button" tabindex="0" aria-pressed="false" title="Like"><span data-metric-like-icon aria-hidden="true">♡</span><strong data-metric-likes>${metric.likes}</strong></span>
               <span class="metric-pill" data-metric-id="${safeEntryId}" data-metric-current-likes="${metric.likes}" data-metric-current-views="${metric.views}"><span aria-hidden="true">◉</span><strong data-metric-views>${metric.views}</strong></span>
@@ -2091,7 +2097,7 @@ function archiveItemHtml({ origin, entry, metrics }) {
         </div>
       </section>
       <section class="seo-text" aria-label="About this Spine animation">
-        <p>${displayTitle} is a Spine animation${ownerName !== 'Spine creator' ? ` by ${escapeHtml(ownerName)}` : ''} with ${animations} animation${animations !== 1 ? 's' : ''} available in the World SPINE ARCHIVE. Open the interactive Spine player to preview the animation in real time, or watch the WebM video preview. You can like this work, view its metrics, and explore more Spine animations in the public archive.</p>
+        <p>${displayTitle} is a Spine animation${ownerName !== 'Spine creator' ? ` by ${escapeHtml(ownerName)}` : ''} ${animationDescription} in the World SPINE ARCHIVE. Open the interactive Spine player to preview the animation in real time, or watch the WebM video preview. You can like this work, view its metrics, and explore more Spine animations in the public archive.</p>
       </section>
     </main>
     <script>window.SpineLinkMetricsConfig = { viewId: ${JSON.stringify(entryId)} };</script>
