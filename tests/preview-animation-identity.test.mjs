@@ -299,6 +299,8 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
   assert.doesNotMatch(browserWorkflow, /spine-link-e2e-2026-11-14T09-30-30-139Z|l3_socks-2026-10-14T14-46-08-978Z/);
   assert.match(browserWorkflow, /dataset\.previewAnimation === name/);
   assert.match(browserWorkflow, /SPINE ASSET DIAGNOSTIC/);
+  assert.match(browserWorkflow, /__spinePlayerOptions/);
+  assert.match(browserWorkflow, /rawDataKeys:Object\.keys\(o\.rawDataURIs/);
   assert.match(browserWorkflow, /missingSlotBones/);
   assert.match(browserWorkflow, /createHash\('sha256'\)/);
   assert.match(browserWorkflow, /UNSUPPORTED_SPINE_3_8_75/);
