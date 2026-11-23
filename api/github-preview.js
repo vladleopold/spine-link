@@ -3083,6 +3083,57 @@ async function resolveEntryRecord(settings, entryId) {
       console.warn('[preview] collection lookup failed:', basePath, String(error));
     }
   }
+
+  // Three older public works were preserved in the immutable pre-rotation
+  // index and their files now live under library_01/<id>. The archive feed
+  // already restores these records; mirror that lookup here so /p/<id> works
+  // as well. Keep this allowlist narrow so normal misses never fetch a 2 MB
+  // historical index.
+  const recoveredIds = new Set([
+    '1036_1-2026-07-24T21-06-04-535Z',
+    '8000021-2026-07-02T04-52-57-380Z',
+    '8000021-2026-07-02T04-43-24-403Z',
+  ]);
+  if (!recoveredIds.has(id)) return null;
+  try {
+    const recoveredRef = 'f4e51c6c420d4ff1f4d2028c12492b04153cc862';
+    const snapshotBase = cleanRepoPath(settings.basePath || 'library');
+    const snapshotText = await githubText(
+      { ...settings, branch: recoveredRef },
+      `${snapshotBase}/index.json`,
+      { ttlMs: 60000 },
+    );
+    const recoveredEntries = snapshotText ? JSON.parse(snapshotText) : [];
+    if (!Array.isArray(recoveredEntries)) return null;
+    const restoreEntry = (entry) => {
+      const entryId = String(entry?.id || '');
+      const oldPath = cleanRepoPath(entry?.previewPath || '');
+      const newPath = `library_01/${entryId}`;
+      const rewrite = (value) => {
+        if (typeof value === 'string') return oldPath ? value.replaceAll(oldPath, newPath) : value;
+        if (Array.isArray(value)) return value.map(rewrite);
+        if (value && typeof value === 'object') {
+          return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, rewrite(child)]));
+        }
+        return value;
+      };
+      return { ...rewrite(entry), previewPath: newPath };
+    };
+    const restoredEntries = recoveredEntries
+      .filter((entry) => recoveredIds.has(String(entry?.id || '')))
+      .map(restoreEntry);
+    const match = restoredEntries.find((entry) => String(entry?.id || '') === id);
+    if (match?.previewPath) {
+      return {
+        previewPath: match.previewPath,
+        entry: match,
+        entries: restoredEntries,
+        basePath: 'library_01',
+      };
+    }
+  } catch (error) {
+    console.warn('[preview] legacy recovery lookup failed:', id, String(error));
+  }
   return null;
 }
 
