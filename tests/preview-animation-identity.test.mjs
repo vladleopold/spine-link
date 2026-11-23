@@ -275,6 +275,11 @@ test('Spine 3.7 binary skeletons receive a specific JSON re-export diagnostic', 
 const browserWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml', import.meta.url), 'utf8');
 const archiveLiveWorkflow = fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
 
+test('preview lookup always searches established shards when root listings are truncated', () => {
+  const lookup = section(preview, 'async function libraryCollectionPaths(', 'async function githubText(');
+  assert.match(lookup, /const paths = new Set\\([\\s\\S]*'library_02'[\\s\\S]*'library_01'/);
+});
+
 test('production Chromium gate verifies the upstream Vercel deployment job', () => {
   assert.match(browserWorkflow, /actions\/runs\/\$SOURCE_RUN_ID\/jobs\?per_page=100/);
   assert.match(browserWorkflow, /\.name == "Deploy to Vercel" and \.conclusion == "success"/);
