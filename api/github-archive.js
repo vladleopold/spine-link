@@ -1533,7 +1533,11 @@ function archiveHtml({ origin, entries, metrics }) {
     entries: entries.slice(nextOffset, embeddedEnd).map(entry => archiveFeedEntry(origin, entry, metrics)),
     hasMore: entries.length > embeddedEnd,
   };
-  const firstPoster = initialItems.find((item) => item.poster)?.poster || '';
+  // If the first server-rendered page contains no eligible previews, preload
+  // the first real poster from the already embedded next batch. This starts
+  // its transfer from the document head instead of waiting for client pagination.
+  const firstPoster = initialItems.find((item) => item.poster)?.poster ||
+    preloadedBatch.entries.find((item) => item.poster)?.poster || '';
   const archiveImage = firstPoster || `${origin}/spine-link-video-thumbnail.png`;
   const firstPosterPreload = firstPoster
     ? `<link rel="preload" as="image" href="${escapeHtml(firstPoster)}" fetchpriority="high" />`
