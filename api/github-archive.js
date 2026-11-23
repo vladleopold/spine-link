@@ -2437,12 +2437,12 @@ export default async function handler(request, response) {
         githubText(
           basePath === settings.basePath ? { ...settings, branch: recoveredArchiveRef } : settings,
           `${basePath}/index.json`,
-          { ttlMs: basePath === settings.basePath ? 60000 : 20000 },
+          { ttlMs: basePath === settings.basePath ? 60000 : 20000, preferRaw: true },
         ).catch(() => '')
       )),
-      githubText(settings, `${settings.basePath}/archive-exclusions.json`),
-      githubText(settings, `${settings.basePath}/metrics.json`),
-      githubText(settings, 'library/censorship.json'),
+      githubText(settings, `${settings.basePath}/archive-exclusions.json`, { preferRaw: true }),
+      githubText(settings, `${settings.basePath}/metrics.json`, { preferRaw: true }),
+      githubText(settings, 'library/censorship.json', { preferRaw: true }),
     ]);
     const collectedEntries = [];
     for (const text of indexTexts) {
