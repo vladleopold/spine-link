@@ -269,9 +269,9 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     const firstCardEnd=html.indexOf('</article>',firstCardStart);
     const firstCard=html.slice(firstCardStart,firstCardEnd);
     console.log('FIRST_ARCHIVE_CARD '+firstCard);
-    assert.ok(firstCard.includes('/preview-low.webp"'),
+    assert.match(firstCard,/\/preview-low\.webp(?:\?|")/,
       'the initial visible card must prefer its smaller low WebP poster');
-    assert.ok(firstCard.includes('/preview-low.webm'),
+    assert.match(firstCard,/\/preview-low\.webm(?:\?|")/,
       'the initial card must pair the low poster with its exact low WebM');
     const firstPoster=firstCard.match(/src="([^"]+preview-low\.webp[^"]*)"/)?.[1]||'';
     assert.ok(firstPoster&&html.includes('rel="preload" as="image" href="'+firstPoster+'"'),
