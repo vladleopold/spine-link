@@ -275,10 +275,10 @@ test('Spine 3.7 binary skeletons receive a specific JSON re-export diagnostic', 
 const browserWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml', import.meta.url), 'utf8');
 const archiveLiveWorkflow = fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
 
-test('production Chromium gate recognizes an already deployed Vercel commit', () => {
-  assert.match(browserWorkflow, /commits\/\$DEPLOY_SHA\/status/);
-  assert.match(browserWorkflow, /\.context == "Vercel"/);
-  assert.match(browserWorkflow, /\.state == "success"/);
+test('production Chromium gate verifies the upstream Vercel deployment job', () => {
+  assert.match(browserWorkflow, /actions\/runs\/\$SOURCE_RUN_ID\/jobs\?per_page=100/);
+  assert.match(browserWorkflow, /\.name == "Deploy to Vercel" and \.conclusion == "success"/);
+  assert.match(browserWorkflow, /REAL_PRODUCTION_DEPLOY=/);
   assert.match(archiveLiveWorkflow, /commits\/\$DEPLOY_SHA\/status/);
   assert.match(archiveLiveWorkflow, /\.context == "Vercel"/);
 });
