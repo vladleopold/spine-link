@@ -64,10 +64,15 @@ function entryVideoAsset(value = '', entry = {}, fallback = '') {
 }
 
 function selectedAnimationVideo(entry = {}) {
-  const name = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
   const previews = entry?.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
     ? entry.allAnimationPreviews
     : null;
+  const previewAnimation = typeof entry?.previewAnimation === 'string' ? entry.previewAnimation : '';
+  const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+  // A rendered preview can intentionally use a source-declared track while
+  // the upload's defaultAnimation remains unset. Only the exact track recorded
+  // by the renderer may unlock that preview; never guess another map entry.
+  const name = previewAnimation.trim() ? previewAnimation : defaultAnimation;
   const selected = name.trim() && previews ? previews[name] : null;
   return {
     name,
@@ -573,8 +578,9 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 
 function archiveFeedEntry(origin, entry, metrics) {
   const id = String(entry?.id || '').trim();
-  const hasDefaultAnimation = typeof entry?.defaultAnimation === 'string' && entry.defaultAnimation.trim().length > 0;
-  const selectedPreview = hasDefaultAnimation ? selectedAnimationVideo(entry) : null;
+  const hasPreviewAnimation = (typeof entry?.previewAnimation === 'string' && entry.previewAnimation.trim().length > 0) ||
+    (typeof entry?.defaultAnimation === 'string' && entry.defaultAnimation.trim().length > 0);
+  const selectedPreview = hasPreviewAnimation ? selectedAnimationVideo(entry) : null;
   const mediaReady = entry?.webmStatus === 'ready' && entry?.previewStatus === 'ready' && Boolean(selectedPreview?.name);
   const candidates = mediaReady ? [
     {
