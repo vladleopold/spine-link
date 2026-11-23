@@ -109,16 +109,18 @@ test('loading video is hidden and can play only when it names the selected anima
   assert.doesNotMatch(preview, /preview-loading-video[^\n]*autoplay/);
 });
 
-test('archive cards use only the indexed default animation and its exact media pair', () => {
+test('archive cards use the exact recorded preview animation or indexed default and its media pair', () => {
   const feed = section(archive, 'function archiveFeedEntry(', 'function lightweightCardHtml(');
-  assert.match(feed, /hasDefaultAnimation = typeof entry\?\.defaultAnimation === 'string' && entry\.defaultAnimation\.trim\(\)\.length > 0/);
-  assert.match(feed, /selectedPreview = hasDefaultAnimation \? selectedAnimationVideo\(entry\) : null/);
+  assert.match(feed, /hasPreviewAnimation = \(typeof entry\?\.previewAnimation === 'string' && entry\.previewAnimation\.trim\(\)\.length > 0\)/);
+  assert.match(feed, /selectedPreview = hasPreviewAnimation \? selectedAnimationVideo\(entry\) : null/);
   assert.match(feed, /video: selected\?\.video \|\| ''/);
   assert.match(feed, /isGeneratedWebmUrl\(candidate\.video, entry\)/);
   assert.match(feed, /isGeneratedWebpPosterUrl\(candidate\.poster, entry\)/);
   const selected = section(archive, 'function selectedAnimationVideo(', 'function safeAsset(');
   assert.match(selected, /allAnimationPreviews/);
+  assert.match(selected, /previewAnimation/);
   assert.match(selected, /defaultAnimation/);
+  assert.match(selected, /const name = previewAnimation\.trim\(\) \? previewAnimation : defaultAnimation/);
   assert.doesNotMatch(selected, /entry\?\.webmPreview/);
   const home = section(archive, 'function homepageFeedEntries(', 'function mergeArchiveEntries(');
   assert.match(home, /entryVideoLowSrc\(origin, entry\)/);
@@ -144,12 +146,14 @@ test('indexed animation names remain byte-for-byte exact in URLs, media lookup a
   assert.match(playerUrl, /encodeURIComponent\(animation\)/);
 
   const archiveUrl = section(archive, 'function previewUrl(', 'function archiveItemUrl(');
-  assert.match(archiveUrl, /const animation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+  assert.match(archiveUrl, /const previewAnimation = typeof entry\?\.previewAnimation === 'string' \? entry\.previewAnimation : ''/);
+  assert.match(archiveUrl, /const defaultAnimation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+  assert.match(archiveUrl, /const animation = previewAnimation\.trim\(\) \? previewAnimation : defaultAnimation/);
   assert.match(archiveUrl, /animation\.trim\(\) \?/);
   assert.match(archiveUrl, /encodeURIComponent\(animation\)/);
 
   const selected = section(archive, 'function selectedAnimationVideo(', 'function safeAsset(');
-  assert.match(selected, /const name = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+  assert.match(selected, /const name = previewAnimation\.trim\(\) \? previewAnimation : defaultAnimation/);
   assert.match(selected, /previews\[name\]/);
   assert.doesNotMatch(selected, /String\(entry\?\.defaultAnimation \|\| ''\)\.trim\(\)/);
 });
