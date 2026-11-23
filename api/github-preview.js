@@ -2225,7 +2225,7 @@ const pinchDistance = { value: null };
           if (isSpine43) {
             const skeletonSource = String(activeSet.value.jsonUrl || activeSet.value.skelUrl || activeSet.value.skeleton || "");
             const skeletonPath = skeletonSource.split(/[?#]/, 1)[0];
-            if (/\\.json$/i.test(skeletonPath) && skeletonSource !== skeletonPath) {
+            if (/\.json$/i.test(skeletonPath) && skeletonSource !== skeletonPath) {
               const response = await fetch(skeletonSource, { cache: "no-store" });
               if (!response.ok) throw new Error("Could not load Spine 4.3 JSON skeleton: HTTP " + response.status);
               const bytes = new TextEncoder().encode(await response.text());
