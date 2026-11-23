@@ -514,6 +514,111 @@ jobs:
                   await blockedPage.close();
                 }
               }
+
+              // Diagnostic only: patch the 3.8.75 version tag in memory and
+              // test the official 3.8.99 runtime. Production files stay untouched.
+              const compatPage = await browser.newPage({viewport:{width:1200,height:780}});
+              try {
+                await compatPage.goto(site + '/p/sabrinaBedSide-2026-11-20T07-06-45-002Z',
+                  {waitUntil:'domcontentloaded',timeout:60000});
+                await compatPage.waitForSelector('#spine-preview-config');
+                const assets = await compatPage.evaluate(async () => {
+                  const config = JSON.parse(document.querySelector('#spine-preview-config').textContent || '{}');
+                  const set = config.sets?.[0] || {};
+                  const jsonUrl = set.jsonUrl || set.skelUrl || set.skeleton || '';
+                  const atlasUrl = set.atlasUrl || set.atlas || '';
+                  const [jr,ar] = await Promise.all([fetch(jsonUrl),fetch(atlasUrl)]);
+                  if(!jr.ok || !ar.ok) throw new Error('source asset fetch failed: JSON '+jr.status+', atlas '+ar.status);
+                  const json = await jr.json();
+                  const atlasText = await ar.text();
+                  const pages = atlasText.replace(/\r/g,'').split('\n')
+                    .filter(line=>line && line===line.trim() && /\.(?:png|jpe?g|webp)$/i.test(line));
+                  const textures = [];
+                  for(const name of pages) {
+                    const response = await fetch(new URL(name,atlasUrl).href);
+                    if(!response.ok) throw new Error('texture fetch failed: '+name+' HTTP '+response.status);
+                    const bytes = new Uint8Array(await response.arrayBuffer());
+                    let binary='';
+                    for(let i=0;i<bytes.length;i+=0x8000) binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+                    textures.push({name,base64:btoa(binary)});
+                  }
+                  return {json,atlasText,textures,jsonUrl,atlasUrl};
+                });
+                const originalVersion=assets.json.skeleton?.spine || '';
+                assert.equal(originalVersion,'3.8.75','compatibility test source version');
+                const bones=new Set((assets.json.bones||[]).map(b=>b.name));
+                assert.ok((assets.json.ik||[]).length===0,'do not patch exports with IK constraints');
+                assert.ok(Object.values(assets.json.animations||{}).every(a=>(a.ik||[]).length===0),
+                  'do not patch exports with IK animation timelines');
+                assert.ok((assets.json.slots||[]).every(slot=>bones.has(slot.bone)),
+                  'all slot bone references must resolve');
+                let weightedVertexCount=0;
+                for(const skin of assets.json.skins||[]) for(const attachments of Object.values(skin.attachments||{}))
+                  for(const attachment of Object.values(attachments||{})) {
+                    if(attachment.type!=='mesh' && attachment.type!=='linkedmesh') continue;
+                    const vertices=attachment.vertices||[];let offset=0,count=0;
+                    while(offset<vertices.length) {
+                      const influences=vertices[offset++];
+                      assert.ok(Number.isInteger(influences)&&influences>0&&offset+influences*4<=vertices.length,
+                        'weighted mesh encoding is invalid');
+                      for(let n=0;n<influences;n++) {
+                        const boneIndex=vertices[offset++],x=vertices[offset++],y=vertices[offset++],weight=vertices[offset++];
+                        assert.ok(Number.isInteger(boneIndex)&&boneIndex>=0&&boneIndex<assets.json.bones.length,
+                          'weighted mesh references an unknown bone');
+                        assert.ok(Number.isFinite(x)&&Number.isFinite(y)&&Number.isFinite(weight),
+                          'weighted mesh contains invalid values');
+                      }
+                      count++;
+                    }
+                    assert.equal(count,(attachment.uvs||[]).length/2,'weighted mesh vertex/UV counts differ');
+                    weightedVertexCount+=count;
+                  }
+                assets.json.skeleton.spine='3.8.99';
+                const textureBodies=new Map(assets.textures.map(x=>[x.name,Buffer.from(x.base64,'base64')]));
+                await compatPage.route('**/compat-spine/**',async route=>{
+                  const name=new URL(route.request().url()).pathname.split('/').pop();
+                  if(name==='sabrina.json') return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(assets.json)});
+                  if(name==='sabrina.atlas') return route.fulfill({status:200,contentType:'text/plain',body:assets.atlasText});
+                  if(textureBodies.has(name)) return route.fulfill({status:200,contentType:'image/png',body:textureBodies.get(name)});
+                  return route.continue();
+                });
+                const runtimeBase='https://cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@8b4844bd4b193ba9e54487ed397a777993cbad56/spine-ts/';
+                await compatPage.addStyleTag({url:runtimeBase+'player/css/spine-player.css'});
+                await compatPage.addScriptTag({url:runtimeBase+'build/spine-player.js'});
+                await compatPage.evaluate(() => {
+                  const container=document.createElement('div');
+                  container.id='compat-spine-player';container.style.width='1000px';container.style.height='700px';
+                  document.body.appendChild(container);
+                  window.__compatSpineResult=new Promise(resolve=>{
+                    const timer=setTimeout(()=>resolve({status:'timeout'}),30000);
+                    new window.spine.SpinePlayer('compat-spine-player',{
+                      jsonUrl:'/compat-spine/sabrina.json',atlasUrl:'/compat-spine/sabrina.atlas',
+                      animation:'digesting_4_full',loop:true,showControls:false,
+                      success:player=>{window.__compatSpinePlayer=player;clearTimeout(timer);resolve({status:'ready'});},
+                      error:(_player,reason)=>{clearTimeout(timer);resolve({status:'error',reason:String(reason||'')});},
+                    });
+                  });
+                });
+                const compatResult=await compatPage.evaluate(()=>window.__compatSpineResult);
+                let framesChanged=false,activeAnimation='';
+                if(compatResult.status==='ready') {
+                  activeAnimation=await compatPage.evaluate(()=>window.__compatSpinePlayer?.animationState?.getCurrent?.(0)?.animation?.name||'');
+                  const canvas=compatPage.locator('#compat-spine-player canvas').first();
+                  const first=await canvas.screenshot();
+                  await compatPage.waitForTimeout(1000);
+                  const second=await canvas.screenshot();
+                  framesChanged=createHash('sha256').update(first).digest('hex')!==createHash('sha256').update(second).digest('hex');
+                  if(framesChanged) await compatPage.screenshot({path:'artifacts/compat-spine-3.8.75-sabrina.png',fullPage:true});
+                }
+                console.log('SPINE_3_8_75_IN_MEMORY_COMPATIBILITY_PROOF '+JSON.stringify({
+                  originalVersion,patchedVersion:assets.json.skeleton.spine,weightedVertexCount,
+                  animation:'digesting_4_full',compatResult,activeAnimation,framesChanged,
+                }));
+              } catch(error) {
+                console.log('SPINE_3_8_75_IN_MEMORY_COMPATIBILITY_PROOF '+JSON.stringify({status:'diagnostic-failed',error:String(error)}));
+              } finally {
+                await compatPage.close();
+              }
             } catch (error) {
               failures.push('Spine preview: ' + String(error));
             } finally {
