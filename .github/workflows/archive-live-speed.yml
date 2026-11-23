@@ -91,10 +91,10 @@ jobs:
                 assert.equal(archiveMetaResponse.status,200,'Archive metadata API HTTP '+archiveMetaResponse.status);
                 const archiveMeta=await archiveMetaResponse.json();
                 const firstHtml=await page.content();
-                const pageTotalMatch=firstHtml.match(/const totalEntries=(\\d+);/);
+                const pageTotalMatch=firstHtml.match(/const totalEntries=(\d+);/);
                 const pageTotal=Number(pageTotalMatch?.[1]||archiveMeta.total||0);
                 const expectedCards=Math.min(40,Math.max(0,pageTotal));
-                const embeddedMatch=firstHtml.match(/id="archive-next-page">([\\s\\S]*?)<\\/script>/);
+                const embeddedMatch=firstHtml.match(/id="archive-next-page">([\s\S]*?)<\/script>/);
                 const embeddedBatch=embeddedMatch?JSON.parse(embeddedMatch[1]):{entries:[]};
                 const embeddedCount=Array.isArray(embeddedBatch.entries)?embeddedBatch.entries.length:0;
                 const domCardCount=await page.locator('.feed-card').count();
