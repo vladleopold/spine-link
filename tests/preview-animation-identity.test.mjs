@@ -296,3 +296,13 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
   assert.match(browserWorkflow, /createHash\('sha256'\)/);
   assert.match(browserWorkflow, /UNSUPPORTED_SPINE_3_8_75/);
 });
+
+test('Spine 4.3 versioned JSON URLs are supplied as JSON data, not misread as binary', () => {
+  const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
+  assert.match(startup, /const isSpine43 =/);
+  assert.match(startup, /skeletonSource\.split\(\/\[\?\#\]\/\, 1\)\[0\]/);
+  assert.match(startup, /fetch\(skeletonSource, \{ cache: "no-store" \}\)/);
+  assert.match(startup, /playerOptions\.skeleton = skeletonPath/);
+  assert.match(startup, /playerOptions\.rawDataURIs =/);
+  assert.match(startup, /data:application\/json;base64,/);
+});
