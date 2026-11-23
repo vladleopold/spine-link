@@ -283,9 +283,17 @@ test('preview lookup always searches established shards when root listings are t
 test('production Chromium gate verifies the upstream Vercel deployment job', () => {
   assert.match(browserWorkflow, /actions\/runs\/\$SOURCE_RUN_ID\/jobs\?per_page=100/);
   assert.match(browserWorkflow, /\.name == "Deploy to Vercel" and \.conclusion == "success"/);
+  assert.match(browserWorkflow, /commits\/\$DEPLOY_SHA\/status/);
+  assert.match(browserWorkflow, /\.context == "Vercel" and \.state == "success"/);
+  assert.match(browserWorkflow, /WORKFLOW_FILE: spine-link-browser-smoke\.yml/);
+  assert.match(browserWorkflow, /SMOKE_JOB_NAME: chromium/);
+  assert.match(browserWorkflow, /prior_success/);
   assert.match(browserWorkflow, /VERIFIED_PRODUCTION_DEPLOY=/);
   assert.match(archiveLiveWorkflow, /\.name == "Deploy to Vercel" and \.conclusion == "success"/);
-  assert.doesNotMatch(archiveLiveWorkflow, /commits\/\$DEPLOY_SHA\/status/);
+  assert.match(archiveLiveWorkflow, /commits\/\$DEPLOY_SHA\/status/);
+  assert.match(archiveLiveWorkflow, /WORKFLOW_FILE: archive-live-speed\.yml/);
+  assert.match(archiveLiveWorkflow, /SMOKE_JOB_NAME: chromium/);
+  assert.match(archiveLiveWorkflow, /prior_success/);
 });
 
 test('production Chromium smoke performs real playback checks for Spine 3.8 through 4.3', () => {
