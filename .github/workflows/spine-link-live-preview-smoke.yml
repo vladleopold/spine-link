@@ -1,20 +1,17 @@
 name: Spine-Link live preview smoke
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/spine-link-live-preview-smoke.yml'
-      - 'api/github-preview.js'
-      - 'api/github-upload.js'
-      - 'src/main.tsx'
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Vercel deploy and alias"]
+    types: [completed]
 
 permissions:
   contents: read
 
 jobs:
   production-preview:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -28,6 +25,8 @@ jobs:
             'spine-link-directcheck-2026-11-14T08-58-02-742Z'
             'spine-link-fastcheck-2026-11-14T08-50-04-803Z'
             'k_nuke-2026-11-13T08-34-56-151Z'
+            'wolf-2026-11-20T05-12-56-813Z'
+            'sabrinaBedSide-2026-11-20T07-06-45-002Z'
           )
           for id in "${ids[@]}"; do
             success=0
