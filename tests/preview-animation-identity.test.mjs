@@ -294,6 +294,8 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
     'whiskey_glass-2026-11-04T08-13-32-548Z',
   ]) assert.ok(browserWorkflow.includes(id), `missing live runtime fixture: ${id}`);
   assert.match(browserWorkflow, /beforeSelection\.status, 'ready'/);
+  assert.match(browserWorkflow, /info\.status, 'ready'/);
+  assert.match(browserWorkflow, /info\.animation, 'blow_loop_landscape'/);
   assert.match(browserWorkflow, /const url = site \+ '\/p\/wolf-2026-11-20T05-12-56-813Z\?animation=blow_loop_landscape'/);
   assert.doesNotMatch(browserWorkflow, /spine-link-e2e-2026-11-14T09-30-30-139Z|l3_socks-2026-10-14T14-46-08-978Z/);
   assert.match(browserWorkflow, /dataset\.previewAnimation === name/);

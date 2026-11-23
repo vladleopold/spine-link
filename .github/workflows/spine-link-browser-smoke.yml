@@ -179,18 +179,28 @@ jobs:
                 waitUntil: 'domcontentloaded', timeout: 60000,
               });
               assert.equal(response?.status(), 200, 'Spine preview HTTP status');
-              await page.waitForTimeout(4500);
+              await page.waitForFunction(() => {
+                const player = document.querySelector('#player');
+                return player && ['ready','blocked'].includes(player.dataset.previewStatus || '');
+              }, null, {timeout:60000});
               const info = await page.evaluate(() => {
                 const raw = document.querySelector('#spine-preview-config')?.textContent;
                 const config = raw ? JSON.parse(raw) : {};
+                const player = document.querySelector('#player');
                 return {
                   sets: config.sets?.length || 0,
                   notFound: document.body.innerText.includes('Preview not found'),
                   canvas: document.querySelectorAll('canvas').length,
+                  status: player?.dataset.previewStatus || '',
+                  animation: player?.dataset.previewAnimation || '',
+                  error: player?.dataset.previewError || '',
                 };
               });
               assert.ok(info.sets > 0, 'Spine preview has no skeleton sets');
               assert.equal(info.notFound, false, 'Spine preview shows not found');
+              assert.equal(info.status, 'ready', 'Spine Runtime did not become ready: ' + JSON.stringify(info));
+              assert.equal(info.animation, 'blow_loop_landscape',
+                'Requested initial Spine animation did not start: ' + JSON.stringify(info));
               // Long animation lists scroll internally, while all subsequent
               // sidebar cards stay below them; cover the >1000px breakpoint.
               for (const width of [1200, 1001]) {
