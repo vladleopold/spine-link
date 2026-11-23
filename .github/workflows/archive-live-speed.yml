@@ -144,7 +144,8 @@ jobs:
                 let initialTiming={posterAvailable:false};
                 if(initialPosterCount>0){
                   const firstPoster=page.locator('.feed-card .feed-media img').first();
-                  await firstPoster.waitFor({state:'visible',timeout:20000});
+                  // The poster may be below the viewport; decode the preloaded DOM image
+          // directly instead of waiting for scroll visibility, which is not load latency.
                   const decodeStarted=Date.now();
                   await firstPoster.evaluate(img=>img.decode());
                   posterDecodeMs=Date.now()-decodeStarted;
