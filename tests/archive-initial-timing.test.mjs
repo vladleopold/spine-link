@@ -31,10 +31,8 @@ test('first available archive poster decodes within one second when the initial 
     'a cooldown skip must not count as a production release');
   assert.doesNotMatch(workflow,/^\s+schedule:/m,
     'live proof must not repeatedly benchmark stale production during quota cooldown');
-  assert.match(workflow,/push:\s*branches:\s*\[main\]\s*paths:\s*-\s*'\.github\/workflows\/archive-live-speed\.yml'/,
-    'read-only diagnostics may run when this workflow itself changes');
-  assert.doesNotMatch(workflow,/push:[\s\S]*?paths:[\s\S]*?api\/github-archive\.js/,
-    'application pushes must wait for the production deploy gate');
+  assert.doesNotMatch(workflow,/^\s+push:/m,
+    'live proof must not race the production deploy on main push');
   assert.match(workflow,/if\(initialPosterCount>0\)/,
     'only measure a first poster when the initial archive batch has an eligible preview');
   assert.match(workflow,/const img=document\.querySelector\('\.feed-card \.feed-media img'\)/,
