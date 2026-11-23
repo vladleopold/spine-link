@@ -27,6 +27,8 @@ test('first available archive poster decodes within one second when the initial 
   assert.match(workflow,/release_gate:/,
     'live proof must have a deployment gate');
   assert.match(workflow,/Deploy to Vercel/);
+  assert.match(workflow,/github\.event\.workflow_run\.head_branch == 'main'/,
+    'live proof must inspect production status after a cooldown-only skipped deploy');
   assert.match(workflow,/needs\.release_gate\.outputs\.deployed == 'true'/,
     'a cooldown skip must not count as a production release');
   assert.doesNotMatch(workflow,/^\s+schedule:/m,
