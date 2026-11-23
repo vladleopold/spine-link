@@ -22,6 +22,18 @@ on:
       - .github/workflows/spine-export-full.yml
       - tests/spine-runtime-file-selection.test.mjs
       - tests/spine-atlas-integrity.test.mjs
+      - lib/spine-atlas-integrity.js
+      - lib/spine-runtime-file-selection.js
+      - src/main.tsx
+      - .github/workflows/archive-performance.yml
+      - .github/workflows/vercel-deploy-and-alias.yml
+      - .github/workflows/archive-live-speed.yml
+      - .github/workflows/spine-link-live-preview-smoke.yml
+      - .github/workflows/spine-link-browser-smoke.yml
+  pull_request:
+    paths:
+      - tests/spine-runtime-file-selection.test.mjs
+      - tests/spine-atlas-integrity.test.mjs
       - tests/archive-exact-spine-export.test.mjs
       - scripts/spine-export-webm.mjs
       - scripts/preview-animation-choice.mjs
@@ -31,17 +43,6 @@ on:
       - scripts/lib/preview-work-path.cjs
       - scripts/lib/preview-export-status.cjs
       - .github/workflows/spine-export-full.yml
-      - lib/spine-atlas-integrity.js
-      - lib/spine-runtime-file-selection.js
-      - api/github-preview.js
-      - src/main.tsx
-      - .github/workflows/archive-performance.yml
-      - .github/workflows/vercel-deploy-and-alias.yml
-      - .github/workflows/archive-live-speed.yml
-      - .github/workflows/spine-link-live-preview-smoke.yml
-      - .github/workflows/spine-link-browser-smoke.yml
-  pull_request:
-    paths:
       - api/github-archive.js
       - api/github-preview.js
       - tests/preview-animation-identity.test.mjs
