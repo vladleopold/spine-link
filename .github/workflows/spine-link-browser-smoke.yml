@@ -371,10 +371,10 @@ jobs:
                 const playbackMissingAssets = [];
                 const playbackConsoleErrors = [];
                 // Capture the exact options passed to the official runtime.
-                await playbackPage.route(url => /spine-player\\.js/.test(url.href), async route => {
+                await playbackPage.route(url => /spine-player\.js/.test(url.href), async route => {
                   const response = await route.fetch();
                   const source = await response.text();
-                  const probe = '\\n;(()=>{try{const C=window.spine&&window.spine.SpinePlayer;if(C&&!C.__spineLinkProbe){const W=new Proxy(C,{construct(t,args){const o=args[1]||{};window.__spinePlayerOptions={keys:Object.keys(o),skeleton:o.skeleton||"",jsonUrl:o.jsonUrl||"",atlas:o.atlas||"",atlasUrl:o.atlasUrl||"",binaryUrl:o.binaryUrl||"",rawDataKeys:Object.keys(o.rawDataURIs||{}),rawDataSamples:Object.entries(o.rawDataURIs||{}).slice(0,8)};return Reflect.construct(t,args,t)}});W.__spineLinkProbe=true;window.spine.SpinePlayer=W}}catch(e){window.__spinePlayerProbeError=String(e)}})();';
+                  const probe = '\n;(()=>{try{const C=window.spine&&window.spine.SpinePlayer;if(C&&!C.__spineLinkProbe){const W=new Proxy(C,{construct(t,args){const o=args[1]||{};window.__spinePlayerOptions={keys:Object.keys(o),skeleton:o.skeleton||"",jsonUrl:o.jsonUrl||"",atlas:o.atlas||"",atlasUrl:o.atlasUrl||"",binaryUrl:o.binaryUrl||"",rawDataKeys:Object.keys(o.rawDataURIs||{}),rawDataSamples:Object.entries(o.rawDataURIs||{}).slice(0,8)};return Reflect.construct(t,args,t)}});W.__spineLinkProbe=true;window.spine.SpinePlayer=W}}catch(e){window.__spinePlayerProbeError=String(e)}})();';
                   await route.fulfill({response,body:source+probe});
                 });
                 playbackPage.on('pageerror', error => playbackErrors.push(String(error)));
@@ -419,7 +419,7 @@ jobs:
                       jsonContentType, jsonVersion:jsonData?.skeleton?.spine || '',
                       boneCount:jsonData?.bones?.length || 0, slotCount:jsonData?.slots?.length || 0,
                       missingSlotBones,
-                      runtimeScriptUrls:performance.getEntriesByType('resource').map(x=>x.name).filter(x=>/spine-player\\.js/.test(x)),
+                      runtimeScriptUrls:performance.getEntriesByType('resource').map(x=>x.name).filter(x=>/spine-player\.js/.test(x)),
                       playerOptions:window.__spinePlayerOptions||null,
                       playerProbeError:window.__spinePlayerProbeError||'',
                     };
