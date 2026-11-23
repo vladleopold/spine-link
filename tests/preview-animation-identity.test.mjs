@@ -356,3 +356,12 @@ test('archive cards do not claim zero animations when index metadata is unavaila
   assert.match(detail, /Open player to view animations/);
   assert.match(detail, /animation options listed in the interactive player/);
 });
+
+const upload = fs.readFileSync(new URL('../api/github-upload.js', import.meta.url), 'utf8');
+test('upload export requires an explicit default animation and never picks the first track', () => {
+  const dispatch = section(upload, 'async function dispatchSpineExportWebm(', 'export function publicLibraryEntry(');
+  assert.match(dispatch, /const defaultAnimation = typeof entry\\?\\.defaultAnimation === 'string' \\? entry\\.defaultAnimation : '';/);
+  assert.match(dispatch, /if \\(!defaultAnimation\\.trim\\(\\)\\) \\{/);
+  assert.match(dispatch, /missing-explicit-default-animation/);
+  assert.doesNotMatch(dispatch, /entry\\?\\.animations\\s*\\?\\s*entry\\.animations\\[0\\]/);
+});
