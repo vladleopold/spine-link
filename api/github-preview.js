@@ -1943,6 +1943,8 @@ const pinchDistance = { value: null };
           markPreviewBlocked("SELECTED_SPINE_ANIMATION_UNAVAILABLE");
           return false;
         }
+        const playerContainer = document.getElementById("player");
+        if (playerContainer) playerContainer.dataset.previewAnimation = name;
         const entry = setResult || player.animationState?.getCurrent?.(0);
         // Spine Player 3.8 applies the animation but exposes neither the
         // TrackEntry return value nor animationState on its public wrapper.
@@ -2115,6 +2117,7 @@ const pinchDistance = { value: null };
         if (!box) return;
         box.dataset.previewStatus = "blocked";
         box.dataset.previewError = code;
+        delete box.dataset.previewAnimation;
         const detailText = String(detail || "").replace(/<[^>]*>/g, " ").trim();
         if (detailText) box.dataset.previewErrorDetail = detailText.slice(0, 500);
         const missingAtlasRegion = detailText.match(/Region not found in atlas:\\s*([^\\s]+)/i)?.[1] || "";
@@ -2141,6 +2144,7 @@ const pinchDistance = { value: null };
         if (playerContainer) {
           playerContainer.dataset.previewStatus = "loading";
           delete playerContainer.dataset.previewError;
+          delete playerContainer.dataset.previewAnimation;
         }
         if (!activeSet.value) {
           markPreviewBlocked("NO_SKELETON_SET");

@@ -45,6 +45,7 @@ test('player selects exact requested animations without requiring a version-spec
   const playback = section(preview, 'function playAnimationEntry(name)', 'function togglePlayback()');
   assert.doesNotMatch(playback, /skeleton\.data\.findAnimation\(/);
   assert.match(playback, /player\.setAnimation\(name, loopEnabled\.value\)/);
+  assert.match(playback, /dataset\.previewAnimation = name/);
   assert.match(playback, /player\.animationState\?\.getCurrent\?\.\(0\)/);
   assert.match(playback, /if \(entry\) \{/);
   assert.doesNotMatch(playback, /if \(!entry\)/);
@@ -269,4 +270,29 @@ test('Spine 3.7 binary skeletons receive a specific JSON re-export diagnostic', 
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.match(startup, /UNSUPPORTED_SPINE_3_7_BINARY/);
   assert.match(preview, /bundled Spine 3\.7 Web Player accepts JSON skeletons only/);
+});
+
+const browserWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml', import.meta.url), 'utf8');
+
+test('production Chromium gate recognizes an already deployed Vercel commit', () => {
+  assert.match(browserWorkflow, /commits\/\$DEPLOY_SHA\/status/);
+  assert.match(browserWorkflow, /\.context == "Vercel"/);
+  assert.match(browserWorkflow, /\.state == "success"/);
+});
+
+test('production Chromium smoke performs real playback checks for Spine 3.8 through 4.3', () => {
+  for (const id of [
+    'l3_socks-2026-10-14T14-46-08-978Z',
+    'castle_upgrade-2026-11-19T07-33-26-823Z',
+    '276-Spine-2014--2026-10-24T21-46-51-258Z',
+    'wolf-2026-11-20T05-12-56-813Z',
+    'dryad-2026-09-30T21-54-03-321Z',
+    'superboxbot-2026-10-18T03-51-48-726Z',
+    'sabrinaBedSide-2026-11-20T07-06-45-002Z',
+    'whiskey_glass-2026-11-04T08-13-32-548Z',
+  ]) assert.ok(browserWorkflow.includes(id), `missing live runtime fixture: ${id}`);
+  assert.match(browserWorkflow, /dataset\.previewStatus === 'ready'/);
+  assert.match(browserWorkflow, /dataset\.previewAnimation === name/);
+  assert.match(browserWorkflow, /createHash\('sha256'\)/);
+  assert.match(browserWorkflow, /UNSUPPORTED_SPINE_3_8_75/);
 });

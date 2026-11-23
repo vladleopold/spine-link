@@ -27,10 +27,18 @@ jobs:
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
-          jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")"
-          deployed="$(printf '%s' "$jobs" | jq -r '[.jobs[].steps[]? | select(.name == "Deploy to Vercel" and .conclusion == "success")] | length > 0')"
+          DEPLOY_SHA="${{ github.event.workflow_run.head_sha }}"
+          # The deploy workflow intentionally skips a duplicate Vercel deploy
+          # when this exact SHA is already live. In that case its Deploy step is
+          # skipped, but Vercel's commit status still proves production is READY.
+          status="$(gh api "repos/$GITHUB_REPOSITORY/commits/$DEPLOY_SHA/status")"
+          deployed="$(printf '%s' "$status" | jq -r '[.statuses[]? | select((.context == "Vercel" or .context == "vercel/production") and .state == "success")] | length > 0')"
+          if [[ "$deployed" != "true" ]]; then
+            jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")"
+            deployed="$(printf '%s' "$jobs" | jq -r '[.jobs[].steps[]? | select(.name == "Deploy to Vercel" and .conclusion == "success")] | length > 0')"
+          fi
           echo "deployed=$deployed" >> "$GITHUB_OUTPUT"
-          echo "REAL_PRODUCTION_DEPLOY=$deployed"
+          echo "VERIFIED_PRODUCTION_DEPLOY=$deployed for $DEPLOY_SHA"
   chromium:
     needs: release_gate
     if: ${{ always() && (github.event_name != 'workflow_run' || needs.release_gate.outputs.deployed == 'true') }}
@@ -51,6 +59,7 @@ jobs:
           mkdir -p artifacts
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
           import { chromium } from 'playwright';
 
           const site = process.env.SITE;
@@ -336,6 +345,115 @@ jobs:
               assert.deepEqual(missingAssets, [], 'Spine preview has missing assets');
               assert.deepEqual(pageErrors, [], 'Spine preview JavaScript errors');
               console.log('PASS LIVE PREVIEW', JSON.stringify(info));
+
+              // Verify actual runtime initialization, exact animation selection,
+              // and moving canvas pixels across every supported major/minor line.
+              const playbackCases = [
+                {label:'Spine 3.8.99 l3_socks', id:'l3_socks-2026-10-14T14-46-08-978Z', animation:'idle'},
+                {label:'Spine 3.8.99 castle_upgrade', id:'castle_upgrade-2026-11-19T07-33-26-823Z', animation:'build'},
+                {label:'Spine 4.0.58', id:'276-Spine-2014--2026-10-24T21-46-51-258Z', animation:'walk'},
+                {label:'Spine 4.1.24', id:'wolf-2026-11-20T05-12-56-813Z', animation:'blow_loop_landscape'},
+                {label:'Spine 4.2.0', id:'dryad-2026-09-30T21-54-03-321Z', animation:'walk'},
+                {label:'Spine 4.3.00', id:'superboxbot-2026-10-18T03-51-48-726Z', animation:'walk'},
+              ];
+              for (const sample of playbackCases) {
+                const playbackPage = await browser.newPage({viewport:{width:1200,height:780}});
+                const playbackErrors = [];
+                const playbackMissingAssets = [];
+                playbackPage.on('pageerror', error => playbackErrors.push(String(error)));
+                playbackPage.on('response', response => {
+                  if (response.status() >= 400 &&
+                      /\.(?:atlas|json|png|webp|skel)(?:\?|$)/i.test(response.url())) {
+                    playbackMissingAssets.push(response.status() + ' ' + response.url());
+                  }
+                });
+                try {
+                  const playbackResponse = await playbackPage.goto(site + '/p/' + sample.id, {
+                    waitUntil:'domcontentloaded', timeout:60000,
+                  });
+                  assert.equal(playbackResponse?.status(), 200, sample.label + ' preview HTTP status');
+                  await playbackPage.waitForFunction(() => {
+                    const player = document.querySelector('#player');
+                    return player && ['ready','blocked'].includes(player.dataset.previewStatus || '');
+                  }, null, {timeout:60000});
+                  const beforeSelection = await playbackPage.evaluate(() => ({
+                    status: document.querySelector('#player')?.dataset.previewStatus || '',
+                    error: document.querySelector('#player')?.dataset.previewError || '',
+                    animationCount: document.querySelectorAll('#animation-menu button').length,
+                  }));
+                  assert.equal(beforeSelection.status, 'ready',
+                    sample.label + ' Runtime must reach ready; got ' + JSON.stringify(beforeSelection));
+                  assert.ok(beforeSelection.animationCount > 0,
+                    sample.label + ' must expose its indexed animation list');
+                  const clicked = await playbackPage.evaluate(name => {
+                    const button = Array.from(document.querySelectorAll('#animation-menu button'))
+                      .find(item => item.textContent.trim() === name);
+                    if (!button) return false;
+                    button.click();
+                    return true;
+                  }, sample.animation);
+                  assert.equal(clicked, true, sample.label + ' missing exact animation ' + sample.animation);
+                  await playbackPage.waitForFunction(name =>
+                    document.querySelector('#player')?.dataset.previewAnimation === name,
+                    sample.animation, {timeout:15000});
+                  const canvas = playbackPage.locator('#player canvas').first();
+                  await canvas.waitFor({state:'visible',timeout:15000});
+                  const dimensions = await canvas.evaluate(element => ({width:element.width,height:element.height}));
+                  assert.ok(dimensions.width > 100 && dimensions.height > 100,
+                    sample.label + ' canvas has invalid dimensions: ' + JSON.stringify(dimensions));
+                  const frameA = await canvas.screenshot();
+                  await playbackPage.waitForTimeout(1200);
+                  const frameB = await canvas.screenshot();
+                  const hashA = createHash('sha256').update(frameA).digest('hex');
+                  const hashB = createHash('sha256').update(frameB).digest('hex');
+                  assert.notEqual(hashA, hashB,
+                    sample.label + ' canvas pixels did not change while animation ' + sample.animation + ' was playing');
+                  assert.deepEqual(playbackMissingAssets, [],
+                    sample.label + ' missing Spine assets: ' + JSON.stringify(playbackMissingAssets));
+                  assert.deepEqual(playbackErrors, [],
+                    sample.label + ' JavaScript errors: ' + JSON.stringify(playbackErrors));
+                  console.log('PASS REAL SPINE PLAYBACK', sample.label, sample.animation,
+                    JSON.stringify({dimensions,hashA,hashB}));
+                } catch (error) {
+                  failures.push(sample.label + ': ' + String(error));
+                } finally {
+                  await playbackPage.screenshot({
+                    path:'artifacts/playback-' + sample.id + '.png', fullPage:true, timeout:15000,
+                  }).catch(console.error);
+                  await playbackPage.close();
+                }
+              }
+
+              // Spine 3.8.75 is the explicit known-bad export exception. Verify
+              // the site reports the exact cause rather than a generic player failure.
+              for (const sample of [
+                {label:'sabrinaBedSide', id:'sabrinaBedSide-2026-11-20T07-06-45-002Z'},
+                {label:'whiskey_glass', id:'whiskey_glass-2026-11-04T08-13-32-548Z'},
+              ]) {
+                const blockedPage = await browser.newPage({viewport:{width:1200,height:780}});
+                try {
+                  const blockedResponse = await blockedPage.goto(site + '/p/' + sample.id, {
+                    waitUntil:'domcontentloaded', timeout:60000,
+                  });
+                  assert.equal(blockedResponse?.status(), 200, sample.label + ' preview HTTP status');
+                  await blockedPage.waitForFunction(() =>
+                    document.querySelector('#player')?.dataset.previewStatus === 'blocked',
+                    null, {timeout:60000});
+                  const blocked = await blockedPage.evaluate(() => ({
+                    error: document.querySelector('#player')?.dataset.previewError || '',
+                    message: document.querySelector('#player')?.innerText || '',
+                  }));
+                  assert.equal(blocked.error, 'UNSUPPORTED_SPINE_3_8_75',
+                    sample.label + ' must expose the specific 3.8.75 export diagnostic');
+                  assert.match(blocked.message, /Spine 3\.8\.75/);
+                  assert.match(blocked.message, /3\.8\.99/);
+                  console.log('PASS EXPECTED 3.8.75 EXPORT DIAGNOSTIC', sample.label);
+                } catch (error) {
+                  failures.push(sample.label + ' expected 3.8.75 diagnostic: ' + String(error));
+                } finally {
+                  await blockedPage.close();
+                }
+              }
             } catch (error) {
               failures.push('Spine preview: ' + String(error));
             } finally {
