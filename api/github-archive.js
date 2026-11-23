@@ -633,7 +633,8 @@ function archiveFeedEntry(origin, entry, metrics, preferredQuality = 'medium') {
   };
 }
 
-function lightweightCardHtml(item, index = 0) {
+function lightweightCardHtml(item, index = 0, firstPosterIndex = -1) {
+  const eagerPoster = index < 4 || index === firstPosterIndex;
   const title = escapeHtml(item.title);
   const poster = escapeHtml(item.poster);
   const video = escapeHtml(item.video);
@@ -643,7 +644,7 @@ function lightweightCardHtml(item, index = 0) {
   // Never mix assets from different works: the preview poster and WebM must be
   // the matching pair selected by archiveFeedEntry.
   const media = item.poster && item.video
-    ? `<img src="${poster}" ${posterOnError} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${index < 4 ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${index < 2 ? 'high' : 'low'}" />`
+    ? `<img src="${poster}" ${posterOnError} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${eagerPoster ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${eagerPoster ? 'high' : 'low'}" />`
     : '';
   const videoAttrs = video && item.poster ? ` data-video-src="${video}"` : '';
   const playerUrlAttr = item.playerUrl ? ` data-player-url="${escapeHtml(item.playerUrl)}"` : '';
@@ -1524,7 +1525,8 @@ function legacyArchiveHtml({ origin, entries, exclusions, metrics }) {
 
 function archiveHtml({ origin, entries, metrics }) {
   const initialItems = entries.slice(0, archivePageSize).map((entry) => archiveFeedEntry(origin, entry, metrics, 'low'));
-  const cards = initialItems.map(lightweightCardHtml).join('');
+  const firstPosterIndex = initialItems.findIndex((item) => item.poster && item.video);
+  const cards = initialItems.map((item, index) => lightweightCardHtml(item, index, firstPosterIndex)).join('');
   // Embed the compact metadata of all remaining cards. Scroll pagination
   // requires zero API round trips; assets are separately demand-loaded.
   const nextOffset = initialItems.length;
