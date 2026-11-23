@@ -27,16 +27,8 @@ jobs:
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
-          DEPLOY_SHA="${{ github.event.workflow_run.head_sha }}"
-          # The deploy workflow intentionally skips a duplicate Vercel deploy
-          # when this exact SHA is already live. In that case its Deploy step is
-          # skipped, but Vercel's commit status still proves production is READY.
-          status="$(gh api "repos/$GITHUB_REPOSITORY/commits/$DEPLOY_SHA/status")"
-          deployed="$(printf '%s' "$status" | jq -r '[.statuses[]? | select((.context == "Vercel" or .context == "vercel/production") and .state == "success")] | length > 0')"
-          if [[ "$deployed" != "true" ]]; then
-            jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")"
-            deployed="$(printf '%s' "$jobs" | jq -r '[.jobs[].steps[]? | select(.name == "Deploy to Vercel" and .conclusion == "success")] | length > 0')"
-          fi
+          jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?per_page=100")"
+          deployed="$(printf '%s' "$jobs" | jq -r '[.jobs[].steps[]? | select(.name == "Deploy to Vercel" and .conclusion == "success")] | length > 0')"
           echo "deployed=$deployed" >> "$GITHUB_OUTPUT"
           echo "VERIFIED_PRODUCTION_DEPLOY=$deployed for $DEPLOY_SHA"
   chromium:
