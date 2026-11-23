@@ -2226,19 +2226,35 @@ const pinchDistance = { value: null };
             const skeletonSource = String(activeSet.value.jsonUrl || activeSet.value.skelUrl || activeSet.value.skeleton || "");
             const skeletonPath = skeletonSource.split(/[?#]/, 1)[0];
             if (/\.json$/i.test(skeletonPath) && skeletonSource !== skeletonPath) {
-              const response = await fetch(skeletonSource, { cache: "no-store" });
-              if (!response.ok) throw new Error("Could not load Spine 4.x JSON skeleton: HTTP " + response.status);
-              const bytes = new TextEncoder().encode(await response.text());
-              let binary = "";
-              for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-                binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-              }
+              const atlasSource = String(activeSet.value.atlasUrl || activeSet.value.atlas || "");
+              const atlasPath = atlasSource.split(/[?#]/, 1)[0];
+              const rawDataURIs = { ...(playerOptions.rawDataURIs || {}) };
+
+              // Keep query-free filenames for Spine's format detection, but
+              // route each exact filename to its immutable, versioned asset URL.
+              // Spine 4.2's Downloader treats data:application/json as a URL
+              // because its legacy rawDataURIs heuristic sees the dot in MIME
+              // types. URL-to-URL mappings avoid that ambiguity and preserve
+              // the asset cache key.
               playerOptions.skeleton = skeletonPath;
               playerOptions.jsonUrl = skeletonPath;
-              playerOptions.rawDataURIs = {
-                ...(playerOptions.rawDataURIs || {}),
-                [skeletonPath]: "data:application/json;base64," + btoa(binary),
-              };
+              rawDataURIs[skeletonPath] = skeletonSource;
+
+              if (atlasPath) {
+                playerOptions.atlas = atlasPath;
+                playerOptions.atlasUrl = atlasPath;
+                rawDataURIs[atlasPath] = atlasSource;
+              }
+
+              for (const textureSource of Array.isArray(activeSet.value.textures) ? activeSet.value.textures : []) {
+                const texturePath = String(textureSource || "").split(/[?#]/, 1)[0];
+                const textureName = texturePath.slice(texturePath.lastIndexOf("/") + 1);
+                if (!textureName) continue;
+                rawDataURIs[texturePath] = textureSource;
+                rawDataURIs[textureName] = textureSource;
+              }
+
+              playerOptions.rawDataURIs = rawDataURIs;
             }
           }
           player = new SpinePlayer("player", {

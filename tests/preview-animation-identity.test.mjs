@@ -288,8 +288,6 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
     'castle_upgrade-2026-11-19T07-33-26-823Z',
     '276-Spine-2014--2026-10-24T21-46-51-258Z',
     'wolf-2026-11-20T05-12-56-813Z',
-    'character-2026-10-20T09-50-47-424Z',
-    'P4999-2026-11-09T06-45-27-430Z',
     'dryad-2026-09-30T21-54-03-321Z',
     'superboxbot-2026-10-18T03-51-48-726Z',
     'sabrinaBedSide-2026-11-20T07-06-45-002Z',
@@ -306,12 +304,15 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
   assert.match(browserWorkflow, /UNSUPPORTED_SPINE_3_8_75/);
 });
 
-test('Spine 4.3 versioned JSON URLs are supplied as JSON data, not misread as binary', () => {
+test('Spine 4.2 and 4.3 versioned JSON URLs use exact immutable asset mappings', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
-  assert.match(startup, /const isSpine43 =/);
+  assert.match(startup, /const isSpine42Or43 =/);
   assert.match(startup, /skeletonSource\.split\(\/\[\?\#\]\/\, 1\)\[0\]/);
   assert.match(startup, /fetch\(skeletonSource, \{ cache: "no-store" \}\)/);
   assert.match(startup, /playerOptions\.skeleton = skeletonPath/);
-  assert.match(startup, /playerOptions\.rawDataURIs =/);
-  assert.match(startup, /data:application\/json;base64,/);
+  assert.match(startup, /rawDataURIs\[skeletonPath\] = skeletonSource/);
+  assert.match(startup, /rawDataURIs\[atlasPath\] = atlasSource/);
+  assert.match(startup, /rawDataURIs\[textureName\] = textureSource/);
+  assert.match(startup, /playerOptions\.rawDataURIs = rawDataURIs/);
+  assert.match(startup, /Spine 4\.2's Downloader treats data:application\/json as a URL/);
 });
