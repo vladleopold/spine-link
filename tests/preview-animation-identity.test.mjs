@@ -303,14 +303,14 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
   assert.match(browserWorkflow, /Math\.min\(8000, 1000 \* \(2 \*\* attempt\)\)/);
   assert.match(browserWorkflow, /response\?\.status\(\) === 200/);
   assert.match(browserWorkflow, /SPINE ASSET DIAGNOSTIC/);
-  assert.match(browserWorkflow, /SPINE_3_8_75_IN_MEMORY_COMPATIBILITY_PROOF/);
-  assert.match(browserWorkflow, /assets\.json\.skeleton\.spine='3\.8\.99'/);
-  assert.match(browserWorkflow, /weighted mesh references an unknown bone/);
+  assert.match(browserWorkflow, /PASS CONVERTED SPINE 3\.8\.75 -> 4\.3\.26/);
+  assert.match(browserWorkflow, /converted\.animations\.length, 11/);
+  assert.match(browserWorkflow, /converted\.animation, 'idle'/);
   assert.match(browserWorkflow, /__spinePlayerOptions/);
   assert.match(browserWorkflow, /rawDataKeys:Object\.keys\(o\.rawDataURIs/);
   assert.match(browserWorkflow, /missingSlotBones/);
   assert.match(browserWorkflow, /createHash\('sha256'\)/);
-  assert.match(browserWorkflow, /UNSUPPORTED_SPINE_3_8_75/);
+  assert.doesNotMatch(browserWorkflow, /SPINE_3_8_75_IN_MEMORY_COMPATIBILITY_PROOF|UNSUPPORTED_SPINE_3_8_75/);
 });
 
 test('Spine 4.2 and 4.3 versioned JSON URLs use exact immutable asset mappings', () => {
@@ -326,4 +326,16 @@ test('Spine 4.2 and 4.3 versioned JSON URLs use exact immutable asset mappings',
   assert.match(startup, /rawDataURIs\[textureName\] = textureSource/);
   assert.match(startup, /playerOptions\.rawDataURIs = rawDataURIs/);
   assert.match(startup, /Spine 4\.2's Downloader treats data:application\/json as a URL/);
+});
+
+
+test('archive cards do not claim zero animations when index metadata is unavailable', () => {
+  const feed = section(archive, 'function archiveFeedEntry(', 'function lightweightCardHtml(');
+  assert.match(feed, /animations: Array\.isArray\(entry\?\.animations\) && entry\.animations\.length > 0 \? entry\.animations\.length : null/);
+  const card = section(archive, 'function lightweightCardHtml(', 'function imageSizeFromBuffer(');
+  assert.match(card, /item\.animations > 0/);
+  assert.match(card, /Open player for animations/);
+  const detail = section(archive, 'function archiveItemHtml(', 'function archiveVideoHtml(');
+  assert.match(detail, /Open player to view animations/);
+  assert.match(detail, /animation options listed in the interactive player/);
 });
