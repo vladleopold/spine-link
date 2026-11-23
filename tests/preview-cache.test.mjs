@@ -50,3 +50,28 @@ test('large collection indexes are resolved through Git blobs', async () => {
     globalThis.fetch = oldFetch;
   }
 });
+
+test('large collection index falls back to raw when the Git blob endpoint is unavailable', async () => {
+  const oldFetch = globalThis.fetch;
+  const settings = { owner: 'example', repo: 'example', branch: 'main', token: 'test' };
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    if (String(url).includes('/git/blobs/')) return new Response('', { status: 403 });
+    if (String(url).includes('/contents/')) {
+      return new Response(JSON.stringify({ sha: 'unavailable-blob', encoding: 'none', content: '', download_url: null }));
+    }
+    if (String(url).startsWith('https://raw.githubusercontent.com/')) {
+      return new Response('[{"id":"raw-index-fallback"}]');
+    }
+    throw new Error('Unexpected fetch URL: ' + url);
+  };
+  try {
+    const data = await cachedGithubText(settings, 'library_98767/index.json', { ttlMs: 0 });
+    assert.match(data, /raw-index-fallback/);
+    assert.equal(urls.length, 3);
+    assert.match(urls[2], /raw\.githubusercontent\.com\/example\/example\/main\/library_98767\/index\.json/);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
