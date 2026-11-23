@@ -356,15 +356,51 @@ function entryBaseTitle(entry) {
   return base.toLowerCase();
 }
 
+function archivePreviewStateTimestamp(entry = {}) {
+  return Math.max(
+    Date.parse(String(entry?.previewBlockedAt || '')) || 0,
+    Date.parse(String(entry?.webmGeneratedAt || '')) || 0,
+    Date.parse(String(entry?.posterGeneratedAt || '')) || 0,
+    Date.parse(String(entry?.previewUpdatedAt || '')) || 0,
+    Date.parse(String(entry?.updatedAt || '')) || 0,
+  );
+}
+
+function hasArchivePreviewState(entry = {}) {
+  return Boolean(
+    String(entry?.webmStatus || '').trim() ||
+    String(entry?.previewStatus || '').trim() ||
+    entry?.previewBlockedAt ||
+    entry?.webmGeneratedAt ||
+    entry?.posterGeneratedAt
+  );
+}
+
 function dedupeArchiveEntries(entries) {
   // A repeated skeleton filename is not a duplicate work: users may upload
   // multiple revisions or separate projects with the same export filename.
   // Only collapse repeated index records with the exact same immutable work ID.
+  // The root library is a pinned recovery snapshot, while library_NN shards
+  // contain newer preview status. Prefer explicit preview state and then the
+  // latest preview event so a stale recovery copy cannot hide a blocked/ready
+  // state written to the active shard.
   const byId = new Map();
   for (const entry of Array.isArray(entries) ? entries : []) {
     const id = String(entry?.id || '').trim();
     if (!id) continue;
-    if (!byId.has(id)) byId.set(id, entry);
+    if (!byId.has(id)) {
+      byId.set(id, entry);
+      continue;
+    }
+    const previous = byId.get(id);
+    const previousHasState = hasArchivePreviewState(previous);
+    const incomingHasState = hasArchivePreviewState(entry);
+    const preferIncoming = incomingHasState !== previousHasState
+      ? incomingHasState
+      : archivePreviewStateTimestamp(entry) >= archivePreviewStateTimestamp(previous);
+    const preferred = preferIncoming ? entry : previous;
+    const fallback = preferIncoming ? previous : entry;
+    byId.set(id, { ...fallback, ...preferred });
   }
   return Array.from(byId.values());
 }
