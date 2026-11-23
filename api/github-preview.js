@@ -1610,7 +1610,12 @@ const pinchDistance = { value: null };
         if (!runtimeLoaders.has(key)) {
           runtimeLoaders.set(key, (async () => {
             if (runtime && runtime.startsWith("4.")) {
-              const base = "https://unpkg.com/@esotericsoftware/spine-player@" + runtime + ".*/dist/";
+              // Use the same exact package pins as the server-side renderer;
+              // wildcard unpkg URLs can resolve inconsistently or return 403.
+              const pinnedVersions = {"4.0":"4.0.31","4.1":"4.1.56","4.2":"4.2.120"};
+              const version = pinnedVersions[runtime];
+              if (!version) throw new Error("Unsupported pinned Spine runtime: " + runtime);
+              const base = "https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@" + version + "/dist/";
               setPlayerStylesheet(base + "spine-player.css");
               await loadScriptOnce(base + "iife/spine-player.js");
             } else if (runtime === "3.7") {
