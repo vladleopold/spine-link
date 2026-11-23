@@ -273,11 +273,14 @@ test('Spine 3.7 binary skeletons receive a specific JSON re-export diagnostic', 
 });
 
 const browserWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml', import.meta.url), 'utf8');
+const archiveLiveWorkflow = fs.readFileSync(new URL('../.github/workflows/archive-live-speed.yml', import.meta.url), 'utf8');
 
 test('production Chromium gate recognizes an already deployed Vercel commit', () => {
   assert.match(browserWorkflow, /commits\/\$DEPLOY_SHA\/status/);
   assert.match(browserWorkflow, /\.context == "Vercel"/);
   assert.match(browserWorkflow, /\.state == "success"/);
+  assert.match(archiveLiveWorkflow, /commits\/\$DEPLOY_SHA\/status/);
+  assert.match(archiveLiveWorkflow, /\.context == "Vercel"/);
 });
 
 test('production Chromium smoke performs real playback checks for Spine 3.8 through 4.3', () => {
@@ -292,6 +295,8 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
     'whiskey_glass-2026-11-04T08-13-32-548Z',
   ]) assert.ok(browserWorkflow.includes(id), `missing live runtime fixture: ${id}`);
   assert.match(browserWorkflow, /beforeSelection\.status, 'ready'/);
+  assert.match(browserWorkflow, /const url = site \+ '\/p\/l3_socks-2026-10-14T14-46-08-978Z\?animation=idle'/);
+  assert.doesNotMatch(browserWorkflow, /spine-link-e2e-2026-11-14T09-30-30-139Z/);
   assert.match(browserWorkflow, /dataset\.previewAnimation === name/);
   assert.match(browserWorkflow, /createHash\('sha256'\)/);
   assert.match(browserWorkflow, /UNSUPPORTED_SPINE_3_8_75/);

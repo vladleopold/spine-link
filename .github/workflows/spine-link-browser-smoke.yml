@@ -174,7 +174,7 @@ jobs:
               }
             });
             try {
-              const url = site + '/p/spine-link-e2e-2026-11-14T09-30-30-139Z';
+              const url = site + '/p/l3_socks-2026-10-14T14-46-08-978Z?animation=idle';
               const response = await page.goto(url, {
                 waitUntil: 'domcontentloaded', timeout: 60000,
               });
