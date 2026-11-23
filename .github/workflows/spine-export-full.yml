@@ -352,11 +352,24 @@ jobs:
             git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
             git reset --hard refs/remotes/origin/main
 
+            WORK_PATH=$(node -e "
+              const fs = require('fs');
+              const { resolvePreviewWorkPath } = require('./scripts/lib/preview-work-path.cjs');
+              const [indexPath, uploadId, basePath] = process.argv.slice(1);
+              const entries = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+              const entry = entries.find((item) => item.id === uploadId);
+              if (!entry) throw new Error('ENTRY_NOT_FOUND');
+              console.log(resolvePreviewWorkPath(basePath, uploadId, entry.previewPath));
+            " "$INDEX_PATH" "$UPLOAD_ID" "$BASE_PATH")
+
             # 2. Process all downloaded artifacts and update index.json
-            node -e "
+            WORK_PATH="$WORK_PATH" node -e "
               const fs = require('fs');
               const path = require('path');
+              const { hasSelectedPreviewMedia } = require('./scripts/lib/preview-export-status.cjs');
 
+              const workPath = process.env.WORK_PATH;
+              if (!workPath) throw new Error('UNSAFE_PREVIEW_PATH');
               const uploadId = '$UPLOAD_ID';
               const origin = '$ORIGIN';
               const basePath = '$BASE_PATH';
@@ -387,7 +400,7 @@ jobs:
 
                   const animName = fs.readFileSync(animNameFile, 'utf8').trim();
                   const safeName = fs.readFileSync(safeNameFile, 'utf8').trim();
-                  const animTargetDir = path.join(basePath, uploadId, 'animations', safeName);
+                  const animTargetDir = path.join(workPath, 'animations', safeName);
                   fs.mkdirSync(animTargetDir, { recursive: true });
 
                   if (!allAnimPreviews[animName]) allAnimPreviews[animName] = {};
@@ -431,7 +444,6 @@ jobs:
                     // actually lives in right now. If the library rotated while
                     // this job ran, basePath can already point at the previous
                     // collection and every URL written here would 404.
-                    const workPath = String(indexData[entryIndex]?.previewPath || (basePath + '/' + uploadId)).replace(/^\/+|\/+$/g, '');
                     const url = origin + '/assets/' + workPath + '/animations/' + safeName + '/' + file;
                     const prefix = uploadId + '-anim-' + safeName + '-';
 
@@ -467,48 +479,28 @@ jobs:
                 }
               }
 
-              const hasExports = Object.keys(allAnimPreviews).length > 0;
-
-              // Work-level preview duration: the duration of the animation the
-              // work is currently presenting (defaultAnimation). The page
-              // renderer uses this to decide whether the chosen preview is
-              // long enough, or whether to fall back to another animation's
-              // preview that is.
-              const chosenAnim = String(indexData[entryIndex]?.defaultAnimation || '').trim();
-              const chosenPreview = allAnimPreviews[chosenAnim];
+              // Preserve the exact indexed animation. Other exported tracks are
+              // metadata only; they must never replace the selected preview.
+              const chosenAnim = typeof indexData[entryIndex]?.defaultAnimation === 'string'
+                ? indexData[entryIndex].defaultAnimation
+                : '';
+              const chosenPreview = chosenAnim ? allAnimPreviews[chosenAnim] : null;
               const chosenDuration = chosenPreview ? Number(chosenPreview.previewDuration) : NaN;
-
-              // Automatic preview fallback — runs after every full export, so
-              // it works for both freshly created pages and existing ones.
-              // A work's main preview is the one for defaultAnimation. When
-              // that animation's preview is a 1–3 frame clip (an idle that is
-              // a single held frame) the moving thumbnail is effectively a
-              // still image, so the site silently re-points defaultAnimation at
-              // the first animation whose preview is long enough (>= 2 s).
-              // Declaration order is preserved; the first long-enough win.
-              const animOrder = Array.isArray(indexData[entryIndex]?.animations) && indexData[entryIndex].animations.length
-                ? indexData[entryIndex].animations
-                : Object.keys(allAnimPreviews);
-              let effectiveDefault = chosenAnim && animOrder.includes(chosenAnim) ? chosenAnim : (animOrder[0] || '');
-              if (effectiveDefault) {
-                const effDur = allAnimPreviews[effectiveDefault] ? Number(allAnimPreviews[effectiveDefault].previewDuration) : NaN;
-                if (!(Number.isFinite(effDur) && effDur >= 2)) {
-                  for (const a of animOrder) {
-                    const d = allAnimPreviews[a] ? Number(allAnimPreviews[a].previewDuration) : NaN;
-                    if (Number.isFinite(d) && d >= 2) { effectiveDefault = a; break; }
-                  }
-                }
-              }
-              const effectivePreview = allAnimPreviews[effectiveDefault] || chosenPreview;
-              const effectiveDuration = effectivePreview ? Number(effectivePreview.previewDuration) : NaN;
+              const hasChosenExport = hasSelectedPreviewMedia(chosenPreview);
+              const blockedStatus = chosenAnim
+                ? 'blocked-selected-animation-preview-missing'
+                : 'blocked-missing-animation-selection';
 
               indexData[entryIndex] = {
                 ...indexData[entryIndex],
                 allAnimationPreviews: allAnimPreviews,
-                ...(effectiveDefault && effectiveDefault !== chosenAnim ? { defaultAnimation: effectiveDefault } : {}),
-                previewDuration: Number.isFinite(effectiveDuration) && effectiveDuration > 0 ? effectiveDuration : undefined,
-                fullExportStatus: hasExports ? 'ready' : 'failed',
+                previewDuration: Number.isFinite(chosenDuration) && chosenDuration > 0 ? chosenDuration : undefined,
+                fullExportStatus: hasChosenExport ? 'ready' : 'failed',
                 fullExportGeneratedAt: new Date().toISOString(),
+                ...(hasChosenExport ? {} : {
+                  previewStatus: 'blocked',
+                  webmStatus: blockedStatus,
+                }),
               };
 
               fs.writeFileSync(indexPath, JSON.stringify(indexData, null, 2));
@@ -517,7 +509,7 @@ jobs:
             "
 
             # 3. Stage everything
-            git add "$BASE_PATH"
+            git add "$BASE_PATH" "$WORK_PATH/animations"
             if git diff-index --quiet HEAD --; then
               echo "No changes to commit — all animations already up to date."
               exit 0
