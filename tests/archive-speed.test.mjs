@@ -335,6 +335,35 @@ test('preview sidebar keeps all supporting panels below the animation picker on 
 });
 
 
+test('archive displays the exact recorded previewAnimation when source defaultAnimation is unset',async()=>{
+  const source=[{
+    ...entries[0],
+    defaultAnimation:'',
+    previewAnimation:'walk',
+    allAnimationPreviews:entries[0].allAnimationPreviews,
+  }];
+  const log=[];
+  globalThis.fetch=stubFetch(log,source);
+  process.env.GITHUB_TOKEN='test-only-placeholder';
+  process.env.GITHUB_BRANCH='test-explicit-preview-animation';
+  try{
+    const res=response();
+    await handler({method:'GET',headers:{host:'spine-link.vercel.app'},query:{feed:'archive',offset:'0',limit:'12'}},res);
+    assert.equal(res.code,200);
+    assert.equal(res.body.entries.length,1);
+    const item=res.body.entries[0];
+    assert.match(item.poster,/preview-medium\.webp$/);
+    assert.match(item.video,/preview-medium\.webm$/);
+    assert.equal(item.quality,'medium');
+    assert.equal(item.sourceWebmStatus,'ready');
+    assert.equal(item.sourcePreviewStatus,'ready');
+  }finally{
+    globalThis.fetch=originalFetch;
+    if(originalToken===undefined)delete process.env.GITHUB_TOKEN;else process.env.GITHUB_TOKEN=originalToken;
+    if(originalBranch===undefined)delete process.env.GITHUB_BRANCH;else process.env.GITHUB_BRANCH=originalBranch;
+  }
+});
+
 test('archive never substitutes another animation when defaultAnimation is absent or unavailable',async()=>{
   const source=[
     {...entries[0],defaultAnimation:'',allAnimationPreviews:entries[0].allAnimationPreviews},
