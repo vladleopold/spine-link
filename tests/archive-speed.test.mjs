@@ -100,7 +100,6 @@ test('source textures and guessed posters never unlock archive WebM or render a 
     thumbnail:'data:image/webp;base64,VEVYVFVSRQ==',
     webmPreview:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webm',
     webmPreviewMedium:'',
-    webmPreviewLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webm',
     webmStatus:'ready',previewStatus:'ready',
     allAnimationPreviews:{},
   }];
@@ -130,12 +129,11 @@ test('source textures and guessed posters never unlock archive WebM or render a 
   }
 });
 
-test('only a matching medium WebM and its own medium first-frame WebP unlock a card',async()=>{
+test('medium WebM and WebP remain a paired fallback when low renditions are absent',async()=>{
   const source=[{
     ...entries[0],
     previewPath:'library_02/card-000',
     webpPosterMedium:'https://spine-link.vercel.app/assets/library_02/card-000/preview-medium.webp',
-    webpPosterLow:'https://spine-link.vercel.app/assets/library_02/card-000/preview-low.webp',
     webpPoster:'https://spine-link.vercel.app/assets/library_02/card-000/preview.webp',
     thumbnailPoster:'https://spine-link.vercel.app/assets/library_02/card-000/texture.webp',
     thumbnail:'https://spine-link.vercel.app/assets/library_02/card-000/texture.webp',
@@ -274,7 +272,7 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
       'the initial visible card must prefer its smaller low WebP poster');
     assert.ok(firstCard.includes('/preview-low.webm'),
       'the initial card must pair the low poster with its exact low WebM');
-    const firstPoster=firstCard.match(/src="([^"]+preview-low\\.webp[^"]*)"/)?.[1]||'';
+    const firstPoster=firstCard.match(/src="([^"]+preview-low\.webp[^"]*)"/)?.[1]||'';
     assert.ok(firstPoster&&html.includes('rel="preload" as="image" href="'+firstPoster+'"'),
       'preload the same small poster used by the first visible card');
     assert.ok(!html.includes('<video src="'), 'eager WebM would block WebP posters');
