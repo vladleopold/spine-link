@@ -11,8 +11,26 @@ on:
       - tests/preview-cache.test.mjs
       - lib/github-content-cache.js
       - tests/archive-initial-timing.test.mjs
+      - tests/archive-exact-spine-export.test.mjs
+      - scripts/spine-export-webm.mjs
+      - scripts/preview-animation-choice.mjs
+      - scripts/lib/source-set-choice.mjs
+      - scripts/source-skeleton-choice.mjs
+      - scripts/atlas-pages.mjs
+      - scripts/lib/preview-work-path.cjs
+      - scripts/lib/preview-export-status.cjs
+      - .github/workflows/spine-export-full.yml
       - tests/spine-runtime-file-selection.test.mjs
       - tests/spine-atlas-integrity.test.mjs
+      - tests/archive-exact-spine-export.test.mjs
+      - scripts/spine-export-webm.mjs
+      - scripts/preview-animation-choice.mjs
+      - scripts/lib/source-set-choice.mjs
+      - scripts/source-skeleton-choice.mjs
+      - scripts/atlas-pages.mjs
+      - scripts/lib/preview-work-path.cjs
+      - scripts/lib/preview-export-status.cjs
+      - .github/workflows/spine-export-full.yml
       - lib/spine-atlas-integrity.js
       - lib/spine-runtime-file-selection.js
       - api/github-preview.js
@@ -51,4 +69,5 @@ jobs:
         run: |
           node --check api/github-archive.js
           node --check api/github-preview.js
-          node --test tests/preview-cache.test.mjs tests/archive-speed.test.mjs tests/archive-initial-timing.test.mjs tests/preview-animation-identity.test.mjs tests/animation-menu-scroll.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs
+          node --check scripts/spine-export-webm.mjs
+          node --test tests/preview-cache.test.mjs tests/archive-speed.test.mjs tests/archive-initial-timing.test.mjs tests/preview-animation-identity.test.mjs tests/animation-menu-scroll.test.mjs tests/spine-runtime-file-selection.test.mjs tests/spine-atlas-integrity.test.mjs tests/archive-exact-spine-export.test.mjs
