@@ -332,6 +332,12 @@ test('Spine 4.2 and 4.3 versioned JSON URLs use exact immutable asset mappings',
 });
 
 
+test('Spine 4.0-4.2 runtime loader uses exact pinned package versions', () => {
+  assert.match(preview, /pinnedVersions = \{"4\.0":"4\.0\.31","4\.1":"4\.1\.56","4\.2":"4\.2\.120"\}/);
+  assert.match(preview, /cdn\.jsdelivr\.net\/npm\/@esotericsoftware\/spine-player@/);
+  assert.doesNotMatch(preview, /unpkg\.com\/@esotericsoftware\/spine-player@\s*\+\s*runtime\s*\+\s*"\.\*\/dist/);
+});
+
 test('archive cards do not claim zero animations when index metadata is unavailable', () => {
   const feed = section(archive, 'function archiveFeedEntry(', 'function lightweightCardHtml(');
   assert.match(feed, /animations: Array\.isArray\(entry\?\.animations\) && entry\.animations\.length > 0 \? entry\.animations\.length : null/);
