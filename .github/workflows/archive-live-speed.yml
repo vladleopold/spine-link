@@ -141,10 +141,21 @@ jobs:
                   initialTiming=await page.evaluate(()=>{
                     const nav=performance.getEntriesByType('navigation')[0];
                     const img=document.querySelector('.feed-card .feed-media img');
-                    const resource=img?performance.getEntriesByName(img.currentSrc||img.src).filter(x=>x.entryType==='resource').at(-1):null;
+                    const preload=document.querySelector('link[rel="preload"][as="image"]');
+                    const url=img?.currentSrc||img?.src||'';
+                    const resource=img?performance.getEntriesByName(url).filter(x=>x.entryType==='resource').at(-1):null;
+                    const preloadResource=preload?performance.getEntriesByName(preload.href).filter(x=>x.entryType==='resource').at(-1):null;
                     return {
                       posterAvailable:true,
+                      preloadPresent:Boolean(preload),
+                      preloadMatchesFirstPoster:Boolean(preload&&img&&preload.href===url),
+                      preloadResourceFound:Boolean(preloadResource),
+                      preloadStartMs:Math.round(preloadResource?.startTime||0),
                       responseStartMs:Math.round(nav?.responseStart||0),
+                      responseEndMs:Math.round(nav?.responseEnd||0),
+                      navigationTransferBytes:Math.round(nav?.transferSize||0),
+                      navigationEncodedBytes:Math.round(nav?.encodedBodySize||0),
+                      domInteractiveMs:Math.round(nav?.domInteractive||0),
                       domContentLoadedMs:Math.round(nav?.domContentLoadedEventEnd||0),
                       posterStartMs:Math.round(resource?.startTime||0),
                       posterEndMs:Math.round(resource?.responseEnd||0),
