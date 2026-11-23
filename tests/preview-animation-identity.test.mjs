@@ -308,7 +308,9 @@ test('Spine 4.2 and 4.3 versioned JSON URLs use exact immutable asset mappings',
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.match(startup, /const isSpine42Or43 =/);
   assert.match(startup, /skeletonSource\.split\(\/\[\?\#\]\/\, 1\)\[0\]/);
-  assert.match(startup, /fetch\(skeletonSource, \{ cache: "no-store" \}\)/);
+  assert.match(startup, /playerOptions\.jsonUrl = skeletonPath/);
+  assert.match(startup, /playerOptions\.atlas = atlasPath/);
+  assert.match(startup, /rawDataURIs\[skeletonPath\] = skeletonSource/);
   assert.match(startup, /playerOptions\.skeleton = skeletonPath/);
   assert.match(startup, /rawDataURIs\[skeletonPath\] = skeletonSource/);
   assert.match(startup, /rawDataURIs\[atlasPath\] = atlasSource/);
