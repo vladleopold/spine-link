@@ -544,13 +544,13 @@ jobs:
               console.error('PRODUCTION BROWSER FAILURES:\n' + failures.join('\n'));
               process.exitCode = 1;
             }
+            } finally {
+              await page.close();
+            }
           } finally {
-            await page.close();
+            await browser.close();
           }
-        } finally {
-          await browser.close();
-        }
-        NODE
+          NODE
       - name: Verify production rejects invalid Google credentials
         shell: bash
         env:
