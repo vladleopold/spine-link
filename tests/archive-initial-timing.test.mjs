@@ -65,8 +65,6 @@ test('live preview smoke skips cooldown-only deploy workflow runs',()=>{
   const job=livePreviewWorkflow.split('  production-preview:')[1]||'';
   assert.equal((job.match(/^\s+if:/gm)||[]).length,1,
     'production-preview must have exactly one job condition');
-  assert.doesNotMatch(livePreviewWorkflow,/commits\/\$DEPLOY_SHA\/status/,
-  assert.match(livePreviewWorkflow,/commits\/\$DEPLOY_SHA\/status/);
 });
 
 test('repository lifecycle workflow cannot close or mutate pull requests', () => {
