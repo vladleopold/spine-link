@@ -1811,7 +1811,14 @@ function archiveHtml({ origin, entries, metrics }) {
             sentinel.textContent='Tap to retry';
           }finally{
             loading=false;
-            if(!finished)setTimeout(prefetchNext,70);
+            if(!finished)setTimeout(()=>{
+              prefetchNext();
+              const rect=sentinel.getBoundingClientRect();
+              // Keep filling while the sentinel remains inside the same
+              // prefetch window; IntersectionObserver need not re-fire
+              // when appended cards leave it continuously intersecting.
+              if(rect.top<=window.innerHeight+2200)void loadMore();
+            },70);
           }
         }
         document.addEventListener('visibilitychange',queueUpdate);
