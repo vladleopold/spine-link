@@ -268,6 +268,7 @@ test('gallery server-HTML puts WebP before any WebM network request',async()=>{
     const firstCardStart=html.indexOf('<article class="feed-card"');
     const firstCardEnd=html.indexOf('</article>',firstCardStart);
     const firstCard=html.slice(firstCardStart,firstCardEnd);
+    console.log('FIRST_ARCHIVE_CARD '+firstCard);
     assert.ok(firstCard.includes('/preview-low.webp"'),
       'the initial visible card must prefer its smaller low WebP poster');
     assert.ok(firstCard.includes('/preview-low.webm'),
