@@ -6,7 +6,7 @@ export default async function handler(request, response) {
     if (!sourceResponse.ok) throw new Error('Cannot fetch source: ' + sourceResponse.status);
     let source = await sourceResponse.text();
     source = source
-      .replace(/^import\\s+.*?;\\s*$/gm, '')
+      .replace(/^import[^\\r\\n]*[\\r\\n]+/gm, '')
       .replace(/^export default /gm, '')
       .replace(/^export /gm, '');
     new Script(source, { filename: 'api/github-preview.js' });
@@ -17,8 +17,6 @@ export default async function handler(request, response) {
       name: error?.name || 'Error',
       message: error?.message || String(error),
       stack: error?.stack || '',
-      lineNumber: error?.lineNumber || null,
-      columnNumber: error?.columnNumber || null,
     });
   }
 }
