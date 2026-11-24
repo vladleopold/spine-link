@@ -10,7 +10,7 @@ on:
       - tests/spine-runtime-compatibility.test.mjs
       - tests/spine37-binary-runtime-compatibility.test.mjs
       - tests/preview-animation-identity.test.mjs
-      - tests/work-page-video-preview.test.mjs
+      - tests/work-page-video-preview.test.mjs tests/preview-cache.test.mjs
       - tests/spine37-binary-preview.e2e.mjs
       - .github/workflows/spine-runtime-compatibility-ci.yml
       - .github/workflows/spine-link-browser-smoke.yml
