@@ -3248,8 +3248,9 @@ export default async function handler(request, response) {
     return response.status(405).send('Method not allowed');
   }
 
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) return response.status(500).send('GITHUB_TOKEN is not configured');
+  // The archive repository is public. Preview deployments may read it
+  // anonymously; production still uses GITHUB_TOKEN to avoid API rate limits.
+  const token = process.env.GITHUB_TOKEN || '';
 
   const settings = {
     owner: process.env.GITHUB_OWNER || defaultOwner,
