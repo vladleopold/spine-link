@@ -52,6 +52,7 @@ on:
       - scripts/lib/preview-work-path.cjs
       - scripts/lib/preview-export-status.cjs
       - .github/workflows/spine-export-full.yml
+      - .github/workflows/spine-link-browser-smoke.yml
   workflow_dispatch:
 permissions:
   contents: read
