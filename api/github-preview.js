@@ -1,4 +1,4 @@
-import { isSpine37BinaryUnsupported, selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
+import { runtimeVersionOverrideForSpineSkeleton, selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
 import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
@@ -1601,6 +1601,8 @@ const pinchDistance = { value: null };
       const runtimeLoaders = new Map();
       function legacyRuntimeForSet(set) {
         const version = String(set?.skeletonVersion || "");
+        const runtimeVersionOverride = String(set?.runtimeVersionOverride || "");
+        if (runtimeVersionOverride === "3.8") return "3.8";
         // В шаблонной строке точка экранируется одним обратным слэшем:
         // было "\\." — регулярка искала буквальную "\." и никогда не срабатывала.
         if (/^3\.7(?:\.|$)/.test(version)) return "3.7";
@@ -2208,24 +2210,16 @@ const pinchDistance = { value: null };
           return;
         }
         const skeletonVersion = String(activeSet.value.skeletonVersion || "");
-        // Spine 3.7's official web player only accepts JSON skeletons. Binary
-        // .skel support was added in Spine 3.8; passing a 3.7 binary to the
-        // 3.7 player throws "Please specify the URL of the skeleton JSON file."
-        // Use the generated WebM when present; otherwise show the precise
-        // re-export instruction instead of a misleading generic blocked state.
-        if (activeSet.value.binaryUnsupported) {
-          if (!showPreviewVideoFallback()) markPreviewBlocked("UNSUPPORTED_SPINE_3_7_BINARY");
-          return;
-        }
+        // Legacy Spine 3.7 binary is routed through the binary-capable 3.8 player.
         // Spine 3.8.75 exports contain a known upstream IK/export bug and are
         // explicitly rejected by the official 3.8 runtime.
         if (skeletonVersion === "3.8.75") {
           markPreviewBlocked("UNSUPPORTED_SPINE_3_8_75");
           return;
         }
-        // Spine 3.7 binary exports were rejected by the preflight above.
-        // Remaining binary sources use the exact option expected by their
-        // matching runtime: skelUrl (3.8), binaryUrl (4.0-4.2), skeleton (4.3).
+        // Binary sources use the exact option expected by the selected runtime:
+        // skelUrl (3.8, including compatible legacy 3.7), binaryUrl (4.0-4.2),
+        // skeleton (4.3).
         // Do not silently feed 2.x / 3.0-3.6 / future unknown exports to 4.3:
         // those formats require their matching historical runtime and otherwise
         // fail with misleading parser errors such as "Slot name must not be null".
@@ -2991,6 +2985,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       return matchedTexture ? versionedAssetUrl(origin, matchedTexture, matchedTexture.sha) : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5U9WcAAAAASUVORK5CYII=';
     });
     const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+    const runtimeVersionOverride = runtimeVersionOverrideForSpineSkeleton(skeletonVersion, skeletonIsBinary);
 
     const assetVersion = [
       skeleton.sha,
@@ -3018,7 +3013,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       animation: defaultAnimation,
       animations,
       skeletonVersion,
-      binaryUnsupported: isSpine37BinaryUnsupported(skeletonVersion, skeletonIsBinary),
+      runtimeVersionOverride,
       textures: textureUrls,
       skin: preferredSkinName(skinNames),
       premultipliedAlpha: hasPremultipliedAlpha(atlasText),
