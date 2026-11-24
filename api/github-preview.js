@@ -662,7 +662,7 @@ globalThis.__spineLinkCollectionPathCache = collectionPathCache;
 
 async function libraryCollectionPaths(settings) {
   const basePath = cleanRepoPath(settings.basePath || defaultBasePath);
-  const cacheKey = [settings.owner, settings.repo, settings.branch, basePath].join('\\n');
+  const cacheKey = [settings.owner, settings.repo, settings.branch, basePath].join('\n');
   const cached = collectionPathCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return [...cached.paths];
 
@@ -679,7 +679,7 @@ async function libraryCollectionPaths(settings) {
       const items = await response.json();
       if (Array.isArray(items)) {
         for (const item of items) {
-          if (item?.type === 'dir' && /^library(_\\d+)?$/.test(String(item.name || ''))) {
+          if (item?.type === 'dir' && /^library(_\d+)?$/.test(String(item.name || ''))) {
             paths.add(item.name);
           }
         }
@@ -690,8 +690,8 @@ async function libraryCollectionPaths(settings) {
   }
   // New uploads are in the newest collection. Searching library_01 first can
   // download a 20+ MB legacy index and time out the Vercel invocation.
-  const rank = (name) => /^library_(\\d+)$/.test(name)
-    ? Number(name.match(/^library_(\\d+)$/)[1])
+  const rank = (name) => /^library_(\d+)$/.test(name)
+    ? Number(name.match(/^library_(\d+)$/)[1])
     : name === 'library' ? 0 : -1;
   const result = [...paths].filter(Boolean).sort((a, b) => rank(b) - rank(a));
   collectionPathCache.set(cacheKey, { paths: result, expiresAt: Date.now() + 60_000 });
