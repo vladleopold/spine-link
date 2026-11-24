@@ -2170,12 +2170,9 @@ const pinchDistance = { value: null };
           markPreviewBlocked("UNSUPPORTED_SPINE_3_8_75");
           return;
         }
-        // The bundled Spine 3.7 Web Player accepts JSON skeletons only;
-        // binary .skel exports need a JSON re-export from the source project.
-        if (/^3\.7(?:\.|$)/.test(skeletonVersion) && activeSet.value.skelUrl && !activeSet.value.jsonUrl) {
-          markPreviewBlocked("UNSUPPORTED_SPINE_3_7_BINARY");
-          return;
-        }
+        // Spine 3.7 binary exports are supported by the pinned official
+        // runtime. The loader supplies these through the legacy skelUrl field;
+        // do not reject them merely because there is no JSON skeleton.
         // Do not silently feed 2.x / 3.0-3.6 / future unknown exports to 4.3:
         // those formats require their matching historical runtime and otherwise
         // fail with misleading parser errors such as "Slot name must not be null".
