@@ -397,6 +397,7 @@ jobs:
                 {label:'Spine 3.8.99 castle_upgrade', id:'castle_upgrade-2026-11-19T07-33-26-823Z', animation:'build'},
                 {label:'Spine 4.0.58 restored archive', id:'276-Spine-2014--2026-10-24T21-46-51-258Z', animation:'idle'},
                 {label:'Spine 4.1.24', id:'wolf-2026-11-20T05-12-56-813Z', animation:'blow_loop_landscape'},
+                {label:'Spine 4.1 provenance restored', id:'wolf-2026-11-17T07-14-36-248Z', animation:'blow_in_landscape'},
                 {label:'Spine 4.2.0 dryad diagnostic', id:'dryad-2026-09-30T21-54-03-321Z', animation:'walk'},
               ];
               for (const sample of playbackCases) {
