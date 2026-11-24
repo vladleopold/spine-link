@@ -14,6 +14,8 @@ test('local binary previews use the URL option expected by each runtime generati
   assert.match(app, /binaryUrl:/);
   assert.match(app, /skelUrl:/);
   assert.match(app, /skeleton:/);
+  assert.match(app, /const binary = \[\"skel\", \"bytes\"\]\.includes\(extensionOf\(prepared\.skeletonName\)\)/);
+  assert.match(app, /\[\"skel\", \"bytes\"\]\.includes\(extensionOf\(preparedSpine\?\.skeletonName/);
   assert.equal((app.match(/spinePlayerSourceConfig\(/g) || []).length, 4);
 });
 
