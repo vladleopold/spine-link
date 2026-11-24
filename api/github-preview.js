@@ -2340,14 +2340,22 @@ const pinchDistance = { value: null };
               limitPlayerFps(loadedPlayer, 30);
               releaseRuntimeWheelCapture();
               clearPreviewVideoFallback();
-              const runtimeNames = player?.skeleton?.data?.animations?.map((animation) => animation.name) ?? [];
+              // Read from the success callback's player instance rather than
+              // the outer `player` closure: a cached/fast load can invoke
+              // success before the assignment expression has completed.
+              const runtimeAnimationData = loadedPlayer?.skeleton?.data?.animations;
+              const runtimeNames = Array.isArray(runtimeAnimationData)
+                ? runtimeAnimationData.map((animation) => animation.name).filter((name) => typeof name === "string" && name.trim())
+                : [];
               const indexedNames = Array.isArray(activeSet.value?.animations)
                 ? activeSet.value.animations.filter((name) => typeof name === "string" && name.trim())
                 : [];
-              // Legacy 3.8/4.1 player wrappers do not consistently expose
-              // skeleton.data on the public instance. Prefer runtime names
-              // when available, otherwise retain the names extracted from
-              // the uploaded JSON/index manifest.
+              if (playerContainer) {
+                playerContainer.dataset.previewRuntimeAnimationCount = String(runtimeNames.length);
+                playerContainer.dataset.previewRuntimeAnimationNames = runtimeNames.join("|");
+                playerContainer.dataset.previewRuntimeBoneCount = String(loadedPlayer?.skeleton?.data?.bones?.length ?? 0);
+                playerContainer.dataset.previewRuntimeSlotCount = String(loadedPlayer?.skeleton?.data?.slots?.length ?? 0);
+              }
               const names = runtimeNames.length ? runtimeNames : indexedNames;
               if (names.length) {
                 animationNames.value = names.filter(name => !name.startsWith("Backup/") || name === requestedAnimation);
