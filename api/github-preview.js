@@ -1438,6 +1438,7 @@ function createHtml(config) {
         <aside id="sidebar">
           <div class="preview-card" id="set-card"><div class="section-title">Set</div><select id="set-select"></select></div>
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
+          ${video?.contentUrl ? `<div class="preview-card preview-video-card"><div class="section-title">Video preview</div><video id="preview-video-card-player" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl || '')}" muted loop playsinline preload="metadata" autoplay controls aria-label="${escapeHtml(video.name || 'Spine animation video preview')}"></video></div>` : ''}
           <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
           ${animationDownloadBlock(entry, origin)}
           
@@ -2750,6 +2751,8 @@ function createVideoFallbackHtml({ origin, entry, ownerProfile, note, entryId, m
       .author-work-label { position: absolute; right: 0; bottom: 0; left: 0; padding: 16px 10px 8px; color: #fff; background: linear-gradient(transparent, rgba(3,5,7,.86)); font-size: 12px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
       @media (prefers-reduced-motion: reduce) { .author-work { content-visibility: auto; } }
       /* Server-rendered video is visible while Spine/WebGL initializes, for users and crawlers alike. */
+      .preview-video-card { display: grid; gap: 10px; }
+      .preview-video-card video { display: block; width: 100%; max-height: 260px; aspect-ratio: 16 / 9; object-fit: contain; border: 1px solid rgba(140,199,255,.2); border-radius: 6px; background: #000; }
       .player-frame > #preview-loading-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; z-index: 2; pointer-events: none; }
       .player-frame > #preview-loading-video[hidden] { display: none !important; }
       .player-frame > .library-nav-button { z-index: 3; }
