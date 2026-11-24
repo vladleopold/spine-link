@@ -1476,7 +1476,7 @@ function createHtml(config) {
         <div class="player-frame">
           <button class="library-nav-button library-nav-button--prev" id="library-nav-prev" type="button" aria-label="Previous Spine work" title="Previous Spine work">&lsaquo;</button>
           <div id="player"></div>
-          ${video?.contentUrl ? `<video id="preview-loading-video" class="preview-fallback-video" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl || '')}" muted loop playsinline preload="none" hidden data-animation="${escapeHtml(video.previewAnimation || '')}" aria-label="${escapeHtml(video.name || 'Spine animation video preview')}"></video>` : ''}
+          ${video?.contentUrl ? `<video id="preview-loading-video" class="preview-fallback-video" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video?.thumbnailUrl || '')}" muted loop playsinline preload="none" hidden data-animation="${escapeHtml(video.previewAnimation || '')}" aria-label="${escapeHtml(video.name || 'Spine animation video preview')}"></video>` : ''}
           <button class="library-nav-button library-nav-button--next" id="library-nav-next" type="button" aria-label="Next Spine work" title="Next Spine work">&rsaquo;</button>
         </div>
         <aside id="sidebar">
