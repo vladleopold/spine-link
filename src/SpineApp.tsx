@@ -669,6 +669,27 @@ function legacySpine3Runtime(version = "") {
   return "";
 }
 
+function modernSpine4Runtime(version = "") {
+  const match = version.match(/^4\.(0|1|2)(?:\.|$)/);
+  return match ? "4." + match[1] : "";
+}
+
+function spinePlayerSourceConfig(prepared: Pick<PreparedSpine, "skeletonName" | "atlasName" | "skeletonVersion">) {
+  const version = prepared.skeletonVersion || "";
+  const binary = extensionOf(prepared.skeletonName) === "skel";
+  if (/^3\./.test(version)) {
+    return binary
+      ? { skelUrl: prepared.skeletonName, atlasUrl: prepared.atlasName }
+      : { jsonUrl: prepared.skeletonName, atlasUrl: prepared.atlasName };
+  }
+  if (modernSpine4Runtime(version)) {
+    return binary
+      ? { binaryUrl: prepared.skeletonName, atlasUrl: prepared.atlasName }
+      : { jsonUrl: prepared.skeletonName, atlasUrl: prepared.atlasName };
+  }
+  return { skeleton: prepared.skeletonName, atlas: prepared.atlasName };
+}
+
 function unsupportedSpineMajorMessage(version = "") {
   const major = version.match(/^(\d+)\./)?.[1] || "";
   if (major === "1" || major === "2") {
@@ -677,10 +698,35 @@ function unsupportedSpineMajorMessage(version = "") {
   return "";
 }
 
-async function loadSpinePlayerForSet(preparedSpine?: Pick<PreparedSpine, "skeletonVersion"> | null) {
+async function loadSpinePlayerForSet(preparedSpine?: Pick<PreparedSpine, "skeletonVersion" | "skeletonName"> | null) {
   const version = preparedSpine?.skeletonVersion || "";
   const unsupportedMessage = unsupportedSpineMajorMessage(preparedSpine?.skeletonVersion || "");
   if (unsupportedMessage) throw new Error(unsupportedMessage);
+  if (/^3\.7(?:\.|$)/.test(version) && extensionOf(preparedSpine?.skeletonName || "") === "skel") {
+    throw new Error("Spine 3.7 Web Player requires a JSON skeleton; re-export this source as JSON or use a compatible Spine 3.8+ export.");
+  }
+
+  const modernRuntime = modernSpine4Runtime(version);
+  if (modernRuntime) {
+    const pinnedVersions: Record<string, string> = { "4.0": "4.0.31", "4.1": "4.1.56", "4.2": "4.2.120" };
+    if (!legacySpinePlayerPromises.has(modernRuntime)) {
+      legacySpinePlayerPromises.set(
+        modernRuntime,
+        (async () => {
+          const packageVersion = pinnedVersions[modernRuntime];
+          const base = "https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@" + packageVersion + "/dist/";
+          loadStylesheetOnce(base + "spine-player.css");
+          await loadScriptOnce(base + "iife/spine-player.js");
+          const SpinePlayer = window.spine?.SpinePlayer;
+          if (!SpinePlayer) throw new Error("Spine " + modernRuntime + " runtime could not be loaded.");
+          patchAtlasAttachmentLoader(window.spine?.AtlasAttachmentLoader, window.spine);
+          return { SpinePlayer };
+        })(),
+      );
+    }
+    return legacySpinePlayerPromises.get(modernRuntime)!;
+  }
+
   if (!isLegacySpine38(preparedSpine)) return loadSpinePlayerModule();
 
   const runtime = legacySpine3Runtime(version);
@@ -4048,10 +4094,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         if (isCancelled) return;
         host.innerHTML = "";
         const player = new SpinePlayer(host, {
-          skeleton: prepared.skeletonName,
-          ...(extensionOf(prepared.skeletonName) === "skel" ? { skelUrl: prepared.skeletonName } : { jsonUrl: prepared.skeletonName }),
-          atlas: prepared.atlasName,
-          atlasUrl: prepared.atlasName,
+          ...spinePlayerSourceConfig(prepared),
           rawDataURIs: prepared.rawDataURIs,
           animation: extraSet?.activeAnimation || prepared.defaultAnimation,
           ...(prepared.defaultSkin ? { skin: prepared.defaultSkin } : {}),
@@ -4164,10 +4207,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     let isCancelled = false;
     resetPlayer();
     const config = {
-      skeleton: configuredSpine.skeletonName,
-      ...(extensionOf(configuredSpine.skeletonName) === "skel" ? { skelUrl: configuredSpine.skeletonName } : { jsonUrl: configuredSpine.skeletonName }),
-      atlas: configuredSpine.atlasName,
-      atlasUrl: configuredSpine.atlasName,
+      ...spinePlayerSourceConfig(configuredSpine),
       rawDataURIs: configuredSpine.rawDataURIs,
       animation: configuredSpine.defaultAnimation,
       ...(configuredSpine.defaultSkin ? { skin: configuredSpine.defaultSkin } : {}),
@@ -5379,10 +5419,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           if (cancelled || !modalPlayerHostRef.current) return;
           modalPlayerHostRef.current.innerHTML = "";
           const player = new SpinePlayer(modalPlayerHostRef.current, {
-            skeleton: prepared.skeletonName,
-            ...(extensionOf(prepared.skeletonName) === "skel" ? { skelUrl: prepared.skeletonName } : { jsonUrl: prepared.skeletonName }),
-            atlas: prepared.atlasName,
-            atlasUrl: prepared.atlasName,
+          ...spinePlayerSourceConfig(prepared),
             rawDataURIs: prepared.rawDataURIs,
             animation: prepared.defaultAnimation,
             ...(prepared.defaultSkin ? { skin: prepared.defaultSkin } : {}),
