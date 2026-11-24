@@ -57,3 +57,33 @@ test('restored pre-rotation archive works also resolve from /p links', async () 
   assert.equal(unknown, null);
   assert.equal(snapshotReads.length, recoveredIds.length);
 });
+
+test('legacy indexed skeleton/atlas/texture fields bypass a throttled directory listing', async () => {
+  const start = source.indexOf('async function findSpineSetDirectories(');
+  const end = source.indexOf('// Download buttons for the work page sidebar', start);
+  assert.ok(start >= 0 && end > start, 'findSpineSetDirectories source must exist');
+  const helper = source.slice(start, end).trim();
+  let directoryReads = 0;
+  const findDirectories = new Function(
+    'cleanRepoPath', 'isSkeleton', 'isAtlas', 'isImage', 'joinRepoPath', 'githubList',
+    helper + '; return findSpineSetDirectories;',
+  )(
+    value => String(value || '').replace(/^\\/+|\\/+$/g, ''),
+    name => /\\.(?:json|skel|bytes)$/i.test(String(name || '')),
+    name => /\\.atlas$/i.test(String(name || '')),
+    name => /\\.(?:png|webp|jpe?g|dds)$/i.test(String(name || '')),
+    (...parts) => parts.filter(Boolean).join('/'),
+    async () => { directoryReads += 1; throw new Error('GitHub Contents API temporarily unavailable'); },
+  );
+  const result = await findDirectories({}, 'library_02/legacy-work', 3, {
+    uploadedAt: '2026-10-24T21:46:51.258Z',
+    skeleton: '276-Spine(2014).json',
+    atlas: '276-Spine(2014).atlas',
+    textures: ['276-Spine(2014).png', 'preview.webp'],
+  });
+  assert.equal(directoryReads, 0, 'indexed legacy files must not depend on a live directory listing');
+  assert.equal(result.length, 1);
+  assert.ok(result[0].items.some(item => item.name === '276-Spine(2014).json'));
+  assert.ok(result[0].items.some(item => item.name === '276-Spine(2014).atlas'));
+  assert.ok(result[0].items.some(item => item.name === '276-Spine(2014).png'));
+});
