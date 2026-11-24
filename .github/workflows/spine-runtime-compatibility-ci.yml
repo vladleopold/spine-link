@@ -30,6 +30,35 @@ jobs:
         run: node --test tests/spine-runtime-compatibility.test.mjs tests/spine37-binary-runtime-compatibility.test.mjs tests/preview-animation-identity.test.mjs tests/work-page-video-preview.test.mjs
       - name: Build production bundle
         run: npm run build
+      - name: Wait for the branch preview deployment
+        if: github.ref == 'refs/heads/fix/spine37-binary-via-38-runtime'
+        env:
+          SITE: https://spine-link-git-fix-spine37-binary-via-38-runtime-team-3bf124fa.vercel.app
+        run: |
+          set -euo pipefail
+          page="$(mktemp)"
+          ready=false
+          for attempt in $(seq 1 20); do
+            status="$(curl --silent --show-error --location --max-time 30 --connect-timeout 10 -H 'Cache-Control: no-cache' --output "$page" --write-out '%{http_code}' "$SITE/p/Spine-animation-2026-11-20T10-01-52-055Z?e2e=$GITHUB_RUN_ID" || true)"
+            if [[ "$status" == "200" ]] && grep -Fq 'spine-preview-config' "$page" && grep -Fq 'runtimeVersionOverride' "$page"; then
+              ready=true
+              break
+            fi
+            sleep 15
+          done
+          if [[ "$ready" != "true" ]]; then
+            echo "::error::Branch preview did not become ready for Spine 3.7 binary playback"
+            head -c 1000 "$page" || true
+            rm -f "$page"
+            exit 1
+          fi
+          rm -f "$page"
+          echo "Branch preview is ready for Spine 3.7 binary playback"
+      - name: Verify Spine 3.7 binary playback in the branch preview
+        if: github.ref == 'refs/heads/fix/spine37-binary-via-38-runtime'
+        env:
+          SITE: https://spine-link-git-fix-spine37-binary-via-38-runtime-team-3bf124fa.vercel.app
+        run: node tests/spine37-binary-preview.e2e.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
