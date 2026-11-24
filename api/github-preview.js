@@ -2353,7 +2353,7 @@ const pinchDistance = { value: null };
               releaseRuntimeWheelCapture();
               clearPreviewVideoFallback();
               // Read from the success callback's player instance rather than
-              // the outer `player` closure: a cached/fast load can invoke
+              // the outer player closure: a cached/fast load can invoke
               // success before the assignment expression has completed.
               const runtimeAnimationData = loadedPlayer?.skeleton?.data?.animations;
               const runtimeNames = Array.isArray(runtimeAnimationData)
