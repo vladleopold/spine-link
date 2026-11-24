@@ -2992,7 +2992,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       atlas.sha,
       ...textures.map((texture) => texture.sha),
       ...(atlasPages.some((page) => /\.dds$/i.test(page)) ? ['dds-png-v1'] : []),
-      ...(/^3\.8\./.test(skeletonVersion) ? ['spine38-atlas-compat-v1'] : []),
+      ...(runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion) ? ['spine38-atlas-compat-v1'] : []),
     ].filter(Boolean).join('-');
 
     // Version the skeleton JSON/binary as well as atlas pages and textures.
@@ -3001,7 +3001,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     const skeletonUrl = versionedAssetUrl(origin, skeleton, assetVersion);
     const atlasUrlBase = versionedAssetUrl(origin, atlas, assetVersion);
     // Spine 3.8 predates the pma page field; the asset route strips it for 3.8 only.
-    const atlasUrl = /^3\.8\./.test(skeletonVersion)
+    const atlasUrl = runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion)
       ? `${atlasUrlBase}&spineRuntime=3.8`
       : atlasUrlBase;
     sets.push({
