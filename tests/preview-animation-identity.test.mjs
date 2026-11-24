@@ -329,6 +329,7 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
   assert.match(browserWorkflow, /SPINE ASSET DIAGNOSTIC/);
   assert.match(browserWorkflow, /Failed to load resource:\.\*status of 404/);
   assert.match(browserWorkflow, /PASS CONVERTED SPINE 3\.8\.75 -> 4\.3\.26/);
+  assert.match(browserWorkflow, /node tests\\/spine37-binary-preview\\.e2e\\.mjs/);
   assert.match(browserWorkflow, /converted\.animations\.length, 11/);
   assert.match(browserWorkflow, /converted\.animation, 'idle'/);
   assert.match(browserWorkflow, /missingSlotBones/);
