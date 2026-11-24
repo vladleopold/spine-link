@@ -803,7 +803,7 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3, index
       const relativeTexturePaths = texturePaths
         .filter(filePath => {
           const parent = parentOf(filePath);
-          return parent === skeletonParent || parent.startsWith(skeletonParent ? skeletonParent + '/' : '\u0000');
+          return parent === skeletonParent || parent.startsWith(skeletonParent ? skeletonParent + '/' : '');
         })
         .map(filePath => ({
           type: 'file',
