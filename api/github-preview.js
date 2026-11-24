@@ -2235,9 +2235,9 @@ const pinchDistance = { value: null };
           markPreviewBlocked("UNSUPPORTED_SPINE_3_8_75");
           return;
         }
-        // Binary sources use the exact option expected by the selected runtime:
-        // skelUrl (3.8, including compatible legacy 3.7), binaryUrl (4.0-4.2),
-        // skeleton (4.3).
+        // Binary sources use the exact option expected by their native runtime:
+        // skelUrl (3.8), binaryUrl (4.0-4.2), skeleton (4.3).
+        // Spine 3.7 binary is blocked above because its format is incompatible.
         // Do not silently feed 2.x / 3.0-3.6 / future unknown exports to 4.3:
         // those formats require their matching historical runtime and otherwise
         // fail with misleading parser errors such as "Slot name must not be null".
