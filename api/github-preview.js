@@ -782,6 +782,50 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3, index
     if (indexedDirectories.length) return indexedDirectories;
   }
 
+  // Older collection entries often store the runtime file names in
+  // skeleton/atlas/textures rather than a complete files[] manifest. Use those
+  // indexed paths directly so an archived preview does not depend on the
+  // GitHub Contents directory API being available during page rendering.
+  if (!indexedFiles.length && indexedEntry) {
+    const skeletonPath = cleanRepoPath(indexedEntry.skeleton || '');
+    const atlasPath = cleanRepoPath(indexedEntry.atlas || '');
+    const texturePaths = Array.isArray(indexedEntry.textures)
+      ? indexedEntry.textures.map(cleanRepoPath).filter(filePath => filePath && isImage(filePath))
+      : [];
+    const parentOf = filePath => {
+      const slash = filePath.lastIndexOf('/');
+      return slash >= 0 ? filePath.slice(0, slash) : '';
+    };
+    const baseName = filePath => filePath.slice(filePath.lastIndexOf('/') + 1);
+    const skeletonParent = skeletonPath ? parentOf(skeletonPath) : '';
+    if (skeletonPath && atlasPath && parentOf(atlasPath) === skeletonParent && texturePaths.length) {
+      const fileVersion = String(indexedEntry.uploadedAt || indexedEntry.updatedAt || 'indexed-legacy-manifest');
+      const relativeTexturePaths = texturePaths
+        .filter(filePath => {
+          const parent = parentOf(filePath);
+          return parent === skeletonParent || parent.startsWith(skeletonParent ? skeletonParent + '/' : '\u0000');
+        })
+        .map(filePath => ({
+          type: 'file',
+          name: skeletonParent ? filePath.slice(skeletonParent.length + 1) : filePath,
+          path: joinRepoPath(uploadPath, filePath),
+          sha: fileVersion,
+        }));
+      const items = [
+        { type: 'file', name: baseName(skeletonPath), path: joinRepoPath(uploadPath, skeletonPath), sha: fileVersion },
+        { type: 'file', name: baseName(atlasPath), path: joinRepoPath(uploadPath, atlasPath), sha: fileVersion },
+        ...relativeTexturePaths,
+      ];
+      if (items.some(item => isImage(item.name))) {
+        return [{
+          name: skeletonParent.split('/').filter(Boolean).pop() || cleanRepoPath(uploadPath).split('/').pop() || uploadPath,
+          path: joinRepoPath(uploadPath, skeletonParent),
+          items,
+        }];
+      }
+    }
+  }
+
   // Older records without a file manifest retain the directory-listing path.
   const found = [];
   const seen = new Set();
