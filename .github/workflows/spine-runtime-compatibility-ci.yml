@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - fix/spine37-binary-via-38-runtime
     paths:
       - api/github-preview.js
       - lib/spine-runtime-file-selection.js
