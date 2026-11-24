@@ -277,7 +277,7 @@ test('Spine version preflight accepts supported major.minor strings without a pa
 test('Spine 3.7 binary skeletons use the binary-capable 3.8 runtime instead of being blocked', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
   assert.doesNotMatch(startup, /activeSet\.value\.binaryUnsupported/);
-  assert.match(preview, /const runtimeVersionOverride = runtimeVersionOverrideForSpineSkeleton\\(skeletonVersion, skeletonIsBinary\\)/);
+  assert.ok(preview.includes('const runtimeVersionOverride = runtimeVersionOverrideForSpineSkeleton(skeletonVersion, skeletonIsBinary)'));
   assert.match(preview, /runtimeVersionOverride,/);
   assert.match(preview, /if \(runtimeVersionOverride === "3\.8"\) return "3\.8"/);
   assert.ok(preview.includes("runtimeVersionOverride === '3.8' || /^3\\.8\\./.test(skeletonVersion)"),
