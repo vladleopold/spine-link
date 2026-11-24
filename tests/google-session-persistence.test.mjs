@@ -106,7 +106,8 @@ try {
   // Opening the portfolio mounts React, which performs the silent GIS refresh.
   await page.locator('[data-open-library]').first().click();
   await page.locator('button[aria-label="Reconnect Google"]').waitFor({state:'visible',timeout:15000});
-  assert.match(await page.locator('.auth-error').innerText(),/Reconnect to continue/i);
+  await page.locator('.auth-error').filter({hasText:/Reconnect to continue/i})
+    .waitFor({state:'visible',timeout:15000});
 
   const promptsAfterSilentAttempt = await page.evaluate(() => window.__gisPromptLog);
   assert.ok(promptsAfterSilentAttempt.includes(''), 'Expired session must attempt silent Google token renewal');
