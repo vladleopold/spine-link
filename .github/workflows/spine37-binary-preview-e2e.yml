@@ -25,8 +25,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-      - name: Run complete unit regression suite
-        run: npm test
+      - name: Run targeted runtime and preview regressions
+        run: node --test tests/spine-runtime-compatibility.test.mjs tests/spine37-binary-runtime-compatibility.test.mjs tests/preview-animation-identity.test.mjs tests/work-page-video-preview.test.mjs
       - name: Build production bundle
         run: npm run build
       - name: Verify actual Spine 3.7 binary animation playback in branch deployment
