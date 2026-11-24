@@ -508,7 +508,8 @@ jobs:
                         waitUntil:'domcontentloaded', timeout:60000,
                       });
                     }
-                    assetDiagnostic = await playbackPage.evaluate(async () => {
+                    try {
+                      assetDiagnostic = await playbackPage.evaluate(async () => {
                       const raw = document.querySelector('#spine-preview-config')?.textContent || '{}';
                       const config = JSON.parse(raw);
                       const set = config.sets?.[0] || {};
@@ -537,7 +538,14 @@ jobs:
                         missingSlotBones,
                         runtimeScriptUrls:performance.getEntriesByType('resource').map(x=>x.name).filter(x=>/spine-player\.js/.test(x)),
                       };
-                    });
+                      });
+                    } catch (error) {
+                      assetDiagnostic = {
+                        setKeys:[], jsonUrl:'', atlasUrl:'', jsonStatus:0, atlasStatus:0,
+                        jsonContentType:'', jsonVersion:'', boneCount:0, slotCount:0,
+                        missingSlotBones:[], runtimeScriptUrls:[], diagnosticError:String(error),
+                      };
+                    }
                     reachedTerminalState = await playbackPage.waitForFunction(() => {
                       const player = document.querySelector('#player');
                       return player && ['ready','blocked'].includes(player.dataset.previewStatus || '');
