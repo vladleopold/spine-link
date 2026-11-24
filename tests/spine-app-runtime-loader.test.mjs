@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 const app = readFileSync(new URL('../src/SpineApp.tsx', import.meta.url), 'utf8');
 
 test('local preview selects an exact Spine 4.0, 4.1, or 4.2 Web Player runtime', () => {
-  assert.match(app, /pinnedVersions\s*=\s*\{\s*"4\.0"\s*:\s*"4\.0\.31"\s*,\s*"4\.1"\s*:\s*"4\.1\.56"\s*,\s*"4\.2"\s*:\s*"4\.2\.120"/);
+  assert.match(app, /pinnedVersions(?::\s*Record<string,\s*string>)?\s*=\s*\{\s*"4\.0"\s*:\s*"4\.0\.31"\s*,\s*"4\.1"\s*:\s*"4\.1\.56"\s*,\s*"4\.2"\s*:\s*"4\.2\.120"/);
   assert.match(app, /function modernSpine4Runtime/);
 });
 
