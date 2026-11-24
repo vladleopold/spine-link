@@ -1,5 +1,7 @@
 import agentAnimationHandler from '../lib/agent-animation.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
+import { githubMetricsCache } from '../lib/github-metrics-cache.js';
+import { cachedGithubText } from '../lib/github-content-cache.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
@@ -764,9 +766,21 @@ function pruneRecentViews(entry, now) {
 }
 
 async function readMetrics(settings, metricsPath) {
-  const current = await getGitHubContent(settings, metricsPath);
-  const text = current?.content && current.encoding === 'base64' ? base64ToText(current.content) : '';
-  return { current, metrics: normalizeMetrics(parseMetricsJson(text)) };
+  return githubMetricsCache.read(settings, metricsPath, async () => {
+    try {
+      const current = await getGitHubContent(settings, metricsPath);
+      const text = current?.content && current.encoding === 'base64' ? base64ToText(current.content) : '';
+      return { current, metrics: normalizeMetrics(parseMetricsJson(text)) };
+    } catch (error) {
+      if (!/rate limit|secondary rate|abuse detection/i.test(String(error?.message || ''))) throw error;
+      // The collection is public. Raw GitHub remains readable when the
+      // authenticated Contents API quota is exhausted; serve counts without
+      // attempting a write until a fresh Contents SHA is available.
+      const text = await cachedGithubText(settings, metricsPath, { ttlMs: 15_000, preferRaw: true });
+      if (!text) throw error;
+      return { current: null, metrics: normalizeMetrics(parseMetricsJson(text)), stale: true };
+    }
+  });
 }
 
 async function mutateMetrics(settings, metricsPath, message, mutate, origin = '') {
@@ -777,14 +791,17 @@ async function mutateMetrics(settings, metricsPath, message, mutate, origin = ''
   const attempts = 5;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      const { current, metrics } = await readMetrics(settings, metricsPath);
+      const { current, metrics, stale } = await readMetrics(settings, metricsPath);
+      if (stale) return { metrics, changed: false, deferred: true };
       const changed = mutate(metrics);
       if (!changed) return { metrics, changed: false };
       metrics.updatedAt = new Date().toISOString();
-      await putGitHubContent(settings, metricsPath, textToBase64(JSON.stringify(metrics, null, 2)), message, current?.sha, origin);
+      const written = await putGitHubContent(settings, metricsPath, textToBase64(JSON.stringify(metrics, null, 2)), message, current?.sha, origin);
+      githubMetricsCache.set(settings, metricsPath, written?.content || written, metrics);
       return { metrics, changed: true };
     } catch (error) {
       const conflict = Number(error?.status) === 409 || /sha/i.test(String(error?.message || ''));
+      if (conflict) githubMetricsCache.invalidate(settings, metricsPath);
       if (!conflict || attempt >= attempts - 1) throw error;
       const delay = Math.min(150 * 2 ** attempt + Math.floor(Math.random() * 250), 1500);
       await new Promise((resolve) => setTimeout(resolve, delay));
@@ -1634,7 +1651,7 @@ export default async function handler(request, response) {
         const now = Date.now();
         const day = new Date(now).toISOString().slice(0, 10);
         const viewKey = `${hash}:${day}`;
-        const { metrics } = await mutateMetrics(settings, metricsPath, `Track Spine preview view ${entryId}`, (draft) => {
+        const { metrics, deferred } = await mutateMetrics(settings, metricsPath, `Track Spine preview view ${entryId}`, (draft) => {
           const metricEntry = normalizeEntryMetric(draft, entryId);
           if (!metricEntry) return false;
           pruneRecentViews(metricEntry, now);
@@ -1643,12 +1660,12 @@ export default async function handler(request, response) {
           metricEntry.views += 1;
           return true;
         }, origin);
-        return response.status(200).json({ ok: true, entryId, metric: metricCountsForIds(metrics, [entryId], hash)[entryId] });
+        return response.status(200).json({ ok: true, entryId, metric: metricCountsForIds(metrics, [entryId], hash)[entryId], ...(deferred ? { deferred: true } : {}) });
       }
 
       if (metricAction === 'like') {
         const liked = Boolean(body?.liked);
-        const { metrics } = await mutateMetrics(settings, metricsPath, `${liked ? 'Like' : 'Unlike'} Spine preview ${entryId}`, (draft) => {
+        const { metrics, deferred } = await mutateMetrics(settings, metricsPath, `${liked ? 'Like' : 'Unlike'} Spine preview ${entryId}`, (draft) => {
           const metricEntry = normalizeEntryMetric(draft, entryId);
           if (!metricEntry) return false;
           const currentlyLiked = Boolean(metricEntry.likedBy[hash]);
@@ -1664,7 +1681,7 @@ export default async function handler(request, response) {
           }
           return false;
         }, origin);
-        return response.status(200).json({ ok: true, entryId, metric: metricCountsForIds(metrics, [entryId], hash)[entryId] });
+        return response.status(200).json({ ok: true, entryId, metric: metricCountsForIds(metrics, [entryId], hash)[entryId], ...(deferred ? { deferred: true } : {}) });
       }
 
       return response.status(400).json({ error: 'Invalid metrics action' });

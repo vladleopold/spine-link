@@ -12,6 +12,13 @@ on:
       - 'src/SpineApp.tsx'
       - 'tests/**'
       - '.github/workflows/spine-link-upload-delete-regression.yml'
+  pull_request:
+    paths:
+      - 'api/github-upload.js'
+      - 'lib/github-metrics-cache.js'
+      - 'tests/github-metrics-cache.test.mjs'
+      - 'tests/metrics-write-conflict.test.mjs'
+      - '.github/workflows/spine-link-upload-delete-regression.yml'
   workflow_dispatch:
 
 permissions:
@@ -31,4 +38,4 @@ jobs:
       - name: TypeScript, Vite, and upload regression tests
         run: |
           npm run build
-          node --test tests/upload-fast.test.mjs tests/upload-base64.test.mjs tests/upload-recovery.test.mjs tests/library-accounts.test.mjs tests/spine-project-import.test.mjs tests/metrics-write-conflict.test.mjs tests/spine-app-runtime-loader.test.mjs tests/spine-preview-runtime-loader.test.mjs tests/spine-runtime-compatibility.test.mjs tests/preview-cache.test.mjs tests/preview-metadata.test.mjs
+          node --test tests/upload-fast.test.mjs tests/upload-base64.test.mjs tests/upload-recovery.test.mjs tests/library-accounts.test.mjs tests/spine-project-import.test.mjs tests/metrics-write-conflict.test.mjs tests/github-metrics-cache.test.mjs tests/spine-app-runtime-loader.test.mjs tests/spine-preview-runtime-loader.test.mjs tests/spine-runtime-compatibility.test.mjs tests/preview-cache.test.mjs tests/preview-metadata.test.mjs
