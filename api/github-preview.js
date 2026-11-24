@@ -3280,12 +3280,14 @@ async function resolveEntryPath(settings, entryId) {
 }
 
 export default async function handler(request, response) {
+  console.info('[preview] handler entered', { method: request.method });
   if (!['GET', 'HEAD'].includes(request.method)) {
     response.setHeader('Allow', 'GET, HEAD');
     return response.status(405).send('Method not allowed');
   }
 
   const token = process.env.GITHUB_TOKEN;
+  console.info('[preview] token configured:', Boolean(token));
   if (!token) return response.status(500).send('GITHUB_TOKEN is not configured');
 
   const settings = {
@@ -3311,6 +3313,7 @@ export default async function handler(request, response) {
   }
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 
+    console.info('[preview] rendering preview');
     let html = '';
     let robotsHeader = 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1';
     if (path.endsWith('.html')) {
@@ -3322,6 +3325,7 @@ export default async function handler(request, response) {
       robotsHeader = preview.robots;
     }
 
+    console.info('[preview] preview rendered', { htmlLength: html.length });
     response.setHeader('Content-Type', 'text/html; charset=utf-8');
     response.setHeader('X-Robots-Tag', robotsHeaderValue(robotsHeader));
     if (request.method === 'HEAD') {
