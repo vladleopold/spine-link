@@ -2200,7 +2200,7 @@ const pinchDistance = { value: null };
           : code === "UNSUPPORTED_SPINE_3_8_75"
             ? "This export uses Spine 3.8.75, which the official runtime rejects because of a known export bug. Re-export the original Spine project with Spine 3.8.99."
             : code === "UNSUPPORTED_SPINE_3_7_BINARY"
-              ? "This Spine 3.7 export is binary (.skel), but the bundled Spine 3.7 Web Player accepts JSON skeletons only. Re-export the original project as JSON."
+              ? "Spine 3.7 binary (.skel) is not compatible with the web player. Re-export the same project as JSON using Spine Editor 3.7."
               : code === "UNSUPPORTED_SPINE_VERSION"
                 ? "This export uses Spine " + String(activeSet.value?.skeletonVersion || "unknown") + ". Spine-Link supports Web Player exports from Spine 3.7 through 4.3. Re-export the original .spine project with a supported editor version."
                 : code === "SPINE_PLAYER_ERROR" && missingAtlasRegion
@@ -2222,7 +2222,13 @@ const pinchDistance = { value: null };
           return;
         }
         const skeletonVersion = String(activeSet.value.skeletonVersion || "");
-        // Legacy Spine 3.7 binary is routed through the binary-capable 3.8 player.
+        // Spine 3.7 and 3.8 use incompatible binary formats. The official
+        // 3.7 Web Player only loads JSON, while the 3.8 runtime cannot parse
+        // 3.7 SKEL data. Never report an empty skeleton as successfully loaded.
+        if (/^3\\.7(?:\\.|$)/.test(skeletonVersion) && Boolean(activeSet.value.skelUrl)) {
+          markPreviewBlocked("UNSUPPORTED_SPINE_3_7_BINARY");
+          return;
+        }
         // Spine 3.8.75 exports contain a known upstream IK/export bug and are
         // explicitly rejected by the official 3.8 runtime.
         if (skeletonVersion === "3.8.75") {
