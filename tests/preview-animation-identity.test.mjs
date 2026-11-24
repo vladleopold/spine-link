@@ -274,11 +274,12 @@ test('Spine version preflight accepts supported major.minor strings without a pa
   assert.match(preview, /\^\(\?:3\\\.\(\?:7\|8\)\(\?:\\\.\|\$\)\|4\\\.\[0-3\]\(\?:\\\.\|\$\)\)/);
 });
 
-test('Spine 3.7 binary skeletons are passed to the official runtime instead of being blocked', () => {
+test('Spine 3.7 binary skeletons are blocked with an explicit fallback because the 3.7 player requires JSON', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
-  assert.doesNotMatch(startup, /UNSUPPORTED_SPINE_3_7_BINARY/);
-  assert.match(startup, /loadSpineRuntime\(activeSet\.value\)/);
-  assert.match(preview, /skeletonIsBinary \? \{ skelUrl: skeletonUrl \} : \{ jsonUrl: skeletonUrl \}/);
+  assert.match(startup, /if \(activeSet\.value\.binaryUnsupported\)/);
+  assert.match(startup, /UNSUPPORTED_SPINE_3_7_BINARY/);
+  assert.match(startup, /showPreviewVideoFallback\(\)/);
+  assert.match(preview, /binaryUnsupported: isSpine37BinaryUnsupported\(skeletonVersion, skeletonIsBinary\)/);
 });
 
 const browserWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml', import.meta.url), 'utf8');
