@@ -391,6 +391,37 @@ jobs:
               assert.deepEqual(pageErrors, [], 'Spine preview JavaScript errors');
               console.log('PASS LIVE PREVIEW', JSON.stringify(info));
 
+              // Legacy Spine 2.1 is intentionally outside the Web Player
+              // compatibility matrix. It must show an actionable re-export
+              // message instead of leaking a generic player initialization error.
+              const legacyPage = await browser.newPage({viewport:{width:1200,height:780}});
+              try {
+                const legacyResponse = await gotoWithRetry(
+                  legacyPage,
+                  site + '/p/Spine-animation-2026-11-24T01-25-27-944Z?animation=idleBattle',
+                  {waitUntil:'domcontentloaded',timeout:60000},
+                );
+                assert.equal(legacyResponse?.status(), 200, 'Legacy Spine 2.1 preview HTTP status');
+                await legacyPage.waitForFunction(() =>
+                  document.querySelector('#player')?.dataset.previewStatus === 'blocked',
+                  null, {timeout:15000});
+                const legacy = await legacyPage.evaluate(() => ({
+                  status:document.querySelector('#player')?.dataset.previewStatus || '',
+                  error:document.querySelector('#player')?.dataset.previewError || '',
+                  message:document.querySelector('#player')?.innerText || '',
+                  animation:document.querySelector('#player')?.dataset.previewAnimation || '',
+                }));
+                assert.equal(legacy.status, 'blocked');
+                assert.equal(legacy.error, 'UNSUPPORTED_SPINE_VERSION',
+                  'Spine 2.1 must be blocked by the compatibility gate, not by a player initialization error: ' + JSON.stringify(legacy));
+                assert.match(legacy.message, /Spine 2\.1\.27/);
+                assert.match(legacy.message, /Re-export the original \.spine project/);
+                assert.doesNotMatch(legacy.message, /^Spine preview is blocked\.$/);
+                console.log('PASS ACTIONABLE LEGACY VERSION GATE', JSON.stringify(legacy));
+              } finally {
+                await legacyPage.close();
+              }
+
               // Verify actual runtime initialization, exact animation selection,
               // and moving canvas pixels across every supported major/minor line.
               const playbackCases = [
