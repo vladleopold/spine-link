@@ -395,6 +395,7 @@ jobs:
               // and moving canvas pixels across every supported major/minor line.
               const playbackCases = [
                 {label:'Spine 3.8.99 castle_upgrade', id:'castle_upgrade-2026-11-19T07-33-26-823Z', animation:'build'},
+                {label:'Spine 4.0.58 restored archive', id:'276-Spine-2014--2026-10-24T21-46-51-258Z', animation:'idle'},
                 {label:'Spine 4.1.24', id:'wolf-2026-11-20T05-12-56-813Z', animation:'blow_loop_landscape'},
                 {label:'Spine 4.2.0 dryad diagnostic', id:'dryad-2026-09-30T21-54-03-321Z', animation:'walk'},
               ];
@@ -528,31 +529,8 @@ jobs:
                 }
               }
 
-              // This archive record has no Spine source set or preview media. Keep it
-              // poster-only instead of treating an empty record as a broken 4.0.58 runtime.
-              const posterOnlyPage = await browser.newPage({viewport:{width:1200,height:780}});
-              try {
-                const posterOnlyResponse = await gotoWithRetry(
-                  posterOnlyPage,
-                  site + '/p/276-Spine-2014--2026-10-24T21-46-51-258Z',
-                  {waitUntil:'domcontentloaded',timeout:60000},
-                );
-                assert.equal(posterOnlyResponse?.status(), 200, 'Poster-only archive record HTTP status');
-                const posterOnly = await posterOnlyPage.evaluate(() => ({
-                  config: document.querySelector('#spine-preview-config')?.textContent || '',
-                  runtimeCanvas: Boolean(document.querySelector('#player canvas')),
-                  videoSource: Boolean(document.querySelector('video[src]')),
-                }));
-                assert.equal(posterOnly.config, '', 'Source-less record must not fabricate a Spine config');
-                assert.equal(posterOnly.runtimeCanvas, false, 'Source-less record must not mount a Spine runtime canvas');
-                assert.equal(posterOnly.videoSource, false, 'Source-less record must not expose an unverified preview video');
-                console.log('PASS SOURCE-LESS ARCHIVE RECORD DOES NOT MOUNT A SPINE RUNTIME');
-              } finally {
-                await posterOnlyPage.screenshot({
-                  path:'artifacts/poster-only-276.png',fullPage:true,timeout:15000,
-                }).catch(console.error);
-                await posterOnlyPage.close();
-              }
+              // The restored legacy 4.0.58 record is included in the real runtime
+              // matrix above; it must initialize and play its indexed idle track.
 
               // sabrinaBedSide was imported in the matching 3.8.75 editor and re-exported
               // with Spine 4.3.26. Verify the real production player and all original animations.
