@@ -3,6 +3,7 @@ const defaultRepo = 'spine';
 const defaultBranch = 'main';
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
 import { ddsToPng } from '../lib/dds-png.js';
+import { canReadPublicSpineWithoutToken } from '../lib/github-read-access.js';
 
 const memoryCache = globalThis.__spineLinkAssetMemoryCache || {
   entries: new Map(),
@@ -416,8 +417,13 @@ export default async function handler(request, response) {
     return response.status(405).send('Method not allowed');
   }
 
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) return response.status(500).send('GITHUB_TOKEN is not configured');
+  const token = process.env.GITHUB_TOKEN || '';
+  const owner = process.env.GITHUB_OWNER || defaultOwner;
+  const repo = process.env.GITHUB_REPO || defaultRepo;
+  const branch = process.env.GITHUB_BRANCH || defaultBranch;
+  if (!canReadPublicSpineWithoutToken(token, owner, repo)) {
+    return response.status(500).send('GITHUB_TOKEN is required for non-public repository access');
+  }
 
   const path = normalizeRepoPath(request.query?.path || '');
   if (!path) return response.status(400).send('Invalid asset path');
@@ -427,9 +433,6 @@ export default async function handler(request, response) {
   const assetPath = path;
   const assetVersion = typeof request.query?.v === 'string' ? request.query.v : '';
 
-  const owner = process.env.GITHUB_OWNER || defaultOwner;
-  const repo = process.env.GITHUB_REPO || defaultRepo;
-  const branch = process.env.GITHUB_BRANCH || defaultBranch;
   const encodedPath = encodeURIComponent(assetPath).replace(/%2F/g, '/');
   const cacheKey = memoryCacheKey({ owner, repo, branch, path: assetPath, assetVersion });
   const cachedAsset = getMemoryCacheEntry(cacheKey);

@@ -4,18 +4,6 @@ name: Spine-Link Chromium production verification
 # Manual dispatch remains available for diagnostics; PRs must not test stale production.
 on:
   workflow_dispatch:
-  # Run directly after runtime/player changes on main as well as after
-  # the explicit Vercel release workflow. The chromium job waits for the
-  # public production alias through its retrying page/asset checks.
-  push:
-    branches: [main]
-    paths:
-      - api/github-preview.js
-      - lib/github-content-cache.js
-      - vercel.json
-      - lib/spine-runtime-file-selection.js
-      - tests/spine37-binary-preview.e2e.mjs
-      - .github/workflows/spine-link-browser-smoke.yml
   workflow_run:
     workflows: ["Vercel deploy and alias"]
     types: [completed]
