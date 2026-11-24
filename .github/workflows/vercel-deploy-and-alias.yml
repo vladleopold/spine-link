@@ -40,6 +40,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          deploy_sha="${{ github.event.workflow_run.head_sha || github.sha }}"
+          already_deployed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$deploy_sha/status" --jq '[.statuses[]? | select(.context == "Vercel" and .state == "success")][0] // empty' || true)
+          if [ -n "$already_deployed" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "This exact commit already passed Vercel production deployment through Git integration."
+            exit 0
+          fi
           # After a failed automatic deployment, do not hammer Vercel while its
           # rolling 24-hour deployment quota is still exhausted. Manual dispatch
           # intentionally bypasses this cooldown.
@@ -58,14 +65,7 @@ jobs:
               exit 0
             fi
           fi
-          deploy_sha="${{ github.event.workflow_run.head_sha || github.sha }}"
-          already_deployed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$deploy_sha/status" --jq '[.statuses[]? | select(.context == "vercel/production" and .state == "success")][0] // empty' || true)
-          if [ -n "$already_deployed" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "This exact commit already passed the production deployment and smoke checks."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
       - name: Validate Vercel secrets
         if: steps.quota_recovery.outputs.skip != 'true'
         run: |
