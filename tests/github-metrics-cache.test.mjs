@@ -76,6 +76,25 @@ test('serves the last snapshot as stale when a refresh hits the GitHub API rate 
   assert.equal(stale.metrics.entries.preview.views, 7);
 });
 
+test('recognizes rate-limit details carried separately from the generic GitHub error', async () => {
+  let now = 1_000;
+  const cache = createGithubMetricsCache({ ttlMs: 100, now: () => now });
+  await cache.read(settings, path, async () => ({
+    current: { sha: 'sha-1' },
+    metrics: { entries: { preview: { views: 9 } } },
+  }));
+  now += 101;
+  const stale = await cache.read(settings, path, async () => {
+    throw Object.assign(new Error('Storage read failed for metrics.json: 403'), {
+      status: 403,
+      githubMessage: 'API rate limit exceeded',
+    });
+  });
+  assert.equal(stale.stale, true);
+  assert.equal(stale.current.sha, 'sha-1');
+  assert.equal(stale.metrics.entries.preview.views, 9);
+});
+
 test('coalesces concurrent cache misses for the same metrics file', async () => {
   const cache = createGithubMetricsCache({ ttlMs: 15_000, now: () => 1_000 });
   let reads = 0;
