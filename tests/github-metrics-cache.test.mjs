@@ -58,6 +58,49 @@ test('refreshes expired metrics snapshots and invalidates stale SHA after a conf
   assert.equal(reads, 3);
 });
 
+test('serves the last snapshot as stale when a refresh hits the GitHub API rate limit', async () => {
+  let now = 1_000;
+  const cache = createGithubMetricsCache({ ttlMs: 100, now: () => now });
+  const initial = await cache.read(settings, path, async () => ({
+    current: { sha: 'sha-1' },
+    metrics: { entries: { preview: { views: 7 } } },
+  }));
+  now += 101;
+  const stale = await cache.read(settings, path, async () => {
+    throw new Error('API rate limit exceeded');
+  });
+
+  assert.equal(initial.stale, undefined);
+  assert.equal(stale.stale, true);
+  assert.equal(stale.current.sha, 'sha-1');
+  assert.equal(stale.metrics.entries.preview.views, 7);
+});
+
+test('coalesces concurrent cache misses for the same metrics file', async () => {
+  const cache = createGithubMetricsCache({ ttlMs: 15_000, now: () => 1_000 });
+  let reads = 0;
+  let finish;
+  const load = () => {
+    reads++;
+    return new Promise(resolve => {
+      finish = () => resolve({
+        current: { sha: 'sha-shared' },
+        metrics: { entries: { preview: { views: 3 } } },
+      });
+    });
+  };
+
+  const first = cache.read(settings, path, load);
+  const second = cache.read(settings, path, load);
+  await Promise.resolve();
+  finish();
+  const [a, b] = await Promise.all([first, second]);
+
+  assert.equal(reads, 1);
+  assert.equal(a.current.sha, 'sha-shared');
+  assert.equal(b.metrics.entries.preview.views, 3);
+});
+
 test('a successful write refreshes cached SHA and metrics without another GitHub read', async () => {
   let reads = 0;
   const cache = createGithubMetricsCache({ ttlMs: 15_000, now: () => 1_000 });
