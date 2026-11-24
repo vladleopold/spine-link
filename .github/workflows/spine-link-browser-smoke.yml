@@ -11,6 +11,8 @@ on:
     branches: [main]
     paths:
       - api/github-preview.js
+      - lib/github-content-cache.js
+      - vercel.json
       - lib/spine-runtime-file-selection.js
       - tests/spine37-binary-preview.e2e.mjs
       - .github/workflows/spine-link-browser-smoke.yml
