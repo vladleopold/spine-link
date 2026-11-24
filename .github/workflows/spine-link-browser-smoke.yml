@@ -663,6 +663,7 @@ jobs:
           }
           NODE
       - name: Verify real playback of legacy Spine 3.7 binary
+        if: always()
         env:
           SITE: https://spine-link.vercel.app
         run: node tests/spine37-binary-preview.e2e.mjs
