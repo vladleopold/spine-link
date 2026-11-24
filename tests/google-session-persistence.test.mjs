@@ -106,6 +106,13 @@ try {
   // Opening the portfolio mounts React, which performs the silent GIS refresh.
   await page.locator('[data-open-library]').first().click();
   await page.locator('button[aria-label="Reconnect Google"]').waitFor({state:'visible',timeout:15000});
+  // The reconnect control is also visible during the intermediate silent-refresh
+  // state. Wait for the callback to settle before asserting the final message.
+  await page.waitForFunction(
+    () => /Reconnect to continue/i.test(document.querySelector('.auth-error')?.textContent || ''),
+    null,
+    {timeout:15000},
+  );
   assert.match(await page.locator('.auth-error').innerText(),/Reconnect to continue/i);
 
   const promptsAfterSilentAttempt = await page.evaluate(() => window.__gisPromptLog);
