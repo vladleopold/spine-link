@@ -1,4 +1,4 @@
-import { selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
+import { isSpine37BinaryUnsupported, selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
 import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
@@ -2164,6 +2164,15 @@ const pinchDistance = { value: null };
           return;
         }
         const skeletonVersion = String(activeSet.value.skeletonVersion || "");
+        // Spine 3.7's official web player only accepts JSON skeletons. Binary
+        // .skel support was added in Spine 3.8; passing a 3.7 binary to the
+        // 3.7 player throws "Please specify the URL of the skeleton JSON file."
+        // Use the generated WebM when present; otherwise show the precise
+        // re-export instruction instead of a misleading generic blocked state.
+        if (activeSet.value.binaryUnsupported) {
+          if (!showPreviewVideoFallback()) markPreviewBlocked("UNSUPPORTED_SPINE_3_7_BINARY");
+          return;
+        }
         // Spine 3.8.75 exports contain a known upstream IK/export bug and are
         // explicitly rejected by the official 3.8 runtime.
         if (skeletonVersion === "3.8.75") {
@@ -2965,6 +2974,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       animation: defaultAnimation,
       animations,
       skeletonVersion,
+      binaryUnsupported: isSpine37BinaryUnsupported(skeletonVersion, skeletonIsBinary),
       textures: textureUrls,
       skin: preferredSkinName(skinNames),
       premultipliedAlpha: hasPremultipliedAlpha(atlasText),
