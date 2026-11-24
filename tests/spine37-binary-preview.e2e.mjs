@@ -29,6 +29,10 @@ try {
     waitUntil: 'domcontentloaded',
     timeout: 60000,
   });
+  if (first?.status() !== 200) {
+    const body = await first?.text().catch(() => '');
+    console.error('SPINE37_HTTP_ERROR_BODY', String(body || '').slice(0, 3000));
+  }
   assert.equal(first?.status(), 200, 'legacy preview route must return HTTP 200');
   await page.waitForFunction(() => {
     const player = document.querySelector('#player');
