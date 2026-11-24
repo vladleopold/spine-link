@@ -3280,34 +3280,37 @@ async function resolveEntryPath(settings, entryId) {
 }
 
 export default async function handler(request, response) {
-  if (!['GET', 'HEAD'].includes(request.method)) {
-    response.setHeader('Allow', 'GET, HEAD');
-    return response.status(405).send('Method not allowed');
-  }
-
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) return response.status(500).send('GITHUB_TOKEN is not configured');
-
-  const settings = {
-    owner: process.env.GITHUB_OWNER || defaultOwner,
-    repo: process.env.GITHUB_REPO || defaultRepo,
-    branch: process.env.GITHUB_BRANCH || defaultBranch,
-    basePath: cleanRepoPath(process.env.GITHUB_BASE_PATH || defaultBasePath),
-    token,
-  };
-
-  let path = cleanRepoPath(request.query?.path || '');
-  let entryRecord;
-  if (!path) {
-    const entryId = cleanRepoPath(request.query?.entry || '');
-    if (!entryId) return response.status(400).send('Invalid preview path');
-    entryRecord = await resolveEntryRecord(settings, entryId);
-    path = entryRecord?.previewPath || await findDirectPreviewPath(settings, entryId);
-    if (!path) return response.status(404).send('Preview not found');
-  }
-  const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
-
   try {
+    if (!['GET', 'HEAD'].includes(request.method)) {
+      response.setHeader('Allow', 'GET, HEAD');
+      return response.status(405).send('Method not allowed');
+    }
+
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) return response.status(500).send('GITHUB_TOKEN is not configured');
+
+    const settings = {
+      owner: process.env.GITHUB_OWNER || defaultOwner,
+      repo: process.env.GITHUB_REPO || defaultRepo,
+      branch: process.env.GITHUB_BRANCH || defaultBranch,
+      basePath: cleanRepoPath(process.env.GITHUB_BASE_PATH || defaultBasePath),
+      token,
+    };
+
+    let path = cleanRepoPath(request.query?.path || '');
+    let entryRecord;
+    if (!path) {
+      const entryId = cleanRepoPath(request.query?.entry || '');
+      if (!entryId) return response.status(400).send('Invalid preview path');
+      // Resolve inside the handler-level guard: GitHub lookups can time out or
+      // throw before the preview-rendering phase. Letting that escape causes a
+      // Vercel FUNCTION_INVOCATION_FAILED instead of a controlled response.
+      entryRecord = await resolveEntryRecord(settings, entryId);
+      path = entryRecord?.previewPath || await findDirectPreviewPath(settings, entryId);
+      if (!path) return response.status(404).send('Preview not found');
+    }
+    const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
+
     let html = '';
     let robotsHeader = 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1';
     if (path.endsWith('.html')) {
@@ -3321,16 +3324,14 @@ export default async function handler(request, response) {
 
     response.setHeader('Content-Type', 'text/html; charset=utf-8');
     response.setHeader('X-Robots-Tag', robotsHeaderValue(robotsHeader));
-    if (request.method === 'HEAD') {
-      setNoStoreHeaders(response);
-      return response.status(200).send('');
-    }
-    // Work pages must not survive deletion in a browser/CDN for minutes.
-    // The assets can remain cacheable; the entry lookup is always fresh.
     setNoStoreHeaders(response);
+    if (request.method === 'HEAD') return response.status(200).send('');
     return response.status(200).send(html);
   } catch (error) {
-    return response.status(500).send(error instanceof Error ? error.message : 'Preview failed');
+    const message = error instanceof Error ? error.message : String(error || 'Preview failed');
+    console.error('[github-preview] request failed:', message, error instanceof Error ? error.stack : '');
+    if (response.headersSent) return response.end();
+    return response.status(500).send('Preview failed: ' + message.slice(0, 240));
   }
 }
 
