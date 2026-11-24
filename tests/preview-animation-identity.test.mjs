@@ -250,8 +250,8 @@ test('animation selections made during loading are queued until the Spine Player
 
 test('legacy Spine Player wrappers fall back to indexed animation names when skeleton.data is not public', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
-  assert.match(startup, /const runtimeAnimationData = loadedPlayer\\?\\.skeleton\\?\\.data\\?\\.animations/);
-  assert.match(startup, /const runtimeNames = Array\\.isArray\\(runtimeAnimationData\\)/);
+  assert.ok(startup.includes('const runtimeAnimationData = loadedPlayer?.skeleton?.data?.animations;'));
+  assert.ok(startup.includes('const runtimeNames = Array.isArray(runtimeAnimationData)'));
   assert.match(startup, /const indexedNames = Array\.isArray\(activeSet\.value\?\.animations\)/);
   assert.match(startup, /const names = runtimeNames\.length \? runtimeNames : indexedNames/);
   assert.match(startup, /if \(selectedAnimation && names\.length && !names\.includes\(selectedAnimation\)\)/);
