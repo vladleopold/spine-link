@@ -6,6 +6,8 @@ on:
       - fix/spine37-binary-via-38-runtime
     paths:
       - api/github-preview.js
+      - lib/github-content-cache.js
+      - vercel.json
       - lib/spine-runtime-file-selection.js
       - tests/spine-runtime-compatibility.test.mjs
       - tests/spine37-binary-runtime-compatibility.test.mjs
