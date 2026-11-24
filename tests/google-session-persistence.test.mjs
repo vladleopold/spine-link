@@ -106,6 +106,8 @@ try {
   // Opening the portfolio mounts React, which performs the silent GIS refresh.
   await page.locator('[data-open-library]').first().click();
   await page.locator('button[aria-label="Reconnect Google"]').waitFor({state:'visible',timeout:15000});
+  // The status span can be hidden while its final text is already populated.
+  // Wait for the text rather than requiring the span itself to be visible.
   await page.waitForFunction(
     () => /Reconnect to continue/i.test(document.querySelector('.auth-error')?.textContent || ''),
     null,
