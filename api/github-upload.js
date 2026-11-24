@@ -1651,7 +1651,7 @@ export default async function handler(request, response) {
         const now = Date.now();
         const day = new Date(now).toISOString().slice(0, 10);
         const viewKey = `${hash}:${day}`;
-        const { metrics } = await mutateMetrics(settings, metricsPath, `Track Spine preview view ${entryId}`, (draft) => {
+        const { metrics, deferred } = await mutateMetrics(settings, metricsPath, `Track Spine preview view ${entryId}`, (draft) => {
           const metricEntry = normalizeEntryMetric(draft, entryId);
           if (!metricEntry) return false;
           pruneRecentViews(metricEntry, now);
@@ -1660,12 +1660,12 @@ export default async function handler(request, response) {
           metricEntry.views += 1;
           return true;
         }, origin);
-        return response.status(200).json({ ok: true, entryId, metric: metricCountsForIds(metrics, [entryId], hash)[entryId] });
+        return response.status(200).json({ ok: true, entryId, metric: metricCountsForIds(metrics, [entryId], hash)[entryId], ...(deferred ? { deferred: true } : {}) });
       }
 
       if (metricAction === 'like') {
         const liked = Boolean(body?.liked);
-        const { metrics } = await mutateMetrics(settings, metricsPath, `${liked ? 'Like' : 'Unlike'} Spine preview ${entryId}`, (draft) => {
+        const { metrics, deferred } = await mutateMetrics(settings, metricsPath, `${liked ? 'Like' : 'Unlike'} Spine preview ${entryId}`, (draft) => {
           const metricEntry = normalizeEntryMetric(draft, entryId);
           if (!metricEntry) return false;
           const currentlyLiked = Boolean(metricEntry.likedBy[hash]);
@@ -1681,7 +1681,7 @@ export default async function handler(request, response) {
           }
           return false;
         }, origin);
-        return response.status(200).json({ ok: true, entryId, metric: metricCountsForIds(metrics, [entryId], hash)[entryId] });
+        return response.status(200).json({ ok: true, entryId, metric: metricCountsForIds(metrics, [entryId], hash)[entryId], ...(deferred ? { deferred: true } : {}) });
       }
 
       return response.status(400).json({ error: 'Invalid metrics action' });
