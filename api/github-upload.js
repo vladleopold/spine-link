@@ -772,7 +772,8 @@ async function readMetrics(settings, metricsPath) {
       const text = current?.content && current.encoding === 'base64' ? base64ToText(current.content) : '';
       return { current, metrics: normalizeMetrics(parseMetricsJson(text)) };
     } catch (error) {
-      if (!/rate limit|secondary rate|abuse detection/i.test(String(error?.message || ''))) throw error;
+      const rateLimitDetails = `${String(error?.message || '')} ${String(error?.githubMessage || '')}`;
+      if (!/rate limit|secondary rate|abuse detection/i.test(rateLimitDetails)) throw error;
       // The collection is public. Raw GitHub remains readable when the
       // authenticated Contents API quota is exhausted; serve counts without
       // attempting a write until a fresh Contents SHA is available.
