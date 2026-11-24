@@ -1482,7 +1482,7 @@ function createHtml(config) {
         <aside id="sidebar">
           <div class="preview-card" id="set-card"><div class="section-title">Set</div><select id="set-select"></select></div>
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
-          ${video?.contentUrl ? `<div class="preview-card preview-video-card"><div class="section-title">Video preview</div><video id="preview-video-card-player" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl || '')}" muted loop playsinline preload="metadata" autoplay controls aria-label="${escapeHtml(video.name || 'Spine animation video preview')}"></video></div>` : ''}
+          ${video?.contentUrl ? `<div class="preview-card preview-video-card"><div class="section-title">Video preview</div><video id="preview-video-card-player" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video?.thumbnailUrl || '')}" muted loop playsinline preload="metadata" autoplay controls aria-label="${escapeHtml(video.name || 'Spine animation video preview')}"></video></div>` : ''}
           <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
           ${animationDownloadBlock(entry, origin)}
           
