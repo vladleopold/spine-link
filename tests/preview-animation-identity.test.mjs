@@ -274,12 +274,14 @@ test('Spine version preflight accepts supported major.minor strings without a pa
   assert.match(preview, /\^\(\?:3\\\.\(\?:7\|8\)\(\?:\\\.\|\$\)\|4\\\.\[0-3\]\(\?:\\\.\|\$\)\)/);
 });
 
-test('Spine 3.7 binary skeletons are blocked with an explicit fallback because the 3.7 player requires JSON', () => {
+test('Spine 3.7 binary skeletons use the binary-capable 3.8 runtime instead of being blocked', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
-  assert.match(startup, /if \(activeSet\.value\.binaryUnsupported\)/);
-  assert.match(startup, /UNSUPPORTED_SPINE_3_7_BINARY/);
-  assert.match(startup, /showPreviewVideoFallback\(\)/);
-  assert.match(preview, /binaryUnsupported: isSpine37BinaryUnsupported\(skeletonVersion, skeletonIsBinary\)/);
+  assert.doesNotMatch(startup, /activeSet\.value\.binaryUnsupported/);
+  assert.ok(preview.includes('const runtimeVersionOverride = runtimeVersionOverrideForSpineSkeleton(skeletonVersion, skeletonIsBinary)'));
+  assert.match(preview, /runtimeVersionOverride,/);
+  assert.match(preview, /if \(runtimeVersionOverride === "3\.8"\) return "3\.8"/);
+  assert.ok(preview.includes("runtimeVersionOverride === '3.8' || /^3\\.8\\./.test(skeletonVersion)"),
+    'Spine 3.7 binary must receive the Spine 3.8 atlas compatibility route');
 });
 
 const browserWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml', import.meta.url), 'utf8');
@@ -306,7 +308,7 @@ test('production Chromium gate verifies the upstream Vercel deployment job', () 
   assert.match(archiveLiveWorkflow, /prior_success/);
 });
 
-test('production Chromium smoke performs real playback checks for Spine 3.8 through 4.3', () => {
+test('production Chromium smoke performs real playback checks for Spine 3.7 through 4.3', () => {
   for (const id of [
     'castle_upgrade-2026-11-19T07-33-26-823Z',
     '276-Spine-2014--2026-10-24T21-46-51-258Z',
@@ -327,6 +329,7 @@ test('production Chromium smoke performs real playback checks for Spine 3.8 thro
   assert.match(browserWorkflow, /SPINE ASSET DIAGNOSTIC/);
   assert.match(browserWorkflow, /Failed to load resource:\.\*status of 404/);
   assert.match(browserWorkflow, /PASS CONVERTED SPINE 3\.8\.75 -> 4\.3\.26/);
+  assert.ok(browserWorkflow.includes('run: node tests/spine37-binary-preview.e2e.mjs'));
   assert.match(browserWorkflow, /converted\.animations\.length, 11/);
   assert.match(browserWorkflow, /converted\.animation, 'idle'/);
   assert.match(browserWorkflow, /missingSlotBones/);

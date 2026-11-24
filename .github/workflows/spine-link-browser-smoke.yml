@@ -422,31 +422,6 @@ jobs:
                 await legacyPage.close();
               }
 
-              const legacy37Page = await browser.newPage({viewport:{width:1200,height:780}});
-              try {
-                const legacy37Response = await gotoWithRetry(
-                  legacy37Page,
-                  site + '/p/Spine-animation-2026-11-20T10-01-52-055Z',
-                  {waitUntil:'domcontentloaded',timeout:60000},
-                );
-                assert.equal(legacy37Response?.status(), 200, 'Legacy Spine 3.7 binary preview HTTP status');
-                await legacy37Page.waitForFunction(() =>
-                  document.querySelector('#player')?.dataset.previewStatus === 'blocked',
-                  null, {timeout:15000});
-                const legacy37 = await legacy37Page.evaluate(() => ({
-                  status:document.querySelector('#player')?.dataset.previewStatus || '',
-                  error:document.querySelector('#player')?.dataset.previewError || '',
-                  message:document.querySelector('#player')?.innerText || '',
-                }));
-                assert.equal(legacy37.error, 'UNSUPPORTED_SPINE_3_7_BINARY',
-                  'Spine 3.7 binary must be rejected before player initialization: ' + JSON.stringify(legacy37));
-                assert.match(legacy37.message, /accepts JSON skeletons only/);
-                assert.doesNotMatch(legacy37.message, /Please specify the URL of the skeleton JSON file/i);
-                console.log('PASS ACTIONABLE SPINE 3.7 BINARY GATE', JSON.stringify(legacy37));
-              } finally {
-                await legacy37Page.close();
-              }
-
               // Verify actual runtime initialization, exact animation selection,
               // and moving canvas pixels across every supported major/minor line.
               const playbackCases = [
@@ -677,6 +652,10 @@ jobs:
             await browser.close();
           }
           NODE
+      - name: Verify real playback of legacy Spine 3.7 binary
+        env:
+          SITE: https://spine-link.vercel.app
+        run: node tests/spine37-binary-preview.e2e.mjs
       - name: Verify production rejects invalid Google credentials
         shell: bash
         env:

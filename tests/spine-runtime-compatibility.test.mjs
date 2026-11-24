@@ -1,16 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isSpine37BinaryUnsupported } from '../lib/spine-runtime-file-selection.js';
+import { runtimeVersionOverrideForSpineSkeleton } from '../lib/spine-runtime-file-selection.js';
 
-test('rejects Spine 3.7 binary skeletons because the 3.7 web player requires JSON', () => {
-  assert.equal(isSpine37BinaryUnsupported('3.7.94', true), true);
+test('routes Spine 3.7 binary skeletons through the binary-capable 3.8 player', () => {
+  assert.equal(runtimeVersionOverrideForSpineSkeleton('3.7.94', true), '3.8');
 });
 
-test('keeps Spine 3.7 JSON skeletons playable', () => {
-  assert.equal(isSpine37BinaryUnsupported('3.7.94', false), false);
+test('keeps Spine 3.7 JSON skeletons on their native 3.7 player', () => {
+  assert.equal(runtimeVersionOverrideForSpineSkeleton('3.7.94', false), '');
 });
 
-test('keeps binary skeletons supported by Spine 3.8 and later runtimes', () => {
-  assert.equal(isSpine37BinaryUnsupported('3.8.99', true), false);
-  assert.equal(isSpine37BinaryUnsupported('4.2.120', true), false);
+test('does not override native Spine 3.8 binary runtime selection', () => {
+  assert.equal(runtimeVersionOverrideForSpineSkeleton('3.8.99', true), '');
+});
+
+test('does not override Spine 4.x runtime selection', () => {
+  assert.equal(runtimeVersionOverrideForSpineSkeleton('4.2.120', true), '');
 });

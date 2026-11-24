@@ -1,4 +1,4 @@
-import { isSpine37BinaryUnsupported, selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
+import { runtimeVersionOverrideForSpineSkeleton, selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
 import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
@@ -1476,13 +1476,13 @@ function createHtml(config) {
         <div class="player-frame">
           <button class="library-nav-button library-nav-button--prev" id="library-nav-prev" type="button" aria-label="Previous Spine work" title="Previous Spine work">&lsaquo;</button>
           <div id="player"></div>
-          ${video?.contentUrl ? `<video id="preview-loading-video" class="preview-fallback-video" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl || '')}" muted loop playsinline preload="none" hidden data-animation="${escapeHtml(video.previewAnimation || '')}" aria-label="${escapeHtml(video.name || 'Spine animation video preview')}"></video>` : ''}
+          ${video?.contentUrl ? `<video id="preview-loading-video" class="preview-fallback-video" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video?.thumbnailUrl || '')}" muted loop playsinline preload="none" hidden data-animation="${escapeHtml(video.previewAnimation || '')}" aria-label="${escapeHtml(video.name || 'Spine animation video preview')}"></video>` : ''}
           <button class="library-nav-button library-nav-button--next" id="library-nav-next" type="button" aria-label="Next Spine work" title="Next Spine work">&rsaquo;</button>
         </div>
         <aside id="sidebar">
           <div class="preview-card" id="set-card"><div class="section-title">Set</div><select id="set-select"></select></div>
           <div class="preview-card note-card" id="note-card"><div class="section-title">Text</div><p class="note-text" id="note-text"></p></div>
-          ${video?.contentUrl ? `<div class="preview-card preview-video-card"><div class="section-title">Video preview</div><video id="preview-video-card-player" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video.thumbnailUrl || '')}" muted loop playsinline preload="metadata" autoplay controls aria-label="${escapeHtml(video.name || 'Spine animation video preview')}"></video></div>` : ''}
+          ${video?.contentUrl ? `<div class="preview-card preview-video-card"><div class="section-title">Video preview</div><video id="preview-video-card-player" src="${escapeHtml(video.contentUrl)}" poster="${escapeHtml(video?.thumbnailUrl || '')}" muted loop playsinline preload="metadata" autoplay controls aria-label="${escapeHtml(video.name || 'Spine animation video preview')}"></video></div>` : ''}
           <div class="preview-card animation-card is-open" id="animation-card"><div class="section-title">Animations</div><div class="animation-menu" id="animation-menu" role="menu"></div></div>
           ${animationDownloadBlock(entry, origin)}
           
@@ -1601,6 +1601,8 @@ const pinchDistance = { value: null };
       const runtimeLoaders = new Map();
       function legacyRuntimeForSet(set) {
         const version = String(set?.skeletonVersion || "");
+        const runtimeVersionOverride = String(set?.runtimeVersionOverride || "");
+        if (runtimeVersionOverride === "3.8") return "3.8";
         // В шаблонной строке точка экранируется одним обратным слэшем:
         // было "\\." — регулярка искала буквальную "\." и никогда не срабатывала.
         if (/^3\.7(?:\.|$)/.test(version)) return "3.7";
@@ -2208,24 +2210,16 @@ const pinchDistance = { value: null };
           return;
         }
         const skeletonVersion = String(activeSet.value.skeletonVersion || "");
-        // Spine 3.7's official web player only accepts JSON skeletons. Binary
-        // .skel support was added in Spine 3.8; passing a 3.7 binary to the
-        // 3.7 player throws "Please specify the URL of the skeleton JSON file."
-        // Use the generated WebM when present; otherwise show the precise
-        // re-export instruction instead of a misleading generic blocked state.
-        if (activeSet.value.binaryUnsupported) {
-          if (!showPreviewVideoFallback()) markPreviewBlocked("UNSUPPORTED_SPINE_3_7_BINARY");
-          return;
-        }
+        // Legacy Spine 3.7 binary is routed through the binary-capable 3.8 player.
         // Spine 3.8.75 exports contain a known upstream IK/export bug and are
         // explicitly rejected by the official 3.8 runtime.
         if (skeletonVersion === "3.8.75") {
           markPreviewBlocked("UNSUPPORTED_SPINE_3_8_75");
           return;
         }
-        // Spine 3.7 binary exports were rejected by the preflight above.
-        // Remaining binary sources use the exact option expected by their
-        // matching runtime: skelUrl (3.8), binaryUrl (4.0-4.2), skeleton (4.3).
+        // Binary sources use the exact option expected by the selected runtime:
+        // skelUrl (3.8, including compatible legacy 3.7), binaryUrl (4.0-4.2),
+        // skeleton (4.3).
         // Do not silently feed 2.x / 3.0-3.6 / future unknown exports to 4.3:
         // those formats require their matching historical runtime and otherwise
         // fail with misleading parser errors such as "Slot name must not be null".
@@ -2991,13 +2985,14 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       return matchedTexture ? versionedAssetUrl(origin, matchedTexture, matchedTexture.sha) : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5U9WcAAAAASUVORK5CYII=';
     });
     const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+    const runtimeVersionOverride = runtimeVersionOverrideForSpineSkeleton(skeletonVersion, skeletonIsBinary);
 
     const assetVersion = [
       skeleton.sha,
       atlas.sha,
       ...textures.map((texture) => texture.sha),
       ...(atlasPages.some((page) => /\.dds$/i.test(page)) ? ['dds-png-v1'] : []),
-      ...(/^3\.8\./.test(skeletonVersion) ? ['spine38-atlas-compat-v1'] : []),
+      ...(runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion) ? ['spine38-atlas-compat-v1'] : []),
     ].filter(Boolean).join('-');
 
     // Version the skeleton JSON/binary as well as atlas pages and textures.
@@ -3006,7 +3001,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     const skeletonUrl = versionedAssetUrl(origin, skeleton, assetVersion);
     const atlasUrlBase = versionedAssetUrl(origin, atlas, assetVersion);
     // Spine 3.8 predates the pma page field; the asset route strips it for 3.8 only.
-    const atlasUrl = /^3\.8\./.test(skeletonVersion)
+    const atlasUrl = runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion)
       ? `${atlasUrlBase}&spineRuntime=3.8`
       : atlasUrlBase;
     sets.push({
@@ -3018,7 +3013,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       animation: defaultAnimation,
       animations,
       skeletonVersion,
-      binaryUnsupported: isSpine37BinaryUnsupported(skeletonVersion, skeletonIsBinary),
+      runtimeVersionOverride,
       textures: textureUrls,
       skin: preferredSkinName(skinNames),
       premultipliedAlpha: hasPremultipliedAlpha(atlasText),
