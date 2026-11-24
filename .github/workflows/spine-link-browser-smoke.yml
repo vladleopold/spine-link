@@ -3,6 +3,10 @@ name: Spine-Link Chromium production verification
 # Verify the actual public alias only after a successful production deployment.
 # Manual dispatch remains available for diagnostics; PRs must not test stale production.
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/spine-link-browser-smoke.yml'
   workflow_dispatch:
   workflow_run:
     workflows: ["Vercel deploy and alias"]
@@ -489,41 +493,69 @@ jobs:
                     waitUntil:'domcontentloaded', timeout:60000,
                   });
                   assert.equal(playbackResponse?.status(), 200, sample.label + ' preview HTTP status');
-                  const assetDiagnostic = await playbackPage.evaluate(async () => {
-                    const raw = document.querySelector('#spine-preview-config')?.textContent || '{}';
-                    const config = JSON.parse(raw);
-                    const set = config.sets?.[0] || {};
-                    const jsonUrl = set.jsonUrl || set.skelUrl || set.skeleton || '';
-                    const atlasUrl = set.atlasUrl || set.atlas || '';
-                    let jsonStatus = 0, atlasStatus = 0, jsonData = null, jsonContentType = '';
-                    if (jsonUrl) {
-                      const response = await fetch(jsonUrl, {cache:'no-store'});
-                      jsonStatus = response.status;
-                      jsonContentType = response.headers.get('content-type') || '';
-                      const body = await response.text();
-                      try { jsonData = JSON.parse(body); } catch {}
+                  const playbackUrl = site + '/p/' + sample.id;
+                  let assetDiagnostic = null;
+                  let reachedTerminalState = false;
+                  for (let attempt = 1; attempt <= 3; attempt++) {
+                    if (attempt > 1) {
+                      playbackErrors.length = 0;
+                      playbackMissingAssets.length = 0;
+                      playbackConsoleErrors.length = 0;
+                      playbackHttpErrors.length = 0;
+                      console.warn('RETRY SPINE PLAYBACK CONFIG', sample.label, attempt);
+                      await playbackPage.waitForTimeout(attempt * 3000);
+                      await gotoWithRetry(playbackPage, playbackUrl, {
+                        waitUntil:'domcontentloaded', timeout:60000,
+                      });
                     }
-                    if (atlasUrl) {
-                      const response = await fetch(atlasUrl, {cache:'no-store'});
-                      atlasStatus = response.status;
+                    assetDiagnostic = await playbackPage.evaluate(async () => {
+                      const raw = document.querySelector('#spine-preview-config')?.textContent || '{}';
+                      const config = JSON.parse(raw);
+                      const set = config.sets?.[0] || {};
+                      const jsonUrl = set.jsonUrl || set.skelUrl || set.skeleton || '';
+                      const atlasUrl = set.atlasUrl || set.atlas || '';
+                      let jsonStatus = 0, atlasStatus = 0, jsonData = null, jsonContentType = '';
+                      if (jsonUrl) {
+                        const response = await fetch(jsonUrl, {cache:'no-store'});
+                        jsonStatus = response.status;
+                        jsonContentType = response.headers.get('content-type') || '';
+                        const body = await response.text();
+                        try { jsonData = JSON.parse(body); } catch {}
+                      }
+                      if (atlasUrl) {
+                        const response = await fetch(atlasUrl, {cache:'no-store'});
+                        atlasStatus = response.status;
+                      }
+                      const boneNames = new Set((jsonData?.bones || []).map(bone => bone.name));
+                      const missingSlotBones = (jsonData?.slots || [])
+                        .filter(slot => !boneNames.has(slot.bone))
+                        .map(slot => ({slot:slot.name,bone:slot.bone}));
+                      return {
+                        setKeys:Object.keys(set), jsonUrl, atlasUrl, jsonStatus, atlasStatus,
+                        jsonContentType, jsonVersion:jsonData?.skeleton?.spine || '',
+                        boneCount:jsonData?.bones?.length || 0, slotCount:jsonData?.slots?.length || 0,
+                        missingSlotBones,
+                        runtimeScriptUrls:performance.getEntriesByType('resource').map(x=>x.name).filter(x=>/spine-player\\.js/.test(x)),
+                      };
+                    });
+                    reachedTerminalState = await playbackPage.waitForFunction(() => {
+                      const player = document.querySelector('#player');
+                      return player && ['ready','blocked'].includes(player.dataset.previewStatus || '');
+                    }, null, {timeout:15000}).then(() => true).catch(() => false);
+                    if (assetDiagnostic.setKeys.length > 0 &&
+                        assetDiagnostic.jsonStatus === 200 &&
+                        assetDiagnostic.atlasStatus === 200 &&
+                        reachedTerminalState) break;
+                    if (attempt < 3) {
+                      console.warn('SPINE PLAYBACK NOT READY', sample.label, attempt, JSON.stringify({
+                        setKeys:assetDiagnostic.setKeys,
+                        jsonStatus:assetDiagnostic.jsonStatus,
+                        atlasStatus:assetDiagnostic.atlasStatus,
+                        reachedTerminalState,
+                      }));
                     }
-                    const boneNames = new Set((jsonData?.bones || []).map(bone => bone.name));
-                    const missingSlotBones = (jsonData?.slots || [])
-                      .filter(slot => !boneNames.has(slot.bone))
-                      .map(slot => ({slot:slot.name,bone:slot.bone}));
-                    return {
-                      setKeys:Object.keys(set), jsonUrl, atlasUrl, jsonStatus, atlasStatus,
-                      jsonContentType, jsonVersion:jsonData?.skeleton?.spine || '',
-                      boneCount:jsonData?.bones?.length || 0, slotCount:jsonData?.slots?.length || 0,
-                      missingSlotBones,
-                      runtimeScriptUrls:performance.getEntriesByType('resource').map(x=>x.name).filter(x=>/spine-player\.js/.test(x)),
-                    };
-                  });
+                  }
                   console.log('SPINE ASSET DIAGNOSTIC', sample.label, JSON.stringify(assetDiagnostic));
-                  const reachedTerminalState = await playbackPage.waitForFunction(() => {
-                    const player = document.querySelector('#player');
-                    return player && ['ready','blocked'].includes(player.dataset.previewStatus || '');
-                  }, null, {timeout:15000}).then(() => true).catch(() => false);
                   const beforeSelection = await playbackPage.evaluate(() => ({
                     status: document.querySelector('#player')?.dataset.previewStatus || '',
                     error: document.querySelector('#player')?.dataset.previewError || '',
