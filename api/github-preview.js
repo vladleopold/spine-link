@@ -3296,7 +3296,11 @@ export default async function handler(request, response) {
     token,
   };
 
-  let path = cleanRepoPath(request.query?.path || '');
+  // Entry discovery also performs remote GitHub requests. Keep it inside the
+  // handler boundary so rejected fetches/timeouts become an HTTP response
+  // instead of an unhandled Vercel FUNCTION_INVOCATION_FAILED.
+  try {
+    let path = cleanRepoPath(request.query?.path || '');
   let entryRecord;
   if (!path) {
     const entryId = cleanRepoPath(request.query?.entry || '');
@@ -3307,7 +3311,6 @@ export default async function handler(request, response) {
   }
   const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
 
-  try {
     let html = '';
     let robotsHeader = 'index,follow,max-image-preview:large,max-video-preview:-1,max-snippet:-1';
     if (path.endsWith('.html')) {
@@ -3330,6 +3333,8 @@ export default async function handler(request, response) {
     setNoStoreHeaders(response);
     return response.status(200).send(html);
   } catch (error) {
+    console.error('[preview] request failed:', error);
+    if (response.headersSent) return response.end();
     return response.status(500).send(error instanceof Error ? error.message : 'Preview failed');
   }
 }
