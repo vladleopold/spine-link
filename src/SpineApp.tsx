@@ -676,7 +676,7 @@ function modernSpine4Runtime(version = "") {
 
 function spinePlayerSourceConfig(prepared: Pick<PreparedSpine, "skeletonName" | "atlasName" | "skeletonVersion">) {
   const version = prepared.skeletonVersion || "";
-  const binary = extensionOf(prepared.skeletonName) === "skel";
+  const binary = ["skel", "bytes"].includes(extensionOf(prepared.skeletonName));
   if (/^3\./.test(version)) {
     return binary
       ? { skelUrl: prepared.skeletonName, atlasUrl: prepared.atlasName }
@@ -702,7 +702,7 @@ async function loadSpinePlayerForSet(preparedSpine?: Pick<PreparedSpine, "skelet
   const version = preparedSpine?.skeletonVersion || "";
   const unsupportedMessage = unsupportedSpineMajorMessage(preparedSpine?.skeletonVersion || "");
   if (unsupportedMessage) throw new Error(unsupportedMessage);
-  if (/^3\.7(?:\.|$)/.test(version) && extensionOf(preparedSpine?.skeletonName || "") === "skel") {
+  if (/^3\.7(?:\.|$)/.test(version) && ["skel", "bytes"].includes(extensionOf(preparedSpine?.skeletonName || ""))) {
     throw new Error("Spine 3.7 Web Player requires a JSON skeleton; re-export this source as JSON or use a compatible Spine 3.8+ export.");
   }
 
