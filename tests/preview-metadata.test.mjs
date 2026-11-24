@@ -68,10 +68,10 @@ test('legacy indexed skeleton/atlas/texture fields bypass a throttled directory 
     'cleanRepoPath', 'isSkeleton', 'isAtlas', 'isImage', 'joinRepoPath', 'githubList',
     helper + '; return findSpineSetDirectories;',
   )(
-    value => String(value || '').replace(/^\\/+|\\/+$/g, ''),
-    name => /\\.(?:json|skel|bytes)$/i.test(String(name || '')),
-    name => /\\.atlas$/i.test(String(name || '')),
-    name => /\\.(?:png|webp|jpe?g|dds)$/i.test(String(name || '')),
+    value => String(value || '').replace(/^\/+|\/+$/g, ''),
+    name => /\.(?:json|skel|bytes)$/i.test(String(name || '')),
+    name => /\.atlas$/i.test(String(name || '')),
+    name => /\.(?:png|webp|jpe?g|dds)$/i.test(String(name || '')),
     (...parts) => parts.filter(Boolean).join('/'),
     async () => { directoryReads += 1; throw new Error('GitHub Contents API temporarily unavailable'); },
   );
