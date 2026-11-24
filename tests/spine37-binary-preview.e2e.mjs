@@ -62,6 +62,17 @@ try {
   assert.equal(initialState.status, 'ready',
     'Spine 3.7 binary must initialize through the 3.8 runtime: ' + JSON.stringify(initialState));
 
+  const runtimeDiagnostics = await page.evaluate(() => {
+    const player = document.querySelector('#player');
+    return {
+      animationCount: Number(player?.dataset.previewRuntimeAnimationCount || 0),
+      animationNames: (player?.dataset.previewRuntimeAnimationNames || '').split('|').filter(Boolean),
+      boneCount: Number(player?.dataset.previewRuntimeBoneCount || 0),
+      slotCount: Number(player?.dataset.previewRuntimeSlotCount || 0),
+      menuCount: document.querySelectorAll('#animation-menu button').length,
+    };
+  });
+  console.log('SPINE37_RUNTIME_DIAGNOSTICS', JSON.stringify(runtimeDiagnostics));
   await page.waitForFunction(() =>
     document.querySelectorAll('#animation-menu button').length > 0,
   null, { timeout: 15000 });
