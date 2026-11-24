@@ -115,7 +115,8 @@ test('cache-busted raw index refresh appends a unique query parameter', async ()
       cacheBust: true,
     });
     assert.match(data, /fresh-index/);
-    assert.match(requestedUrl, /index\\.json\\?t=\\d+$/);
+    assert.ok(requestedUrl.includes('/index.json?t='));
+    assert.ok(Number(new URL(requestedUrl).searchParams.get('t')) > 0);
   } finally {
     globalThis.fetch = oldFetch;
   }
