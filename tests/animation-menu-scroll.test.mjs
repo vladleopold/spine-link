@@ -31,8 +31,13 @@ test('live animation-menu scroll gate stays strict and runs only after productio
   assert.ok(browserWorkflow.includes('workflows: ["Vercel deploy and alias"]'));
   assert.ok(!browserWorkflow.includes('  pull_request:'),
     'a PR must not run production browser checks against the old production deployment');
-  assert.ok(!browserWorkflow.includes('  push:'),
-    'the smoke must wait for the deployment workflow, not race it on main push');
+  assert.ok(browserWorkflow.includes('  push:') &&
+    browserWorkflow.includes('branches: [main]') &&
+    browserWorkflow.includes('api/github-preview.js') &&
+    browserWorkflow.includes('lib/spine-runtime-file-selection.js') &&
+    browserWorkflow.includes('tests/spine37-binary-preview.e2e.mjs') &&
+    browserWorkflow.includes('.github/workflows/spine-link-browser-smoke.yml'),
+    'direct production smoke pushes must be restricted to main player/runtime changes');
   assert.ok(browserWorkflow.includes('release_gate:'));
   assert.ok(browserWorkflow.includes('Deploy to Vercel'));
   assert.ok(browserWorkflow.includes("needs.release_gate.outputs.deployed == 'true'"));
