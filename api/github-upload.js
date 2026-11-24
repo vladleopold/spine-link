@@ -792,7 +792,7 @@ async function mutateMetrics(settings, metricsPath, message, mutate, origin = ''
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       const { current, metrics, stale } = await readMetrics(settings, metricsPath);
-      if (stale || !current?.sha) return { metrics, changed: false, deferred: true };
+      if (stale) return { metrics, changed: false, deferred: true };
       const changed = mutate(metrics);
       if (!changed) return { metrics, changed: false };
       metrics.updatedAt = new Date().toISOString();
