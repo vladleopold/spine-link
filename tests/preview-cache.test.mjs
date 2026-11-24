@@ -99,3 +99,24 @@ test('large collection index falls back to raw when the Git blob endpoint is una
     globalThis.fetch = oldFetch;
   }
 });
+
+test('cache-busted raw index refresh appends a unique query parameter', async () => {
+  const oldFetch = globalThis.fetch;
+  const settings = { owner: 'example', repo: 'example', branch: 'main', token: 'test' };
+  let requestedUrl = '';
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return new Response('[{"id":"fresh-index"}]');
+  };
+  try {
+    const data = await cachedGithubText(settings, 'library_98769/index.json', {
+      ttlMs: 0,
+      preferRaw: true,
+      cacheBust: true,
+    });
+    assert.match(data, /fresh-index/);
+    assert.match(requestedUrl, /index\\.json\\?t=\\d+$/);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
