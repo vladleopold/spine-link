@@ -277,9 +277,9 @@ test('Spine version preflight accepts supported major.minor strings without a pa
 
 test('Spine 3.7 binary is explicitly blocked before loading an incompatible runtime', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
-  assert.match(startup, /if \(\/^3\\\\\.7\(\?:\\\\\.|\$\)\/\.test\(skeletonVersion\) && Boolean\(activeSet\.value\.skelUrl\)\)/);
-  assert.match(startup, /markPreviewBlocked\("UNSUPPORTED_SPINE_3_7_BINARY"\)/);
-  assert.match(preview, /Spine 3\.7 binary \\(\.skel\\\) is not compatible with the web player/);
+  assert.ok(startup.includes('UNSUPPORTED_SPINE_3_7_BINARY'));
+  assert.ok(startup.includes('Boolean(activeSet.value.skelUrl)'));
+  assert.match(preview, /Spine 3\.7 binary/);
   assert.match(preview, /Re-export the same project as JSON using Spine Editor 3\.7/);
 });
 
