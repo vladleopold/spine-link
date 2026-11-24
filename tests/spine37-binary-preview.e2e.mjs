@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
 const site = process.env.SITE;
-assert.ok(site, 'SITE must point at the branch preview alias');
+assert.ok(site, 'SITE must point at the public preview site');
 const id = 'Spine-animation-2026-11-20T10-01-52-055Z';
 const browser = await chromium.launch({
   headless: true,
@@ -49,13 +49,26 @@ try {
       defaultAnimation: set.animation || '',
     };
   });
-  assert.match(config.version, /^3\.7\./, 'fixture must be a Spine 3.7 source');
+  const initialState = await page.evaluate(() => ({
+    status: document.querySelector('#player')?.dataset.previewStatus || '',
+    error: document.querySelector('#player')?.dataset.previewError || '',
+    message: document.querySelector('#player')?.innerText || '',
+  }));
+  console.log('SPINE37_INITIAL_STATE', JSON.stringify({ config, initialState }));
+  assert.match(config.version, /^3\\.7\\./, 'fixture must be a Spine 3.7 source');
   assert.equal(config.binary, true, 'fixture must use a binary .skel source');
   assert.equal(config.runtimeOverride, '3.8',
     '3.7 binary must be routed to the binary-capable 3.8 runtime');
-  assert.ok(config.animations.length > 0, 'fixture must expose animation names');
+  assert.equal(initialState.status, 'ready',
+    'Spine 3.7 binary must initialize through the 3.8 runtime: ' + JSON.stringify(initialState));
 
-  const candidates = [...new Set([config.defaultAnimation, ...config.animations].filter(Boolean))].slice(0, 6);
+  await page.waitForFunction(() =>
+    document.querySelectorAll('#animation-menu button').length > 0,
+  null, { timeout: 15000 });
+  const runtimeAnimations = await page.locator('#animation-menu button').allTextContents();
+  assert.ok(runtimeAnimations.length > 0,
+    'loaded binary must expose its runtime animation names: ' + JSON.stringify(initialState));
+  const candidates = [...new Set([config.defaultAnimation, ...config.animations, ...runtimeAnimations].filter(Boolean))].slice(0, 6);
   let successfulAnimation = '';
   let beforeHash = '';
   let afterHash = '';
