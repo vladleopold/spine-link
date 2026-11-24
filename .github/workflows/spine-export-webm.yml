@@ -26,6 +26,17 @@ jobs:
         with:
           node-version: 22
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install 2Spine skel2json converter
+        run: |
+          echo "=== INSTALLING 2SPINE TOOLS ==="
+          pip install msgpack
+          echo "=== 2SPINE TOOLS INSTALLED ==="
+
       - name: Install Playwright with Chromium
         run: |
           echo "=== INSTALLING PLAYWRIGHT ==="

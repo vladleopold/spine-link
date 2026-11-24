@@ -181,6 +181,73 @@ function detectSkeletonVersion(filePath) {
  * Binary .skel files: we attempt a best-effort parse of the header.
  * Returns { width, height } or { width: 0, height: 0 } if unreadable.
  */
+
+/**
+ * Convert Spine 2.x skeleton to 3.8+ format using 2Spine skel2json tool.
+ * This enables web preview for skeletons exported from Spine 2.x (e.g., 2.1.27).
+ */
+async function convertSkeleton2xTo3x(filePath, version) {
+  // Only convert 2.x versions
+  if (!/^2\./.test(version)) return null;
+  
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext !== '.skel') return null; // Only binary format for now
+  
+  const outputPath = filePath.replace(/\.skel$/i, '_converted_38.json');
+  const skel2jsonPath = path.resolve('./scripts/2spine-tools/skel2json.py');
+  
+  try {
+    // Check if 2spine tools are available
+    if (!fs.existsSync(skel2jsonPath)) {
+      console.error(`2Spine tools not found at ${skel2jsonPath}, skipping 2.x conversion`);
+      return null;
+    }
+    
+    const { spawn } = await import('child_process');
+    
+    console.error(`Converting Spine ${version} skeleton to 3.8+ format...`);
+    
+    await new Promise((resolve, reject) => {
+      const proc = spawn('python3', [skel2jsonPath, filePath, outputPath], {
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      
+      let stderr = '';
+      
+      proc.stderr.on('data', (data) => { stderr += data.toString(); });
+      
+      proc.on('close', (code) => {
+        if (code === 0) {
+          console.error(`Conversion successful: ${outputPath}`);
+          resolve();
+        } else {
+          console.error(`Conversion failed: ${stderr}`);
+          reject(new Error(`skel2json exited with code ${code}: ${stderr}`));
+        }
+      });
+      
+      proc.on('error', (err) => {
+        reject(err);
+      });
+    });
+    
+    // Verify the converted file exists and has valid content
+    if (fs.existsSync(outputPath)) {
+      const content = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+      if (content.skeleton && content.skeleton.spine) {
+        console.error(`Converted skeleton version: ${content.skeleton.spine}`);
+        return outputPath;
+      }
+    }
+    
+    return null;
+  } catch (err) {
+    console.error(`2.x conversion error: ${err.message}`);
+    return null;
+  }
+}
+
+
 function readSkeletonBounds(filePath) {
   try {
     const ext = path.extname(filePath).toLowerCase();
@@ -439,6 +506,17 @@ function sanitizedSkelBuffer(buffer, version = "") {
 }
 
 const skeletonFilePath = path.join(firstSet.path, skeletonFile);
+
+// Convert 2.x skeletons to 3.8+ format for web player compatibility
+let convertedSkeletonPath = null;
+if (skeletonFile.toLowerCase().endsWith('.skel')) {
+  convertedSkeletonPath = await convertSkeleton2xTo3x(skeletonFilePath, skeletonVersion);
+}
+const finalSkeletonPath = convertedSkeletonPath || skeletonFilePath;
+const finalSkeletonFile = path.basename(finalSkeletonPath);
+const finalSkeletonVersion = convertedSkeletonPath 
+  ? JSON.parse(fs.readFileSync(finalSkeletonPath, 'utf8')).skeleton.spine 
+  : skeletonVersion;
 const skeletonVersion = detectSkeletonVersion(skeletonFilePath);
 const skeletonBounds = readSkeletonBounds(skeletonFilePath);
 const requestedAnimation = args.animation !== ''
@@ -473,9 +551,9 @@ const rawVideoHeight = rawSkelHeight > 0 ? rawSkelHeight * (1 + PAD_RATIO * 2) :
 const videoWidth = (Math.min(MAX_VIDEO_DIM, Math.max(MIN_VIDEO_DIM, Math.round(rawVideoWidth))) & ~1) || 960;
 const videoHeight = (Math.min(MAX_VIDEO_DIM, Math.max(MIN_VIDEO_DIM, Math.round(rawVideoHeight))) & ~1) || 720;
 
-const versionMajor = skeletonVersion.split('.')[0] || '4';
+const versionMajor = finalSkeletonVersion.split('.')[0] || '4';
 const isLegacy = parseInt(versionMajor, 10) < 4;
-const runtimeMinor = isLegacy ? (skeletonVersion.split('.')[1] || '8') : '';
+const runtimeMinor = isLegacy ? (finalSkeletonVersion.split('.')[1] || '8') : '';
 
 // Use reliable Vercel domain for legacy player assets to avoid DNS resolution issues in GitHub Actions
 const stableOrigin = 'https://spine-link.vercel.app';
@@ -486,7 +564,7 @@ const playerCssUrl = isLegacy
   ? `${stableOrigin}/vendor-spine-player-${versionMajor}.${runtimeMinor}.css`
   : 'https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/spine-player.css';
 
-const skeletonKey = skeletonFile.toLowerCase().endsWith('.skel') ? 'skelUrl' : 'skeleton';
+const skeletonKey = finalSkeletonFile.toLowerCase().endsWith('.skel') ? 'skelUrl' : 'skeleton';
 const atlasKey = 'atlas';
 
 const setSegments = [uploadPath, firstSet.name];
@@ -495,7 +573,7 @@ function rawUrl(filename) {
   return `https://raw.githubusercontent.com/${args.owner}/${args.repo}/${args.branch}/${setSegments.join('/')}/${encodeURIComponent(filename)}`;
 }
 
-const skeletonRawUrl = rawUrl(skeletonFile);
+const skeletonRawUrl = rawUrl(finalSkeletonFile);
 const atlasRawUrl = rawUrl(atlasFile);
 const textureRawUrls = textureFiles.map(f => rawUrl(f));
 
@@ -750,15 +828,15 @@ try {
   });
   await page.route(skeletonRawUrl, async route => {
     let body;
-    if (skeletonFile.toLowerCase().endsWith('.skel')) {
-      const rawBuffer = fs.readFileSync(skeletonFilePath);
-      body = args.sanitizeSkel ? sanitizedSkelBuffer(rawBuffer, skeletonVersion) : rawBuffer;
+    if (finalSkeletonFile.toLowerCase().endsWith('.skel')) {
+      const rawBuffer = fs.readFileSync(finalSkeletonPath);
+      body = args.sanitizeSkel ? sanitizedSkelBuffer(rawBuffer, finalSkeletonVersion) : rawBuffer;
     } else {
-      body = fs.readFileSync(skeletonFilePath, 'utf8');
+      body = fs.readFileSync(finalSkeletonPath, 'utf8');
     }
     await route.fulfill({
       status: 200,
-      contentType: skeletonFile.toLowerCase().endsWith('.skel') ? 'application/octet-stream' : 'application/json',
+      contentType: finalSkeletonFile.toLowerCase().endsWith('.skel') ? 'application/octet-stream' : 'application/json',
       body: body,
     });
   });
@@ -1118,6 +1196,8 @@ try {
     height: videoHeight,
     skeletonWidth: rawSkelWidth,
     skeletonHeight: rawSkelHeight,
+    originalSkeletonVersion: skeletonVersion,
+    convertedSkeletonVersion: finalSkeletonVersion,
     bytes: finalWebmBuffer.length,
     sha256: finalWebmBuffer.length > 0 ? createHash('sha256').update(finalWebmBuffer).digest('hex') : '',
     isDefault,
