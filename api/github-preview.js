@@ -2231,7 +2231,7 @@ const pinchDistance = { value: null };
             ...(isSpine42Or43
               ? { skeleton: activeSet.value.jsonUrl || activeSet.value.skelUrl || activeSet.value.skeleton, atlasUrl: activeSet.value.atlasUrl }
               : {}),
-            ...(/^4[.][01](?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))
+            ...(/^4[.][012](?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))
               ? { binaryUrl: activeSet.value.skelUrl || undefined, atlasUrl: activeSet.value.atlasUrl }
               : {}),
           };
