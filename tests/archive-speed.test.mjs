@@ -403,8 +403,10 @@ test('production deploys are queued instead of cancelled by later workflow_run c
     'queued deploys must still reject stale tested source');
   assert.match(workflow,/commits\/\$deploy_sha\/status/,
     'deduplication must inspect the exact source commit, not a workflow conclusion');
-  assert.match(workflow,/context == "vercel\/production" and \.state == "success"/,
-    'only an explicit successful production deployment status may deduplicate a commit');
+  assert.match(workflow,/context == "Vercel" and \.state == "success"/,
+    'only an explicit successful Vercel production status may deduplicate a commit');
+  assert.ok(workflow.indexOf('context == "Vercel"') < workflow.indexOf('latest_failure='),
+    'an already-deployed commit must be recognized before applying the 24-hour quota cooldown');
   assert.match(workflow,/name: Record verified production deployment on commit/,
     'a production status may be written only after deploy and production smoke steps pass');
   assert.match(workflow,/statuses:\s*write/,
