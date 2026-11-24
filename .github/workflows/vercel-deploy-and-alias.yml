@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
   # Deploy only after a relevant CI workflow has completed successfully.
   workflow_run:
-    workflows: ["Spine-Link Agent API CI", "Spine archive WebP-first performance regression"]
+    workflows: ["Spine-Link Agent API CI", "Spine-Link upload and delete regression", "Spine archive WebP-first performance regression"]
     types: [completed]
   # Vercel rejected deployments at 20:42 UTC; retry only after the rolling 24h window.
   schedule:
