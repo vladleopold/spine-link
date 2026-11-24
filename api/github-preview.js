@@ -2179,9 +2179,9 @@ const pinchDistance = { value: null };
           markPreviewBlocked("UNSUPPORTED_SPINE_3_8_75");
           return;
         }
-        // Spine 3.7 binary exports are supported by the pinned official
-        // runtime. The loader supplies these through the legacy skelUrl field;
-        // do not reject them merely because there is no JSON skeleton.
+        // Spine 3.7 binary exports were rejected by the preflight above.
+        // Remaining binary sources use the exact option expected by their
+        // matching runtime: skelUrl (3.8), binaryUrl (4.0-4.2), skeleton (4.3).
         // Do not silently feed 2.x / 3.0-3.6 / future unknown exports to 4.3:
         // those formats require their matching historical runtime and otherwise
         // fail with misleading parser errors such as "Slot name must not be null".
