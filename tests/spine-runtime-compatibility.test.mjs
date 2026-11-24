@@ -22,6 +22,6 @@ test('does not override Spine 4.x runtime selection', () => {
 
 test('allows public archive reads when preview deployments have no GitHub token', () => {
   const source = readFileSync(new URL('../api/github-preview.js', import.meta.url), 'utf8');
-  assert.match(source, /const token = process\\.env\\.GITHUB_TOKEN \\|\\| ''/);
+  assert.ok(source.includes("const token = process.env.GITHUB_TOKEN || ''"));
   assert.doesNotMatch(source, /GITHUB_TOKEN is not configured/);
 });
