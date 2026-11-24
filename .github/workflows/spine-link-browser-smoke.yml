@@ -3,10 +3,6 @@ name: Spine-Link Chromium production verification
 # Verify the actual public alias only after a successful production deployment.
 # Manual dispatch remains available for diagnostics; PRs must not test stale production.
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/spine-link-browser-smoke.yml'
   workflow_dispatch:
   workflow_run:
     workflows: ["Vercel deploy and alias"]
