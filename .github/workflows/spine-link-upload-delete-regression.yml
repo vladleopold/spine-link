@@ -31,4 +31,4 @@ jobs:
       - name: TypeScript, Vite, and upload regression tests
         run: |
           npm run build
-          node --test tests/upload-fast.test.mjs tests/upload-base64.test.mjs tests/upload-recovery.test.mjs tests/library-accounts.test.mjs tests/spine-project-import.test.mjs tests/metrics-write-conflict.test.mjs tests/spine-app-runtime-loader.test.mjs tests/spine-preview-runtime-loader.test.mjs tests/spine-runtime-compatibility.test.mjs
+          node --test tests/upload-fast.test.mjs tests/upload-base64.test.mjs tests/upload-recovery.test.mjs tests/library-accounts.test.mjs tests/spine-project-import.test.mjs tests/metrics-write-conflict.test.mjs tests/spine-app-runtime-loader.test.mjs tests/spine-preview-runtime-loader.test.mjs tests/spine-runtime-compatibility.test.mjs tests/preview-cache.test.mjs tests/preview-metadata.test.mjs
