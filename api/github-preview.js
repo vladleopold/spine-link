@@ -575,9 +575,17 @@ function githubHeaders(token) {
 }
 
 async function githubApiFetch(url, token) {
-  let response = await fetch(url, { headers: githubHeaders(token) });
-  if (!response.ok && token && (response.status === 401 || response.status === 403)) {
-    response = await fetch(url, { headers: githubHeaders('') });
+  let response = await fetch(url, {
+    headers: githubHeaders(token),
+    signal: AbortSignal.timeout(8000),
+  });
+  // A 403 is commonly a rate-limit response; retrying anonymously only
+  // consumes the separate public quota. Raw index reads are the fallback.
+  if (!response.ok && token && response.status === 401) {
+    response = await fetch(url, {
+      headers: githubHeaders(''),
+      signal: AbortSignal.timeout(8000),
+    });
   }
   return response;
 }
@@ -649,46 +657,50 @@ async function githubJson(settings, path) {
 // Works are spread across library_01, library_02, ... folders, each capped at the
 // GitHub limit. They are listed at runtime so a folder added by a rotation shows up
 // without a code change or a deploy.
+const collectionPathCache = globalThis.__spineLinkCollectionPathCache || new Map();
+globalThis.__spineLinkCollectionPathCache = collectionPathCache;
+
 async function libraryCollectionPaths(settings) {
+  const basePath = cleanRepoPath(settings.basePath || defaultBasePath);
+  const cacheKey = [settings.owner, settings.repo, settings.branch, basePath].join('\\n');
+  const cached = collectionPathCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return [...cached.paths];
+
   // GitHub root Contents listings may be truncated when a repository has many
   // root entries. Always search the two established public shards as well as
   // the configured base path, even when the root listing appears successful.
-  const paths = new Set([
-    cleanRepoPath(settings.basePath || defaultBasePath),
-    'library_02',
-    'library_01',
-  ]);
+  const paths = new Set([basePath, 'library_02', 'library_01']);
   try {
     const response = await githubApiFetch(
       `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}&per_page=100`,
       settings.token,
     );
-    if (!response.ok) {
-      paths.add('library_02');
-      paths.add('library_01');
-    }
     if (response.ok) {
       const items = await response.json();
       if (Array.isArray(items)) {
         for (const item of items) {
-          if (item?.type === 'dir' && /^library(_\d+)?$/.test(String(item.name || ''))) {
+          if (item?.type === 'dir' && /^library(_\\d+)?$/.test(String(item.name || ''))) {
             paths.add(item.name);
           }
         }
       }
     }
   } catch {
-    // Fall back to the configured collection if the root listing is unavailable.
+    // Fall back to established collection shards if the root listing is unavailable.
   }
   // New uploads are in the newest collection. Searching library_01 first can
-  // download a 20+ MB legacy index, time out the Vercel invocation, and make a
-  // successfully uploaded /p/<id> appear missing. Put the newest first.
-  const rank = (name) => /^library_(\d+)$/.test(name)
-    ? Number(name.match(/^library_(\d+)$/)[1])
+  // download a 20+ MB legacy index and time out the Vercel invocation.
+  const rank = (name) => /^library_(\\d+)$/.test(name)
+    ? Number(name.match(/^library_(\\d+)$/)[1])
     : name === 'library' ? 0 : -1;
-  return [...paths].filter(Boolean).sort((a, b) => rank(b) - rank(a));
+  const result = [...paths].filter(Boolean).sort((a, b) => rank(b) - rank(a));
+  collectionPathCache.set(cacheKey, { paths: result, expiresAt: Date.now() + 60_000 });
+  if (collectionPathCache.size > 24) {
+    const oldest = collectionPathCache.keys().next().value;
+    if (oldest) collectionPathCache.delete(oldest);
+  }
+  return result;
 }
-
 async function githubText(settings, path, options = {}) {
   return cachedGithubText(settings, path, options);
 }
@@ -3155,13 +3167,30 @@ async function resolveEntryRecord(settings, entryId) {
   const id = cleanRepoPath(entryId).split('/').pop() || '';
   if (!id) return null;
   const basePaths = await libraryCollectionPaths(settings);
-  for (const basePath of basePaths) {
+  for (let index = 0; index < basePaths.length; index++) {
+    const basePath = basePaths[index];
     try {
-      const indexText = await githubText(settings, `${basePath}/index.json`, { ttlMs: 0 });
-      if (!indexText) continue;
-      const entries = JSON.parse(indexText);
-      if (!Array.isArray(entries)) continue;
-      const match = entries.find((entry) => String(entry?.id || '') === id);
+      const indexPath = `${basePath}/index.json`;
+      // Collection indexes are public and often larger than the Contents API
+      // limit. Prefer raw GitHub with a short cache to avoid API quota spikes.
+      let indexText = await githubText(settings, indexPath, { ttlMs: 60_000, preferRaw: true });
+      let entries = indexText ? JSON.parse(indexText) : [];
+      if (!Array.isArray(entries)) entries = [];
+      let match = entries.find((entry) => String(entry?.id || '') === id);
+
+      // A just-published work may not be present in the cached index. Refresh
+      // only the newest collection on a miss, using a cache-busted raw URL.
+      if (!match && index === 0) {
+        indexText = await githubText(settings, indexPath, {
+          ttlMs: 0,
+          preferRaw: true,
+          cacheBust: true,
+        });
+        entries = indexText ? JSON.parse(indexText) : [];
+        if (!Array.isArray(entries)) entries = [];
+        match = entries.find((entry) => String(entry?.id || '') === id);
+      }
+
       const previewPath = cleanRepoPath(match?.previewPath || '');
       if (previewPath) return { previewPath, entry: match, entries, basePath };
     } catch (error) {
