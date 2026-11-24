@@ -53,18 +53,17 @@ try {
   assert.equal(config.binary, true, 'fixture must use a binary .skel source');
   assert.equal(config.runtimeOverride, '3.8',
     '3.7 binary must be routed to the binary-capable 3.8 runtime');
-  const debugState = await page.evaluate(() => window.__SPINE_PREVIEW_E2E__?.() || null);
-  assert.ok(debugState, 'preview must expose its test-only runtime diagnostics');
-  assert.equal(debugState.status, 'ready',
-    'Spine 3.7 binary must initialize through 3.8 runtime: ' + JSON.stringify(debugState));
-  assert.equal(debugState.playerReady, true, 'Spine player must finish loading the binary skeleton');
-  const runtimeAnimations = [
-    ...(Array.isArray(debugState.runtimeAnimationNames) ? debugState.runtimeAnimationNames : []),
-    ...(Array.isArray(debugState.animationNames) ? debugState.animationNames : []),
-  ];
+  await page.waitForFunction(() => {
+    const status = document.querySelector('#player')?.dataset.previewStatus;
+    return document.querySelectorAll('#animation-menu button').length > 0 || status === 'blocked';
+  }, null, { timeout: 60000 });
+  const runtimeAnimations = await page.locator('#animation-menu button').allTextContents();
+  const playerStatus = await page.locator('#player').getAttribute('data-preview-status');
+  assert.equal(playerStatus, 'ready',
+    'Spine 3.7 binary must initialize through 3.8 runtime before animation selection');
+  assert.ok(runtimeAnimations.length > 0,
+    'loaded Spine runtime must expose animation names for the binary fixture');
   const candidates = [...new Set([config.defaultAnimation, ...config.animations, ...runtimeAnimations].filter(Boolean))].slice(0, 6);
-  assert.ok(candidates.length > 0,
-    'loaded Spine 3.8 runtime must expose animation names for the 3.7 binary: ' + JSON.stringify(debugState));
   let successfulAnimation = '';
   let beforeHash = '';
   let afterHash = '';
