@@ -1,6 +1,10 @@
 name: Spine-Link live preview smoke
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/spine-link-live-preview-smoke.yml'
   workflow_dispatch:
   workflow_run:
     workflows: ["Vercel deploy and alias"]
