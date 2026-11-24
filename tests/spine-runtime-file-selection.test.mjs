@@ -16,3 +16,8 @@ test('never treats lone config JSON as a runtime skeleton',()=>{
 test('supports single JSON with missing atlas as a recoverable import',()=>{
  assert.equal(select([{name:'boss_1.json'},{name:'boss_1.png'}])?.name,'boss_1.json');
 });
+
+test('prefers matching JSON skeleton over same-basename binary when Spine player requires JSON',()=>{
+ const files=[{name:'hero.skel'},{name:'hero.json'},{name:'hero.atlas'},{name:'hero.png'}];
+ assert.equal(select(files,'hero.atlas')?.name,'hero.json');
+});
