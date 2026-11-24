@@ -1,4 +1,5 @@
 import { runtimeVersionOverrideForSpineSkeleton, selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
+import { canReadPublicSpineWithoutToken } from '../lib/github-read-access.js';
 import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
 import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 
@@ -3285,12 +3286,16 @@ export default async function handler(request, response) {
     return response.status(405).send('Method not allowed');
   }
 
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) return response.status(500).send('GITHUB_TOKEN is not configured');
+  const token = process.env.GITHUB_TOKEN || '';
+  const owner = process.env.GITHUB_OWNER || defaultOwner;
+  const repo = process.env.GITHUB_REPO || defaultRepo;
+  if (!canReadPublicSpineWithoutToken(token, owner, repo)) {
+    return response.status(500).send('GITHUB_TOKEN is required for non-public repository access');
+  }
 
   const settings = {
-    owner: process.env.GITHUB_OWNER || defaultOwner,
-    repo: process.env.GITHUB_REPO || defaultRepo,
+    owner,
+    repo,
     branch: process.env.GITHUB_BRANCH || defaultBranch,
     basePath: cleanRepoPath(process.env.GITHUB_BASE_PATH || defaultBasePath),
     token,
