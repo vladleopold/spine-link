@@ -55,7 +55,7 @@ try {
     message: document.querySelector('#player')?.innerText || '',
   }));
   console.log('SPINE37_INITIAL_STATE', JSON.stringify({ config, initialState }));
-  assert.match(config.version, /^3\\.7\\./, 'fixture must be a Spine 3.7 source');
+  assert.ok(config.version.startsWith('3.7.'), 'fixture must be a Spine 3.7 source');
   assert.equal(config.binary, true, 'fixture must use a binary .skel source');
   assert.equal(config.runtimeOverride, '3.8',
     '3.7 binary must be routed to the binary-capable 3.8 runtime');
@@ -66,6 +66,7 @@ try {
     document.querySelectorAll('#animation-menu button').length > 0,
   null, { timeout: 15000 });
   const runtimeAnimations = await page.locator('#animation-menu button').allTextContents();
+  console.log('SPINE37_RUNTIME_ANIMATIONS', JSON.stringify(runtimeAnimations));
   assert.ok(runtimeAnimations.length > 0,
     'loaded binary must expose its runtime animation names: ' + JSON.stringify(initialState));
   const candidates = [...new Set([config.defaultAnimation, ...config.animations, ...runtimeAnimations].filter(Boolean))].slice(0, 6);
