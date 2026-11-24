@@ -39,3 +39,11 @@ test('Spine 4.2 and 4.3 JSON URLs keep a query-free extension for the official p
   assert.ok(previewSource.includes('rawDataURIs[textureName] = textureSource'));
   assert.ok(previewSource.includes('playerOptions.rawDataURIs = rawDataURIs'));
 });
+
+test('Spine 4.2 binary skeletons use binaryUrl just like 4.0 and 4.1', () => {
+  assert.ok(
+    previewSource.includes('/^4[.][012](?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))'),
+    'Spine 4.2 must be included in the binaryUrl runtime branch',
+  );
+  assert.ok(previewSource.includes('binaryUrl: activeSet.value.skelUrl || undefined'));
+});
