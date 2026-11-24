@@ -2,6 +2,10 @@ name: Spine-Link live preview smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/spine-link-live-preview-smoke.yml
   workflow_run:
     workflows: ["Vercel deploy and alias"]
     types: [completed]
@@ -99,3 +103,27 @@ jobs:
               exit 1
             fi
           done
+
+          # A known-good published WebM must be present in the production page and reachable as video/webm.
+          webm_id='wolf-2026-11-20T05-12-56-813Z'
+          webm_html="$(mktemp)"
+          webm_http="$(curl --silent --show-error --location --max-time 45 --connect-timeout 10 -H 'Cache-Control: no-cache' --output "$webm_html" --write-out '%{http_code}' "$SITE/p/$webm_id?smoke=$GITHUB_RUN_ID")"
+          if [[ "$webm_http" != "200" ]] || ! grep -Fq 'id="preview-video-card-player"' "$webm_html"; then
+            echo "::error::Production Wolf page does not expose the WebM video player (HTTP $webm_http)"
+            head -c 500 "$webm_html" || true
+            rm -f "$webm_html"
+            exit 1
+          fi
+          webm_url="$(grep -oE 'src="[^"]+\.webm[^"]*"' "$webm_html" | head -n1 | sed -E 's/^src="([^"]+)"$/\1/')"
+          rm -f "$webm_html"
+          if [[ -z "$webm_url" || "$webm_url" != *"$webm_id"* ]]; then
+            echo "::error::Production Wolf page has no matching preview.webm source"
+            exit 1
+          fi
+          webm_headers="$(curl --silent --show-error --location --head --max-time 30 "$webm_url" || true)"
+          if ! grep -qiE '^content-type:[[:space:]]*video/webm' <<< "$webm_headers"; then
+            echo "::error::Published WebM asset is not served with Content-Type video/webm"
+            printf '%s\n' "$webm_headers"
+            exit 1
+          fi
+          echo "PASS: production WebM player and asset are reachable: $webm_url"
