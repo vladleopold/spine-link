@@ -279,7 +279,8 @@ test('Spine 3.7 binary skeletons use the binary-capable 3.8 runtime instead of b
   assert.doesNotMatch(startup, /activeSet\.value\.binaryUnsupported/);
   assert.match(preview, /runtimeVersionOverride: runtimeVersionOverrideForSpineSkeleton\(skeletonVersion, skeletonIsBinary\)/);
   assert.match(preview, /if \(runtimeVersionOverride === "3\.8"\) return "3\.8"/);
-  assert.match(preview, /runtimeVersionOverride === "3\.8" \|\| \^3\\\\\.8\\\\\./);
+  assert.ok(preview.includes("runtimeVersionOverride === '3.8' || /^3\\.8\\./.test(skeletonVersion)"),
+    'Spine 3.7 binary must receive the Spine 3.8 atlas compatibility route');
 });
 
 const browserWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml', import.meta.url), 'utf8');
