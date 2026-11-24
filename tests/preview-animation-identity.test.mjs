@@ -275,16 +275,12 @@ test('Spine version preflight accepts supported major.minor strings without a pa
   assert.match(preview, /\^\(\?:3\\\.\(\?:7\|8\)\(\?:\\\.\|\$\)\|4\\\.\[0-3\]\(\?:\\\.\|\$\)\)/);
 });
 
-test('Spine 3.7 binary skeletons use the binary-capable 3.8 runtime instead of being blocked', () => {
+test('Spine 3.7 binary is explicitly blocked before loading an incompatible runtime', () => {
   const startup = section(preview, 'async function createPlayer()', 'function renderAnimationList()');
-  assert.doesNotMatch(startup, /activeSet\.value\.binaryUnsupported/);
-  assert.ok(preview.includes('const runtimeVersionOverride = runtimeVersionOverrideForSpineSkeleton(skeletonVersion, skeletonIsBinary)'));
-  assert.match(preview, /runtimeVersionOverride,/);
-  assert.ok(preview.includes('ttlMs: 60_000, preferRaw: true'));
-  assert.ok(preview.includes('cacheBust: true'));
-  assert.match(preview, /if \(runtimeVersionOverride === "3\.8"\) return "3\.8"/);
-  assert.ok(preview.includes("runtimeVersionOverride === '3.8' || /^3\\.8\\./.test(skeletonVersion)"),
-    'Spine 3.7 binary must receive the Spine 3.8 atlas compatibility route');
+  assert.match(startup, /if \(\/^3\\\\\.7\(\?:\\\\\.|\$\)\/\.test\(skeletonVersion\) && Boolean\(activeSet\.value\.skelUrl\)\)/);
+  assert.match(startup, /markPreviewBlocked\("UNSUPPORTED_SPINE_3_7_BINARY"\)/);
+  assert.match(preview, /Spine 3\.7 binary \\(\.skel\\\) is not compatible with the web player/);
+  assert.match(preview, /Re-export the same project as JSON using Spine Editor 3\.7/);
 });
 
 const browserWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-link-browser-smoke.yml', import.meta.url), 'utf8');
