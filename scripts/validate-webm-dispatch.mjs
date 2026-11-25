@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { entryForUpload } from './resolve-library.mjs';
 
 const failed = (reason) => ({ found: false, reason });
@@ -70,7 +71,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
   return failed(sawSkeleton ? 'animation-not-found' : 'source-files-missing');
 }
 
-const isCli = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+const isCli = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (isCli) {
   const result = validateWebmDispatch(process.cwd(), process.env.UPLOAD_ID || '', process.env.ANIMATION || '');
   const output = [
