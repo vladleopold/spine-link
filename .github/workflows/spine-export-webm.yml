@@ -307,6 +307,7 @@ jobs:
             # 5. Push — if rejected, loop back with fresh HEAD
             if git push origin main; then
               echo "Successfully committed and pushed on attempt $i!"
+              echo 'published=true' >> "$GITHUB_OUTPUT"
               exit 0
             else
               echo "Push rejected. Retrying with fresh HEAD..."
