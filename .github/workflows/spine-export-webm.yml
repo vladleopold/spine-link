@@ -3,6 +3,16 @@ name: Spine Export WebM
 on:
   repository_dispatch:
     types: [spine-export-webm]
+  workflow_dispatch:
+    inputs:
+      upload_id:
+        description: Existing library upload ID
+        required: true
+        type: string
+      animation:
+        description: Exact animation name in the selected Spine skeleton
+        required: true
+        type: string
 
 jobs:
   export:
@@ -26,18 +36,28 @@ jobs:
         with:
           node-version: 22
 
+      - name: Validate upload and animation before starting export
+        id: validate
+        env:
+          UPLOAD_ID: ${{ github.event.client_payload.uploadId || inputs.upload_id || '' }}
+          ANIMATION: ${{ github.event.client_payload.animation || inputs.animation || '' }}
+        run: node scripts/validate-webm-dispatch.mjs
+
       - name: Setup Python
+        if: steps.validate.outputs.found == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install 2Spine skel2json converter
+        if: steps.validate.outputs.found == 'true'
         run: |
           echo "=== INSTALLING 2SPINE TOOLS ==="
           pip install msgpack
           echo "=== 2SPINE TOOLS INSTALLED ==="
 
       - name: Install Playwright with Chromium
+        if: steps.validate.outputs.found == 'true'
         run: |
           echo "=== INSTALLING PLAYWRIGHT ==="
           npm init -y
@@ -46,6 +66,7 @@ jobs:
           echo "=== PLAYWRIGHT INSTALLED ==="
 
       - name: Install system dependencies
+        if: steps.validate.outputs.found == 'true'
         run: |
           echo "=== INSTALLING SYSTEM DEPS ==="
           sudo apt-get update -qq
@@ -59,24 +80,25 @@ jobs:
           echo "=== SYSTEM DEPS INSTALLED ==="
 
       - name: Resolve library collection folder
+        if: steps.validate.outputs.found == 'true'
         id: basepath
-        run: |
-          uploadId="${{ github.event.client_payload.uploadId }}"
-          basePath=$(node -e "
-            import('./scripts/resolve-library.mjs').then(m => {
-              console.log(m.collectionPathForUpload(process.cwd(), process.argv[1]));
-            });
-          " "$uploadId")
-          echo "Collection folder for $uploadId: $basePath"
-          echo "basePath=$basePath" >> "$GITHUB_OUTPUT"
+        env:
+          BASE_PATH: ${{ steps.validate.outputs.basePath }}
+        run: echo "basePath=$BASE_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Compute animation duration from skeleton JSON
+        if: steps.validate.outputs.found == 'true'
         id: duration
+        env:
+          UPLOAD_ID: ${{ github.event.client_payload.uploadId || inputs.upload_id || '' }}
+          ANIMATION: ${{ github.event.client_payload.animation || inputs.animation || '' }}
+          BASE_PATH: ${{ steps.basepath.outputs.basePath }}
         run: |
+          set -euo pipefail
           echo "=== COMPUTING ANIMATION DURATION ==="
-          uploadId="${{ github.event.client_payload.uploadId }}"
-          animation="${{ github.event.client_payload.animation }}"
-          basePath="${{ steps.basepath.outputs.basePath }}"
+          uploadId="$UPLOAD_ID"
+          animation="$ANIMATION"
+          basePath="$BASE_PATH"
           uploadPath="${basePath}/${uploadId}"
           # Find the first directory inside uploadPath
           setName=$(find "$uploadPath" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | head -1)
@@ -98,8 +120,8 @@ jobs:
           else
             duration=$(node -e "
               const fs = require('fs');
-              const animName = '$animation';
-              const data = JSON.parse(fs.readFileSync('$skeletonPath', 'utf8'));
+              const animName = process.argv[1];
+              const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
               const anim = data.animations && data.animations[animName];
               if (!anim) { console.log(0); process.exit(0); }
               let max = 0;
@@ -112,48 +134,69 @@ jobs:
               };
               traverse(anim);
               console.log(max > 0 ? max.toFixed(4) : 0);
-            " 2>/dev/null || echo "0")
+            " "$animation" "$skeletonPath" 2>/dev/null || echo "0")
             echo "Computed duration: ${duration}s"
             echo "anim_duration=${duration}" >> $GITHUB_OUTPUT
           fi
 
       - name: Reconstruct atlas for JSON+PNG uploads
-        run: node scripts/reconstruct-missing-atlas-for-export.mjs --upload-id="${{ github.event.client_payload.uploadId }}"
+        if: steps.validate.outputs.found == 'true'
+        env:
+          UPLOAD_ID: ${{ github.event.client_payload.uploadId || inputs.upload_id || '' }}
+        run: node scripts/reconstruct-missing-atlas-for-export.mjs --upload-id="$UPLOAD_ID"
 
       - name: Export WebM preview
+        if: steps.validate.outputs.found == 'true'
         id: export
-        run: |
-          echo "=== STARTING EXPORT ==="
-          uploadId="${{ github.event.client_payload.uploadId }}"
-          animation="${{ github.event.client_payload.animation }}"
-          animDuration="${{ steps.duration.outputs.anim_duration }}"
-          
-          echo "Upload ID: $uploadId"
-          echo "Animation: $animation"
-          echo "Animation duration: ${animDuration}s"
-
-          node scripts/spine-export-webm.mjs \
-            --upload-id="${{ github.event.client_payload.uploadId }}" \
-            --animation="${{ github.event.client_payload.animation }}" \
-            --origin="${{ github.event.client_payload.origin }}" \
-            --owner="${{ github.event.client_payload.owner }}" \
-            --repo="${{ github.event.client_payload.repo }}" \
-            --branch="${{ github.event.client_payload.branch }}" \
-            --repo-path="${{ github.workspace }}" \
-            --anim-duration="${animDuration}" \
-            --output="${{ github.workspace }}/${{ github.event.client_payload.uploadId }}-preview.webm"
-          echo "=== EXPORT COMPLETED ==="
         env:
+          UPLOAD_ID: ${{ github.event.client_payload.uploadId || inputs.upload_id || '' }}
+          ANIMATION: ${{ github.event.client_payload.animation || inputs.animation || '' }}
+          ORIGIN: ${{ github.event.client_payload.origin || inputs.origin || 'https://spine-link.vercel.app' }}
+          OWNER: ${{ github.event.client_payload.owner || inputs.owner || 'vladleopold' }}
+          REPO: ${{ github.event.client_payload.repo || inputs.repo || 'spine' }}
+          BRANCH: ${{ github.event.client_payload.branch || inputs.branch || 'main' }}
+          ANIM_DURATION: ${{ steps.duration.outputs.anim_duration }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "=== STARTING EXPORT ==="
+          echo "Upload ID: $UPLOAD_ID"
+          echo "Animation: $ANIMATION"
+          echo "Animation duration: ${ANIM_DURATION}s"
+          node scripts/spine-export-webm.mjs \
+            --upload-id="$UPLOAD_ID" \
+            --animation="$ANIMATION" \
+            --origin="$ORIGIN" \
+            --owner="$OWNER" \
+            --repo="$REPO" \
+            --branch="$BRANCH" \
+            --repo-path="$GITHUB_WORKSPACE" \
+            --anim-duration="$ANIM_DURATION" \
+            --output="$GITHUB_WORKSPACE/$UPLOAD_ID-preview.webm"
+          echo "=== EXPORT COMPLETED ==="
 
       - name: Commit and Push Atomically
+        if: steps.validate.outputs.found == 'true'
+        id: commit
+        env:
+          UPLOAD_ID: ${{ github.event.client_payload.uploadId || inputs.upload_id || '' }}
+          ORIGIN: ${{ github.event.client_payload.origin || inputs.origin || 'https://spine-link.vercel.app' }}
+          BASE_PATH: ${{ steps.basepath.outputs.basePath }}
         run: |
-          uploadId="${{ github.event.client_payload.uploadId }}"
-          origin="${{ github.event.client_payload.origin }}"
-          basePath="${{ steps.basepath.outputs.basePath }}"
+          set -euo pipefail
+          uploadId="$UPLOAD_ID"
+          origin="$ORIGIN"
+          basePath="$BASE_PATH"
           indexPath="${basePath}/index.json"
           metaPath="${{ github.workspace }}/${uploadId}-preview.webm.json"
           atlasBackupDir="${RUNNER_TEMP}/spine-inferred-atlas-${uploadId}"
+          export INDEX_PATH="$indexPath"
+          export META_PATH="$metaPath"
+          if ! node -e "const fs=require('fs'); const rows=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); process.exit(rows.some(e=>e && e.id===process.argv[2])?0:1);" "$indexPath" "$uploadId"; then
+            echo '::notice::Upload was deleted before publication; skipping preview commit.'
+            echo 'published=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           # Keep newly inferred atlas files outside the checkout before each clean reset.
           node scripts/preserve-inferred-atlas.mjs --upload-id="$uploadId" --mode=backup --backup-dir="$atlasBackupDir"
@@ -171,6 +214,12 @@ jobs:
             # on the stale HEAD and the push was rejected all the same.
             git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
             git reset --hard refs/remotes/origin/main
+
+            if ! node -e "const fs=require('fs'); const rows=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); process.exit(rows.some(e=>e && e.id===process.argv[2])?0:1);" "$indexPath" "$uploadId"; then
+              echo '::notice::Upload was deleted during export; skipping preview publication.'
+              echo 'published=false' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
 
             # Re-apply inferred atlases after refreshing main; stage them with the preview output.
             node scripts/preserve-inferred-atlas.mjs --upload-id="$uploadId" --mode=restore --backup-dir="$atlasBackupDir"
@@ -192,11 +241,11 @@ jobs:
             # 3. Update index.json on top of fresh state
             node -e "
               const fs = require('fs');
-              const uploadId = '$uploadId';
-              const origin = '$origin';
-              const basePath = '$basePath';
-              const indexPath = '$indexPath';
-              const metaPath = '$metaPath';
+              const uploadId = process.env.UPLOAD_ID;
+              const origin = process.env.ORIGIN;
+              const basePath = process.env.BASE_PATH;
+              const indexPath = process.env.INDEX_PATH;
+              const metaPath = process.env.META_PATH;
               
               const indexData = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
               let videoMeta = {};
@@ -249,6 +298,7 @@ jobs:
             git add "$basePath"
             if git diff-index --quiet HEAD --; then
               echo "No changes to commit (perhaps already processed?)"
+              echo 'published=true' >> "$GITHUB_OUTPUT"
               exit 0
             fi
             
@@ -257,6 +307,7 @@ jobs:
             # 5. Push — if rejected, loop back with fresh HEAD
             if git push origin main; then
               echo "Successfully committed and pushed on attempt $i!"
+              echo 'published=true' >> "$GITHUB_OUTPUT"
               exit 0
             else
               echo "Push rejected. Retrying with fresh HEAD..."
@@ -268,21 +319,22 @@ jobs:
           exit 1
 
       - name: Trigger full animation export (background)
-        if: success()
+        if: steps.validate.outputs.found == 'true' && steps.commit.outputs.published == 'true'
+        env:
+          UPLOAD_ID: ${{ github.event.client_payload.uploadId || inputs.upload_id || '' }}
+          ORIGIN: ${{ github.event.client_payload.origin || inputs.origin || 'https://spine-link.vercel.app' }}
+          OWNER: ${{ github.event.client_payload.owner || inputs.owner || 'vladleopold' }}
+          REPO: ${{ github.event.client_payload.repo || inputs.repo || 'spine' }}
+          BRANCH: ${{ github.event.client_payload.branch || inputs.branch || 'main' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          curl -s -X POST \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
+          set -euo pipefail
+          payload=$(jq -n --arg uploadId "$UPLOAD_ID" --arg origin "$ORIGIN" --arg owner "$OWNER" --arg repo "$REPO" --arg branch "$BRANCH" \
+            '{event_type:"spine-export-full",client_payload:{uploadId:$uploadId,origin:$origin,owner:$owner,repo:$repo,branch:$branch}}')
+          curl --fail --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/json" \
-            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
-            -d "{
-              \"event_type\": \"spine-export-full\",
-              \"client_payload\": {
-                \"uploadId\": \"${{ github.event.client_payload.uploadId }}\",
-                \"origin\": \"${{ github.event.client_payload.origin }}\",
-                \"owner\": \"${{ github.event.client_payload.owner }}\",
-                \"repo\": \"${{ github.event.client_payload.repo }}\",
-                \"branch\": \"${{ github.event.client_payload.branch }}\"
-              }
-            }"
-          echo "Dispatched spine-export-full for ${{ github.event.client_payload.uploadId }}"
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/dispatches" \
+            -d "$payload"
+          echo "Dispatched spine-export-full for $UPLOAD_ID"
