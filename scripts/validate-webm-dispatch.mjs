@@ -107,9 +107,7 @@ if (isCli) {
       : ['reason=' + result.reason]),
   ];
   if (process.env.GITHUB_OUTPUT) {
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, output.join('
-') + '
-');
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, output.join('\n') + '\n');
   }
   console.log(result.found
     ? 'WEBM_DISPATCH_VALIDATED ' + result.uploadPath
