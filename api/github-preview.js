@@ -3007,7 +3007,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     // Spine 3.8 JSON additionally needs a distinct cache key and an explicit
     // asset-route flag so object-keyed skins are normalized for the official
     // 3.8 player without rewriting the immutable source upload.
-    const spine38JsonCompat = !skeletonIsBinary && /^3\\.8(?:[.]|$)/.test(skeletonVersion);
+    const spine38JsonCompat = !skeletonIsBinary && /^3\.8(?:[.]|$)/.test(skeletonVersion);
     const skeletonAssetVersion = spine38JsonCompat
       ? `${assetVersion}-spine38-json-skin-array-v1`
       : assetVersion;
