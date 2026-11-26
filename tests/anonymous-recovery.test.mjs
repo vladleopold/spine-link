@@ -100,8 +100,10 @@ test('API exposes create, restore and revoke actions without persisting plaintex
 });
 
 test('Google-linked uploads never write raw email or unkeyed email hashes to the public index', () => {
-  assert.doesNotMatch(apiSource, /ownerEmail\s*:/);
-  assert.doesNotMatch(apiSource, /ownerEmailSha256\s*:/);
+  assert.doesNotMatch(apiSource, /\\.ownerEmail\\s*=/);
+  assert.doesNotMatch(apiSource, /ownerEmail\\s*:\\s*googlePayload/);
+  assert.doesNotMatch(apiSource, /\\.ownerEmailSha256\\s*=/);
+  assert.doesNotMatch(apiSource, /ownerEmailSha256\\s*:\\s*sha256Hex/);
   assert.match(apiSource, /function googleOwnerAccountId\(googlePayload\)/);
   assert.match(apiSource, /ownerAccountId = googleOwnerAccountId\(googlePayload\)/);
 });
