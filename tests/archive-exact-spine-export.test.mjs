@@ -12,10 +12,11 @@ const { resolvePreviewWorkPath } = require('../scripts/lib/preview-work-path.cjs
 const { hasSelectedPreviewMedia } = require('../scripts/lib/preview-export-status.cjs');
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('selected animation is preserved exactly; an absent selection is never guessed', () => {
+test('explicit animation identity is preserved and an absent selection uses only exact idle', () => {
   assert.equal(choosePreviewAnimation(['idle', 'run'], 'Run'), 'Run');
   assert.equal(choosePreviewAnimation(['idle', 'run'], 'Missing'), 'Missing');
-  assert.equal(choosePreviewAnimation(['idle', 'run'], ''), '');
+  assert.equal(choosePreviewAnimation(['idle', 'run'], ''), 'idle');
+  assert.equal(choosePreviewAnimation(['appear', 'hit'], ''), '');
 });
 
 test('source set must uniquely match the index-selected skeleton', () => {
