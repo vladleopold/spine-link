@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import "./styles.css";
+import { createPublicUploaderEvidence } from "../lib/source-proof-privacy.js";
 import {
   getPublishProgress,
   hidePublishProgress,
@@ -156,28 +157,9 @@ type SourceProofFile = {
   sha256: string;
 };
 
-type BrowserEnvironmentProof = {
-  userAgent: string;
-  platform: string;
-  language: string;
-  languages: string[];
-  hardwareConcurrency: number;
-  deviceMemory?: number;
-  screen: {
-    width: number;
-    height: number;
-    colorDepth: number;
-    pixelRatio: number;
-  };
-  timezone: string;
-  timezoneOffset: number;
-  maxTouchPoints: number;
-  cookieEnabled: boolean;
-};
-
 type SourceProof = {
   type: "SpineLinkSourceProof";
-  version: 1;
+  version: 1 | 2;
   proofHash: string;
   hashAlgorithm: "SHA-256";
   entryId: string;
@@ -188,11 +170,12 @@ type SourceProof = {
   uploader: {
     mode: "google-account" | "anonymous-browser";
     googleEmailSha256?: string;
-    anonymousAccountId: string;
-    anonymousFingerprint: string;
-    browserFingerprintSha256: string;
-    browserEnvironmentHashSha256: string;
-    browserEnvironment: BrowserEnvironmentProof;
+    /** Legacy v1 fields are optional so old public proofs remain readable. */
+    anonymousAccountId?: string;
+    anonymousFingerprint?: string;
+    browserFingerprintSha256?: string;
+    browserEnvironmentHashSha256?: string;
+    browserEnvironment?: Record<string, unknown>;
   };
   github: {
     owner: string;
@@ -797,43 +780,6 @@ function browserFingerprint() {
     Intl.DateTimeFormat().resolvedOptions().timeZone,
     `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`,
   ].join("|");
-}
-
-function browserEnvironmentProof(): BrowserEnvironmentProof {
-  if (typeof window === "undefined") {
-    return {
-      userAgent: "server",
-      platform: "server",
-      language: "",
-      languages: [],
-      hardwareConcurrency: 0,
-      screen: { width: 0, height: 0, colorDepth: 0, pixelRatio: 1 },
-      timezone: "",
-      timezoneOffset: 0,
-      maxTouchPoints: 0,
-      cookieEnabled: false,
-    };
-  }
-
-  const navigatorWithMemory = navigator as Navigator & { deviceMemory?: number };
-  return {
-    userAgent: navigator.userAgent,
-    platform: navigator.platform,
-    language: navigator.language,
-    languages: Array.from(navigator.languages || []).slice(0, 8),
-    hardwareConcurrency: Number(navigator.hardwareConcurrency || 0),
-    ...(typeof navigatorWithMemory.deviceMemory === "number" ? { deviceMemory: navigatorWithMemory.deviceMemory } : {}),
-    screen: {
-      width: Number(window.screen?.width || 0),
-      height: Number(window.screen?.height || 0),
-      colorDepth: Number(window.screen?.colorDepth || 0),
-      pixelRatio: Number(window.devicePixelRatio || 1),
-    },
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
-    timezoneOffset: new Date().getTimezoneOffset(),
-    maxTouchPoints: Number(navigator.maxTouchPoints || 0),
-    cookieEnabled: Boolean(navigator.cookieEnabled),
-  };
 }
 
 function hashString(value: string) {
@@ -1815,28 +1761,18 @@ async function createSourceProof(
       sha256: await sha256HexFromBytes(base64ToBytes(file.contentBase64)),
     })),
   );
-  const browserHash = await sha256HexFromText(browserFingerprint());
-  const browserEnvironment = browserEnvironmentProof();
-  const browserEnvironmentHashSha256 = await sha256HexFromText(canonicalJson(browserEnvironment));
-  const googleEmailSha256 = options.user?.email ? await sha256HexFromText(options.user.email.trim().toLowerCase()) : undefined;
   const proofPayload = {
     type: "SpineLinkSourceProof" as const,
-    version: 1 as const,
+    version: 2 as const,
     hashAlgorithm: "SHA-256" as const,
     entryId: options.uploadId,
     title: options.title,
     uploadedAt: options.uploadedAt,
     proofPath: options.proofPath,
     proofUrl: options.proofUrl,
-    uploader: {
-      mode: options.user?.email ? ("google-account" as const) : ("anonymous-browser" as const),
-      ...(googleEmailSha256 ? { googleEmailSha256 } : {}),
-      anonymousAccountId: options.anonymousAccount.id,
-      anonymousFingerprint: options.anonymousAccount.fingerprint,
-      browserFingerprintSha256: browserHash,
-      browserEnvironmentHashSha256,
-      browserEnvironment,
-    },
+    uploader: createPublicUploaderEvidence({
+      mode: options.user?.email ? "google-account" : "anonymous-browser",
+    }),
     github: {
       owner: options.settings.owner,
       repo: options.settings.repo,
