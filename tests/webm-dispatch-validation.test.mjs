@@ -108,3 +108,43 @@ test('a live indexed binary .skel upload can be dispatched for runtime animation
     f.cleanup();
   }
 });
+
+
+test('JSON skeleton with indexed tracks can be dispatched for runtime default selection', () => {
+  const f = fixture();
+  try {
+    const set = path.join(f.library, 'upload-123', 'set-a');
+    fs.mkdirSync(set, { recursive: true });
+    fs.writeFileSync(path.join(set, 'skeleton.json'), JSON.stringify({
+      bones: [{ name: 'root' }],
+      animations: { appear: {}, idle: {}, hit: {} },
+    }));
+    fs.writeFileSync(path.join(set, 'body.png'), Buffer.from([137, 80, 78, 71]));
+    f.writeIndex([{ id: 'upload-123' }]);
+
+    const result = validateWebmDispatch(f.root, 'upload-123', '');
+    assert.equal(result.found, true);
+    assert.equal(result.runtimeDiscovery, true);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('binary skeleton with no indexed animation can be dispatched for runtime discovery', () => {
+  const f = fixture();
+  try {
+    const set = path.join(f.library, 'upload-123', 'set-a');
+    fs.mkdirSync(set, { recursive: true });
+    fs.writeFileSync(path.join(set, 'skeleton.skel'), Buffer.from([1, 2, 3, 4]));
+    fs.writeFileSync(path.join(set, 'body.atlas'), 'body.png\nsize: 1,1\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\n');
+    fs.writeFileSync(path.join(set, 'body.png'), Buffer.from([137, 80, 78, 71]));
+    f.writeIndex([{ id: 'upload-123', animations: [] }]);
+
+    const result = validateWebmDispatch(f.root, 'upload-123', '');
+    assert.equal(result.found, true);
+    assert.equal(result.binary, true);
+    assert.equal(result.runtimeDiscovery, true);
+  } finally {
+    f.cleanup();
+  }
+});
