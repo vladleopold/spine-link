@@ -40,3 +40,15 @@ test('rejects invalid Spine 3.8 skin-map entries instead of silently dropping th
   const source = JSON.stringify({ skeleton: { spine: '3.8.97' }, skins: { default: null } });
   assert.throws(() => normalizeSpineJsonForLegacy38Runtime(source), /Invalid Spine 3\.8 skin map entry/);
 });
+
+test('normalizes Buffer input for the versioned asset route and preserves its byte type', () => {
+  const source = Buffer.from(JSON.stringify({
+    skeleton: { spine: '3.8.97' },
+    skins: { default: { body: { mesh: { type: 'mesh' } } } },
+  }));
+  const result = normalizeSpineJsonForLegacy38Runtime(source);
+  assert.ok(Buffer.isBuffer(result));
+  const data = JSON.parse(result.toString('utf8'));
+  assert.equal(data.skins[0].name, 'default');
+  assert.deepEqual(data.skins[0].body.mesh.uvs, []);
+});
