@@ -9080,3 +9080,149 @@ h1 {
     width: max-content !important;
   }
 }
+
+
+/* Anonymous library recovery uses only a one-time high-entropy key. */
+.anonymous-recovery-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.anonymous-recovery-copy {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 5px;
+}
+
+.anonymous-recovery-copy strong,
+.anonymous-recovery-secret strong {
+  color: rgba(245, 249, 255, 0.94);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.anonymous-recovery-copy p,
+.anonymous-recovery-secret p {
+  margin: 0;
+  color: rgba(220, 228, 238, 0.68);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.anonymous-recovery-actions,
+.anonymous-recovery-secret-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.anonymous-recovery-actions button,
+.anonymous-recovery-secret-actions button,
+.anonymous-recovery-secret-actions a,
+.anonymous-recovery-form button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: rgba(248, 251, 255, 0.92);
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.anonymous-recovery-actions button:disabled,
+.anonymous-recovery-form button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.anonymous-recovery-secret,
+.anonymous-recovery-form {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
+.anonymous-recovery-secret {
+  padding: 11px;
+  border: 1px solid rgba(96, 190, 142, 0.32);
+  border-radius: 8px;
+  background: rgba(54, 135, 91, 0.08);
+}
+
+.anonymous-recovery-secret code {
+  display: block;
+  padding: 10px;
+  border-radius: 6px;
+  color: #dfffe9;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.anonymous-recovery-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.anonymous-recovery-form label {
+  grid-column: 1 / -1;
+  color: rgba(232, 239, 248, 0.82);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.anonymous-recovery-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: #f4f7fb;
+  background: rgba(0, 0, 0, 0.22);
+  font: inherit;
+}
+
+.anonymous-recovery-status {
+  grid-column: 1 / -1;
+  color: #a7e7be;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .anonymous-recovery-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .anonymous-recovery-actions {
+    grid-column: 1 / -1;
+  }
+
+  .anonymous-recovery-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .anonymous-recovery-form label {
+    grid-column: 1;
+  }
+
+  .anonymous-recovery-form button {
+    width: 100%;
+  }
+}
