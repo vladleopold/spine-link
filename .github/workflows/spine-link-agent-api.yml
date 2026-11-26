@@ -8,6 +8,8 @@ on:
     paths:
       - 'api/github-upload.js'
       - 'lib/google-session.js'
+      - 'lib/google-session.d.ts'
+      - 'lib/google-session.d.ts'
       - 'lib/agent-animation.js'
       - 'lib/agent-user-keys.js'
       - 'public/api-keys.html'
