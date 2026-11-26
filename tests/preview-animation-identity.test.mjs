@@ -36,14 +36,21 @@ test('default animation comes only from the index, never idle or the first runti
   assert.doesNotMatch(preview, /skeleton\.data\.animations\[0\]/);
 });
 
-test('video target is restricted to the indexed defaultAnimation', () => {
+test('video target prefers the indexed previewAnimation while preserving the player defaultAnimation', () => {
   const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
-  assert.match(resolver, /const chosen = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : '';/);
+  assert.match(resolver, /const previewAnimation = typeof entry\?\.previewAnimation === 'string' \? entry\.previewAnimation : '';/);
+  assert.match(resolver, /const defaultAnimation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : '';/);
+  assert.match(resolver, /const chosen = previewAnimation\.trim\(\) \? previewAnimation : defaultAnimation/);
+  assert.match(resolver, /const selectedAnimation = chosen\.trim\(\) && previews && previews\[chosen\] \? chosen : defaultAnimation/);
+  assert.match(resolver, /name: selectedAnimation/);
   assert.doesNotMatch(resolver, /entry\?\.webmPreview/);
   assert.match(resolver, /lowUrl: shortClip/);
   assert.doesNotMatch(resolver, /for \(const a of animations\)/);
   assert.doesNotMatch(resolver, /candidates\.find|animations\.find/);
   assert.match(resolver, /isFallback: false/);
+  const playerUrl = section(preview, 'function playerUrlForEntry(', 'function archiveUrlForEntry(');
+  assert.match(playerUrl, /const animation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
+  assert.doesNotMatch(playerUrl, /previewAnimation/);
   const metadata = section(preview, 'function videoMetadataForEntry(', 'function ');
   assert.match(metadata, /const contentUrl = target\.url \? entryVideoAsset\(target\.url, entry, 'webm'\) : ''/);
   assert.match(metadata, /previewAnimation: target\.name/);

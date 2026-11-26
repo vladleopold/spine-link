@@ -866,11 +866,14 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3, index
 // Resolve media only from the exact indexed defaultAnimation. A missing or short
 // selected preview remains blocked; another animation is never substituted.
 function resolvePreviewTarget(entry, origin = '') {
-  const chosen = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+  const previewAnimation = typeof entry?.previewAnimation === 'string' ? entry.previewAnimation : '';
+  const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
+  const chosen = previewAnimation.trim() ? previewAnimation : defaultAnimation;
   const previews = entry && entry.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
     ? entry.allAnimationPreviews
     : null;
-  const selected = chosen.trim() && previews ? previews[chosen] : null;
+  const selectedAnimation = chosen.trim() && previews && previews[chosen] ? chosen : defaultAnimation;
+  const selected = selectedAnimation.trim() && previews ? previews[selectedAnimation] : null;
   const fix = origin ? (value) => repairAnimationAssetUrl(entry, value, origin) : (value) => value;
   const selectedFullValue = selected?.webmPreview || selected?.webmPreviewMedium || selected?.webmPreviewLow || '';
   const selectedLowValue = selected?.webmPreviewLow || selected?.webmPreviewMedium || selected?.webmPreview || '';
@@ -884,7 +887,7 @@ function resolvePreviewTarget(entry, origin = '') {
   const duration = Number.isFinite(durationValue) && durationValue > 0 ? durationValue : 0;
   const shortClip = duration > 0 && duration < 2;
   return {
-    name: chosen,
+    name: selectedAnimation,
     url: shortClip ? '' : selectedUrl,
     lowUrl: shortClip ? '' : (selectedLowUrl || selectedUrl),
     poster: typeof selected?.webpPosterMedium === 'string' && selected.webpPosterMedium.trim()
