@@ -481,17 +481,24 @@ export function publicLibraryEntry(origin, entry) {
   delete next.apiKeyId;
   const version = assetVersionForEntry(entry);
   next.thumbnail = appendAssetVersion(safeHttpAsset(next.thumbnail), version);
+  // Generated WebP preview posters take precedence over uploaded texture
+  // images. The texture remains the fallback only until the export worker
+  // publishes a poster for this exact work.
+  const generatedPoster = safeHttpAsset(entry.webpPosterMedium) ||
+    safeHttpAsset(entry.webpPoster) ||
+    safeHttpAsset(entry.webpPosterLow);
   next.thumbnailPoster =
-    appendAssetVersion(safeHttpAsset(next.thumbnailPoster), version) ||
+    appendAssetVersion(generatedPoster || safeHttpAsset(next.thumbnailPoster), version) ||
     generatedThumbnailUrl(origin, entry) ||
     derivedMediaFromFiles(origin, entry, ['.webp', '.png', '.jpg', '.jpeg']);
-  next.webmPreview = /\.webm(?:[?#].*)?$/i.test(String(next.webmPreview || ''))
-    ? appendAssetVersion(safeHttpAsset(next.webmPreview), version)
-    : '';
-  // An entry with no preview of its own gets no video URL at all. Substituting
-  // a shared placeholder here is what made every freshly created page show the
-  // same unrelated clip instead of the entry's own poster.
-  next.webmPreview = next.webmPreview || derivedMediaFromFiles(origin, entry, ['.webm']);
+  // The library/player APIs expose the medium clip first, then full/low.
+  // This also makes an entry discoverable as soon as the export worker has
+  // populated any supported preview tier.
+  const generatedVideo = safeHttpAsset(entry.webmPreviewMedium) ||
+    safeHttpAsset(entry.webmPreview) ||
+    safeHttpAsset(entry.webmPreviewLow);
+  next.webmPreview = appendAssetVersion(generatedVideo, version) ||
+    derivedMediaFromFiles(origin, entry, ['.webm']);
   return next;
 }
 
