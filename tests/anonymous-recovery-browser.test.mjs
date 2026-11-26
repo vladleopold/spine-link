@@ -69,6 +69,11 @@ test('anonymous visitors can create, use and revoke a recovery key without brows
     await page.goto(SITE);
     await page.locator('.my-library-button').click();
     await page.locator('.anonymous-recovery-panel').waitFor();
+    await page.waitForFunction(() => {
+      const button = Array.from(document.querySelectorAll('.anonymous-recovery-actions button'))
+        .find((item) => item.textContent?.includes('Create / rotate key'));
+      return Boolean(button && !button.disabled);
+    });
 
     await page.getByRole('button', { name: /Create \/ rotate key/ }).click();
     await page.getByText(recoverySecret).waitFor();
