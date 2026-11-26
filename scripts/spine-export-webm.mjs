@@ -519,21 +519,6 @@ const finalSkeletonVersion = convertedSkeletonPath
   ? JSON.parse(fs.readFileSync(finalSkeletonPath, 'utf8')).skeleton.spine
   : skeletonVersion;
 const skeletonBounds = readSkeletonBounds(skeletonFilePath);
-const requestedAnimation = args.animation !== ''
-  ? args.animation
-  : args.defaultAnimation !== ''
-    ? args.defaultAnimation
-    : (typeof entry.defaultAnimation === 'string' ? entry.defaultAnimation : '');
-const availableAnimations = readAnimationNames(skeletonFilePath);
-const targetAnimation = choosePreviewAnimation(availableAnimations, requestedAnimation);
-if (!targetAnimation) {
-  console.error('No explicit selected/default Spine animation; export blocked.');
-  process.exit(1);
-}
-if (availableAnimations.length > 0 && !availableAnimations.includes(targetAnimation)) {
-  console.error('Selected Spine animation is unavailable in the source skeleton; export blocked.');
-  process.exit(1);
-}
 
 // --- Calculate dynamic video dimensions from skeleton bounds ---
 const PAD_RATIO = 0.14; // 14% padding on each side
@@ -595,24 +580,16 @@ async function warmUpAnimations() {
       await new Promise(r => setTimeout(r, 500));
       if (page.isClosed()) break;
       try {
-        const w = await page.evaluate(() => window);
-        if (w.__warmup && w.__warmup.skeletonData && w.__warmup.skeletonData.animations) {
-          names = w.__warmup.skeletonData.animations.map(a => a.name).filter(Boolean);
+        const state = await page.evaluate(() => ({
+          animations: window.__warmup?.skeletonData?.animations?.map((animation) => animation.name).filter(Boolean) || [],
+          error: String(window.__warmupError || ''),
+        }));
+        if (state.animations.length > 0) {
+          names = state.animations;
           break;
         }
-        if (w.__warmupError) {
-          if (w.spine && w.spine.SkeletonData) {
-            try {
-              const sd = await page.evaluate(() => {
-                if (window.spine && window.spine.SkeletonData) {
-                  const s = new window.spine.SkeletonData();
-                  return { hasAnimations: !!s.animations, animNames: s.animations ? Object.keys(s.animations) : [] };
-                }
-                return null;
-              });
-              if (sd && sd.animNames.length > 0) { names = sd.animNames; break; }
-            } catch {}
-          }
+        if (state.error) {
+          console.error('Spine runtime animation discovery failed:', state.error);
           break;
         }
       } catch {}
@@ -621,6 +598,32 @@ async function warmUpAnimations() {
   } finally {
     try { await page.close(); } catch {}
   }
+}
+
+const requestedAnimation = args.animation !== ''
+  ? args.animation
+  : args.defaultAnimation !== ''
+    ? args.defaultAnimation
+    : (typeof entry.defaultAnimation === 'string' ? entry.defaultAnimation : '');
+let availableAnimations = readAnimationNames(skeletonFilePath);
+let targetAnimation = choosePreviewAnimation(availableAnimations, requestedAnimation);
+
+// Binary .skel files often have no sibling JSON, so their animation names must
+// come from the same pinned Spine runtime that will render the final video.
+if (!targetAnimation && !requestedAnimation && availableAnimations.length === 0) {
+  console.error('Discovering binary Spine animation names with the pinned runtime...');
+  availableAnimations = await warmUpAnimations();
+  targetAnimation = choosePreviewAnimation(availableAnimations, '');
+}
+if (!targetAnimation) {
+  console.error(availableAnimations.length > 1
+    ? 'Multiple Spine animations found without an explicit default or exact idle track; export blocked.'
+    : 'No Spine animation could be discovered; export blocked.');
+  process.exit(1);
+}
+if (availableAnimations.length > 0 && !availableAnimations.includes(targetAnimation)) {
+  console.error('Selected Spine animation is unavailable in the source skeleton; export blocked.');
+  process.exit(1);
 }
 
 const atlasLocalPath = path.join(firstSet.path, atlasFile);

@@ -284,6 +284,9 @@ jobs:
                   webmStatus: isError ? 'error' : 'ready',
                   webmError: isError ? videoMeta.error : undefined,
                   webmGeneratedAt: new Date().toISOString(),
+                  ...(typeof videoMeta.animation === 'string' && videoMeta.animation
+                    ? { previewAnimation: videoMeta.animation, previewStatus: 'ready' }
+                    : {}),
                   ...(videoMeta.width > 0 ? { previewWidth: videoMeta.width } : {}),
                   ...(videoMeta.height > 0 ? { previewHeight: videoMeta.height } : {}),
                   ...(videoMeta.animationDuration > 0 ? { previewDuration: videoMeta.animationDuration } : {}),
