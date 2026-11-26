@@ -260,11 +260,11 @@ jobs:
               if (entryIndex !== -1) {
                 if (exportError) {
                   delete indexData[entryIndex].webmPreview;
-                    delete indexData[entryIndex].webmPreviewMedium;
-                    delete indexData[entryIndex].webmPreviewLow;
-                    delete indexData[entryIndex].webpPoster;
-                    delete indexData[entryIndex].webpPosterMedium;
-                    delete indexData[entryIndex].webpPosterLow;
+                  delete indexData[entryIndex].webmPreviewMedium;
+                  delete indexData[entryIndex].webmPreviewLow;
+                  delete indexData[entryIndex].webpPoster;
+                  delete indexData[entryIndex].webpPosterMedium;
+                  delete indexData[entryIndex].webpPosterLow;
                   delete indexData[entryIndex].webmPreviewPath;
                 }
                 delete indexData[entryIndex].webmChunksJson;
