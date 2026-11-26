@@ -18,6 +18,8 @@ test('every artifact-index writer marks an export ready only when a WebM file ex
       `writer ${index + 1} must not mark an empty export ready`);
     assert.match(block, /\.\.\.\(exportError \? \{\} : uploadedUrls\)/,
       `writer ${index + 1} must not index partial media from a failed export`);
+    assert.match(block, /const webmPreviewPath = \\(uploadedUrls\\.webmPreview \\|\\| uploadedUrls\\.webmPreviewMedium \\|\\| uploadedUrls\\.webmPreviewLow \\|\\| ''\\)\\.replace\\(origin \\+ '\\/assets\\/', ''\\)/,
+      `writer ${index + 1} must store the path of the actual selected WebM tier`);
   }
 });
 
