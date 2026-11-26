@@ -7,6 +7,8 @@ on:
     branches: [main]
     paths:
       - 'api/github-upload.js'
+      - 'lib/google-session.js'
+      - 'lib/google-session.d.ts'
       - 'lib/agent-animation.js'
       - 'lib/agent-user-keys.js'
       - 'public/api-keys.html'
@@ -26,6 +28,14 @@ on:
       - 'scripts/spine-link-agent-publish.mjs'
       - 'docs/agent-animation-api.md'
       - 'vercel.json'
+      - '.github/workflows/spine-link-agent-api.yml'
+  pull_request:
+    paths:
+      - 'api/github-upload.js'
+      - 'lib/google-session.js'
+      - 'lib/google-session.d.ts'
+      - 'src/SpineApp.tsx'
+      - 'tests/google-auth-guard.test.mjs'
       - '.github/workflows/spine-link-agent-api.yml'
   workflow_dispatch:
 

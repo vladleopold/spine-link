@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import "./styles.css";
 import { createPublicUploaderEvidence } from "../lib/source-proof-privacy.js";
+import { hasUsableGoogleSession } from "../lib/google-session.js";
 import {
   getPublishProgress,
   hidePublishProgress,
@@ -769,6 +770,7 @@ const skeletonUploadTipStoragePrefix = "spine-link-skeleton-upload-tip";
 type StoredGoogleSession = {
   user: GoogleUser;
   accessToken: string;
+  clientId?: string;
   expiresAt: number;
 };
 
@@ -813,8 +815,7 @@ function readStoredGoogleSession(): StoredGoogleSession | null {
 
 function getValidStoredGoogleToken() {
   const storedSession = readStoredGoogleSession();
-  const expiresAt = Number(storedSession?.expiresAt);
-  if (!storedSession?.accessToken || !Number.isFinite(expiresAt) || expiresAt <= Date.now() + 60_000) return "";
+  if (!storedSession || !hasUsableGoogleSession(storedSession, googleClientId)) return "";
   return storedSession.accessToken;
 }
 
@@ -827,6 +828,7 @@ function storeGoogleSession(user: GoogleUser, accessToken: string, expiresIn = 3
     JSON.stringify({
       user,
       accessToken,
+      clientId: googleClientId,
       expiresAt: Date.now() + Math.max(60, Math.min(lifetime, 3600)) * 1000,
     } satisfies StoredGoogleSession),
   );
@@ -5095,8 +5097,9 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   useEffect(() => {
     const storedSession = readStoredGoogleSession();
     if (!storedSession?.user?.email || googleIdToken) return;
-    const expiresAt = Number(storedSession.expiresAt);
-    if (storedSession.accessToken && Number.isFinite(expiresAt) && expiresAt > Date.now() + 60_000) return;
+    // Legacy sessions do not record the OAuth client that issued their token.
+    // Refresh those once silently instead of sending a stale token to the API.
+    if (hasUsableGoogleSession(storedSession, googleClientId)) return;
 
     let cancelled = false;
     const restoreSession = async () => {
