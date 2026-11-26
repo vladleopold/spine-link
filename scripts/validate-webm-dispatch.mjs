@@ -57,7 +57,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
       }
       if (!Array.isArray(skeleton?.bones)) continue;
       sawSkeleton = true;
-      if (!Object.hasOwn(skeleton?.animations ?? {}, animation)) continue;
+      const animationNames = Object.keys(skeleton?.animations ?? {});\n      if (animation ? !animationNames.includes(animation) : animationNames.length === 0) continue;
 
       const skeletonAbsolute = path.join(setDirectory, name);
       const skeletonRelative = path.relative(root, skeletonAbsolute).split(path.sep).join('/');
@@ -82,7 +82,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
         basePath: indexed.basePath,
         uploadPath: path.relative(root, uploadDirectory).split(path.sep).join('/'),
         skeletonPath: skeletonRelative,
-        binary: true,
+        binary: true,\n        runtimeDiscovery: !animation,
       };
     }
   }
