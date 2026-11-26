@@ -2089,7 +2089,7 @@ export default async function handler(request, response) {
       const nextEntries = [...currentEntries];
       nextEntries[entryIndex] = nextEntry;
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update preview text`, currentIndex?.sha, origin);
-      return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry) });
+      return response.status(200).json({ ok: true, entry: { ...publicLibraryEntry(origin, nextEntry), canEdit: canEditEntry(nextEntry, googlePayload, anonymousAccount) } });
     }
 
     if (action === 'update-layout') {
@@ -2117,7 +2117,7 @@ export default async function handler(request, response) {
       nextEntries[entryIndex] = nextEntry;
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update preview layout`, currentIndex?.sha, origin);
       dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {});
-      return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry) });
+      return response.status(200).json({ ok: true, entry: { ...publicLibraryEntry(origin, nextEntry), canEdit: canEditEntry(nextEntry, googlePayload, anonymousAccount) } });
     }
 
     if (action === 'update-entry-visibility') {
@@ -2137,7 +2137,7 @@ export default async function handler(request, response) {
       const nextEntries = [...currentEntries];
       nextEntries[entryIndex] = nextEntry;
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update entry visibility`, currentIndex?.sha, origin);
-      return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry) });
+      return response.status(200).json({ ok: true, entry: { ...publicLibraryEntry(origin, nextEntry), canEdit: canEditEntry(nextEntry, googlePayload, anonymousAccount) } });
     }
 
     if (action === 'update-library-order') {
@@ -2157,7 +2157,7 @@ export default async function handler(request, response) {
       const currentPosition = ownerEntries.findIndex((currentEntry) => String(currentEntry?.id || '') === entryId);
       const nextPosition = direction === 'up' ? currentPosition - 1 : currentPosition + 1;
       if (currentPosition < 0 || nextPosition < 0 || nextPosition >= ownerEntries.length) {
-        return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, ownerEntries), changed: false });
+        return response.status(200).json({ ok: true, entries: accountLibraryEntries(origin, ownerEntries, googlePayload, anonymousAccount), changed: false });
       }
       const nextOwnerEntries = [...ownerEntries];
       const [movedEntry] = nextOwnerEntries.splice(currentPosition, 1);
@@ -2170,7 +2170,7 @@ export default async function handler(request, response) {
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update public library order`, currentIndex?.sha, origin);
       return response.status(200).json({
         ok: true,
-        entries: publicLibraryEntries(origin, nextOwnerEntries.map((entry, index) => ({ ...entry, libraryOrder: index + 1 }))),
+        entries: accountLibraryEntries(origin, nextOwnerEntries.map((entry, index) => ({ ...entry, libraryOrder: index + 1 })), googlePayload, anonymousAccount),
         changed: true,
       });
     }
@@ -2188,13 +2188,18 @@ export default async function handler(request, response) {
           const nextEntries = collection.entries.map(entry => {
             if (!canEditEntry(entry, googlePayload, anonymousAccount)) return entry;
             const next = { ...entry, publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry.publicOwnerId) };
-            if (entry?.ownerAccountId) {
-              // A profile edit must not reintroduce plaintext Google email into
-              // a public agent-upload index, even for legacy agent entries.
+            if (googlePayload?.sub) {
+              const ownerAccountId = googleOwnerAccountId(googlePayload);
+              if (!ownerAccountId) throw new Error('Google owner signing key is not configured');
+              next.ownerAccountId = ownerAccountId;
               delete next.ownerEmail;
               delete next.ownerEmailSha256;
-            } else if (googlePayload?.email) {
-              next.ownerEmail = googlePayload.email;
+              delete next.ownerAnonId;
+              delete next.ownerAnonFingerprint;
+              delete next.ownerRecoveryHash;
+              delete next.ownerRecoveryCreatedAt;
+            } else if (anonymousAccount?.id && !entry?.ownerAccountId) {
+              next.ownerAnonId = anonymousAccount.id;
             }
             if (ownerName) next.ownerName = ownerName;
             if (ownerPicture) next.ownerPicture = ownerPicture;
