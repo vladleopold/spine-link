@@ -2436,6 +2436,8 @@ export default async function handler(request, response) {
               ownerPicture: cleanPublicProfileImage(currentEntry.ownerPicture || body.ownerPicture || googlePayload.picture || '') };
             delete nextEntry.ownerEmail;
             delete nextEntry.ownerEmailSha256;
+            delete nextEntry.ownerAnonId;
+            delete nextEntry.ownerAnonFingerprint;
             delete nextEntry.ownerRecoveryHash;
             delete nextEntry.ownerRecoveryCreatedAt;
             return nextEntry;
