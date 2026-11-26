@@ -1,4 +1,5 @@
 import agentAnimationHandler from '../lib/agent-animation.js';
+import { createPublicUploaderEvidence } from '../lib/source-proof-privacy.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
 import { githubMetricsCache } from '../lib/github-metrics-cache.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
@@ -290,41 +291,6 @@ function normalizeUploadedProofFiles(value = []) {
     .slice(0, 250);
 }
 
-function cleanProofString(value = '', maxLength = 260) {
-  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
-}
-
-function normalizeProofNumber(value, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
-
-function normalizeBrowserEnvironment(value) {
-  if (!value || typeof value !== 'object') return null;
-  const languages = Array.isArray(value.languages)
-    ? value.languages.map((language) => cleanProofString(language, 32)).filter(Boolean).slice(0, 8)
-    : [];
-  const screen = value.screen && typeof value.screen === 'object' ? value.screen : {};
-  return {
-    userAgent: cleanProofString(value.userAgent, 360),
-    platform: cleanProofString(value.platform, 120),
-    language: cleanProofString(value.language, 32),
-    languages,
-    hardwareConcurrency: normalizeProofNumber(value.hardwareConcurrency),
-    ...(Number.isFinite(Number(value.deviceMemory)) ? { deviceMemory: normalizeProofNumber(value.deviceMemory) } : {}),
-    screen: {
-      width: normalizeProofNumber(screen.width),
-      height: normalizeProofNumber(screen.height),
-      colorDepth: normalizeProofNumber(screen.colorDepth),
-      pixelRatio: normalizeProofNumber(screen.pixelRatio, 1),
-    },
-    timezone: cleanProofString(value.timezone, 80),
-    timezoneOffset: normalizeProofNumber(value.timezoneOffset),
-    maxTouchPoints: normalizeProofNumber(value.maxTouchPoints),
-    cookieEnabled: Boolean(value.cookieEnabled),
-  };
-}
-
 async function maybeAnchorOnEvm(anchorHash) {
   return {
     status: 'disabled',
@@ -343,10 +309,9 @@ async function createBlockchainAnchor({ sourceProof, uploadedFiles, body, settin
   const proofPath = cleanRepoPath(sourceProof?.proofPath || body?.proofPath || '');
   const proofUrl = safeHttpAsset(sourceProof?.proofUrl || body?.proofUrl || (proofPath ? assetUrlForRepoPath(origin, proofPath) : ''));
   const userEmail = String(googlePayload?.email || '').trim().toLowerCase();
-  const browserEnvironment = normalizeBrowserEnvironment(sourceProof?.uploader?.browserEnvironment);
   const anchorBase = {
     type: 'SpineLinkGitHubBlockchainAnchor',
-    version: 1,
+    version: 2,
     createdAt: new Date().toISOString(),
     entryId: String(body?.entryId || sourceProof?.entryId || '').trim().slice(0, 220),
     title: cleanPublicProfileText(body?.title || sourceProof?.title || '', 180),
@@ -354,15 +319,7 @@ async function createBlockchainAnchor({ sourceProof, uploadedFiles, body, settin
     sourceProofHash,
     sourceProofPath: proofPath,
     sourceProofUrl: proofUrl,
-    uploader: {
-      mode: userEmail ? 'google-account' : 'anonymous-browser',
-      ...(sourceProof?.uploader?.googleEmailSha256 ? { googleEmailSha256: sanitizeSha256(sourceProof.uploader.googleEmailSha256) } : {}),
-      ...(anonymousAccount?.id ? { anonymousAccountId: anonymousAccount.id } : {}),
-      ...(anonymousAccount?.fingerprint ? { anonymousFingerprint: anonymousAccount.fingerprint } : {}),
-      ...(sourceProof?.uploader?.browserFingerprintSha256 ? { browserFingerprintSha256: sanitizeSha256(sourceProof.uploader.browserFingerprintSha256) } : {}),
-      ...(sourceProof?.uploader?.browserEnvironmentHashSha256 ? { browserEnvironmentHashSha256: sanitizeSha256(sourceProof.uploader.browserEnvironmentHashSha256) } : {}),
-      ...(browserEnvironment ? { browserEnvironment } : {}),
-    },
+    uploader: createPublicUploaderEvidence(sourceProof?.uploader, userEmail ? 'google-account' : 'anonymous-browser'),
     github: {
       owner: settings.owner,
       repo: settings.repo,
@@ -373,9 +330,9 @@ async function createBlockchainAnchor({ sourceProof, uploadedFiles, body, settin
     },
     legalEvidence: {
       statement:
-        'This record links file SHA-256 hashes, browser/account identity hashes, browser environment evidence, GitHub repository writes, and an optional EVM transaction payload for source-origin evidence.',
+        'This record links uploaded-file SHA-256 hashes, upload timestamps, GitHub repository writes, and an optional EVM transaction payload for source-origin evidence.',
       privacy:
-        'Email is stored only as SHA-256 in the proof. Anonymous browser/account identifiers are pseudonymous and should be treated as evidence metadata, not personal identity by themselves.',
+        'This public anchor records only the sign-in mode. It excludes email addresses and their hashes, anonymous account identifiers, browser fingerprints, and raw or hashed browser/device characteristics. Legacy version 1 proofs may contain fields that are no longer collected or published.',
     },
   };
   const anchorHash = sha256Hex(canonicalJson(anchorBase));
