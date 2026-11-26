@@ -87,3 +87,24 @@ test('a live upload with a removed animation is not sent to the exporter', () =>
     f.cleanup();
   }
 });
+
+
+test('a live indexed binary .skel upload can be dispatched for runtime animation validation', () => {
+  const f = fixture();
+  try {
+    const set = path.join(f.library, 'upload-123', 'set-a');
+    fs.mkdirSync(set, { recursive: true });
+    // Binary contents are intentionally opaque to this lightweight validator.
+    // The exporter's pinned Spine runtime performs the authoritative track check.
+    fs.writeFileSync(path.join(set, 'skeleton.skel'), Buffer.from([1, 2, 3, 4]));
+    fs.writeFileSync(path.join(set, 'body.atlas'), 'body.png\nsize: 1,1\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\n');
+    fs.writeFileSync(path.join(set, 'body.png'), Buffer.from([137, 80, 78, 71]));
+    f.writeIndex([{ id: 'upload-123', animations: [] }]);
+
+    const result = validateWebmDispatch(f.root, 'upload-123', 'idle');
+    assert.equal(result.found, true);
+    assert.equal(result.skeletonPath, path.join('library_01', 'upload-123', 'set-a', 'skeleton.skel'));
+  } finally {
+    f.cleanup();
+  }
+});
