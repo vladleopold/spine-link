@@ -203,7 +203,7 @@ test('accept .spine + one images/ PNG; request licensed editor and report pendin
   assert.equal(complete.state, 'processing');
   assert.equal(gh.entries[0].projectFile, 'actor.spine');
   assert.equal(gh.entries[0].conversionStatus, 'pending');
-  assert.equal(gh.dispatches[0].path, '/repos/vladleopold/3Spine-core/dispatches');
+  assert.equal(gh.dispatches[0].path, '/repos/vladleopold/spine/dispatches');
   assert.equal(gh.dispatches[0].body.client_payload.projectFile, 'actor.spine');
   const status = await request('GET', {}, { jobToken: job.jobToken });
   assert.equal(status.state, 'processing');
