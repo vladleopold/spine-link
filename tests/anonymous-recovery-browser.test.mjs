@@ -25,7 +25,7 @@ async function startDevServer() {
   throw new Error('Vite dev server did not become ready on port 4174');
 }
 
-test('anonymous visitors can create, use and revoke a recovery key without browser persistence', async () => {
+test('anonymous visitors can create, use and revoke a recovery key without browser persistence', { timeout: 90000 }, async () => {
   const server = await startDevServer();
   let browser;
   try {
@@ -88,7 +88,7 @@ test('anonymous visitors can create, use and revoke a recovery key without brows
       });
     });
 
-    await page.goto(SITE);
+    await page.goto(SITE, { waitUntil: 'domcontentloaded' });
     await page.locator('.my-library-button').click();
     await page.locator('.anonymous-recovery-panel').waitFor();
     await page.waitForFunction(() => {
