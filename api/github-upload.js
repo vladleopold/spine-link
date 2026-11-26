@@ -370,7 +370,7 @@ async function dispatchSpineProjectExport(settings, entry, origin) {
   try {
     // The public storage repository owns the licensed Ubuntu executor.
     // Dispatch directly there; the private repository is only credential storage.
-    const result = await fetch('https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches', {
+    const result = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
       method: 'POST',
       headers: githubHeaders(settings.token),
       body: JSON.stringify({
