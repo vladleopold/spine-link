@@ -7,6 +7,7 @@ import { metricCountsForId, parseMetricsJson } from '../lib/spine-metrics.js';
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
+import { indexedFilePath, previewIndexPath } from '../lib/github-preview-index.js';
 
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -714,7 +715,7 @@ async function findSpineSetDirectories(settings, uploadPath, maxDepth = 3, index
   // Prefer that manifest when GitHub's directory Contents API is throttled;
   // public raw-file reads can still load the actual skeleton, atlas and images.
   const indexedFiles = Array.isArray(indexedEntry?.files)
-    ? indexedEntry.files.map(cleanRepoPath).filter(Boolean)
+    ? indexedEntry.files.map((file) => cleanRepoPath(indexedFilePath(file))).filter(Boolean)
     : [];
   if (indexedFiles.length) {
     const uploadPrefix = `${cleanRepoPath(uploadPath)}/`;
@@ -859,18 +860,24 @@ function resolvePreviewTarget(entry, origin = '') {
   const selectedLowUrl = typeof selectedLowValue === 'string' && selectedLowValue.trim()
     ? fix(selectedLowValue.trim())
     : '';
-  const durationValue = Number(selected?.previewDuration ?? 0);
+  const durationValue = Number(selected?.previewDuration ?? entry?.previewDuration ?? 0);
   const duration = Number.isFinite(durationValue) && durationValue > 0 ? durationValue : 0;
   const shortClip = duration > 0 && duration < 2;
+  const fallbackFull = String(entry?.webmPreview || entry?.webmPreviewMedium || entry?.webmPreviewLow || '').trim();
+  const fallbackLow = String(entry?.webmPreviewLow || entry?.webmPreviewMedium || entry?.webmPreview || '').trim();
+  const fallbackPoster = String(entry?.webpPosterMedium || entry?.webpPoster || entry?.thumbnailPoster || '').trim();
+  const hasAnimationPreview = Boolean(selectedUrl || selectedLowUrl);
   return {
-    name: selectedAnimation,
-    url: shortClip ? '' : selectedUrl,
-    lowUrl: shortClip ? '' : (selectedLowUrl || selectedUrl),
+    name: selectedAnimation || chosen || defaultAnimation || '',
+    url: shortClip ? '' : (selectedUrl || fallbackFull),
+    lowUrl: shortClip ? '' : (selectedLowUrl || fallbackLow || selectedUrl || fallbackFull),
     poster: typeof selected?.webpPosterMedium === 'string' && selected.webpPosterMedium.trim()
       ? selected.webpPosterMedium.trim()
-      : (typeof selected?.webpPoster === 'string' ? selected.webpPoster.trim() : ''),
+      : (typeof selected?.webpPoster === 'string' && selected.webpPoster.trim()
+        ? selected.webpPoster.trim()
+        : fallbackPoster),
     duration,
-    isFallback: false,
+    isFallback: !hasAnimationPreview && Boolean(fallbackFull || fallbackLow),
   };
 }
 
@@ -3044,15 +3051,19 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
   }
 
   try {
-    const indexText = entryRecord ? JSON.stringify(entryRecord.entries) : (indexPath ? await githubText(settings, indexPath) : '');
-    const metricsText = metricsPath ? await githubText(settings, metricsPath) : '';
-    const exclusionsText = exclusionsPath ? await githubText(settings, exclusionsPath) : '';
+    const [metricsText, exclusionsText] = await Promise.all([
+      metricsPath ? githubText(settings, metricsPath) : '',
+      exclusionsPath ? githubText(settings, exclusionsPath) : '',
+    ]);
     metrics = parseMetricsJson(metricsText);
     exclusions = exclusionsText ? JSON.parse(exclusionsText) : { rules: [] };
-    entries = indexText ? JSON.parse(indexText) : [];
-    entry = Array.isArray(entries)
-      ? entries.find((item) => item?.id === uploadId || cleanRepoPath(item?.previewPath || '') === cleanRepoPath(uploadPath))
-      : null;
+    if (!entryRecord) {
+      const indexText = indexPath ? await githubText(settings, indexPath) : '';
+      entries = indexText ? JSON.parse(indexText) : [];
+      entry = Array.isArray(entries)
+        ? entries.find((item) => item?.id === uploadId || cleanRepoPath(item?.previewPath || '') === cleanRepoPath(uploadPath))
+        : null;
+    }
     note = String(entry?.note || '').trim();
     if (entry?.showOwnerLibrary) {
       const ownerEmail = String(entry?.ownerEmail || '').toLowerCase();
@@ -3159,17 +3170,33 @@ async function resolveEntryRecord(settings, entryId) {
     const basePath = basePaths[index];
     try {
       const indexPath = `${basePath}/index.json`;
-      // Collection indexes are public and often larger than the Contents API
-      // limit. Prefer raw GitHub with a short cache to avoid API quota spikes.
-      let indexText = await githubText(settings, indexPath, { ttlMs: 60_000, preferRaw: true });
+      const lookupPath = previewIndexPath(basePath, id);
+      // library_01's full historical index is ~20 MB. Resolve those older
+      // works through a compact first-character shard so a cold Vercel
+      // invocation never downloads and reparses the entire archive.
+      let indexText = await githubText(settings, lookupPath, { ttlMs: 60_000, preferRaw: true });
+      if (!indexText && basePath === 'library_01') {
+        // Preserve a safe fallback for legacy entries that predate the shards,
+        // without fetching the oversized historical index.
+        const directPath = joinRepoPath(basePath, id);
+        const directItems = await githubList(settings, directPath);
+        if (directItems.length) {
+          const files = directItems
+            .filter((item) => item?.type === 'file')
+            .map((item) => cleanRepoPath(item.path || joinRepoPath(directPath, item.name)))
+            .filter(Boolean);
+          const entry = { id, previewPath: directPath, files, showOwnerLibrary: false };
+          return { previewPath: directPath, entry, entries: [entry], basePath };
+        }
+        continue;
+      }
       let entries = indexText ? JSON.parse(indexText) : [];
       if (!Array.isArray(entries)) entries = [];
       let match = entries.find((entry) => String(entry?.id || '') === id);
 
-      // A just-published work may not be present in the cached index. Refresh
-      // only the newest collection on a miss, using a cache-busted raw URL.
+      // A just-published work may not be present in the cached newest index.
       if (!match && index === 0) {
-        indexText = await githubText(settings, indexPath, {
+        indexText = await githubText(settings, lookupPath, {
           ttlMs: 0,
           preferRaw: true,
           cacheBust: true,
