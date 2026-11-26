@@ -53,8 +53,9 @@ test('Spine 3.7 previews use the official branch runtime pinned to its commit', 
 test('Spine skeleton JSON and binary URLs are versioned to avoid stale CDN exports', () => {
   assert.match(
     previewSource,
-    /const skeletonUrl = versionedAssetUrl\(origin, skeleton, assetVersion\);/,
+    /const skeletonUrlBase = versionedAssetUrl\(origin, skeleton, skeletonAssetVersion\);/,
   );
+  assert.ok(previewSource.includes('spine38-json-skin-array-v1'));
 });
 
 test('Spine 4.2 and 4.3 JSON URLs keep a query-free extension for the official parser', () => {
