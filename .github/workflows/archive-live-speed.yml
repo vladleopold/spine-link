@@ -12,7 +12,7 @@ permissions:
 jobs:
   release_gate:
     if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       deployed: ${{ steps.inspect.outputs.deployed }}
     steps:
