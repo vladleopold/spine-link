@@ -23,12 +23,12 @@ test('network failure, 503 and successful retry', async () => {
 });
 test('429 is returned immediately and keeps the original response readable', async()=>{
  let count=0; const saved=globalThis.fetch;sleeps.length=0;
- globalThis.fetch=async()=>new Response('{"rateLimited":true}',{status:429,headers:{'Retry-After':'2'}});
+ globalThis.fetch=async()=>{count++;return new Response('{"rateLimited":true}',{status:429,headers:{'Retry-After':'2'}});};
  try{
   const response=await uploadRequest('/upload',{});
   assert.equal(response.status,429);
   assert.equal(await response.text(),'{"rateLimited":true}');
-  assert.equal(count,0);
+  assert.equal(count,1);
   assert.deepEqual(sleeps,[]);
  }finally{globalThis.fetch=saved;}
 });
