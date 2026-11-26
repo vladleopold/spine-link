@@ -9,7 +9,6 @@ on:
       - 'api/github-upload.js'
       - 'lib/google-session.js'
       - 'lib/google-session.d.ts'
-      - 'lib/google-session.d.ts'
       - 'lib/agent-animation.js'
       - 'lib/agent-user-keys.js'
       - 'public/api-keys.html'
@@ -34,6 +33,7 @@ on:
     paths:
       - 'api/github-upload.js'
       - 'lib/google-session.js'
+      - 'lib/google-session.d.ts'
       - 'src/SpineApp.tsx'
       - 'tests/google-auth-guard.test.mjs'
       - '.github/workflows/spine-link-agent-api.yml'
