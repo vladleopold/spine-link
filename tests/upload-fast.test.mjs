@@ -169,7 +169,7 @@ test('licensed Spine project upload dispatches directly to the public storage ex
     if (path.endsWith('/git/refs/heads/main') && method === 'PATCH') return json({ ok: true });
     if (path.endsWith('/dispatches') && method === 'POST') {
       dispatches.push({ path, body });
-      return json({}, 204);
+      return json({}, 200);
     }
     if (path.includes('/contents/')) return json({}, 404);
     return json({}, 404);
