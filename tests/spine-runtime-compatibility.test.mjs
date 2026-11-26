@@ -26,9 +26,10 @@ test('sanitizes Spine 3.8 object-keyed skins without losing its runtime version'
   };
   const result = sanitizeSkeletonJson(source);
   assert.equal(result.skeleton.spine, '3.8.97');
-  assert.deepEqual(result.skins.default.body.mesh.uvs, []);
-  assert.deepEqual(result.skins.default.body.mesh.vertices, []);
-  assert.deepEqual(result.skins.default.body.mesh.triangles, []);
+  assert.equal(result.skins[0].name, 'default');
+  assert.deepEqual(result.skins[0].attachments.body.mesh.uvs, []);
+  assert.deepEqual(result.skins[0].attachments.body.mesh.vertices, []);
+  assert.deepEqual(result.skins[0].attachments.body.mesh.triangles, []);
 });
 
 test('continues to sanitize Spine 4.x array-based skin records', () => {
