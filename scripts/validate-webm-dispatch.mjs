@@ -10,7 +10,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
   if (typeof uploadId !== 'string' || !/^[A-Za-z0-9_.-]{1,120}$/.test(uploadId)) {
     return failed('invalid-upload-id');
   }
-  if (typeof animation !== 'string' || animation.length > 160 || /[\\r\\n]/.test(animation)) {
+  if (typeof animation !== 'string' || animation.length > 160 || /[\r\n]/.test(animation)) {
     return failed('invalid-animation');
   }
 
