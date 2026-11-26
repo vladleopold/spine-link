@@ -75,118 +75,31 @@ async function writeCensorshipLists(settings, { blocked, allowed }) {
 // skipped, so a rotation that pre-created `library_90` never strands uploads
 // there. Numbering starts at 02 because `library` is the first permanent
 // collection, which is frozen and only read.
+/** Cache key for the active collection list shared by this Vercel runtime. */
 function libraryFoldersCacheKey(settings) {
-  return [settings.owner, settings.repo, settings.branch].join('\n');
+  return [settings.owner, settings.repo, settings.branch].join(String.fromCharCode(10));
 }
 
 /** Collection folders that hold an index.json, newest first. */
 async function collectionFoldersWithIndex(settings) {
   return githubLibraryFoldersCache.read(libraryFoldersCacheKey(settings), async () => {
     const response = await fetch(
-      `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/?ref=${encodeURIComponent(settings.branch)}`,
+      'https://api.github.com/repos/' + settings.owner + '/' + settings.repo + '/contents/?ref=' + encodeURIComponent(settings.branch),
       { headers: githubHeaders(settings.token) },
     );
     if (!response.ok) {
-      const detail = await response.clone().json()
-        .then(value => typeof value?.message === 'string' ? value.message : '')
-        .catch(() => '');
+      const detail = await response.clone().json().then(value => typeof value?.message === 'string' ? value.message : '').catch(() => '');
       throw withGitHubStatus(githubFailure('list', '/', response, detail), response, detail);
     }
     const items = await response.json();
     const numbered = (Array.isArray(items) ? items : [])
-      .map(item => item && item.type === 'dir'
-        ? String(item.name || '').match(new RegExp(`^${DEFAULT_BASE_PATH_PREFIX}(\\d+)import agentAnimationHandler from '../lib/agent-animation.js';
-import { createPublicUploaderEvidence } from '../lib/source-proof-privacy.js';
-import { mergeCollectionEntries } from '../lib/library-accounts.js';
-import { createRecoverySecret, normalizeRecoverySecret, hashRecoverySecret, addRecoveryHashToOwnedEntries, recoverEntriesByRecoveryHash, revokeRecoveryHashFromOwnedEntries, stripPrivateOwnerMetadata } from '../lib/anonymous-recovery.js';
-import { githubMetricsCache } from '../lib/github-metrics-cache.js';
-import { cachedGithubText, invalidateCachedGithubText } from '../lib/github-content-cache.js';
-import { githubLibraryFoldersCache } from '../lib/github-library-folders-cache.js';
-import { verifyGoogleAccessToken } from '../lib/google-access-token.js';
-import { githubErrorForResponse, shouldRetryGitHubResponse } from '../lib/github-rate-limit.js';
-const defaultOwner = 'vladleopold';
-const defaultRepo = 'spine';
-const defaultBranch = 'main';
-// New uploads always land in the highest-numbered library_NN folder, so the set of
-// folders grows as needed instead of being capped at two. rotate-library.mjs keeps
-// the newest folder under the 999-item GitHub limit by moving it into a permanent
-// collection and opening the next one.
-const DEFAULT_BASE_PATH_PREFIX = 'library_';
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { dataScienceSchema, inferDataScienceMetadata } from '../lib/spine-data-science.js';
-import { metricCountsForIds, parseMetricsJson, sanitizeMetricId, sanitizeMetricIds } from '../lib/spine-metrics.js';
-import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
-import { inspectRuntimeAssetSet } from '../lib/runtime-acceptance.js';
-import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
-
-const CENSORSHIP_FILE = 'library/censorship.json';
-
-function normalizeIdList(value) {
-  const items = Array.isArray(value) ? value : String(value || '').split(/[\s,\n]+/);
-  const seen = new Set();
-  const out = [];
-  for (const raw of items) {
-    const id = String(raw || '').trim().replace(/^\/+|\/+$/g, '');
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    out.push(id);
-  }
-  return out;
-}
-
-// Lists of closed accounts live in the repository so they can be edited from the
-// admin page without touching environment variables.
-async function readCensorshipLists(settings) {
-  try {
-    const existing = await getGitHubContent(settings, CENSORSHIP_FILE);
-    const parsed = existing?.content ? JSON.parse(Buffer.from(existing.content, 'base64').toString('utf8')) : null;
-    return {
-      blocked: normalizeIdList(parsed?.blocked),
-      allowed: normalizeIdList(parsed?.allowed),
-    };
-  } catch {
-    return { blocked: [], allowed: [] };
-  }
-}
-
-async function writeCensorshipLists(settings, { blocked, allowed }) {
-  const payload = {
-    updatedAt: new Date().toISOString(),
-    blocked: normalizeIdList(blocked),
-    allowed: normalizeIdList(allowed),
-  };
-  const existing = await getGitHubContent(settings, CENSORSHIP_FILE);
-  await putGitHubContent(
-    settings,
-    CENSORSHIP_FILE,
-    textToBase64(JSON.stringify(payload, null, 2)),
-    'admin: обновить списки цензуры',
-    existing?.sha,
-    origin,
-  );
-  return payload;
-}
-
-// The collection that receives new uploads: the highest-numbered library_NN
-// folder that actually holds an index.json. Empty placeholder folders are
-// skipped, so a rotation that pre-created `library_90` never strands uploads
-// there. Numbering starts at 02 because `library` is the first permanent
-// collection, which is frozen and only read.
-))
-        : null)
+      .map(item => item && item.type === 'dir' ? String(item.name || '').match(new RegExp('^' + DEFAULT_BASE_PATH_PREFIX + '(\\d+)$')) : null)
       .filter(Boolean)
       .map(match => ({ name: match[0], index: Number(match[1]) }))
-      .sort((a, b) => b.index - a.index);
-
-    // The collection index is public. Check it through raw.githubusercontent.com
-    // and cache it instead of burning one authenticated Contents API call per
-    // collection on every portfolio/library request.
-    const present = await Promise.all(numbered.map(async ({ name }) => {
-      const content = await cachedGithubText(settings, `${name}/index.json`, {
-        ttlMs: 30_000,
-        preferRaw: true,
-      });
-      return content ? name : '';
+      .sort((left, right) => right.index - left.index);
+    const present = await Promise.all(numbered.map(async item => {
+      const text = await cachedGithubText(settings, item.name + '/index.json', { ttlMs: 30000, preferRaw: true });
+      return text ? item.name : '';
     }));
     return present.filter(Boolean);
   });
@@ -197,18 +110,17 @@ async function libraryCollectionIndexes(settings, { readOnly = false } = {}) {
   return Promise.all(folders.map(async basePath => {
     const indexPath = joinRepoPath(basePath, 'index.json');
     if (readOnly) {
-      const text = await cachedGithubText(settings, indexPath, { ttlMs: 10_000, preferRaw: true });
+      const text = await cachedGithubText(settings, indexPath, { ttlMs: 10000, preferRaw: true });
       const entries = text ? JSON.parse(text) : [];
-      if (!Array.isArray(entries)) throw new Error(`Invalid library index: ${basePath}`);
+      if (!Array.isArray(entries)) throw new Error('Invalid library index: ' + basePath);
       return { basePath, entries, sha: '' };
     }
     const content = await getGitHubContent(settings, indexPath);
     const entries = content?.content && content.encoding === 'base64' ? JSON.parse(base64ToText(content.content)) : [];
-    if (!Array.isArray(entries)) throw new Error(`Invalid library index: ${basePath}`);
+    if (!Array.isArray(entries)) throw new Error('Invalid library index: ' + basePath);
     return { basePath, entries, sha: content?.sha };
   }));
 }
-
 async function updateLibraryCollectionIndex(settings, collection, transform, message, origin) {
   const indexPath = joinRepoPath(collection.basePath, 'index.json');
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -264,14 +176,10 @@ async function readMetricsAcrossCollections(settings, ids) {
 
 async function newestLibraryBasePath(settings) {
   if (process.env.LIBRARY_BASE_PATH) return cleanRepoPath(process.env.LIBRARY_BASE_PATH);
-  const fallback = `${DEFAULT_BASE_PATH_PREFIX}02`;
-  try {
-    return (await collectionFoldersWithIndex(settings))[0] || fallback;
-  } catch {
-    return fallback;
-  }
+  const fallback = DEFAULT_BASE_PATH_PREFIX + '02';
+  try { return (await collectionFoldersWithIndex(settings))[0] || fallback; }
+  catch { return fallback; }
 }
-
 /**
  * Resolves a work folder against the active collection. Clients that only know
  * the upload id send a bare id, and the active library_NN folder is prepended
@@ -643,25 +551,19 @@ export async function verifyGoogleToken(request, body) {
   } catch (error) {
     if (error?.code === 'google_oauth_client_mismatch') {
       console.warn('[AUTH] Google access-token audience mismatch', {
-        status: Number(error.googleStatus) || 200,
-        expectedClientId: clientId,
-        issued_to: error.tokenInfo?.issued_to || null,
-        audience: error.tokenInfo?.audience || null,
-        aud: error.tokenInfo?.aud || null,
-        azp: error.tokenInfo?.azp || null,
+        status: Number(error.googleStatus) || 200, expectedClientId: clientId,
+        issued_to: error.tokenInfo?.issued_to || null, audience: error.tokenInfo?.audience || null,
+        aud: error.tokenInfo?.aud || null, azp: error.tokenInfo?.azp || null,
       });
       throw unauthorized('Google token audience does not match this app');
     }
     if (error?.code === 'google_access_token_invalid') {
       console.warn('[AUTH] Google access-token validation failed', {
-        status: Number(error.googleStatus) || 0,
-        error: typeof error.googleError === 'string' ? error.googleError : '',
+        status: Number(error.googleStatus) || 0, error: typeof error.googleError === 'string' ? error.googleError : '',
       });
       throw unauthorized('Google session expired or invalid. Reconnect to continue.');
     }
-    if (error?.code === 'google_token_validation_unavailable') {
-      throw unauthorized('Google sign-in validation is temporarily unavailable', 503);
-    }
+    if (error?.code === 'google_token_validation_unavailable') throw unauthorized('Google sign-in validation is temporarily unavailable', 503);
     throw unauthorized(error instanceof Error ? error.message : 'Invalid Google token');
   }
 }
@@ -1037,50 +939,28 @@ export async function getGitHubContent(settings, path) {
   const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
   let response = null;
   let responseDetail = '';
-
   for (let attempt = 0; attempt < GITHUB_RETRY_ATTEMPTS; attempt += 1) {
     try {
-      response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodedPath}?ref=${encodeURIComponent(settings.branch)}`, {
-        headers: githubHeaders(settings.token),
-      });
+      response = await fetch('https://api.github.com/repos/' + settings.owner + '/' + settings.repo + '/contents/' + encodedPath + '?ref=' + encodeURIComponent(settings.branch), { headers: githubHeaders(settings.token) });
     } catch (error) {
       if (attempt === GITHUB_RETRY_ATTEMPTS - 1) throw error;
-      await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
+      await new Promise(resolve => setTimeout(resolve, githubRetryDelay(attempt)));
       continue;
     }
     if (response.ok || response.status === 404) break;
-
-    // GitHub's secondary-limit response can be HTTP 403 without the primary
-    // x-ratelimit-remaining: 0 header. Read its message before deciding to
-    // retry; repeating the same request only consumes more quota.
-    responseDetail = await response.clone().json()
-      .then(value => typeof value?.message === 'string' ? value.message : '')
-      .catch(() => '');
+    responseDetail = await response.clone().json().then(value => typeof value?.message === 'string' ? value.message : '').catch(() => '');
     if (!shouldRetryGitHubResponse(response, responseDetail)) break;
-    if (attempt < GITHUB_RETRY_ATTEMPTS - 1) {
-      await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
-    }
+    if (attempt < GITHUB_RETRY_ATTEMPTS - 1) await new Promise(resolve => setTimeout(resolve, githubRetryDelay(attempt)));
   }
-
   if (response.status === 404) return null;
-  if (!response.ok) {
-    throw withGitHubStatus(githubFailure('read', path, response, responseDetail), response, responseDetail);
-  }
-
+  if (!response.ok) throw withGitHubStatus(githubFailure('read', path, response, responseDetail), response, responseDetail);
   const data = await response.json();
-  // GitHub Contents API omits the body for files larger than 1MB
-  // (returns encoding "none" with an empty content string). Fetch the blob
-  // by its SHA so large index.json files are not silently read as empty.
   if (data?.encoding !== 'base64' || !data?.content) {
     if (data?.sha) {
-      const blobResponse = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/git/blobs/${data.sha}`, {
-        headers: githubHeaders(settings.token),
-      });
+      const blobResponse = await fetch('https://api.github.com/repos/' + settings.owner + '/' + settings.repo + '/git/blobs/' + data.sha, { headers: githubHeaders(settings.token) });
       if (blobResponse.ok) {
         const blob = await blobResponse.json();
-        if (blob?.encoding === 'base64' && blob?.content) {
-          return { ...data, encoding: 'base64', content: blob.content };
-        }
+        if (blob?.encoding === 'base64' && blob?.content) return { ...data, encoding: 'base64', content: blob.content };
       }
     }
     if (typeof data?.download_url === 'string' && data.download_url) {
@@ -1093,7 +973,6 @@ export async function getGitHubContent(settings, path) {
   }
   return data;
 }
-
 async function putGitHubContent(settings, path, contentBase64, message, sha, origin = '') {
   const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
   const normalizedContentBase64 = normalizePreviewHtml(settings, path, contentBase64, origin);
@@ -1111,11 +990,8 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       });
       const result = await response.json().catch(() => ({}));
       if (response.ok) {
-        const normalizedPath = cleanRepoPath(path);
-        invalidateCachedGithubText(settings, normalizedPath);
-        if (/(^|\/)index\.json$/i.test(normalizedPath)) {
-          githubLibraryFoldersCache.invalidate(libraryFoldersCacheKey(settings));
-        }
+        invalidateCachedGithubText(settings, cleanRepoPath(path));
+        if (/(^|\\/)index\\.json$/i.test(cleanRepoPath(path))) githubLibraryFoldersCache.invalidate(libraryFoldersCacheKey(settings));
         return result;
       }
       // Rate-limited writes are returned immediately with Retry-After. Only
@@ -1272,13 +1148,9 @@ async function commitGitHubChanges(settings, { writes, stagedBlobs = [], deletio
       // Non-fast-forward is a NORMAL concurrent writer, not a broken upload.
       // Retry against a fresh head; no blob bytes are sent again.
       await githubApi(settings, 'PATCH', branchRef, { sha: commit.sha });
-      // A successful commit supersedes any public raw-index snapshots and any
-      // collection discovery result that predates an index creation/rotation.
       for (const write of normalized) {
         invalidateCachedGithubText(settings, write.path);
-        if (/(^|\/)index\.json$/i.test(write.path)) {
-          githubLibraryFoldersCache.invalidate(libraryFoldersCacheKey(settings));
-        }
+        if (/(^|\\/)index\\.json$/i.test(write.path)) githubLibraryFoldersCache.invalidate(libraryFoldersCacheKey(settings));
       }
       // Callers consume the GitHub commit SHA and URL directly; returning a
       // wrapper silently erased commit receipts and source audit metadata.
@@ -1423,14 +1295,9 @@ export default async function handler(request, response) {
       token,
     };
     // An explicit setting still wins; otherwise uploads follow the newest folder.
-    const routePathHint = cleanRepoPath(
-      body?.uploadPath || body?.path || body?.entry?.previewPath || body?.collectionBasePath || '',
-    );
-    const routeCollectionHint = routePathHint.match(/^(library(?:_\d+)?)\//i)?.[1] || '';
-    settings.basePath = cleanRepoPath(
-      process.env.GITHUB_BASE_PATH || body?.settings?.basePath || routeCollectionHint ||
-      (await newestLibraryBasePath(settings)),
-    );
+    const routePathHint = cleanRepoPath(body?.uploadPath || body?.path || body?.entry?.previewPath || body?.collectionBasePath || '');
+    const routeCollectionHint = routePathHint.match(/^(library(?:_\\d+)?)\\//i)?.[1] || '';
+    settings.basePath = cleanRepoPath(process.env.GITHUB_BASE_PATH || body?.settings?.basePath || routeCollectionHint || (await newestLibraryBasePath(settings)));
 
     const files = Array.isArray(body?.files) ? body.files : [];
     const file = body?.file;
