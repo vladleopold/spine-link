@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 
 const SITE = 'http://127.0.0.1:4174';
 
 async function startDevServer() {
-  const server = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '4174', '--strictPort'], {
+  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '4174', '--strictPort'], {
     stdio: 'ignore',
     env: process.env,
   });
@@ -26,8 +27,9 @@ async function startDevServer() {
 
 test('anonymous visitors can create, use and revoke a recovery key without browser persistence', async () => {
   const server = await startDevServer();
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  let browser;
   try {
+    browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
     const page = await browser.newPage();
     const recoverySecret = randomBytes(32).toString('base64url');
     const actions = [];
@@ -112,7 +114,10 @@ test('anonymous visitors can create, use and revoke a recovery key without brows
     await page.getByText(/Recovery key revoked/).waitFor();
     assert.ok(actions.includes('revoke-anonymous-recovery-key'));
   } finally {
-    await browser.close();
-    server.kill('SIGTERM');
+    if (browser) await browser.close();
+    if (server.exitCode === null) {
+      server.kill('SIGTERM');
+      await once(server, 'exit').catch(() => {});
+    }
   }
 });
