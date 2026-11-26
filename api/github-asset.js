@@ -1,4 +1,5 @@
 import { sanitizeSkeletonJson } from '../lib/spine-json-sanitize.js';
+import { normalizeSpineJsonForLegacy38Runtime } from '../lib/spine-json-runtime-compat.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
@@ -149,6 +150,13 @@ function isSkeletonJsonData(data) {
 
 function sanitizeSkeletonData(json) {
   return sanitizeSkeletonJson(json);
+}
+
+function normalizeSkeletonJsonAsset(buffer, assetPath, request) {
+  if (!isSkeletonJsonPath(assetPath) || String(request.query?.spineRuntime || '') !== '3.8') {
+    return buffer;
+  }
+  return normalizeSpineJsonForLegacy38Runtime(buffer);
 }
 
 function byteRangeFromHeader(rangeHeader = '', size = 0) {
@@ -469,6 +477,7 @@ export default async function handler(request, response) {
           buffer = withAtlasPageCacheBuster(buffer, assetVersion);
           if (String(request.query?.spineRuntime || '') === '3.8') buffer = stripPmaMetadataForSpine38(buffer);
         }
+        buffer = normalizeSkeletonJsonAsset(buffer, assetPath, request);
         if (assetPath === 'library/index.json') buffer = sanitizeLibraryIndex(buffer);
         const etag = rawResponse.headers.get('etag') || '';
         putMemoryCacheEntry(cacheKey, { buffer, etag });
@@ -496,7 +505,11 @@ export default async function handler(request, response) {
     }
     const headResponse = sendAssetHeadFromMetadata(request, response, { path: assetPath, assetVersion, data, etag });
     if (headResponse) return headResponse;
-    const rangeResponse = await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag });
+    const needsSpine38JsonNormalization = isSkeletonJsonPath(assetPath) &&
+      String(request.query?.spineRuntime || '') === '3.8';
+    const rangeResponse = needsSpine38JsonNormalization
+      ? null
+      : await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag });
     if (rangeResponse) return rangeResponse;
     let buffer = await contentBufferFromGitHubContent(data, token);
     if (!buffer.length) return response.status(404).send('Asset is empty');
@@ -517,6 +530,7 @@ export default async function handler(request, response) {
       buffer = withAtlasPageCacheBuster(buffer, assetVersion);
       if (String(request.query?.spineRuntime || '') === '3.8') buffer = stripPmaMetadataForSpine38(buffer);
     }
+    buffer = normalizeSkeletonJsonAsset(buffer, assetPath, request);
     if (assetPath === 'library/index.json') {
       buffer = sanitizeLibraryIndex(buffer);
     }
