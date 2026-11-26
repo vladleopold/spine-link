@@ -89,6 +89,7 @@ test('public library projections omit anonymous IDs, recovery hashes and email m
 });
 
 const apiSource = fs.readFileSync(new URL('../api/github-upload.js', import.meta.url), 'utf8');
+const appSource = fs.readFileSync(new URL('../src/SpineApp.tsx', import.meta.url), 'utf8');
 
 test('API exposes create, restore and revoke actions without persisting plaintext recovery secrets', () => {
   assert.match(apiSource, /action === 'create-anonymous-recovery-key'/);
@@ -120,4 +121,11 @@ test('public library authorization is calculated before private owner fields are
 test('updates to existing library entries require the current owner', () => {
   assert.match(apiSource, /if \(existingEntry && !canEditEntry\(existingEntry, googlePayload, anonymousAccount\)\)/);
   assert.match(apiSource, /if \(existing && !canEditEntry\(existing, googlePayload, anonymousAccount\)\)/);
+});
+
+test('browser upload payloads do not include Google emails or anonymous owner IDs', () => {
+  assert.doesNotMatch(appSource, /ownerEmail\\s*:/);
+  assert.doesNotMatch(appSource, /ownerAnonId\\s*:/);
+  assert.doesNotMatch(appSource, /user\\?\.email\s*\|\|\s*anonymousAccount\.id/);
+  assert.match(appSource, /function publicOwnerIdFor\(_user: GoogleUser \| null, anonymousAccount: AnonymousAccount\)/);
 });
