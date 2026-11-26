@@ -136,3 +136,61 @@ test('a successful write refreshes cached SHA and metrics without another GitHub
   assert.equal(updated.current.sha, 'sha-new');
   assert.equal(updated.metrics.entries.preview.views, 2);
 });
+
+
+test('an invalidation fences off an older in-flight read before a fresh SHA is loaded', async () => {
+  const cache = createGithubMetricsCache({ ttlMs: 15_000, now: () => 1_000 });
+  let finishOld;
+  let finishFresh;
+  const oldRead = cache.read(settings, path, () => new Promise(resolve => {
+    finishOld = () => resolve({
+      current: { sha: 'sha-old' },
+      metrics: { entries: { preview: { views: 1 } } },
+    });
+  }));
+  await Promise.resolve();
+
+  cache.invalidate(settings, path);
+  const freshRead = cache.read(settings, path, () => new Promise(resolve => {
+    finishFresh = () => resolve({
+      current: { sha: 'sha-fresh' },
+      metrics: { entries: { preview: { views: 2 } } },
+    });
+  }));
+  await Promise.resolve();
+
+  finishOld();
+  await oldRead;
+  finishFresh();
+  await freshRead;
+
+  const cached = await cache.read(settings, path, async () => {
+    throw new Error('fresh snapshot should already be cached');
+  });
+  assert.equal(cached.current.sha, 'sha-fresh');
+  assert.equal(cached.metrics.entries.preview.views, 2);
+});
+
+test('a successful write fences off an older in-flight read from replacing its new SHA', async () => {
+  const cache = createGithubMetricsCache({ ttlMs: 15_000, now: () => 1_000 });
+  let finishOld;
+  const oldRead = cache.read(settings, path, () => new Promise(resolve => {
+    finishOld = () => resolve({
+      current: { sha: 'sha-before-write' },
+      metrics: { entries: { preview: { views: 3 } } },
+    });
+  }));
+  await Promise.resolve();
+
+  cache.set(settings, path, { sha: 'sha-after-write' }, {
+    entries: { preview: { views: 4 } },
+  });
+  finishOld();
+  await oldRead;
+
+  const cached = await cache.read(settings, path, async () => {
+    throw new Error('successful write snapshot should remain cached');
+  });
+  assert.equal(cached.current.sha, 'sha-after-write');
+  assert.equal(cached.metrics.entries.preview.views, 4);
+});
