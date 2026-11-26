@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { sanitizeSkeletonJson } from '../lib/spine-json-sanitize.js';
 import { normalizeSpineJsonForLegacy38Runtime } from '../lib/spine-json-runtime-compat.js';
 const defaultOwner = 'vladleopold';
@@ -96,8 +97,14 @@ function requestMatchesEtag(request, etag) {
   return Boolean(etag && String(request.headers['if-none-match'] || '') === etag);
 }
 
-function memoryCacheKey({ owner, repo, branch, path, assetVersion }) {
-  return [owner, repo, branch, path, assetVersion].join('\n');
+function memoryCacheKey({ owner, repo, branch, path, assetVersion, responseVariant = '' }) {
+  return [owner, repo, branch, path, assetVersion, responseVariant].join('\\n');
+}
+
+function normalizedAssetEtag(buffer, responseVariant) {
+  if (!responseVariant) return '';
+  const digest = createHash('sha256').update(buffer).digest('hex');
+  return `"${responseVariant}-${digest}"`;
 }
 
 function forgetMemoryCacheEntry(key) {
@@ -416,9 +423,14 @@ export default async function handler(request, response) {
   // to a different tier or substitute another image.
   const assetPath = path;
   const assetVersion = typeof request.query?.v === 'string' ? request.query.v : '';
+  const needsSpine38JsonNormalization = isSkeletonJsonPath(assetPath) &&
+    String(request.query?.spineRuntime || '') === '3.8';
+  const responseVariant = needsSpine38JsonNormalization
+    ? 'spine38-json-skin-array-v1'
+    : '';
 
   const encodedPath = encodeURIComponent(assetPath).replace(/%2F/g, '/');
-  const cacheKey = memoryCacheKey({ owner, repo, branch, path: assetPath, assetVersion });
+  const cacheKey = memoryCacheKey({ owner, repo, branch, path: assetPath, assetVersion, responseVariant });
   const cachedAsset = getMemoryCacheEntry(cacheKey);
   if (cachedAsset) {
     response.setHeader('X-Spine-Link-Asset-Memory', 'hit');
@@ -479,7 +491,9 @@ export default async function handler(request, response) {
         }
         buffer = normalizeSkeletonJsonAsset(buffer, assetPath, request);
         if (assetPath === 'library/index.json') buffer = sanitizeLibraryIndex(buffer);
-        const etag = rawResponse.headers.get('etag') || '';
+        const etag = responseVariant
+          ? normalizedAssetEtag(buffer, responseVariant)
+          : (rawResponse.headers.get('etag') || '');
         putMemoryCacheEntry(cacheKey, { buffer, etag });
         response.setHeader('X-Spine-Link-Asset-Memory', 'raw-fallback');
         return sendAssetBuffer(request, response, { path: assetPath, assetVersion, buffer, etag });
@@ -498,18 +512,18 @@ export default async function handler(request, response) {
     }
 
     const data = await githubResponse.json();
-    const etag = data?.sha ? `"github-${data.sha}${assetVersion ? `-${assetVersion}` : ''}${/\.dds$/i.test(assetPath) ? '-dds-rgba-png-v1' : ''}"` : '';
-    if (requestMatchesEtag(request, etag)) {
-      const earlyResponse = setAssetResponseHeaders(request, response, { path: assetPath, assetVersion, etag });
+    const sourceEtag = data?.sha ? `"github-${data.sha}${assetVersion ? `-${assetVersion}` : ''}${/\\.dds$/i.test(assetPath) ? '-dds-rgba-png-v1' : ''}"` : '';
+    if (!needsSpine38JsonNormalization && requestMatchesEtag(request, sourceEtag)) {
+      const earlyResponse = setAssetResponseHeaders(request, response, { path: assetPath, assetVersion, etag: sourceEtag });
       if (earlyResponse) return earlyResponse;
     }
-    const headResponse = sendAssetHeadFromMetadata(request, response, { path: assetPath, assetVersion, data, etag });
+    const headResponse = needsSpine38JsonNormalization
+      ? null
+      : sendAssetHeadFromMetadata(request, response, { path: assetPath, assetVersion, data, etag: sourceEtag });
     if (headResponse) return headResponse;
-    const needsSpine38JsonNormalization = isSkeletonJsonPath(assetPath) &&
-      String(request.query?.spineRuntime || '') === '3.8';
     const rangeResponse = needsSpine38JsonNormalization
       ? null
-      : await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag });
+      : await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag: sourceEtag });
     if (rangeResponse) return rangeResponse;
     let buffer = await contentBufferFromGitHubContent(data, token);
     if (!buffer.length) return response.status(404).send('Asset is empty');
@@ -534,6 +548,9 @@ export default async function handler(request, response) {
     if (assetPath === 'library/index.json') {
       buffer = sanitizeLibraryIndex(buffer);
     }
+    const etag = responseVariant
+      ? normalizedAssetEtag(buffer, responseVariant)
+      : sourceEtag;
     putMemoryCacheEntry(cacheKey, { buffer, etag });
     response.setHeader('X-Spine-Link-Asset-Memory', 'miss');
     return sendAssetBuffer(request, response, { path: assetPath, assetVersion, buffer, etag });
