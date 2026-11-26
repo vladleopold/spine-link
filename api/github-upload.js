@@ -993,7 +993,9 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       const result = await response.json().catch(() => ({}));
       if (response.ok) {
         invalidateCachedGithubText(settings, cleanRepoPath(path));
-        if (/(^|\\/)index\\.json$/i.test(cleanRepoPath(path))) githubLibraryFoldersCache.invalidate(libraryFoldersCacheKey(settings));
+        invalidateCachedGithubText(settings, normalizedPath);
+        const normalizedPath = cleanRepoPath(path);
+        if (normalizedPath === 'index.json' || normalizedPath.endsWith('/index.json')) githubLibraryFoldersCache.invalidate(libraryFoldersCacheKey(settings));
         return result;
       }
       // Rate-limited writes are returned immediately with Retry-After. Only
@@ -1152,7 +1154,7 @@ async function commitGitHubChanges(settings, { writes, stagedBlobs = [], deletio
       await githubApi(settings, 'PATCH', branchRef, { sha: commit.sha });
       for (const write of normalized) {
         invalidateCachedGithubText(settings, write.path);
-        if (/(^|\\/)index\\.json$/i.test(write.path)) githubLibraryFoldersCache.invalidate(libraryFoldersCacheKey(settings));
+        if (write.path === 'index.json' || write.path.endsWith('/index.json')) githubLibraryFoldersCache.invalidate(libraryFoldersCacheKey(settings));
       }
       // Callers consume the GitHub commit SHA and URL directly; returning a
       // wrapper silently erased commit receipts and source audit metadata.
