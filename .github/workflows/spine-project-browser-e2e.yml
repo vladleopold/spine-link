@@ -66,14 +66,23 @@ jobs:
               const stagePaths = [];
               page.on('pageerror',error=>errors.push(String(error)));
               await page.route('**/api/github-archive?feed=home',route=>route.fulfill({status:200,contentType:'application/json',body:'{"entries":[]}'}));
-              // Never publish test files. Verify the exact outgoing upload paths,
-              // and return a terminal client error to stop the transfer.
+              // Accept stage receipts so the real sequential upload pipeline can
+              // resolve the collection once and submit every file. Finalization
+              // remains rejected below, so the fixture never reaches GitHub.
               await page.route('**/api/github-upload',async route=>{
-                const request=route.request();
                 let payload={};
-                try {payload=JSON.parse(request.postData()||'{}');} catch {}
-                if(payload.action==='stage-blob')stagePaths.push(String(payload.path||''));
-                await route.fulfill({status:422,contentType:'application/json',body:'{"error":"Test stub: publishing disabled"}'});
+                try {payload=JSON.parse(route.request().postData()||'{}');} catch {}
+                if(payload.action==='stage-blob'){
+                  stagePaths.push(String(payload.path||''));
+                  const bytes=Buffer.from(String(payload.contentBase64||''),'base64').length;
+                  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+                    ok:true,path:String(payload.path||''),uploadPath:'library_03/'+String(payload.uploadId||''),
+                    blobSha:'a'.repeat(40),bytes,sha256:'b'.repeat(64),signature:'test-stage-receipt'
+                  })});
+                  return;
+                }
+                await route.fulfill({status:422,contentType:'application/json',
+                  body:'{"error":"Test stub: publishing disabled"}'});
               });
               await page.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded',timeout:45000});
               await page.locator('#home-drop-zone').waitFor();
@@ -153,7 +162,15 @@ jobs:
             await staticPage.route('**/api/github-upload',async route=>{
               let payload={};
               try{payload=JSON.parse(route.request().postData()||'{}');}catch{}
-              if(payload.action==='stage-blob')handoffPaths.push(String(payload.path||''));
+              if(payload.action==='stage-blob'){
+                handoffPaths.push(String(payload.path||''));
+                const bytes=Buffer.from(String(payload.contentBase64||''),'base64').length;
+                await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+                  ok:true,path:String(payload.path||''),uploadPath:'library_03/'+String(payload.uploadId||''),
+                  blobSha:'a'.repeat(40),bytes,sha256:'b'.repeat(64),signature:'test-stage-receipt'
+                })});
+                return;
+              }
               await route.fulfill({status:422,contentType:'application/json',
                 body:'{"error":"Test stub: publishing disabled"}'});
             });

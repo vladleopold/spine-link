@@ -10,7 +10,10 @@ export async function uploadRequest(url: string, init: RequestInit, attempts = 3
       await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
       continue;
     }
-    if (response.ok || (response.status < 500 && response.status !== 429) || attempt + 1 >= attempts) return response;
+    // A rate limit is an instruction to pause, not a transient server fault.
+    // Return it immediately so the caller can preserve the staged upload and
+    // offer a later retry instead of replaying a large POST after Retry-After.
+    if (response.ok || response.status < 500 || attempt + 1 >= attempts) return response;
     const retryAfter = response.headers.get("Retry-After");
     const seconds = Number(retryAfter);
     const dateDelay = retryAfter ? Date.parse(retryAfter) - Date.now() : 0;

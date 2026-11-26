@@ -21,10 +21,16 @@ test('network failure, 503 and successful retry', async () => {
  globalThis.fetch=async()=>{if(++count===1)throw new TypeError('network');return new Response('{}',{status:count===2?503:200});};
  try { assert.equal((await uploadRequest('/upload',{})).status,200); assert.equal(count,3); } finally {globalThis.fetch=saved;}
 });
-test('429 honors Retry-After and keeps final response readable', async()=>{
+test('429 is returned immediately and keeps the original response readable', async()=>{
  let count=0; const saved=globalThis.fetch;sleeps.length=0;
- globalThis.fetch=async()=>new Response('{"ok":true}',{status:++count===1?429:200,headers:{'Retry-After':'2'}});
- try{assert.equal(await(await uploadRequest('/upload',{})).text(),'{"ok":true}');assert.deepEqual(sleeps,[2000]);}finally{globalThis.fetch=saved;}
+ globalThis.fetch=async()=>{count++;return new Response('{"rateLimited":true}',{status:429,headers:{'Retry-After':'2'}});};
+ try{
+  const response=await uploadRequest('/upload',{});
+  assert.equal(response.status,429);
+  assert.equal(await response.text(),'{"rateLimited":true}');
+  assert.equal(count,1);
+  assert.deepEqual(sleeps,[]);
+ }finally{globalThis.fetch=saved;}
 });
 test('temporary failures stop at retry limit',async()=>{
  let count=0;const saved=globalThis.fetch;globalThis.fetch=async()=>{count++;return new Response('unavailable',{status:503});};
