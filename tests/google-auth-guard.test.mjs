@@ -9,7 +9,7 @@ process.env.GOOGLE_CLIENT_ID = 'expected-spine-link-client';
 
 const request = {headers:{authorization:'Bearer valid-google-access'}};
 const results = [];
-function setMocks({aud='expected-spine-link-client',azp='',sub='subject-1',userinfoSub='subject-1',tokenStatus=200}={}) {
+function setMocks({aud='expected-spine-link-client',azp='',issuedTo='',audience='',sub='subject-1',userinfoSub='subject-1',tokenStatus=200}={}) {
   let tokenGets=0, userinfoGets=0;
   globalThis.fetch=async url=>{
     const value=String(url);
@@ -19,7 +19,7 @@ function setMocks({aud='expected-spine-link-client',azp='',sub='subject-1',useri
     if (value.includes('tokeninfo?access_token=')) {
       tokenGets++;
       return {ok:tokenStatus===200,status:tokenStatus,
-        json:async()=>({aud,azp,sub})};
+        json:async()=>({aud,azp,issued_to:issuedTo,audience,sub})};
     }
     if (value.endsWith('/userinfo')) {
       userinfoGets++;
@@ -41,6 +41,26 @@ test('only an access token issued to this Google OAuth client can edit or delete
 
 test('foreign Google access token is rejected even if userinfo would verify email',async()=>{
   const counts=setMocks({aud:'evil-other-client'});
+  await assert.rejects(()=>verifyGoogleToken(request,{}),/audience/);
+  assert.deepEqual(counts(),{tokenGets:1,userinfoGets:0});
+});
+
+test('access-token tokeninfo issued_to claim is accepted for this OAuth client',async()=>{
+  const counts=setMocks({aud:'',azp:'',issuedTo:'expected-spine-link-client'});
+  const profile=await verifyGoogleToken(request,{});
+  assert.equal(profile.sub,'subject-1');
+  assert.deepEqual(counts(),{tokenGets:1,userinfoGets:1});
+});
+
+test('access-token tokeninfo audience field is accepted for this OAuth client',async()=>{
+  const counts=setMocks({aud:'',azp:'',audience:'expected-spine-link-client'});
+  const profile=await verifyGoogleToken(request,{});
+  assert.equal(profile.sub,'subject-1');
+  assert.deepEqual(counts(),{tokenGets:1,userinfoGets:1});
+});
+
+test('foreign access-token issued_to claim remains rejected',async()=>{
+  const counts=setMocks({aud:'',azp:'',issuedTo:'evil-other-client',audience:'evil-other-client'});
   await assert.rejects(()=>verifyGoogleToken(request,{}),/audience/);
   assert.deepEqual(counts(),{tokenGets:1,userinfoGets:0});
 });

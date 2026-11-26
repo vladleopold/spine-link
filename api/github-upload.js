@@ -563,8 +563,15 @@ export async function verifyGoogleToken(request, body) {
   const accessPayload = await accessTokenResponse.json().catch(() => ({}));
   // Do not silently accept an arbitrary Google access token just because
   // userinfo returns a verified email. It must have been issued to this app.
-  if (!accessTokenResponse.ok ||
-      (accessPayload.aud !== clientId && accessPayload.azp !== clientId)) {
+  // Access-token tokeninfo responses use issued_to/audience. Keep aud/azp
+  // for compatibility with responses that expose the ID-token claim names.
+  const issuedToThisApp = [
+    accessPayload.issued_to,
+    accessPayload.audience,
+    accessPayload.aud,
+    accessPayload.azp,
+  ].some(value => value === clientId);
+  if (!accessTokenResponse.ok || !issuedToThisApp) {
     throw unauthorized('Google token audience does not match this app');
   }
 
