@@ -9,7 +9,7 @@ test('Spine 3.8 previews use the same-origin official runtime and compatible atl
   assert.ok(previewSource.includes('setPlayerStylesheet("/vendor-spine-player-3.8.css")'));
   assert.ok(previewSource.includes('loadScriptOnce("/vendor-spine-player-3.8.js")'));
   assert.ok(!previewSource.includes('cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@8b4844bd4b193ba9e54487ed397a777993cbad56'));
-  assert.ok(previewSource.includes('spine38-atlas-compat-v1'));
+  assert.ok(previewSource.includes('spine38-runtime-compat-v2'));
   assert.ok(previewSource.includes('&spineRuntime=3.8'));
   assert.ok(assetSource.includes('function stripPmaMetadataForSpine38('));
   assert.ok(assetSource.includes('request.query?.spineRuntime'));
