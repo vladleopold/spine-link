@@ -6,6 +6,7 @@ on:
       - 'src/SpineApp.tsx'
       - 'api/github-upload.js'
       - 'lib/source-proof-privacy.js'
+      - 'lib/source-proof-privacy.d.ts'
       - 'tests/source-proof-privacy.test.mjs'
       - 'public/spine-link-manifesto.html'
       - 'public/llms.txt'
@@ -25,7 +26,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Node.js 22
-        uses: actions/setup-node@49933ea5288caeca8642d1e84bd3f7d6820020
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
