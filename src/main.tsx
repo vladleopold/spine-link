@@ -1281,7 +1281,9 @@ async function uploadBackgroundFilesFast(
   const runtimeSkeletonFile = selectSpineRuntimeSkeleton(files, files.find(file => /\.atlas(?:\.txt|\.docx)?$/i.test(file.name))?.name);
   const animationMetadata = !isProject && runtimeSkeletonFile && /\.json$/i.test(runtimeSkeletonFile.name)
     ? spineAnimationMetadataFromJson(await runtimeSkeletonFile.text())
-    : { animations: [], defaultAnimation: "" };
+    : !isProject && runtimeSkeletonFile && /\.skel$/i.test(runtimeSkeletonFile.name)
+      ? { animations: [], defaultAnimation: "__SPINE_AUTO__" }
+      : { animations: [], defaultAnimation: "" };
   // Reject corrupt binary files mislabeled .atlas before writing any public
   // archive entry. A malformed atlas otherwise yields bogus image URLs.
   for(const file of files){
