@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { indexedFilePath, previewIndexPath } from '../lib/github-preview-index.js';
 const source=fs.readFileSync(new URL('../api/github-preview.js',import.meta.url),'utf8');
 const snippet=source.slice(source.indexOf('async function resolveEntryRecord('),source.indexOf('export default async function handler('));
 const entry={id:'legacy-work',previewPath:'legacy-work',allAnimationPreviews:{idle:{mp4Preview:'https://example.test/idle.mp4'}}};
@@ -32,6 +33,9 @@ test('restored pre-rotation archive works also resolve from /p links', async () 
     'cleanRepoPath',
     'libraryCollectionPaths',
     'githubText',
+    'previewIndexPath',
+    'joinRepoPath',
+    'githubList',
     `${recoverySnippet}; return resolveEntryRecord;`,
   )(
     (value) => String(value || '').split('/').filter(Boolean).join('/'),
@@ -43,6 +47,9 @@ test('restored pre-rotation archive works also resolve from /p links', async () 
       }
       return '[]';
     },
+    previewIndexPath,
+    (...parts) => parts.filter(Boolean).join('/'),
+    async () => [],
   );
   for (const id of recoveredIds) {
     const found = await resolveRecovered({ branch: 'main', basePath: 'library' }, id);
@@ -65,7 +72,7 @@ test('legacy indexed skeleton/atlas/texture fields bypass a throttled directory 
   const helper = source.slice(start, end).trim();
   let directoryReads = 0;
   const findDirectories = new Function(
-    'cleanRepoPath', 'isSkeleton', 'isAtlas', 'isImage', 'joinRepoPath', 'githubList',
+    'cleanRepoPath', 'isSkeleton', 'isAtlas', 'isImage', 'joinRepoPath', 'githubList', 'indexedFilePath',
     helper + '; return findSpineSetDirectories;',
   )(
     value => String(value || '').replace(/^\/+|\/+$/g, ''),
@@ -74,6 +81,7 @@ test('legacy indexed skeleton/atlas/texture fields bypass a throttled directory 
     name => /\.(?:png|webp|jpe?g|dds)$/i.test(String(name || '')),
     (...parts) => parts.filter(Boolean).join('/'),
     async () => { directoryReads += 1; throw new Error('GitHub Contents API temporarily unavailable'); },
+    indexedFilePath,
   );
   const result = await findDirectories({}, 'library_02/legacy-work', 3, {
     uploadedAt: '2026-10-24T21:46:51.258Z',
