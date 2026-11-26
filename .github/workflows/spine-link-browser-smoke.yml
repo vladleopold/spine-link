@@ -617,8 +617,8 @@ jobs:
                 if (response.status() < 400) return;
                 const url = response.url();
                 convertedHttpErrors.push({status:response.status(),url});
-                if (/\\.(?:atlas|json|png|webp|skel)(?:[?#]|$)/i.test(url) ||
-                    /spine-player(?:\\.min)?\\.(?:js|css)(?:[?#]|$)/i.test(url)) {
+                if (/\.(?:atlas|json|png|webp|skel)(?:[?#]|$)/i.test(url) ||
+                    /spine-player(?:\.min)?\.(?:js|css)(?:[?#]|$)/i.test(url)) {
                   convertedMissingAssets.push(response.status() + ' ' + url);
                 }
               });
