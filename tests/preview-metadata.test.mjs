@@ -6,7 +6,7 @@ const source=fs.readFileSync(new URL('../api/github-preview.js',import.meta.url)
 const snippet=source.slice(source.indexOf('async function resolveEntryRecord('),source.indexOf('export default async function handler('));
 const entry={id:'legacy-work',previewPath:'legacy-work',allAnimationPreviews:{idle:{mp4Preview:'https://example.test/idle.mp4'}}};
 const resolve=new Function('cleanRepoPath','libraryCollectionPaths','githubText','previewIndexPath','joinRepoPath','githubList',snippet+';return resolveEntryRecord;')(
-  v=>String(v||'').replace(/^\\/+|\\/+$/g,''),
+  v=>String(v||'').split('/').filter(Boolean).join('/'),
   async()=>['library','library_02'],
   async(_settings,path)=>JSON.stringify(path==='library_02/index.json'?[entry]:[]),
   previewIndexPath,
