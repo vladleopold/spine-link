@@ -1,0 +1,37 @@
+name: Source Proof Privacy Regression
+
+on:
+  pull_request:
+    paths:
+      - 'src/SpineApp.tsx'
+      - 'api/github-upload.js'
+      - 'lib/source-proof-privacy.js'
+      - 'tests/source-proof-privacy.test.mjs'
+      - 'public/spine-link-manifesto.html'
+      - 'public/llms.txt'
+      - '.github/workflows/source-proof-privacy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-proof-privacy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84bd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Source Proof privacy regression tests
+        run: node --test tests/source-proof-privacy.test.mjs
+      - name: Build site
+        run: npm run build
