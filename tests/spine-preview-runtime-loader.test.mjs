@@ -74,7 +74,7 @@ test('Spine 3.8 JSON preview assets use the versioned runtime-compatible JSON re
   assert.ok(assetSource.includes('normalizeSpineJsonForLegacy38Runtime'));
   assert.ok(assetSource.includes('isSkeletonJsonPath(assetPath)'));
   assert.ok(assetSource.includes('needsSpine38JsonNormalization'));
-  assert.equal((assetSource.match(/normalizeSkeletonJsonAsset\\(buffer, assetPath, request\\)/g) || []).length, 2,
+  assert.equal(assetSource.split('normalizeSkeletonJsonAsset(buffer, assetPath, request)').length - 1, 2,
     'both GitHub API and raw-fallback asset paths must normalize Spine 3.8 JSON');
 });
 
