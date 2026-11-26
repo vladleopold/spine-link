@@ -72,7 +72,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
     // Binary Spine skeletons cannot be inspected without the matching Spine
     // runtime. Accept the dispatch candidate here; spine-export-webm performs
     // the authoritative animation-name validation after loading the .skel.
-    for (const name of files.filter((file) => /\\.skel$/i.test(file))) {
+    for (const name of files.filter((file) => /\.skel$/i.test(file))) {
       sawSkeleton = true;
       sawBinarySkeleton = true;
       const skeletonAbsolute = path.join(setDirectory, name);
