@@ -56,6 +56,7 @@ test('primary rate-limit errors expose HTTP 429 and the exact reset delay', () =
     path: 'library/index.json',
     response: response(403, {'x-ratelimit-remaining':'0','x-ratelimit-reset':'1005'}),
     message: 'API rate limit exceeded',
+    nowMs: 1000000,
   });
   assert.equal(error.statusCode, 429);
   assert.equal(error.retryAfter, 5);
