@@ -9,6 +9,7 @@ on:
       - lib/github-content-cache.js
       - vercel.json
       - lib/spine-runtime-file-selection.js
+      - lib/spine-json-sanitize.js
       - tests/spine-runtime-compatibility.test.mjs
       - tests/spine-preview-runtime-loader.test.mjs
       - tests/spine37-binary-runtime-compatibility.test.mjs
