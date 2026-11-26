@@ -246,9 +246,6 @@ type LibraryEntry = {
   title: string;
   /** Decided server-side by canEditEntry(); the only ownership signal the browser gets. */
   canEdit?: boolean;
-  ownerEmail?: string;
-  ownerAnonId?: string;
-  ownerAnonFingerprint?: string;
   ownerName?: string;
   ownerPicture?: string;
   publicOwnerId?: string;
@@ -890,9 +887,10 @@ function storeDismissedSkeletonUploadTip(user: GoogleUser | null, anonymousAccou
   }
 }
 
-function publicOwnerIdFor(user: GoogleUser | null, anonymousAccount: AnonymousAccount) {
-  const source = (user?.email || anonymousAccount.id).toLowerCase();
-  return `u_${hashString(source)}`;
+function publicOwnerIdFor(_user: GoogleUser | null, anonymousAccount: AnonymousAccount) {
+  // The browser fallback is derived from the random anonymous account ID,
+  // never from a Google email address. The API assigns Google IDs from sub.
+  return `u_${hashString(anonymousAccount.id.toLowerCase())}`;
 }
 
 function decodeJwtPayload<T = Record<string, unknown>>(token: string): T {
@@ -5019,7 +5017,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           showOwnerLibrary: nextValue,
           ownerName: accountDisplayName || googleUser?.name,
           ownerPicture: googleUser?.picture,
-          publicOwnerId: publicOwnerIdFor(googleUser, anonymousAccount),
           commitPrefix: "Update Spine-Link public profile setting",
         }),
       });
@@ -5292,11 +5289,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       const entry: LibraryEntry = {
         id: uploadId,
         title: nextSettings.title || existingEntry?.title || spine.label,
-        ownerEmail: googleUser?.email || existingEntry?.ownerEmail,
         ownerName: accountDisplayName || existingEntry?.ownerName || googleUser?.name,
         ownerPicture: googleUser?.picture || existingEntry?.ownerPicture,
-        publicOwnerId: existingEntry?.publicOwnerId || publicOwnerIdFor(googleUser, anonymousAccount),
-        ownerAnonId: existingEntry?.ownerAnonId || anonymousAccount.id,
         showOwnerLibrary: existingEntry?.showOwnerLibrary ?? showProfileOnSharedPages,
         portfolioMode: existingEntry?.portfolioMode ?? isPortfolioMode,
         hiddenFromPublicLibrary: existingEntry?.hiddenFromPublicLibrary,
