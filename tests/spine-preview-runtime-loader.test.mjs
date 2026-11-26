@@ -67,6 +67,13 @@ test('Spine 4.2 and 4.3 JSON URLs keep a query-free extension for the official p
   assert.ok(previewSource.includes('playerOptions.rawDataURIs = rawDataURIs'));
 });
 
+test('Spine 3.8 JSON preview assets use the versioned runtime-compatible JSON response', () => {
+  assert.ok(previewSource.includes('spine38-json-skin-array-v1'));
+  assert.ok(previewSource.includes('spineRuntime=3.8'));
+  assert.ok(assetSource.includes('normalizeSpineJsonForLegacy38Runtime'));
+  assert.ok(assetSource.includes('isSkeletonJsonPath(assetPath)'));
+});
+
 test('Spine 4.2 binary skeletons use binaryUrl just like 4.0 and 4.1', () => {
   assert.ok(
     previewSource.includes('/^4[.][012](?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""))'),
