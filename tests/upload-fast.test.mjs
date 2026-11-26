@@ -92,7 +92,7 @@ test('fast path uploads four Spine files concurrently and commits only once', as
     assert.equal(published.status, 200, JSON.stringify(published.data));
     assert.equal(published.data.github.commitSha, 'commit-2', 'real commit SHA returned to uploader');
     assert.equal(commits, 1, 'exactly one commit for the whole project');
-    assert.equal(published.data.receipts.length, 4);
+    assert.equal(published.data.files.length, 4, 'verified files returned to uploader');
     const tree = branches.at(-1);
     for (const [name, bytes] of files) {
       const match = tree.find(item => item.path === 'library_02/fast-project/' + name);
