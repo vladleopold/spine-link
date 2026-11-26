@@ -235,7 +235,6 @@ jobs:
                 if (file === 'meta.json') {
                   try {
                     videoMeta = JSON.parse(fs.readFileSync(path.join(sourceDir, file), 'utf8'));
-                    
                   } catch(e) {}
                   continue;
                 }
@@ -259,15 +258,15 @@ jobs:
               const exportError = videoMeta.error || (!hasWebmPreview ? 'No WebM preview artifact was produced' : '');
               const entryIndex = indexData.findIndex(e => e.id === uploadId);
               if (entryIndex !== -1) {
-                  if (exportError) {
-                    delete indexData[entryIndex].webmPreview;
+                if (exportError) {
+                  delete indexData[entryIndex].webmPreview;
                     delete indexData[entryIndex].webmPreviewMedium;
                     delete indexData[entryIndex].webmPreviewLow;
                     delete indexData[entryIndex].webpPoster;
                     delete indexData[entryIndex].webpPosterMedium;
                     delete indexData[entryIndex].webpPosterLow;
-                    delete indexData[entryIndex].webmPreviewPath;
-                  }
+                  delete indexData[entryIndex].webmPreviewPath;
+                }
                 delete indexData[entryIndex].webmChunksJson;
                 delete indexData[entryIndex].webmChunks;
                 delete indexData[entryIndex].webmChunkCount;
@@ -363,7 +362,7 @@ jobs:
                 
                 for (const file of files) {
                   if (file === 'meta.json') {
-                    try { videoMeta = JSON.parse(fs.readFileSync(path.join(sourceDir, file), 'utf8'));  } catch(e) {}
+                    try { videoMeta = JSON.parse(fs.readFileSync(path.join(sourceDir, file), 'utf8')); } catch(e) {}
                     continue;
                   }
                   const cleanFileName = file.replace(uploadId + '-', '');
