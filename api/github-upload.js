@@ -3,6 +3,7 @@ import { createPublicUploaderEvidence } from '../lib/source-proof-privacy.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
 import { createRecoverySecret, normalizeRecoverySecret, hashRecoverySecret, addRecoveryHashToOwnedEntries, recoverEntriesByRecoveryHash, revokeRecoveryHashFromOwnedEntries, stripPrivateOwnerMetadata } from '../lib/anonymous-recovery.js';
 import { githubMetricsCache } from '../lib/github-metrics-cache.js';
+import { runSerializedWrite } from '../lib/serialized-write-queue.js';
 import { cachedGithubText, invalidateCachedGithubText } from '../lib/github-content-cache.js';
 import { githubLibraryFoldersCache } from '../lib/github-library-folders-cache.js';
 import { verifyGoogleAccessToken } from '../lib/google-access-token.js';
@@ -801,30 +802,32 @@ async function readMetrics(settings, metricsPath) {
 }
 
 async function mutateMetrics(settings, metricsPath, message, mutate, origin = '') {
-  // Metric updates are safe to replay because every attempt re-reads the
-  // current file and the mutation is visitor-idempotent. A 409 means the
-  // shared metrics file advanced between read and write; back off, re-read,
-  // and retry instead of surfacing a transient conflict to the preview page.
-  const attempts = 5;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      const { current, metrics, stale } = await readMetrics(settings, metricsPath);
-      if (stale) return { metrics, changed: false, deferred: true };
-      const changed = mutate(metrics);
-      if (!changed) return { metrics, changed: false };
-      metrics.updatedAt = new Date().toISOString();
-      const written = await putGitHubContent(settings, metricsPath, textToBase64(JSON.stringify(metrics, null, 2)), message, current?.sha, origin);
-      githubMetricsCache.set(settings, metricsPath, written?.content || written, metrics);
-      return { metrics, changed: true };
-    } catch (error) {
-      const conflict = Number(error?.status) === 409 || /sha/i.test(String(error?.message || ''));
-      if (conflict) githubMetricsCache.invalidate(settings, metricsPath);
-      if (!conflict || attempt >= attempts - 1) throw error;
-      const delay = Math.min(150 * 2 ** attempt + Math.floor(Math.random() * 250), 1500);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+  const queueKey = [settings.owner, settings.repo, settings.branch, metricsPath].join('/');
+  return runSerializedWrite(queueKey, async () => {
+    // A warm Vercel instance may handle several metric updates concurrently.
+    // Serialize those writes locally, then retain optimistic-SHA retries for
+    // collisions with other serverless instances.
+    const attempts = 6;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        const { current, metrics, stale } = await readMetrics(settings, metricsPath);
+        if (stale) return { metrics, changed: false, deferred: true };
+        const changed = mutate(metrics);
+        if (!changed) return { metrics, changed: false };
+        metrics.updatedAt = new Date().toISOString();
+        const written = await putGitHubContent(settings, metricsPath, textToBase64(JSON.stringify(metrics, null, 2)), message, current?.sha, origin);
+        githubMetricsCache.set(settings, metricsPath, written?.content || written, metrics);
+        return { metrics, changed: true };
+      } catch (error) {
+        const conflict = Number(error?.status) === 409 || /sha/i.test(String(error?.message || ''));
+        if (conflict) githubMetricsCache.invalidate(settings, metricsPath);
+        if (!conflict || attempt >= attempts - 1) throw error;
+        const delay = Math.min(200 * 2 ** attempt + Math.floor(Math.random() * 300), 1500);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
-  }
-  throw new Error('Could not update metrics after retries');
+    throw new Error('Could not update metrics after retries');
+  });
 }
 
 function compareLibraryEntries(a, b) {
