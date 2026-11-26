@@ -86,9 +86,9 @@ test('audience mismatch diagnostics expose client claims but never the bearer to
   }finally{console.warn=oldWarn;}
 });
 
-test('missing token introspection cannot fall back to userinfo only',async()=>{
+test('invalid or expired access tokens are not mislabeled as an audience mismatch',async()=>{
   const counts=setMocks({tokenStatus:400});
-  await assert.rejects(()=>verifyGoogleToken(request,{}),/audience/);
+  await assert.rejects(()=>verifyGoogleToken(request,{}),/expired or invalid/);
   assert.equal(counts().userinfoGets,0);
 });
 
