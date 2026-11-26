@@ -133,3 +133,108 @@ test('fast path uploads four Spine files concurrently and commits only once', as
     else process.env.GITHUB_TOKEN = previousToken;
   }
 });
+test('licensed Spine project upload dispatches directly to the public storage executor', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousToken = process.env.GITHUB_TOKEN;
+  const previousExportEnabled = process.env.SPINE_PROJECT_EXPORT_ENABLED;
+  process.env.GITHUB_TOKEN = 'test-only';
+  process.env.SPINE_PROJECT_EXPORT_ENABLED = 'true';
+  const blobs = new Map();
+  const dispatches = [];
+  let commits = 0;
+  const json = (data, status = 200) => new Response(JSON.stringify(data), { status });
+  globalThis.fetch = async (url, options = {}) => {
+    const request = new URL(url);
+    const path = request.pathname;
+    const method = options.method || 'GET';
+    const body = options.body ? JSON.parse(options.body) : {};
+    if (path.endsWith('/git/blobs') && method === 'POST') {
+      const bytes = Buffer.from(body.content, 'base64');
+      const sha = createHash('sha1').update('blob ' + bytes.length + '\\0').update(bytes).digest('hex');
+      blobs.set(sha, bytes);
+      return json({ sha });
+    }
+    if (path.includes('/git/blobs/') && method === 'GET') {
+      const sha = path.split('/').pop();
+      return blobs.has(sha) ? json({ sha, encoding: 'base64', content: blobs.get(sha).toString('base64') }) : json({}, 404);
+    }
+    if (path.endsWith('/git/refs/heads/main') && method === 'GET') return json({ object: { sha: 'head' } });
+    if (path.endsWith('/git/commits/head')) return json({ tree: { sha: 'base-tree' } });
+    if (path.endsWith('/git/trees') && method === 'POST') return json({ sha: 'tree-2' });
+    if (path.endsWith('/git/commits') && method === 'POST') {
+      commits++;
+      return json({ sha: 'commit-2' });
+    }
+    if (path.endsWith('/git/refs/heads/main') && method === 'PATCH') return json({ ok: true });
+    if (path.endsWith('/dispatches') && method === 'POST') {
+      dispatches.push({ path, body });
+      return json({}, 200);
+    }
+    if (path.includes('/contents/')) return json({}, 404);
+    return json({}, 404);
+  };
+  const call = async (body) => {
+    let status, data;
+    const response = {
+      setHeader() {},
+      status(code) { status = code; return this; },
+      json(value) { data = value; return this; },
+    };
+    await handler({
+      method: 'POST', headers: { host: 'localhost' },
+      body: {
+        settings: { basePath: 'library_02' },
+        anonymousAccount: { id: 'anon_project_upload' },
+        entryId: 'project-upload',
+        uploadPath: 'library_02/project-upload',
+        ...body,
+      },
+    }, response);
+    return { status, data };
+  };
+  try {
+    const files = [
+      ['hero.spine', Buffer.from('spine-source')],
+      ['images/body.png', randomBytes(1024)],
+    ];
+    const staged = await Promise.all(files.map(async ([name, bytes]) => {
+      const result = await call({
+        action: 'stage-blob',
+        path: 'library_02/project-upload/' + name,
+        contentBase64: bytes.toString('base64'),
+      });
+      assert.equal(result.status, 200, JSON.stringify(result.data));
+      return result.data;
+    }));
+    const published = await call({
+      action: 'background-finalize-fast',
+      uploadId: 'project-upload',
+      uploadedAt: '2026-11-26T12:00:00.000Z',
+      entry: {
+        id: 'project-upload',
+        previewPath: 'library_02/project-upload',
+        sourceKind: 'spine-project',
+        projectFile: 'hero.spine',
+        imagesRoot: 'images',
+        files: files.map(([name]) => name),
+      },
+      stagedBlobs: staged,
+    });
+    assert.equal(published.status, 200, JSON.stringify(published.data));
+    assert.equal(published.data.dispatch.status, 'dispatched');
+    assert.equal(commits, 1);
+    assert.equal(dispatches.length, 1);
+    assert.equal(dispatches[0].path, '/repos/vladleopold/spine/dispatches');
+    assert.equal(dispatches[0].body.event_type, 'spine-project-export');
+    assert.equal(dispatches[0].body.client_payload.uploadId, 'project-upload');
+    assert.equal(dispatches[0].body.client_payload.uploadPath, 'library_02/project-upload');
+    assert.equal(dispatches[0].body.client_payload.projectFile, 'hero.spine');
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN = previousToken;
+    if (previousExportEnabled === undefined) delete process.env.SPINE_PROJECT_EXPORT_ENABLED;
+    else process.env.SPINE_PROJECT_EXPORT_ENABLED = previousExportEnabled;
+  }
+});
+
