@@ -33,7 +33,11 @@ test('signed-in portfolio and anonymous merge include every collection, with own
   const own=await call('get-index');
   for(const id of ['new','old','oldest','original','original-google'])assert.ok(own.entries.some(e=>e.id===id));
   assert.ok(!own.entries.some(e=>e.id==='foreign'));assert.ok(!own.entries.some(e=>e.id==='linked-other'));assert.ok(!own.entries.some(e=>e.id==='foreign-google'));assert.equal(own.entries.find(e=>e.id==='old').hiddenFromPublicLibrary,true);
-  assert.ok(own.entries.every(e=>e.canEdit===true&&!('ownerEmail' in e)&&!('ownerAnonId' in e)));
+  for (const entry of own.entries) {
+   assert.equal(entry.canEdit, true, `account projection must preserve edit access for ${entry.id}`);
+   assert.equal('ownerEmail' in entry, false, `account projection must strip ownerEmail for ${entry.id}`);
+   assert.equal('ownerAnonId' in entry, false, `account projection must strip ownerAnonId for ${entry.id}`);
+  }
   const merged=await call('merge-anonymous-account');assert.equal(merged.merged,true);assert.deepEqual(writes.sort(),['library','library_02']);
   assert.equal(indexes.library.find(e=>e.id==='linked-other').ownerEmail,'other@example.test');
   assert.equal(indexes.library.find(e=>e.id==='anon-original').ownerEmail,'owner@example.test');assert.ok(merged.entries.every(e=>e.canEdit===true));
