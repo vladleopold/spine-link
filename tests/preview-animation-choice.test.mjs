@@ -6,8 +6,8 @@ test('preserves an explicit selected animation exactly', () => {
   assert.equal(choosePreviewAnimation(['idle', 'Walk'], 'Walk'), 'Walk');
 });
 
-test('blocks an explicit animation that is not in the discovered runtime list', () => {
-  assert.equal(choosePreviewAnimation(['idle', 'Walk'], 'run'), '');
+test('preserves explicit animation identity for exact validation after runtime load', () => {
+  assert.equal(choosePreviewAnimation(['idle', 'Walk'], 'run'), 'run');
 });
 
 test('chooses exact idle as the safe default when no animation is selected', () => {
