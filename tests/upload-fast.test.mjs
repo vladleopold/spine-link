@@ -84,7 +84,7 @@ test('fast path uploads four Spine files concurrently and commits only once', as
     assert.equal(commits, 0, 'no intermediate commits during staging');
     const published = await call({
       action: 'background-finalize-fast',
-      uploadId: 'project-upload',
+      uploadId: 'fast-project',
       uploadedAt: '2026-11-26T12:00:00.000Z',
       entry: { id: 'fast-project', previewPath: 'library_02/fast-project', files: files.map(([name]) => name) },
       stagedBlobs: stage,
