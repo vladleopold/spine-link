@@ -6,15 +6,29 @@ const previewSource = readFileSync(new URL('../api/github-preview.js', import.me
 const assetSource = readFileSync(new URL('../api/github-asset.js', import.meta.url), 'utf8');
 
 test('Spine 3.8 previews use the same-origin official runtime and compatible atlas response', () => {
-  assert.match(previewSource, /setPlayerStylesheet\("\/vendor-spine-player-3\\.8\\.css"\)/);
-  assert.match(previewSource, /loadScriptOnce\("\/vendor-spine-player-3\\.8\\.js"\)/);
-  assert.doesNotMatch(previewSource, /cdn\\.jsdelivr\\.net\\/gh\\/EsotericSoftware\\/spine-runtimes@8b4844bd4b193ba9e54487ed397a777993cbad56/);
-  assert.match(previewSource, /spine38-atlas-compat-v1/);
-  assert.match(previewSource, /spineRuntime=3\\.8/);
-  assert.match(assetSource, /function stripPmaMetadataForSpine38\\(/);
-  assert.match(assetSource, /request\\.query\\?\\.spineRuntime/);
+  assert.ok(previewSource.includes('setPlayerStylesheet("/vendor-spine-player-3.8.css")'));
+  assert.ok(previewSource.includes('loadScriptOnce("/vendor-spine-player-3.8.js")'));
+  assert.ok(!previewSource.includes('cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@8b4844bd4b193ba9e54487ed397a777993cbad56'));
+  assert.ok(previewSource.includes('spine38-atlas-compat-v1'));
+  assert.ok(previewSource.includes('&spineRuntime=3.8'));
+  assert.ok(assetSource.includes('function stripPmaMetadataForSpine38('));
+  assert.ok(assetSource.includes('request.query?.spineRuntime'));
 });
 
+test('the shipped Spine 3.8 runtime files match the official pinned upstream artifacts', async () => {
+  const {createHash} = await import('node:crypto');
+  const {readFileSync, statSync} = await import('node:fs');
+  const runtimePath = new URL('../public/vendor-spine-player-3.8.js', import.meta.url);
+  const stylesheetPath = new URL('../public/vendor-spine-player-3.8.css', import.meta.url);
+  const runtime = readFileSync(runtimePath);
+  const stylesheet = readFileSync(stylesheetPath);
+  const gitBlobSha = (bytes) => createHash('sha1')
+    .update(Buffer.concat([Buffer.from('blob ' + bytes.length + '\0'), bytes]))
+    .digest('hex');
+  assert.equal(gitBlobSha(runtime), '12dc99ade606a1d6ea4856080d68fd5f78682350');
+  assert.equal(gitBlobSha(stylesheet), '736515f1abbe363f16ca90f8a7381fd91fda4f96');
+  assert.ok(statSync(runtimePath).size > 400000);
+});
 test('the shipped Spine 3.8 runtime files match the official pinned upstream artifacts', async () => {
   const {createHash} = await import('node:crypto');
   const {readFileSync, statSync} = await import('node:fs');
