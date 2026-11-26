@@ -255,6 +255,7 @@ jobs:
               
               // Update index
               const hasWebmPreview = Boolean(uploadedUrls.webmPreview || uploadedUrls.webmPreviewMedium || uploadedUrls.webmPreviewLow);
+              const webmPreviewPath = (uploadedUrls.webmPreview || uploadedUrls.webmPreviewMedium || uploadedUrls.webmPreviewLow || '').replace(origin + '/assets/', '');
               const exportError = videoMeta.error || (!hasWebmPreview ? 'No WebM preview artifact was produced' : '');
               const entryIndex = indexData.findIndex(e => e.id === uploadId);
               if (entryIndex !== -1) {
@@ -275,7 +276,7 @@ jobs:
                 indexData[entryIndex] = {
                   ...indexData[entryIndex],
                   ...(exportError ? {} : uploadedUrls),
-                  webmPreviewPath: exportError ? undefined : `${basePath}/${uploadId}/preview.webm`,
+                  webmPreviewPath: exportError ? undefined : webmPreviewPath,
                   webmStatus: exportError ? 'error' : 'ready',
                   webmError: exportError || undefined,
                   webmGeneratedAt: new Date().toISOString(),
@@ -378,7 +379,8 @@ jobs:
                 }
                 
                 const hasWebmPreview = Boolean(uploadedUrls.webmPreview || uploadedUrls.webmPreviewMedium || uploadedUrls.webmPreviewLow);
-                const exportError = videoMeta.error || (!hasWebmPreview ? 'No WebM preview artifact was produced' : '');
+                const webmPreviewPath = (uploadedUrls.webmPreview || uploadedUrls.webmPreviewMedium || uploadedUrls.webmPreviewLow || '').replace(origin + '/assets/', '');
+              const exportError = videoMeta.error || (!hasWebmPreview ? 'No WebM preview artifact was produced' : '');
                 const entryIndex = indexData.findIndex(e => e.id === uploadId);
                 if (entryIndex !== -1) {
                   if (exportError) {
@@ -397,7 +399,7 @@ jobs:
                   indexData[entryIndex] = {
                     ...indexData[entryIndex],
                     ...(exportError ? {} : uploadedUrls),
-                    webmPreviewPath: exportError ? undefined : \`\${basePath}/\${uploadId}/preview.webm\`,
+                    webmPreviewPath: exportError ? undefined : webmPreviewPath,
                     webmStatus: exportError ? 'error' : 'ready',
                     webmError: exportError || undefined,
                     webmGeneratedAt: new Date().toISOString(),
