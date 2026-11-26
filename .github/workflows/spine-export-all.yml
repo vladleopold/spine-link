@@ -274,7 +274,7 @@ jobs:
                 
                 indexData[entryIndex] = {
                   ...indexData[entryIndex],
-                  ...uploadedUrls,
+                  ...(exportError ? {} : uploadedUrls),
                   webmPreviewPath: exportError ? undefined : `${basePath}/${uploadId}/preview.webm`,
                   webmStatus: exportError ? 'error' : 'ready',
                   webmError: exportError || undefined,
@@ -396,7 +396,7 @@ jobs:
                   delete indexData[entryIndex].webmIsChunked;
                   indexData[entryIndex] = {
                     ...indexData[entryIndex],
-                    ...uploadedUrls,
+                    ...(exportError ? {} : uploadedUrls),
                     webmPreviewPath: exportError ? undefined : \`\${basePath}/\${uploadId}/preview.webm\`,
                     webmStatus: exportError ? 'error' : 'ready',
                     webmError: exportError || undefined,
