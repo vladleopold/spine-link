@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import {
   createRecoverySecret,
@@ -85,4 +86,36 @@ test('public library projections omit anonymous IDs, recovery hashes and email m
     assert.equal(entry[field], undefined, `public projection must omit ${field}`);
   }
   assert.equal(entry.title, 'Public work');
+});
+
+const apiSource = fs.readFileSync(new URL('../api/github-upload.js', import.meta.url), 'utf8');
+
+test('API exposes create, restore and revoke actions without persisting plaintext recovery secrets', () => {
+  assert.match(apiSource, /action === 'create-anonymous-recovery-key'/);
+  assert.match(apiSource, /action === 'recover-anonymous-library'/);
+  assert.match(apiSource, /action === 'revoke-anonymous-recovery-key'/);
+  assert.match(apiSource, /addRecoveryHashToOwnedEntries\(entries, anonymousAccount\.id, recoveryHash/);
+  assert.match(apiSource, /recoverEntriesByRecoveryHash\(entries, recoveryHash, anonymousAccount\.id\)/);
+  assert.doesNotMatch(apiSource, /ownerRecoveryHash\s*:\s*recoverySecret/);
+});
+
+test('Google-linked uploads never write raw email or unkeyed email hashes to the public index', () => {
+  assert.doesNotMatch(apiSource, /ownerEmail\s*:/);
+  assert.doesNotMatch(apiSource, /ownerEmailSha256\s*:/);
+  assert.match(apiSource, /function googleOwnerAccountId\(googlePayload\)/);
+  assert.match(apiSource, /ownerAccountId = googleOwnerAccountId\(googlePayload\)/);
+});
+
+test('public library authorization is calculated before private owner fields are stripped', () => {
+  const start = apiSource.indexOf('function accountLibraryEntries(');
+  const end = apiSource.indexOf('const archiveAdminEmails', start);
+  assert.ok(start >= 0 && end > start);
+  const projection = apiSource.slice(start, end);
+  assert.match(projection, /canEditEntry\(entry, googlePayload, anonymousAccount\)/);
+  assert.match(projection, /publicLibraryEntry\(origin, entry\)/);
+});
+
+test('updates to existing library entries require the current owner', () => {
+  assert.match(apiSource, /if \(existingEntry && !canEditEntry\(existingEntry, googlePayload, anonymousAccount\)\)/);
+  assert.match(apiSource, /if \(existing && !canEditEntry\(existing, googlePayload, anonymousAccount\)\)/);
 });
