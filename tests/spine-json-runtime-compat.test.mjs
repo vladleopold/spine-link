@@ -14,8 +14,8 @@ test('converts object-keyed Spine 3.8 skins to named runtime skin records', () =
   });
   const result = JSON.parse(normalizeSpineJsonForLegacy38Runtime(source));
   assert.deepEqual(result.skins.map(skin => skin.name), ['default', 'alternate']);
-  assert.equal(result.skins[0].body.attachment.path, 'body');
-  assert.equal(result.skins[1].body.attachment.path, 'body_alt');
+  assert.equal(result.skins[0].attachments.body.attachment.path, 'body');
+  assert.equal(result.skins[1].attachments.body.attachment.path, 'body_alt');
   assert.equal(result.skeleton.spine, '3.8.97');
   assert.equal(result.animations.idle !== undefined, true);
 });
@@ -50,5 +50,5 @@ test('normalizes Buffer input for the versioned asset route and preserves its by
   assert.ok(Buffer.isBuffer(result));
   const data = JSON.parse(result.toString('utf8'));
   assert.equal(data.skins[0].name, 'default');
-  assert.deepEqual(data.skins[0].body.mesh.uvs, []);
+  assert.deepEqual(data.skins[0].attachments.body.mesh.uvs, []);
 });
