@@ -655,7 +655,7 @@ function applyOwnerMetadata(entry, googlePayload, anonymousAccount, existingEntr
   const publicOwnerId = publicOwnerIdFor(
     googlePayload,
     anonymousAccount,
-    fallbackPublicOwnerId || entry?.publicOwnerId || existingEntry?.publicOwnerId,
+    fallbackPublicOwnerId || existingEntry?.publicOwnerId,
   );
   if (publicOwnerId) next.publicOwnerId = publicOwnerId;
 
@@ -1882,7 +1882,7 @@ export default async function handler(request, response) {
         showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
         portfolioMode: Boolean(entry?.portfolioMode),
         ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
-      }, googlePayload, anonymousAccount, existingEntry, entry?.publicOwnerId);
+      }, googlePayload, anonymousAccount, existingEntry, existingEntry?.publicOwnerId);
       const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
       const dataScience = await updateDataScienceCatalog(settings, body, nextEntry, commitPrefix, origin);
@@ -1980,7 +1980,7 @@ export default async function handler(request, response) {
           showOwnerLibrary: Boolean(entryPayload?.showOwnerLibrary),
           portfolioMode: Boolean(entryPayload?.portfolioMode),
           ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
-        }, googlePayload, anonymousAccount, existingEntry, entryPayload?.publicOwnerId);
+        }, googlePayload, anonymousAccount, existingEntry, existingEntry?.publicOwnerId);
 
         // The anchor is optional. Building it here keeps it in the same commit
         // as index.json instead of paying for a second request and a second
@@ -2533,7 +2533,7 @@ export default async function handler(request, response) {
       showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
       portfolioMode: Boolean(entry?.portfolioMode),
       ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
-    }, googlePayload, anonymousAccount, existingEntry, entry?.publicOwnerId);
+    }, googlePayload, anonymousAccount, existingEntry, existingEntry?.publicOwnerId);
     const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
 
     await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
