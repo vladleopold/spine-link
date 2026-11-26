@@ -332,7 +332,7 @@ function proofDocumentsForEntry(origin, entry, pageUrl) {
       url: sourceProofUrl,
       encodingFormat: 'application/json',
       description:
-        'Source-origin proof JSON linking uploaded Spine files to SHA-256 hashes, account/browser evidence, and the GitHub repository path.',
+        'Source-origin proof JSON linking uploaded Spine files to SHA-256 hashes, upload timestamps, and the GitHub repository path; new records omit account and browser/device identifiers.',
       ...(proofHash
         ? {
             identifier: {
