@@ -50,7 +50,7 @@ test('video target prefers the indexed previewAnimation while preserving the pla
   assert.match(resolver, /lowUrl: shortClip/);
   assert.doesNotMatch(resolver, /for \(const a of animations\)/);
   assert.doesNotMatch(resolver, /candidates\.find|animations\.find/);
-  assert.match(resolver, /isFallback: false/);
+  assert.match(resolver, /isFallback: !hasAnimationPreview/);
   const playerUrl = section(preview, 'function playerUrlForEntry(', 'function archiveUrlForEntry(');
   assert.match(playerUrl, /const animation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : ''/);
   assert.doesNotMatch(playerUrl, /previewAnimation/);
