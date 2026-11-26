@@ -1260,7 +1260,7 @@ async function resumeStagedUploads() {
 }
 
 type FastStageReceipt = {
-  path: string; blobSha: string; bytes: number; sha256: string; signature: string;
+  path: string; uploadPath?: string; blobSha: string; bytes: number; sha256: string; signature: string;
 };
 
 // Four concurrent Git Blob uploads and one atomic commit. No 60 KB chunk
@@ -1307,27 +1307,42 @@ async function uploadBackgroundFilesFast(
   if (!tasks.length) throw new Error("No Spine files selected");
   const results: FastStageReceipt[] = new Array(tasks.length);
   const completedByFile = new Array(files.length).fill(0);
-  let index = 0;
-  await Promise.all(Array.from({ length: Math.min(4, tasks.length) }, async () => {
+  let resolvedUploadPath = uploadPath;
+  const stageTask = async (taskIndex: number) => {
+    const task = tasks[taskIndex];
+    const relativePath = task.path.startsWith(uploadPath + "/")
+      ? task.path.slice(uploadPath.length + 1)
+      : task.path;
+    const response = await uploadRequest("/api/github-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "stage-blob", uploadId, entryId: uploadId, uploadPath: resolvedUploadPath,
+        path: resolvedUploadPath + "/" + relativePath,
+        contentBase64: task.contentBase64, anonymousAccount, settings,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || typeof payload?.blobSha !== "string" || typeof payload?.signature !== "string") {
+      throw new Error(typeof payload?.error === "string" ? payload.error : "Spine asset staging failed: HTTP " + response.status);
+    }
+    results[taskIndex] = payload as FastStageReceipt;
+    if (typeof payload?.uploadPath === "string" && payload.uploadPath.startsWith("library")) {
+      resolvedUploadPath = payload.uploadPath;
+    }
+    completedByFile[task.fileIndex]++;
+    const completed = completedByFile.filter((count, i) => count >= totals[i]).length;
+    onProgress(completed, files[task.fileIndex].name, completedByFile[task.fileIndex] / totals[task.fileIndex]);
+  };
+  // Resolve the rotating collection once, then send its full path with all
+  // remaining chunks. This avoids repeated root/index discovery for every
+  // file request in a multi-file upload.
+  await stageTask(0);
+  let index = 1;
+  await Promise.all(Array.from({ length: Math.min(4, Math.max(0, tasks.length - 1)) }, async () => {
     while (index < tasks.length) {
       const taskIndex = index++;
-      const task = tasks[taskIndex];
-      const response = await uploadRequest("/api/github-upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "stage-blob", uploadId, entryId: uploadId, uploadPath,
-          path: task.path, contentBase64: task.contentBase64, anonymousAccount, settings,
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || typeof payload?.blobSha !== "string" || typeof payload?.signature !== "string") {
-        throw new Error(typeof payload?.error === "string" ? payload.error : "Spine asset staging failed: HTTP " + response.status);
-      }
-      results[taskIndex] = payload as FastStageReceipt;
-      completedByFile[task.fileIndex]++;
-      const completed = completedByFile.filter((count, i) => count >= totals[i]).length;
-      onProgress(completed, files[task.fileIndex].name, completedByFile[task.fileIndex] / totals[task.fileIndex]);
+      await stageTask(taskIndex);
     }
   }));
   const byPath = new Map<string, FastStageReceipt[]>();
@@ -1342,7 +1357,7 @@ async function uploadBackgroundFilesFast(
     if (parts.length === 1) stagedBlobs.push(parts[0]);
     else stagedAssemblies.push({ path, parts });
   }
-  const realPath = results[0].path.slice(0, results[0].path.lastIndexOf("/"));
+  const realPath = String(results[0].uploadPath || results[0].path.slice(0, results[0].path.lastIndexOf("/")));
   const response = await uploadRequest("/api/github-upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
