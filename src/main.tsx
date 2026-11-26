@@ -1,6 +1,7 @@
 import { uploadRequest } from "./upload-request";
 // Choose an actual Spine skeleton, not an adjacent application config.json.
 import { selectSpineRuntimeSkeleton } from "../lib/spine-runtime-file-selection.js";
+import { spineAnimationMetadataFromJson } from "../lib/spine-upload-animation-metadata.js";
 import { isValidSpineAtlasHeader } from "../lib/spine-atlas-integrity.js";
 import { isSpineProjectFile, isSpineImageFile, normalizeProjectPath, validateProjectSelection, readDroppedProjectEntries, rememberProjectFilePath, projectFilePath } from "./spine-project-import.js";
 import "./styles.css";
@@ -1277,6 +1278,10 @@ async function uploadBackgroundFilesFast(
   const CHUNK = 3_200_000; // Base64 chars, divisible by 4; < 4.5 MB request limit
   const settings = { owner: "vladleopold", repo: "spine", branch: "main", basePath: "", title };
   const isProject = files.some(isSpineProjectFile);
+  const runtimeSkeletonFile = selectSpineRuntimeSkeleton(files, files.find(file => /\.atlas(?:\.txt|\.docx)?$/i.test(file.name))?.name);
+  const animationMetadata = !isProject && runtimeSkeletonFile && /\.json$/i.test(runtimeSkeletonFile.name)
+    ? spineAnimationMetadataFromJson(await runtimeSkeletonFile.text())
+    : { animations: [], defaultAnimation: "" };
   // Reject corrupt binary files mislabeled .atlas before writing any public
   // archive entry. A malformed atlas otherwise yields bogus image URLs.
   for(const file of files){
@@ -1345,6 +1350,8 @@ async function uploadBackgroundFilesFast(
         id: uploadId, uploadedAt, previewPath: realPath, title,
         files: files.map(file => isProject ? normalizeProjectPath(file) : file.name),
         skeleton: selectSpineRuntimeSkeleton(files, files.find(file => /\.atlas(?:\.txt|\.docx)?$/i.test(file.name))?.name)?.name || "",
+        animations: animationMetadata.animations,
+        defaultAnimation: animationMetadata.defaultAnimation,
         atlas: files.find(file => /\.atlas$/i.test(file.name))?.name || "",
         textures: files.filter(file => /\.(png|jpe?g|webp|dds)$/i.test(file.name)).map(file => isProject ? normalizeProjectPath(file) : file.name),
         ...(isProject ? { sourceKind: "spine-project", projectFile: files.find(isSpineProjectFile)?.name || "",
