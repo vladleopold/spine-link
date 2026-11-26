@@ -4,6 +4,7 @@ import {
   isGitHubRateLimitResponse,
   githubRetryAfterSeconds,
   shouldRetryGitHubResponse,
+  githubErrorForResponse,
 } from '../lib/github-rate-limit.js';
 
 function response(status, headers = {}) {
@@ -47,4 +48,26 @@ test('transient server errors remain retryable', () => {
 
 test('definitive permission errors are not retried', () => {
   assert.equal(shouldRetryGitHubResponse(response(403), 'Resource not accessible by integration'), false);
+});
+
+test('primary rate-limit errors expose HTTP 429 and the exact reset delay', () => {
+  const error = githubErrorForResponse({
+    verb: 'read',
+    path: 'library/index.json',
+    response: response(403, {'x-ratelimit-remaining':'0','x-ratelimit-reset':'1005'}),
+    message: 'API rate limit exceeded',
+  });
+  assert.equal(error.statusCode, 429);
+  assert.equal(error.retryAfter, 5);
+});
+
+test('permission errors preserve HTTP 403 instead of becoming rate limits', () => {
+  const error = githubErrorForResponse({
+    verb: 'read',
+    path: 'library/index.json',
+    response: response(403, {'x-ratelimit-remaining':'4987'}),
+    message: 'Resource not accessible by integration',
+  });
+  assert.equal(error.statusCode, 403);
+  assert.equal(error.retryAfter, undefined);
 });
