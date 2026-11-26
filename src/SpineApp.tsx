@@ -815,7 +815,7 @@ function readStoredGoogleSession(): StoredGoogleSession | null {
 
 function getValidStoredGoogleToken() {
   const storedSession = readStoredGoogleSession();
-  if (!hasUsableGoogleSession(storedSession, googleClientId)) return "";
+  if (!storedSession || !hasUsableGoogleSession(storedSession, googleClientId)) return "";
   return storedSession.accessToken;
 }
 
