@@ -1,6 +1,7 @@
 import agentAnimationHandler from '../lib/agent-animation.js';
 import { createPublicUploaderEvidence } from '../lib/source-proof-privacy.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
+import { createRecoverySecret, normalizeRecoverySecret, hashRecoverySecret, addRecoveryHashToOwnedEntries, recoverEntriesByRecoveryHash, revokeRecoveryHashFromOwnedEntries, stripPrivateOwnerMetadata } from '../lib/anonymous-recovery.js';
 import { githubMetricsCache } from '../lib/github-metrics-cache.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
 import { githubErrorForResponse, shouldRetryGitHubResponse } from '../lib/github-rate-limit.js';
@@ -108,6 +109,29 @@ async function libraryCollectionIndexes(settings) {
     if (!Array.isArray(entries)) throw new Error(`Invalid library index: ${basePath}`);
     return { basePath, entries, sha: content?.sha };
   }));
+}
+
+async function updateLibraryCollectionIndex(settings, collection, transform, message, origin) {
+  const indexPath = joinRepoPath(collection.basePath, 'index.json');
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const result = transform(collection.entries);
+    if (!result.changed) {
+      collection.entries = result.entries;
+      return result;
+    }
+    try {
+      await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(result.entries, null, 2)), message, collection.sha, origin);
+      collection.entries = result.entries;
+      return result;
+    } catch (error) {
+      if (attempt === 2 || ![409, 422].includes(Number(error?.status))) throw error;
+      const fresh = await getGitHubContent(settings, indexPath);
+      if (!fresh?.content || fresh.encoding !== 'base64') throw error;
+      collection.entries = JSON.parse(base64ToText(fresh.content));
+      collection.sha = fresh.sha;
+    }
+  }
+  throw new Error(`Could not update library index: ${collection.basePath}`);
 }
 
 /** metrics.json of the collection that holds this work, else the active folder. */
@@ -432,13 +456,9 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
 
 export function publicLibraryEntry(origin, entry) {
   if (!entry || typeof entry !== 'object') return entry;
-  const next = { ...entry };
-  // Raw account identifiers never belong in public or owner library API
-  // responses. Authorization is computed against the original index record.
-  delete next.ownerAccountId;
-  delete next.apiKeyId;
-  // Legacy anonymous device fingerprints are no longer exposed by public APIs.
-  delete next.ownerAnonFingerprint;
+  // Authorization is computed against the original index record. Public API
+  // cards never expose email, owner IDs, recovery hashes or API-key metadata.
+  const next = stripPrivateOwnerMetadata(entry);
   const version = assetVersionForEntry(entry);
   next.thumbnail = appendAssetVersion(safeHttpAsset(next.thumbnail), version);
   // Generated WebP preview posters take precedence over uploaded texture
@@ -2222,6 +2242,75 @@ export default async function handler(request, response) {
       });
     }
 
+    if (action === 'create-anonymous-recovery-key') {
+      if (googlePayload?.email) return response.status(400).json({ error: 'Use your Google account to recover Google-linked uploads' });
+      if (!anonymousAccount) throw unauthorized('Anonymous account is required');
+      const recoverySecret = createRecoverySecret();
+      const recoveryHash = hashRecoverySecret(recoverySecret);
+      const createdAt = new Date().toISOString();
+      const collections = await libraryCollectionIndexes(settings);
+      let updatedEntries = 0;
+      for (const collection of collections) {
+        const result = await updateLibraryCollectionIndex(
+          settings,
+          collection,
+          entries => addRecoveryHashToOwnedEntries(entries, anonymousAccount.id, recoveryHash, createdAt),
+          `${commitPrefix}: create anonymous recovery key`,
+          origin,
+        );
+        updatedEntries += result.changed;
+      }
+      if (!updatedEntries) return response.status(404).json({ error: 'No anonymous uploads found for this account yet' });
+      return response.status(200).json({ ok: true, recoverySecret, updatedEntries });
+    }
+
+    if (action === 'recover-anonymous-library') {
+      if (googlePayload?.email) return response.status(400).json({ error: 'Use your Google account to open your library' });
+      if (!anonymousAccount) throw unauthorized('Anonymous account is required');
+      const recoverySecret = normalizeRecoverySecret(body?.recoverySecret);
+      if (!recoverySecret) return response.status(400).json({ error: 'Invalid recovery key format' });
+      const recoveryHash = hashRecoverySecret(recoverySecret);
+      const collections = await libraryCollectionIndexes(settings);
+      let recoveredCount = 0;
+      for (const collection of collections) {
+        const result = await updateLibraryCollectionIndex(
+          settings,
+          collection,
+          entries => recoverEntriesByRecoveryHash(entries, recoveryHash, anonymousAccount.id),
+          `${commitPrefix}: restore anonymous library`,
+          origin,
+        );
+        recoveredCount += result.changed;
+      }
+      if (!recoveredCount) return response.status(401).json({ error: 'Recovery key is invalid or has been revoked' });
+      const restoredEntries = mergeCollectionEntries(collections)
+        .filter(item => canEditEntry(item, null, anonymousAccount))
+        .sort(compareLibraryEntries);
+      return response.status(200).json({
+        ok: true,
+        recoveredCount,
+        entries: accountLibraryEntries(origin, restoredEntries, null, anonymousAccount),
+      });
+    }
+
+    if (action === 'revoke-anonymous-recovery-key') {
+      if (googlePayload?.email) return response.status(400).json({ error: 'Use your Google account to manage this library' });
+      if (!anonymousAccount) throw unauthorized('Anonymous account is required');
+      const collections = await libraryCollectionIndexes(settings);
+      let revokedCount = 0;
+      for (const collection of collections) {
+        const result = await updateLibraryCollectionIndex(
+          settings,
+          collection,
+          entries => revokeRecoveryHashFromOwnedEntries(entries, anonymousAccount.id),
+          `${commitPrefix}: revoke anonymous recovery key`,
+          origin,
+        );
+        revokedCount += result.changed;
+      }
+      return response.status(200).json({ ok: true, revokedCount });
+    }
+
     if (action === 'get-index') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const collections = await libraryCollectionIndexes(settings);
@@ -2308,10 +2397,16 @@ export default async function handler(request, response) {
             if (currentEntry.ownerEmailSha256 && currentEntry.ownerEmailSha256 !== sha256Hex(userEmail)) return currentEntry;
             if (existingEmail === userEmail) return currentEntry;
             changed = true;
-            return { ...currentEntry, ownerEmail: googlePayload.email,
+            const nextEntry = { ...currentEntry,
+              ownerAccountId: googleOwnerAccountId(googlePayload),
               publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, currentEntry.publicOwnerId),
               ownerName: cleanPublicProfileText(currentEntry.ownerName || body.ownerName || googlePayload.name || ''),
               ownerPicture: cleanPublicProfileImage(currentEntry.ownerPicture || body.ownerPicture || googlePayload.picture || '') };
+            delete nextEntry.ownerEmail;
+            delete nextEntry.ownerEmailSha256;
+            delete nextEntry.ownerRecoveryHash;
+            delete nextEntry.ownerRecoveryCreatedAt;
+            return nextEntry;
           });
           if (!changed) break;
           try {
