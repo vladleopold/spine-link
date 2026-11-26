@@ -18,7 +18,7 @@ test('owner library cards prefer generated medium WebM and WebP preview tiers', 
   const card = section(app, 'const bestWebmPreview = ownEntryWebm', 'const posterCandidates = Array.from');
   assert.match(card, /entry\.webmPreviewMedium \|\| entry\.webmPreview \|\| entry\.webmPreviewLow/);
   assert.match(card, /entry\.webpPosterMedium,\s*entry\.webpPoster,\s*entry\.webpPosterLow,\s*entry\.thumbnailPoster/);
-  assert.match(app, /src=\\{videosEnabled \\? \\(webmPreviewUrl \\|\\| undefined\\) : undefined\\}/);
+  assert.match(app, /src=\{videosEnabled \? \(webmPreviewUrl \|\| undefined\) : undefined\}/);
 });
 
 test('URL-selected animation is preserved even when absent from index animation names', () => {
