@@ -46,6 +46,10 @@ test('transient server errors remain retryable', () => {
   assert.equal(shouldRetryGitHubResponse(response(408)), true);
 });
 
+test('secondary rate-limit body prevents retries even without quota headers', () => {
+  assert.equal(shouldRetryGitHubResponse(response(403), 'API rate limit exceeded'), false);
+});
+
 test('definitive permission errors are not retried', () => {
   assert.equal(shouldRetryGitHubResponse(response(403), 'Resource not accessible by integration'), false);
 });
