@@ -6674,15 +6674,15 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 const previewUrl = previewUrlForEntry(entry.id, entry.defaultAnimation);
                 const editUrl = new URL(`/?edit=${encodeURIComponent(entry.id)}`, window.location.origin).toString();
                 const uploadedDate = entry.uploadedAt ? new Date(entry.uploadedAt) : null;
-                const bestWebmPreview = ownEntryWebm(entry.webmPreviewLow || entry.webmPreviewMedium || entry.webmPreview);
+                const bestWebmPreview = ownEntryWebm(entry.webmPreviewMedium || entry.webmPreview || entry.webmPreviewLow);
                 const webmPreviewUrl = isWebmPreview(bestWebmPreview)
                   ? withAssetVersion(bestWebmPreview, assetVersionForLibraryEntry(entry, "webm"))
                   : derivedLibraryAssetUrl(entry, [".webm"]);
                 const safeThumbnail = withAssetVersion(safeLibraryAssetUrl(entry.thumbnail || ""), assetVersionForLibraryEntry(entry, "thumbnail"));
                 const bestWebpPoster = firstUsablePoster(
-                  entry.webpPosterLow,
                   entry.webpPosterMedium,
                   entry.webpPoster,
+                  entry.webpPosterLow,
                   entry.thumbnailPoster,
                 );
                 const safePoster =
