@@ -3286,7 +3286,15 @@ async function resolveEntryPath(settings, entryId) {
     (await findDirectPreviewPath(settings, entryId));
 }
 
+function sendPreviewUnavailable(response) {
+  setNoStoreHeaders(response);
+  response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  response.setHeader('Retry-After', '30');
+  return response.status(503).send('Preview temporarily unavailable');
+}
+
 export default async function handler(request, response) {
+  setNoStoreHeaders(response);
   if (!['GET', 'HEAD'].includes(request.method)) {
     response.setHeader('Allow', 'GET, HEAD');
     return response.status(405).send('Method not allowed');
@@ -3296,7 +3304,8 @@ export default async function handler(request, response) {
   const owner = process.env.GITHUB_OWNER || defaultOwner;
   const repo = process.env.GITHUB_REPO || defaultRepo;
   if (!canReadPublicSpineWithoutToken(token, owner, repo)) {
-    return response.status(500).send('GITHUB_TOKEN is required for non-public repository access');
+    console.error('[preview] private repository access is not configured');
+    return sendPreviewUnavailable(response);
   }
 
   const settings = {
@@ -3346,7 +3355,7 @@ export default async function handler(request, response) {
   } catch (error) {
     console.error('[preview] request failed:', error);
     if (response.headersSent) return response.end();
-    return response.status(500).send(error instanceof Error ? error.message : 'Preview failed');
+    return sendPreviewUnavailable(response);
   }
 }
 
