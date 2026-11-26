@@ -641,6 +641,43 @@ function publicOwnerIdFor(googlePayload, anonymousAccount, fallback = '') {
   return source ? `u_${sha256Hex(source).slice(0, 20)}` : '';
 }
 
+function applyOwnerMetadata(entry, googlePayload, anonymousAccount, existingEntry, fallbackPublicOwnerId = '') {
+  const next = { ...entry };
+  delete next.ownerEmail;
+  delete next.ownerEmailSha256;
+  delete next.ownerAnonFingerprint;
+  delete next.apiKeyId;
+
+  const publicOwnerId = publicOwnerIdFor(
+    googlePayload,
+    anonymousAccount,
+    fallbackPublicOwnerId || entry?.publicOwnerId || existingEntry?.publicOwnerId,
+  );
+  if (publicOwnerId) next.publicOwnerId = publicOwnerId;
+
+  if (googlePayload?.sub) {
+    const ownerAccountId = googleOwnerAccountId(googlePayload);
+    if (!ownerAccountId) throw new Error('Google owner signing key is not configured');
+    next.ownerAccountId = ownerAccountId;
+    delete next.ownerAnonId;
+    delete next.ownerRecoveryHash;
+    delete next.ownerRecoveryCreatedAt;
+  } else if (anonymousAccount?.id && !existingEntry?.ownerAccountId) {
+    next.ownerAnonId = anonymousAccount.id;
+    const sameAnonymousOwner =
+      String(existingEntry?.ownerAnonId || '').toLowerCase() === String(anonymousAccount.id).toLowerCase();
+    if (sameAnonymousOwner && existingEntry?.ownerRecoveryHash) {
+      next.ownerRecoveryHash = existingEntry.ownerRecoveryHash;
+      if (existingEntry.ownerRecoveryCreatedAt) next.ownerRecoveryCreatedAt = existingEntry.ownerRecoveryCreatedAt;
+    } else {
+      delete next.ownerRecoveryHash;
+      delete next.ownerRecoveryCreatedAt;
+    }
+  }
+
+  return next;
+}
+
 // Google-linked works store a non-reversible HMAC of Google's account sub.
 // Email addresses are not persisted in public library indexes.
 function agentOwnerMatches(entry, googlePayload) {
@@ -1516,7 +1553,7 @@ export default async function handler(request, response) {
         const currentEntries = index?.content && index.encoding === 'base64'
           ? JSON.parse(base64ToText(index.content)) : [];
         const existing = currentEntries.find(item => item.id === uploadId);
-        nextEntry = publicLibraryEntry(origin, {
+        nextEntry = applyOwnerMetadata({
           ...body?.entry,
           files: relativeFiles,
           id: uploadId, uploadedAt, previewPath: workPath,
@@ -1527,10 +1564,7 @@ export default async function handler(request, response) {
             webmStatus: 'waiting-for-editor',
             skeleton: '', atlas: '', animations: [],
           } : {}),
-          ownerEmail: googlePayload?.email,
-          ownerAnonId: anonymousAccount?.id,
-          publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existing?.publicOwnerId),
-        });
+        }, googlePayload, anonymousAccount, existing, existing?.publicOwnerId);
         nextEntry.webmStatus = isEditorProject ? 'waiting-for-editor' :
           existing?.webmStatus === 'ready' ? 'ready' : 'pending';
         nextEntry.dispatchStatus = isEditorProject
@@ -1581,16 +1615,13 @@ export default async function handler(request, response) {
         const currentIndex = await getGitHubContent(settings, indexPath);
         const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
         const existingEntry = currentEntries.find((c) => c.id === uploadId);
-        const nextEntry = publicLibraryEntry(origin, {
+        const nextEntry = applyOwnerMetadata({
           ...body?.entry,
           id: uploadId,
           uploadedAt,
           previewPath: uploadPathBg,
-          ownerEmail: googlePayload?.email,
-          ownerAnonId: anonymousAccount?.id,
-          publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existingEntry?.publicOwnerId),
           sourceProof: body?.entry?.sourceProof,
-        });
+        }, googlePayload, anonymousAccount, existingEntry, existingEntry?.publicOwnerId);
         nextEntry.webmStatus = existingEntry?.webmStatus === 'ready' ? 'ready' : 'pending';
         nextEntry.dispatchStatus = 'pending';
         const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== uploadId)];
@@ -1837,17 +1868,14 @@ export default async function handler(request, response) {
       const currentIndex = await getGitHubContent(settings, indexPath);
       const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
       const existingEntry = currentEntries.find((c) => c.id === entry.id);
-      const nextEntry = {
+      const nextEntry = applyOwnerMetadata({
         ...entry,
-        ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
         ...(entry?.ownerName || googlePayload?.name ? { ownerName: cleanPublicProfileText(entry?.ownerName || googlePayload?.name) } : {}),
         ...(entry?.ownerPicture || googlePayload?.picture ? { ownerPicture: cleanPublicProfileImage(entry?.ownerPicture || googlePayload?.picture) } : {}),
-        ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id } : {}),
-        publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
         showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
         portfolioMode: Boolean(entry?.portfolioMode),
         ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
-      };
+      }, googlePayload, anonymousAccount, existingEntry, entry?.publicOwnerId);
       const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
       const dataScience = await updateDataScienceCatalog(settings, body, nextEntry, commitPrefix, origin);
@@ -1933,21 +1961,18 @@ export default async function handler(request, response) {
         const currentIndex = await getGitHubContent(settings, indexPath);
         const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
         existingEntry = currentEntries.find((currentItem) => currentItem.id === entryPayload.id);
-        nextEntry = {
+        nextEntry = applyOwnerMetadata({
           ...entryPayload,
-          ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
           ...(entryPayload?.ownerName || googlePayload?.name
             ? { ownerName: cleanPublicProfileText(entryPayload?.ownerName || googlePayload?.name) }
             : {}),
           ...(entryPayload?.ownerPicture || googlePayload?.picture
             ? { ownerPicture: cleanPublicProfileImage(entryPayload?.ownerPicture || googlePayload?.picture) }
             : {}),
-          ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id } : {}),
-          publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entryPayload?.publicOwnerId),
           showOwnerLibrary: Boolean(entryPayload?.showOwnerLibrary),
           portfolioMode: Boolean(entryPayload?.portfolioMode),
           ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
-        };
+        }, googlePayload, anonymousAccount, existingEntry, entryPayload?.publicOwnerId);
 
         // The anchor is optional. Building it here keeps it in the same commit
         // as index.json instead of paying for a second request and a second
@@ -2485,17 +2510,14 @@ export default async function handler(request, response) {
     const currentIndex = await getGitHubContent(settings, indexPath);
     const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
     const existingEntry = currentEntries.find((c) => c.id === entry.id);
-    const nextEntry = {
+    const nextEntry = applyOwnerMetadata({
       ...entry,
-      ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
       ...(entry?.ownerName || googlePayload?.name ? { ownerName: cleanPublicProfileText(entry?.ownerName || googlePayload?.name) } : {}),
       ...(entry?.ownerPicture || googlePayload?.picture ? { ownerPicture: cleanPublicProfileImage(entry?.ownerPicture || googlePayload?.picture) } : {}),
-      ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id } : {}),
-      publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
       showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
       portfolioMode: Boolean(entry?.portfolioMode),
       ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
-    };
+    }, googlePayload, anonymousAccount, existingEntry, entry?.publicOwnerId);
     const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
 
     await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
