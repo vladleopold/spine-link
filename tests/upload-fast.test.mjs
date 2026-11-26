@@ -201,7 +201,7 @@ test('licensed Spine project upload dispatches directly to the public storage ex
     const staged = await Promise.all(files.map(async ([name, bytes]) => {
       const result = await call({
         action: 'stage-blob',
-        path: name,
+        path: 'library_02/project-upload/' + name,
         contentBase64: bytes.toString('base64'),
       });
       assert.equal(result.status, 200, JSON.stringify(result.data));
