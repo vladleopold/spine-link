@@ -627,22 +627,27 @@ function hashString(value = '') {
   return (hash >>> 0).toString(36);
 }
 
+function googleOwnerAccountId(googlePayload) {
+  const sub = String(googlePayload?.sub || '');
+  const signingKey = String(process.env.SPINE_LINK_AGENT_API_KEY || '');
+  if (!sub || !signingKey || Buffer.byteLength(signingKey) < 32) return '';
+  return createHmac('sha256', signingKey).update('owner-v1:' + sub).digest('hex');
+}
+
 function publicOwnerIdFor(googlePayload, anonymousAccount, fallback = '') {
   const provided = String(fallback || '').trim();
   if (/^u_[a-z0-9]{3,32}$/i.test(provided)) return provided;
-  const source = String(googlePayload?.email || anonymousAccount?.id || '').toLowerCase();
-  return source ? `u_${hashString(source)}` : '';
+  const source = String(googlePayload?.sub || anonymousAccount?.id || '').toLowerCase();
+  return source ? `u_${sha256Hex(source).slice(0, 20)}` : '';
 }
 
-// Agent-created works store a non-reversible HMAC of Google's account sub.
-// Verify the same Google subject, ignoring spoofed email or anonymous IDs.
+// Google-linked works store a non-reversible HMAC of Google's account sub.
+// Email addresses are not persisted in public library indexes.
 function agentOwnerMatches(entry, googlePayload) {
   const stored = String(entry?.ownerAccountId || '');
   if (!/^[a-f0-9]{64}$/.test(stored)) return false;
-  const sub = String(googlePayload?.sub || '');
-  const signingKey = String(process.env.SPINE_LINK_AGENT_API_KEY || '');
-  if (!sub || !signingKey || Buffer.byteLength(signingKey) < 32) return false;
-  const digest = createHmac('sha256', signingKey).update('owner-v1:' + sub).digest('hex');
+  const digest = googleOwnerAccountId(googlePayload);
+  if (!digest) return false;
   return timingSafeEqual(Buffer.from(stored), Buffer.from(digest));
 }
 
@@ -2385,6 +2390,8 @@ export default async function handler(request, response) {
       if (!anonymousAccount) throw unauthorized('Anonymous account is required');
       const anonymousId = anonymousAccount.id.toLowerCase();
       const userEmail = String(googlePayload.email).toLowerCase();
+      const ownerAccountId = googleOwnerAccountId(googlePayload);
+      if (!ownerAccountId) throw new Error('Google owner signing key is not configured');
       const collections = await libraryCollectionIndexes(settings);
       let merged = false;
       for (const collection of collections) {
@@ -2395,10 +2402,12 @@ export default async function handler(request, response) {
             const existingEmail = String(currentEntry.ownerEmail || '').toLowerCase();
             if (existingEmail && existingEmail !== userEmail) return currentEntry;
             if (currentEntry.ownerEmailSha256 && currentEntry.ownerEmailSha256 !== sha256Hex(userEmail)) return currentEntry;
-            if (existingEmail === userEmail) return currentEntry;
+            if (currentEntry.ownerAccountId && currentEntry.ownerAccountId !== ownerAccountId) return currentEntry;
+            if (currentEntry.ownerAccountId === ownerAccountId && !existingEmail &&
+                !currentEntry.ownerEmailSha256 && !currentEntry.ownerRecoveryHash) return currentEntry;
             changed = true;
             const nextEntry = { ...currentEntry,
-              ownerAccountId: googleOwnerAccountId(googlePayload),
+              ownerAccountId,
               publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, currentEntry.publicOwnerId),
               ownerName: cleanPublicProfileText(currentEntry.ownerName || body.ownerName || googlePayload.name || ''),
               ownerPicture: cleanPublicProfileImage(currentEntry.ownerPicture || body.ownerPicture || googlePayload.picture || '') };
