@@ -58,3 +58,14 @@ test("server blockchain anchors project uploader data through the privacy-safe a
     assert.equal(builder.includes(field), false, `public anchor must not publish ${field}`);
   }
 });
+
+test("new anonymous account IDs are random and are not derived from browser characteristics", async () => {
+  const source = await readFile(new URL("../src/SpineApp.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function createAnonymousAccount()");
+  const end = source.indexOf("\nfunction getStoredAnonymousAccount", start);
+  assert.ok(start >= 0 && end > start, "anonymous account factory must be present");
+  const factory = source.slice(start, end);
+
+  assert.doesNotMatch(factory, /browserFingerprint|fingerprint/);
+  assert.match(factory, /id: `anon_\$\{randomPart\}`/);
+});
