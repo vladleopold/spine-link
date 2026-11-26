@@ -320,8 +320,9 @@
           files, upload timestamps, GitHub commit receipts, and optional blockchain anchors. New proof records identify
           only whether the uploader used Google sign-in or an anonymous upload. They do not publish email addresses or
           email hashes, anonymous account identifiers, browser fingerprints, or raw or hashed browser/device
-          characteristics. Older version 1 records may retain the evidence fields that were collected under the
-          previous format; this change does not rewrite or invalidate those historical records.
+          characteristics. New anonymous upload IDs are random and are not derived from browser or device traits.
+          Existing legacy account IDs and version 1 proof records are not rewritten, so previously published records
+          may retain fields collected under the previous format.
         </p>
         <p>
           These records are technical evidence, not a court judgment. They are designed to support authorship and source
