@@ -65,7 +65,7 @@ test('preview upstream failures return generic no-store 503 without leaking inte
     const response = createResponse();
     await handler({
       method: 'GET',
-      query: { entry: 'preview-error-probe-unique' },
+      query: { path: 'library_02/preview-error-probe-unique/preview.html' },
       headers: { host: 'spine-link.vercel.app' },
     }, response);
 
