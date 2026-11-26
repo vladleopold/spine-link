@@ -316,10 +316,12 @@
       <section class="agreement" aria-labelledby="source-proof">
         <h2 id="source-proof">Source-Origin Proof</h2>
         <p>
-          Spine-Link can create source-origin records for uploads. These records may include SHA-256 hashes of uploaded
-          files, browser and account evidence hashes, timestamps, GitHub commit receipts, and optional blockchain
-          anchors. The goal is to preserve a practical public trail showing which browser, device environment, account,
-          or anonymous upload session introduced a specific set of files to the platform.
+          Spine-Link can create source-origin records for uploads. Public records include SHA-256 hashes of uploaded
+          files, upload timestamps, GitHub commit receipts, and optional blockchain anchors. New proof records identify
+          only whether the uploader used Google sign-in or an anonymous upload. They do not publish email addresses or
+          email hashes, anonymous account identifiers, browser fingerprints, or raw or hashed browser/device
+          characteristics. Older version 1 records may retain the evidence fields that were collected under the
+          previous format; this change does not rewrite or invalidate those historical records.
         </p>
         <p>
           These records are technical evidence, not a court judgment. They are designed to support authorship and source
