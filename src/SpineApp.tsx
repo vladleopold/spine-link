@@ -20,6 +20,7 @@ import {
   ExternalLink,
   FileArchive,
   Heart,
+  KeyRound,
   Layers,
   Link as LinkIcon,
   LogOut,
@@ -28,6 +29,7 @@ import {
   RefreshCw,
   Save,
   Send,
+  ShieldOff,
   SlidersHorizontal,
   Upload,
   User,
@@ -244,9 +246,6 @@ type LibraryEntry = {
   title: string;
   /** Decided server-side by canEditEntry(); the only ownership signal the browser gets. */
   canEdit?: boolean;
-  ownerEmail?: string;
-  ownerAnonId?: string;
-  ownerAnonFingerprint?: string;
   ownerName?: string;
   ownerPicture?: string;
   publicOwnerId?: string;
@@ -888,9 +887,10 @@ function storeDismissedSkeletonUploadTip(user: GoogleUser | null, anonymousAccou
   }
 }
 
-function publicOwnerIdFor(user: GoogleUser | null, anonymousAccount: AnonymousAccount) {
-  const source = (user?.email || anonymousAccount.id).toLowerCase();
-  return `u_${hashString(source)}`;
+function publicOwnerIdFor(_user: GoogleUser | null, anonymousAccount: AnonymousAccount) {
+  // The browser fallback is derived from the random anonymous account ID,
+  // never from a Google email address. The API assigns Google IDs from sub.
+  return `u_${hashString(anonymousAccount.id.toLowerCase())}`;
 }
 
 function decodeJwtPayload<T = Record<string, unknown>>(token: string): T {
@@ -3012,6 +3012,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [libraryEntries, setLibraryEntries] = useState<LibraryEntry[]>([]);
+  const [recoverySecretToSave, setRecoverySecretToSave] = useState("");
+  const [recoverySecretInput, setRecoverySecretInput] = useState("");
+  const [recoveryError, setRecoveryError] = useState("");
+  const [recoveryStatus, setRecoveryStatus] = useState("");
+  const [isRecoveryLoading, setIsRecoveryLoading] = useState(false);
   useEffect(() => {
     if (!googleIdToken) return;
     const session = readStoredGoogleSession();
@@ -4771,6 +4776,91 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     }
   }, [anonymousAccount, googleIdToken]);
 
+  const postAnonymousRecoveryAction = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {
+    const requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
+    if (googleIdToken) requestHeaders.Authorization = `Bearer ${googleIdToken}`;
+    const response = await fetch("/api/github-upload", {
+      method: "POST",
+      headers: requestHeaders,
+      cache: "no-store",
+      body: JSON.stringify({
+        action,
+        googleIdToken,
+        anonymousAccount,
+        settings: githubPublishSettings,
+        ...extra,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(typeof result?.error === "string" ? result.error : `Recovery API ${response.status}`);
+    }
+    return result as { recoverySecret?: string; recoveredCount?: number; revokedCount?: number };
+  }, [anonymousAccount, googleIdToken]);
+
+  const createAnonymousRecoveryKey = useCallback(async () => {
+    setIsRecoveryLoading(true);
+    setRecoveryError("");
+    setRecoveryStatus("");
+    setRecoverySecretToSave("");
+    try {
+      const result = await postAnonymousRecoveryAction("create-anonymous-recovery-key");
+      if (!result.recoverySecret) throw new Error("The server did not return a recovery key.");
+      setRecoverySecretToSave(result.recoverySecret);
+      setRecoveryStatus("Save or download this key now. It is not stored in this browser.");
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : "Could not create a recovery key.");
+    } finally {
+      setIsRecoveryLoading(false);
+    }
+  }, [postAnonymousRecoveryAction]);
+
+  const revokeAnonymousRecoveryKey = useCallback(async () => {
+    setIsRecoveryLoading(true);
+    setRecoveryError("");
+    setRecoveryStatus("");
+    try {
+      const result = await postAnonymousRecoveryAction("revoke-anonymous-recovery-key");
+      setRecoverySecretToSave("");
+      setRecoveryStatus(result.revokedCount
+        ? "Recovery key revoked. Create a new key if you need recovery again."
+        : "There was no active recovery key to revoke.");
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : "Could not revoke the recovery key.");
+    } finally {
+      setIsRecoveryLoading(false);
+    }
+  }, [postAnonymousRecoveryAction]);
+
+  const recoverAnonymousLibrary = useCallback(async () => {
+    setIsRecoveryLoading(true);
+    setRecoveryError("");
+    setRecoveryStatus("");
+    try {
+      const result = await postAnonymousRecoveryAction("recover-anonymous-library", {
+        recoverySecret: recoverySecretInput.trim(),
+      });
+      setRecoverySecretInput("");
+      setRecoverySecretToSave("");
+      await loadLibrary();
+      setRecoveryStatus(`Restored ${Number(result.recoveredCount) || 0} work(s) to this browser account.`);
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : "Could not restore the library.");
+    } finally {
+      setIsRecoveryLoading(false);
+    }
+  }, [loadLibrary, postAnonymousRecoveryAction, recoverySecretInput]);
+
+  const copyAnonymousRecoveryKey = useCallback(async () => {
+    if (!recoverySecretToSave) return;
+    try {
+      await navigator.clipboard.writeText(recoverySecretToSave);
+      setRecoveryStatus("Recovery key copied. Keep it somewhere safe.");
+    } catch {
+      setRecoveryError("Clipboard access is unavailable. Select and copy the key manually.");
+    }
+  }, [recoverySecretToSave]);
+
   const openLibrary = () => {
     setIsAccountMenuOpen(false);
     if (googleUser && !googleIdToken) {
@@ -4928,7 +5018,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
           showOwnerLibrary: nextValue,
           ownerName: accountDisplayName || googleUser?.name,
           ownerPicture: googleUser?.picture,
-          publicOwnerId: publicOwnerIdFor(googleUser, anonymousAccount),
           commitPrefix: "Update Spine-Link public profile setting",
         }),
       });
@@ -5201,11 +5290,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       const entry: LibraryEntry = {
         id: uploadId,
         title: nextSettings.title || existingEntry?.title || spine.label,
-        ownerEmail: googleUser?.email || existingEntry?.ownerEmail,
         ownerName: accountDisplayName || existingEntry?.ownerName || googleUser?.name,
         ownerPicture: googleUser?.picture || existingEntry?.ownerPicture,
-        publicOwnerId: existingEntry?.publicOwnerId || publicOwnerIdFor(googleUser, anonymousAccount),
-        ownerAnonId: existingEntry?.ownerAnonId || anonymousAccount.id,
         showOwnerLibrary: existingEntry?.showOwnerLibrary ?? showProfileOnSharedPages,
         portfolioMode: existingEntry?.portfolioMode ?? isPortfolioMode,
         hiddenFromPublicLibrary: existingEntry?.hiddenFromPublicLibrary,
@@ -6472,13 +6558,76 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <button type="button" onClick={() => void loadLibrary()} disabled={isLibraryLoading} title="Refresh library">
                 {isLibraryLoading ? <Loader2 className="spin" size={18} /> : <RefreshCw size={18} />}
               </button>
-              <button type="button" onClick={() => setIsLibraryOpen(false)} title="Close library">
+              <button type="button" onClick={() => { setIsLibraryOpen(false); setRecoverySecretToSave(""); }} title="Close library">
                 <X size={18} />
               </button>
             </div>
           </div>
 
           {libraryError && <div className="library-error">{libraryError}</div>}
+
+          {!googleUser && (
+            <section className="anonymous-recovery-panel" aria-label="Anonymous library recovery">
+              <div className="anonymous-recovery-copy">
+                <strong>Anonymous library recovery</strong>
+                <p>
+                  Create a 256-bit recovery key before changing devices. Only its SHA-256 hash is stored with your library;
+                  the key itself is shown once and is never saved in this browser. It remains valid until you rotate or revoke it.
+                </p>
+              </div>
+              <div className="anonymous-recovery-actions">
+                <button type="button" onClick={() => void createAnonymousRecoveryKey()} disabled={isRecoveryLoading || isLibraryLoading || libraryEntries.length === 0}>
+                  {isRecoveryLoading ? <Loader2 className="spin" size={15} /> : <KeyRound size={15} />}
+                  Create / rotate key
+                </button>
+                <button type="button" onClick={() => void revokeAnonymousRecoveryKey()} disabled={isRecoveryLoading}>
+                  <ShieldOff size={15} />
+                  Revoke key
+                </button>
+              </div>
+              {recoverySecretToSave && (
+                <div className="anonymous-recovery-secret" role="status">
+                  <strong>Save this recovery key now</strong>
+                  <code>{recoverySecretToSave}</code>
+                  <div className="anonymous-recovery-secret-actions">
+                    <button type="button" onClick={() => void copyAnonymousRecoveryKey()}>
+                      <Copy size={15} /> Copy key
+                    </button>
+                    <a
+                      href={`data:text/plain;charset=utf-8,${encodeURIComponent(recoverySecretToSave)}`}
+                      download="spine-link-recovery-key.txt"
+                    >
+                      <Download size={15} /> Download key
+                    </a>
+                  </div>
+                </div>
+              )}
+              <form
+                className="anonymous-recovery-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void recoverAnonymousLibrary();
+                }}
+              >
+                <label htmlFor="spine-anonymous-recovery-key">Restore an existing library</label>
+                <input
+                  id="spine-anonymous-recovery-key"
+                  type="password"
+                  value={recoverySecretInput}
+                  onChange={(event) => setRecoverySecretInput(event.currentTarget.value)}
+                  placeholder="Paste your 43-character recovery key"
+                  autoComplete="off"
+                  maxLength={43}
+                />
+                <button type="submit" disabled={isRecoveryLoading || recoverySecretInput.trim().length !== 43}>
+                  {isRecoveryLoading ? <Loader2 className="spin" size={15} /> : <KeyRound size={15} />}
+                  Restore library
+                </button>
+              </form>
+              {recoveryError && <div className="library-error">{recoveryError}</div>}
+              {recoveryStatus && <div className="anonymous-recovery-status" role="status">{recoveryStatus}</div>}
+            </section>
+          )}
 
           {ownsLibraryEntries && (
             <div className="library-profile-settings">

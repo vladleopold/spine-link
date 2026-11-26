@@ -1,6 +1,7 @@
 import agentAnimationHandler from '../lib/agent-animation.js';
 import { createPublicUploaderEvidence } from '../lib/source-proof-privacy.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
+import { createRecoverySecret, normalizeRecoverySecret, hashRecoverySecret, addRecoveryHashToOwnedEntries, recoverEntriesByRecoveryHash, revokeRecoveryHashFromOwnedEntries, stripPrivateOwnerMetadata } from '../lib/anonymous-recovery.js';
 import { githubMetricsCache } from '../lib/github-metrics-cache.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
 import { githubErrorForResponse, shouldRetryGitHubResponse } from '../lib/github-rate-limit.js';
@@ -108,6 +109,29 @@ async function libraryCollectionIndexes(settings) {
     if (!Array.isArray(entries)) throw new Error(`Invalid library index: ${basePath}`);
     return { basePath, entries, sha: content?.sha };
   }));
+}
+
+async function updateLibraryCollectionIndex(settings, collection, transform, message, origin) {
+  const indexPath = joinRepoPath(collection.basePath, 'index.json');
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const result = transform(collection.entries);
+    if (!result.changed) {
+      collection.entries = result.entries;
+      return result;
+    }
+    try {
+      await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(result.entries, null, 2)), message, collection.sha, origin);
+      collection.entries = result.entries;
+      return result;
+    } catch (error) {
+      if (attempt === 2 || ![409, 422].includes(Number(error?.status))) throw error;
+      const fresh = await getGitHubContent(settings, indexPath);
+      if (!fresh?.content || fresh.encoding !== 'base64') throw error;
+      collection.entries = JSON.parse(base64ToText(fresh.content));
+      collection.sha = fresh.sha;
+    }
+  }
+  throw new Error(`Could not update library index: ${collection.basePath}`);
 }
 
 /** metrics.json of the collection that holds this work, else the active folder. */
@@ -432,13 +456,9 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
 
 export function publicLibraryEntry(origin, entry) {
   if (!entry || typeof entry !== 'object') return entry;
-  const next = { ...entry };
-  // Raw account identifiers never belong in public or owner library API
-  // responses. Authorization is computed against the original index record.
-  delete next.ownerAccountId;
-  delete next.apiKeyId;
-  // Legacy anonymous device fingerprints are no longer exposed by public APIs.
-  delete next.ownerAnonFingerprint;
+  // Authorization is computed against the original index record. Public API
+  // cards never expose email, owner IDs, recovery hashes or API-key metadata.
+  const next = stripPrivateOwnerMetadata(entry);
   const version = assetVersionForEntry(entry);
   next.thumbnail = appendAssetVersion(safeHttpAsset(next.thumbnail), version);
   // Generated WebP preview posters take precedence over uploaded texture
@@ -607,22 +627,68 @@ function hashString(value = '') {
   return (hash >>> 0).toString(36);
 }
 
+function googleOwnerAccountId(googlePayload) {
+  const sub = String(googlePayload?.sub || '');
+  const signingKey = String(process.env.SPINE_LINK_AGENT_API_KEY || '');
+  if (!sub || !signingKey || Buffer.byteLength(signingKey) < 32) return '';
+  return createHmac('sha256', signingKey).update('owner-v1:' + sub).digest('hex');
+}
+
 function publicOwnerIdFor(googlePayload, anonymousAccount, fallback = '') {
   const provided = String(fallback || '').trim();
   if (/^u_[a-z0-9]{3,32}$/i.test(provided)) return provided;
-  const source = String(googlePayload?.email || anonymousAccount?.id || '').toLowerCase();
-  return source ? `u_${hashString(source)}` : '';
+  const source = String(googlePayload?.sub || anonymousAccount?.id || '').toLowerCase();
+  return source ? `u_${sha256Hex(source).slice(0, 20)}` : '';
 }
 
-// Agent-created works store a non-reversible HMAC of Google's account sub.
-// Verify the same Google subject, ignoring spoofed email or anonymous IDs.
+function applyOwnerMetadata(entry, googlePayload, anonymousAccount, existingEntry, fallbackPublicOwnerId = '') {
+  const next = { ...entry };
+  delete next.ownerEmail;
+  delete next.ownerEmailSha256;
+  delete next.ownerAccountId;
+  delete next.ownerAnonId;
+  delete next.ownerAnonFingerprint;
+  delete next.ownerRecoveryHash;
+  delete next.ownerRecoveryCreatedAt;
+  delete next.apiKeyId;
+
+  const publicOwnerId = publicOwnerIdFor(
+    googlePayload,
+    anonymousAccount,
+    fallbackPublicOwnerId || existingEntry?.publicOwnerId,
+  );
+  if (publicOwnerId) next.publicOwnerId = publicOwnerId;
+
+  if (googlePayload?.sub) {
+    const ownerAccountId = googleOwnerAccountId(googlePayload);
+    if (!ownerAccountId) throw new Error('Google owner signing key is not configured');
+    next.ownerAccountId = ownerAccountId;
+    delete next.ownerAnonId;
+    delete next.ownerRecoveryHash;
+    delete next.ownerRecoveryCreatedAt;
+  } else if (anonymousAccount?.id && !existingEntry?.ownerAccountId) {
+    next.ownerAnonId = anonymousAccount.id;
+    const sameAnonymousOwner =
+      String(existingEntry?.ownerAnonId || '').toLowerCase() === String(anonymousAccount.id).toLowerCase();
+    if (sameAnonymousOwner && existingEntry?.ownerRecoveryHash) {
+      next.ownerRecoveryHash = existingEntry.ownerRecoveryHash;
+      if (existingEntry.ownerRecoveryCreatedAt) next.ownerRecoveryCreatedAt = existingEntry.ownerRecoveryCreatedAt;
+    } else {
+      delete next.ownerRecoveryHash;
+      delete next.ownerRecoveryCreatedAt;
+    }
+  }
+
+  return next;
+}
+
+// Google-linked works store a non-reversible HMAC of Google's account sub.
+// Email addresses are not persisted in public library indexes.
 function agentOwnerMatches(entry, googlePayload) {
   const stored = String(entry?.ownerAccountId || '');
   if (!/^[a-f0-9]{64}$/.test(stored)) return false;
-  const sub = String(googlePayload?.sub || '');
-  const signingKey = String(process.env.SPINE_LINK_AGENT_API_KEY || '');
-  if (!sub || !signingKey || Buffer.byteLength(signingKey) < 32) return false;
-  const digest = createHmac('sha256', signingKey).update('owner-v1:' + sub).digest('hex');
+  const digest = googleOwnerAccountId(googlePayload);
+  if (!digest) return false;
   return timingSafeEqual(Buffer.from(stored), Buffer.from(digest));
 }
 
@@ -639,13 +705,11 @@ export function canEditEntry(entry, googlePayload, anonymousAccount) {
 }
 
 function accountLibraryEntries(origin, entries, googlePayload, anonymousAccount) {
-  return publicLibraryEntries(origin, entries).map(entry => {
-    const next = { ...entry, canEdit: canEditEntry(entry, googlePayload, anonymousAccount) };
-    delete next.ownerEmail;
-    delete next.ownerEmailSha256;
-    delete next.ownerAccountId;
-    delete next.ownerAnonId;
-    delete next.ownerAnonFingerprint;
+  return (Array.isArray(entries) ? entries : []).map(entry => {
+    // Compute authorization against the original index record before the
+    // public projection removes its private owner/recovery metadata.
+    const canEdit = canEditEntry(entry, googlePayload, anonymousAccount);
+    const next = { ...publicLibraryEntry(origin, entry), canEdit };
     // The account list is a card index, not the complete download manifest.
     // Large per-animation exports can exceed the server response limit.
     delete next.allAnimationPreviews;
@@ -1493,7 +1557,8 @@ export default async function handler(request, response) {
         const currentEntries = index?.content && index.encoding === 'base64'
           ? JSON.parse(base64ToText(index.content)) : [];
         const existing = currentEntries.find(item => item.id === uploadId);
-        nextEntry = publicLibraryEntry(origin, {
+        if (existing && !canEditEntry(existing, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can replace this entry', 403);
+        nextEntry = applyOwnerMetadata({
           ...body?.entry,
           files: relativeFiles,
           id: uploadId, uploadedAt, previewPath: workPath,
@@ -1504,10 +1569,7 @@ export default async function handler(request, response) {
             webmStatus: 'waiting-for-editor',
             skeleton: '', atlas: '', animations: [],
           } : {}),
-          ownerEmail: googlePayload?.email,
-          ownerAnonId: anonymousAccount?.id,
-          publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existing?.publicOwnerId),
-        });
+        }, googlePayload, anonymousAccount, existing, existing?.publicOwnerId);
         nextEntry.webmStatus = isEditorProject ? 'waiting-for-editor' :
           existing?.webmStatus === 'ready' ? 'ready' : 'pending';
         nextEntry.dispatchStatus = isEditorProject
@@ -1558,16 +1620,14 @@ export default async function handler(request, response) {
         const currentIndex = await getGitHubContent(settings, indexPath);
         const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
         const existingEntry = currentEntries.find((c) => c.id === uploadId);
-        const nextEntry = publicLibraryEntry(origin, {
+        if (existingEntry && !canEditEntry(existingEntry, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can replace this entry', 403);
+        const nextEntry = applyOwnerMetadata({
           ...body?.entry,
           id: uploadId,
           uploadedAt,
           previewPath: uploadPathBg,
-          ownerEmail: googlePayload?.email,
-          ownerAnonId: anonymousAccount?.id,
-          publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existingEntry?.publicOwnerId),
           sourceProof: body?.entry?.sourceProof,
-        });
+        }, googlePayload, anonymousAccount, existingEntry, existingEntry?.publicOwnerId);
         nextEntry.webmStatus = existingEntry?.webmStatus === 'ready' ? 'ready' : 'pending';
         nextEntry.dispatchStatus = 'pending';
         const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== uploadId)];
@@ -1814,17 +1874,15 @@ export default async function handler(request, response) {
       const currentIndex = await getGitHubContent(settings, indexPath);
       const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
       const existingEntry = currentEntries.find((c) => c.id === entry.id);
-      const nextEntry = {
+      if (existingEntry && !canEditEntry(existingEntry, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can update this library entry', 403);
+      const nextEntry = applyOwnerMetadata({
         ...entry,
-        ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
         ...(entry?.ownerName || googlePayload?.name ? { ownerName: cleanPublicProfileText(entry?.ownerName || googlePayload?.name) } : {}),
         ...(entry?.ownerPicture || googlePayload?.picture ? { ownerPicture: cleanPublicProfileImage(entry?.ownerPicture || googlePayload?.picture) } : {}),
-        ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id } : {}),
-        publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
         showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
         portfolioMode: Boolean(entry?.portfolioMode),
         ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
-      };
+      }, googlePayload, anonymousAccount, existingEntry, existingEntry?.publicOwnerId);
       const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);
       const dataScience = await updateDataScienceCatalog(settings, body, nextEntry, commitPrefix, origin);
@@ -1910,21 +1968,19 @@ export default async function handler(request, response) {
         const currentIndex = await getGitHubContent(settings, indexPath);
         const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
         existingEntry = currentEntries.find((currentItem) => currentItem.id === entryPayload.id);
-        nextEntry = {
+        if (existingEntry && !canEditEntry(existingEntry, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can publish changes to this entry', 403);
+        nextEntry = applyOwnerMetadata({
           ...entryPayload,
-          ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
           ...(entryPayload?.ownerName || googlePayload?.name
             ? { ownerName: cleanPublicProfileText(entryPayload?.ownerName || googlePayload?.name) }
             : {}),
           ...(entryPayload?.ownerPicture || googlePayload?.picture
             ? { ownerPicture: cleanPublicProfileImage(entryPayload?.ownerPicture || googlePayload?.picture) }
             : {}),
-          ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id } : {}),
-          publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entryPayload?.publicOwnerId),
           showOwnerLibrary: Boolean(entryPayload?.showOwnerLibrary),
           portfolioMode: Boolean(entryPayload?.portfolioMode),
           ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
-        };
+        }, googlePayload, anonymousAccount, existingEntry, existingEntry?.publicOwnerId);
 
         // The anchor is optional. Building it here keeps it in the same commit
         // as index.json instead of paying for a second request and a second
@@ -2033,7 +2089,7 @@ export default async function handler(request, response) {
       const nextEntries = [...currentEntries];
       nextEntries[entryIndex] = nextEntry;
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update preview text`, currentIndex?.sha, origin);
-      return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry) });
+      return response.status(200).json({ ok: true, entry: { ...publicLibraryEntry(origin, nextEntry), canEdit: canEditEntry(nextEntry, googlePayload, anonymousAccount) } });
     }
 
     if (action === 'update-layout') {
@@ -2061,7 +2117,7 @@ export default async function handler(request, response) {
       nextEntries[entryIndex] = nextEntry;
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update preview layout`, currentIndex?.sha, origin);
       dispatchSpineExportWebm(settings, nextEntry, origin).catch(() => {});
-      return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry) });
+      return response.status(200).json({ ok: true, entry: { ...publicLibraryEntry(origin, nextEntry), canEdit: canEditEntry(nextEntry, googlePayload, anonymousAccount) } });
     }
 
     if (action === 'update-entry-visibility') {
@@ -2081,7 +2137,7 @@ export default async function handler(request, response) {
       const nextEntries = [...currentEntries];
       nextEntries[entryIndex] = nextEntry;
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update entry visibility`, currentIndex?.sha, origin);
-      return response.status(200).json({ ok: true, entry: publicLibraryEntry(origin, nextEntry) });
+      return response.status(200).json({ ok: true, entry: { ...publicLibraryEntry(origin, nextEntry), canEdit: canEditEntry(nextEntry, googlePayload, anonymousAccount) } });
     }
 
     if (action === 'update-library-order') {
@@ -2101,7 +2157,7 @@ export default async function handler(request, response) {
       const currentPosition = ownerEntries.findIndex((currentEntry) => String(currentEntry?.id || '') === entryId);
       const nextPosition = direction === 'up' ? currentPosition - 1 : currentPosition + 1;
       if (currentPosition < 0 || nextPosition < 0 || nextPosition >= ownerEntries.length) {
-        return response.status(200).json({ ok: true, entries: publicLibraryEntries(origin, ownerEntries), changed: false });
+        return response.status(200).json({ ok: true, entries: accountLibraryEntries(origin, ownerEntries, googlePayload, anonymousAccount), changed: false });
       }
       const nextOwnerEntries = [...ownerEntries];
       const [movedEntry] = nextOwnerEntries.splice(currentPosition, 1);
@@ -2114,7 +2170,7 @@ export default async function handler(request, response) {
       await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update public library order`, currentIndex?.sha, origin);
       return response.status(200).json({
         ok: true,
-        entries: publicLibraryEntries(origin, nextOwnerEntries.map((entry, index) => ({ ...entry, libraryOrder: index + 1 }))),
+        entries: accountLibraryEntries(origin, nextOwnerEntries.map((entry, index) => ({ ...entry, libraryOrder: index + 1 })), googlePayload, anonymousAccount),
         changed: true,
       });
     }
@@ -2132,13 +2188,18 @@ export default async function handler(request, response) {
           const nextEntries = collection.entries.map(entry => {
             if (!canEditEntry(entry, googlePayload, anonymousAccount)) return entry;
             const next = { ...entry, publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry.publicOwnerId) };
-            if (entry?.ownerAccountId) {
-              // A profile edit must not reintroduce plaintext Google email into
-              // a public agent-upload index, even for legacy agent entries.
+            if (googlePayload?.sub) {
+              const ownerAccountId = googleOwnerAccountId(googlePayload);
+              if (!ownerAccountId) throw new Error('Google owner signing key is not configured');
+              next.ownerAccountId = ownerAccountId;
               delete next.ownerEmail;
               delete next.ownerEmailSha256;
-            } else if (googlePayload?.email) {
-              next.ownerEmail = googlePayload.email;
+              delete next.ownerAnonId;
+              delete next.ownerAnonFingerprint;
+              delete next.ownerRecoveryHash;
+              delete next.ownerRecoveryCreatedAt;
+            } else if (anonymousAccount?.id && !entry?.ownerAccountId) {
+              next.ownerAnonId = anonymousAccount.id;
             }
             if (ownerName) next.ownerName = ownerName;
             if (ownerPicture) next.ownerPicture = ownerPicture;
@@ -2222,6 +2283,81 @@ export default async function handler(request, response) {
       });
     }
 
+    if (action === 'create-anonymous-recovery-key') {
+      response.setHeader('Cache-Control', 'no-store, private');
+      response.setHeader('Pragma', 'no-cache');
+      if (googlePayload?.email) return response.status(400).json({ error: 'Use your Google account to recover Google-linked uploads' });
+      if (!anonymousAccount) throw unauthorized('Anonymous account is required');
+      const recoverySecret = createRecoverySecret();
+      const recoveryHash = hashRecoverySecret(recoverySecret);
+      const createdAt = new Date().toISOString();
+      const collections = await libraryCollectionIndexes(settings);
+      let updatedEntries = 0;
+      for (const collection of collections) {
+        const result = await updateLibraryCollectionIndex(
+          settings,
+          collection,
+          entries => addRecoveryHashToOwnedEntries(entries, anonymousAccount.id, recoveryHash, createdAt),
+          `${commitPrefix}: create anonymous recovery key`,
+          origin,
+        );
+        updatedEntries += result.changed;
+      }
+      if (!updatedEntries) return response.status(404).json({ error: 'No anonymous uploads found for this account yet' });
+      return response.status(200).json({ ok: true, recoverySecret, updatedEntries });
+    }
+
+    if (action === 'recover-anonymous-library') {
+      response.setHeader('Cache-Control', 'no-store, private');
+      response.setHeader('Pragma', 'no-cache');
+      if (googlePayload?.email) return response.status(400).json({ error: 'Use your Google account to open your library' });
+      if (!anonymousAccount) throw unauthorized('Anonymous account is required');
+      const recoverySecret = normalizeRecoverySecret(body?.recoverySecret);
+      if (!recoverySecret) return response.status(400).json({ error: 'Invalid recovery key format' });
+      const recoveryHash = hashRecoverySecret(recoverySecret);
+      const collections = await libraryCollectionIndexes(settings);
+      let recoveredCount = 0;
+      for (const collection of collections) {
+        const result = await updateLibraryCollectionIndex(
+          settings,
+          collection,
+          entries => recoverEntriesByRecoveryHash(entries, recoveryHash, anonymousAccount.id),
+          `${commitPrefix}: restore anonymous library`,
+          origin,
+        );
+        recoveredCount += result.changed;
+      }
+      if (!recoveredCount) return response.status(401).json({ error: 'Recovery key is invalid or has been revoked' });
+      const restoredEntries = mergeCollectionEntries(collections)
+        .filter(item => canEditEntry(item, null, anonymousAccount))
+        .sort(compareLibraryEntries);
+      return response.status(200).json({
+        ok: true,
+        recoveredCount,
+        entries: accountLibraryEntries(origin, restoredEntries, null, anonymousAccount),
+      });
+    }
+
+    if (action === 'revoke-anonymous-recovery-key') {
+      response.setHeader('Cache-Control', 'no-store, private');
+      response.setHeader('Pragma', 'no-cache');
+      if (googlePayload?.email) return response.status(400).json({ error: 'Use your Google account to manage this library' });
+      if (!anonymousAccount) throw unauthorized('Anonymous account is required');
+      const collections = await libraryCollectionIndexes(settings);
+      let revokedCount = 0;
+      for (const collection of collections) {
+        const result = await updateLibraryCollectionIndex(
+          settings,
+          collection,
+          entries => revokeRecoveryHashFromOwnedEntries(entries, anonymousAccount.id),
+          `${commitPrefix}: revoke anonymous recovery key`,
+          origin,
+        );
+        revokedCount += result.changed;
+      }
+      return response.status(200).json({ ok: true, revokedCount });
+    }
+
     if (action === 'get-index') {
       if (!googlePayload && !anonymousAccount) throw unauthorized('Anonymous account is required');
       const collections = await libraryCollectionIndexes(settings);
@@ -2296,6 +2432,8 @@ export default async function handler(request, response) {
       if (!anonymousAccount) throw unauthorized('Anonymous account is required');
       const anonymousId = anonymousAccount.id.toLowerCase();
       const userEmail = String(googlePayload.email).toLowerCase();
+      const ownerAccountId = googleOwnerAccountId(googlePayload);
+      if (!ownerAccountId) throw new Error('Google owner signing key is not configured');
       const collections = await libraryCollectionIndexes(settings);
       let merged = false;
       for (const collection of collections) {
@@ -2306,12 +2444,22 @@ export default async function handler(request, response) {
             const existingEmail = String(currentEntry.ownerEmail || '').toLowerCase();
             if (existingEmail && existingEmail !== userEmail) return currentEntry;
             if (currentEntry.ownerEmailSha256 && currentEntry.ownerEmailSha256 !== sha256Hex(userEmail)) return currentEntry;
-            if (existingEmail === userEmail) return currentEntry;
+            if (currentEntry.ownerAccountId && currentEntry.ownerAccountId !== ownerAccountId) return currentEntry;
+            if (currentEntry.ownerAccountId === ownerAccountId && !existingEmail &&
+                !currentEntry.ownerEmailSha256 && !currentEntry.ownerRecoveryHash) return currentEntry;
             changed = true;
-            return { ...currentEntry, ownerEmail: googlePayload.email,
+            const nextEntry = { ...currentEntry,
+              ownerAccountId,
               publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, currentEntry.publicOwnerId),
               ownerName: cleanPublicProfileText(currentEntry.ownerName || body.ownerName || googlePayload.name || ''),
               ownerPicture: cleanPublicProfileImage(currentEntry.ownerPicture || body.ownerPicture || googlePayload.picture || '') };
+            delete nextEntry.ownerEmail;
+            delete nextEntry.ownerEmailSha256;
+            delete nextEntry.ownerAnonId;
+            delete nextEntry.ownerAnonFingerprint;
+            delete nextEntry.ownerRecoveryHash;
+            delete nextEntry.ownerRecoveryCreatedAt;
+            return nextEntry;
           });
           if (!changed) break;
           try {
@@ -2383,17 +2531,15 @@ export default async function handler(request, response) {
     const currentIndex = await getGitHubContent(settings, indexPath);
     const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
     const existingEntry = currentEntries.find((c) => c.id === entry.id);
-    const nextEntry = {
+      if (existingEntry && !canEditEntry(existingEntry, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can update this library entry', 403);
+    const nextEntry = applyOwnerMetadata({
       ...entry,
-      ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
       ...(entry?.ownerName || googlePayload?.name ? { ownerName: cleanPublicProfileText(entry?.ownerName || googlePayload?.name) } : {}),
       ...(entry?.ownerPicture || googlePayload?.picture ? { ownerPicture: cleanPublicProfileImage(entry?.ownerPicture || googlePayload?.picture) } : {}),
-      ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id } : {}),
-      publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
       showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
       portfolioMode: Boolean(entry?.portfolioMode),
       ...(existingEntry?.webmStatus === 'ready' ? { webmStatus: 'ready' } : { webmStatus: 'pending' }),
-    };
+    }, googlePayload, anonymousAccount, existingEntry, existingEntry?.publicOwnerId);
     const nextEntries = [nextEntry, ...currentEntries.filter((currentEntry) => currentEntry.id !== nextEntry.id)];
 
     await putGitHubContent(settings, indexPath, textToBase64(JSON.stringify(nextEntries, null, 2)), `${commitPrefix}: update library index`, currentIndex?.sha, origin);

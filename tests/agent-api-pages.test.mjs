@@ -67,7 +67,8 @@ test('personal API work uses verified owner identity, no public Google email', a
   assert(agent.includes('showOwnerLibrary: false'));
   assert(upload.includes('if (entry?.ownerAccountId) return agentOwnerMatches(entry, googlePayload)'));
   assert(upload.includes('delete next.ownerAccountId'));
-  assert(upload.includes('if (entry?.ownerAccountId) {'));
+  assert(upload.includes('function applyOwnerMetadata('));
+  assert(upload.includes('const next = stripPrivateOwnerMetadata(entry)'));
 });
 
 test("personal agent uploads can be deleted from UI with the owner's Google session", async () => {

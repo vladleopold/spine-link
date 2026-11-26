@@ -1,4 +1,4 @@
-import {createHash} from 'node:crypto';
+import {createHash, createHmac} from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import handler from '../api/github-upload.js';
@@ -9,12 +9,12 @@ test('new collection values win while missing ownership survives rotation',()=>{
  assert.equal(entries.length,1);assert.equal(entries[0].ownerEmail,'owner@example.test');assert.equal(entries[0].hiddenFromPublicLibrary,true);
 });
 test('signed-in portfolio and anonymous merge include every collection, with owner checks',async()=>{
- const saved=globalThis.fetch,oldToken=process.env.GITHUB_TOKEN,oldClient=process.env.GOOGLE_CLIENT_ID;
- process.env.GITHUB_TOKEN='test-only';process.env.GOOGLE_CLIENT_ID='test.apps.googleusercontent.com';
+ const saved=globalThis.fetch,oldToken=process.env.GITHUB_TOKEN,oldClient=process.env.GOOGLE_CLIENT_ID,oldAgentKey=process.env.SPINE_LINK_AGENT_API_KEY;
+ process.env.GITHUB_TOKEN='test-only';process.env.GOOGLE_CLIENT_ID='test.apps.googleusercontent.com';process.env.SPINE_LINK_AGENT_API_KEY='test-spine-link-agent-api-key-for-unit-tests-32-bytes';
  const indexes={library_03:[{id:'new',ownerEmail:'owner@example.test'},{id:'foreign',ownerEmail:'other@example.test'}],library_02:[{id:'old',ownerEmail:'owner@example.test',hiddenFromPublicLibrary:true},{id:'anon-old',ownerAnonId:'anon_test'}],library_01:[{id:'oldest',ownerEmail:'owner@example.test'},{id:'original-google',ownerEmailSha256:createHash('sha256').update('owner@example.test').digest('hex')},{id:'foreign-google',ownerEmailSha256:createHash('sha256').update('other@example.test').digest('hex')}],library:[{id:'original',ownerEmail:'owner@example.test'},{id:'anon-original',ownerAnonId:'anon_test'},{id:'linked-other',ownerAnonId:'anon_test',ownerEmail:'other@example.test'}]};
  const writes=[];
  globalThis.fetch=async(url,options={})=>{
-  if(String(url).startsWith('https://oauth2.googleapis.com/tokeninfo?id_token='))return new Response(JSON.stringify({aud:'test.apps.googleusercontent.com',email_verified:true,email:'owner@example.test',name:'Owner'}));
+  if(String(url).startsWith('https://oauth2.googleapis.com/tokeninfo?id_token='))return new Response(JSON.stringify({aud:'test.apps.googleusercontent.com',email_verified:true,email:'owner@example.test',name:'Owner',sub:'google-owner-subject'}));
   const path=new URL(url).pathname;
   if(path.endsWith('/contents/'))return new Response(JSON.stringify(Object.keys(indexes).map(name=>({type:'dir',name}))));
   const name=decodeURIComponent(path.split('/contents/')[1]||'').split('/')[0];
@@ -33,10 +33,17 @@ test('signed-in portfolio and anonymous merge include every collection, with own
   const own=await call('get-index');
   for(const id of ['new','old','oldest','original','original-google'])assert.ok(own.entries.some(e=>e.id===id));
   assert.ok(!own.entries.some(e=>e.id==='foreign'));assert.ok(!own.entries.some(e=>e.id==='linked-other'));assert.ok(!own.entries.some(e=>e.id==='foreign-google'));assert.equal(own.entries.find(e=>e.id==='old').hiddenFromPublicLibrary,true);
-  assert.ok(own.entries.every(e=>e.canEdit===true&&!('ownerEmail' in e)&&!('ownerAnonId' in e)));
+  for (const entry of own.entries) {
+   assert.equal(entry.canEdit, true, `account projection must preserve edit access for ${entry.id}`);
+   assert.equal('ownerEmail' in entry, false, `account projection must strip ownerEmail for ${entry.id}`);
+   assert.equal('ownerAnonId' in entry, false, `account projection must strip ownerAnonId for ${entry.id}`);
+  }
   const merged=await call('merge-anonymous-account');assert.equal(merged.merged,true);assert.deepEqual(writes.sort(),['library','library_02']);
   assert.equal(indexes.library.find(e=>e.id==='linked-other').ownerEmail,'other@example.test');
-  assert.equal(indexes.library.find(e=>e.id==='anon-original').ownerEmail,'owner@example.test');assert.ok(merged.entries.every(e=>e.canEdit===true));
+  const expectedOwnerId=createHmac('sha256',process.env.SPINE_LINK_AGENT_API_KEY).update('owner-v1:google-owner-subject').digest('hex');
+  assert.equal(indexes.library.find(e=>e.id==='anon-original').ownerEmail,undefined);
+  assert.equal(indexes.library.find(e=>e.id==='anon-original').ownerAccountId,expectedOwnerId);
+  assert.ok(merged.entries.every(e=>e.canEdit===true));
   const profile=await call('update-profile-name',{ownerName:'Restored name'});assert.ok(profile.entries.some(e=>e.id==='oldest'));assert.ok(profile.entries.every(e=>e.ownerName==='Restored name'));assert.equal(indexes.library.find(e=>e.id==='linked-other').ownerName,undefined);
- }finally{globalThis.fetch=saved;for(const[key,value]of [['GITHUB_TOKEN',oldToken],['GOOGLE_CLIENT_ID',oldClient]]){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
+ }finally{globalThis.fetch=saved;for(const[key,value]of [['GITHUB_TOKEN',oldToken],['GOOGLE_CLIENT_ID',oldClient],['SPINE_LINK_AGENT_API_KEY',oldAgentKey]]){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
 });

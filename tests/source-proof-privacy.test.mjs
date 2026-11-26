@@ -77,7 +77,10 @@ test("public library API responses do not expose legacy anonymous device fingerp
   assert.ok(start >= 0 && end > start, "public library projection must be present");
   const projection = source.slice(start, end);
 
-  assert.match(projection, /delete next\.ownerAnonFingerprint/);
+  assert.match(projection, /stripPrivateOwnerMetadata\(entry\)/);
+  const helper = await readFile(new URL("../lib/anonymous-recovery.js", import.meta.url), "utf8");
+  assert.match(helper, /'ownerAnonFingerprint'/);
+  assert.match(helper, /'ownerAnonId'/);
   assert.doesNotMatch(source, /ownerAnonFingerprint: anonymousAccount\?\.fingerprint/);
 });
 
