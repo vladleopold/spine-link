@@ -385,7 +385,8 @@ type GoogleUser = {
 
 type AnonymousAccount = {
   id: string;
-  fingerprint: string;
+  /** Legacy local records may still carry this field; new accounts never create it. */
+  fingerprint?: string;
 };
 
 type GoogleCredentialResponse = {
@@ -771,17 +772,6 @@ type StoredGoogleSession = {
   expiresAt: number;
 };
 
-function browserFingerprint() {
-  if (typeof window === "undefined") return "server";
-  return [
-    navigator.userAgent,
-    navigator.language,
-    navigator.platform,
-    Intl.DateTimeFormat().resolvedOptions().timeZone,
-    `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`,
-  ].join("|");
-}
-
 function hashString(value: string) {
   let hash = 5381;
   for (let index = 0; index < value.length; index += 1) {
@@ -791,12 +781,8 @@ function hashString(value: string) {
 }
 
 function createAnonymousAccount(): AnonymousAccount {
-  const fingerprint = hashString(browserFingerprint());
   const randomPart = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-  return {
-    id: `anon_${fingerprint}_${hashString(randomPart)}`,
-    fingerprint,
-  };
+  return { id: `anon_${randomPart}` };
 }
 
 function getStoredAnonymousAccount(): AnonymousAccount {
@@ -804,7 +790,7 @@ function getStoredAnonymousAccount(): AnonymousAccount {
 
   try {
     const storedAccount = JSON.parse(window.localStorage.getItem(anonymousAccountStorageKey) || "null") as AnonymousAccount | null;
-    if (storedAccount?.id?.startsWith("anon_") && storedAccount.fingerprint) return storedAccount;
+    if (storedAccount?.id?.startsWith("anon_")) return storedAccount;
   } catch {
     // Fall through and create a fresh account.
   }
@@ -5217,7 +5203,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         ownerPicture: googleUser?.picture || existingEntry?.ownerPicture,
         publicOwnerId: existingEntry?.publicOwnerId || publicOwnerIdFor(googleUser, anonymousAccount),
         ownerAnonId: existingEntry?.ownerAnonId || anonymousAccount.id,
-        ownerAnonFingerprint: existingEntry?.ownerAnonFingerprint || anonymousAccount.fingerprint,
         showOwnerLibrary: existingEntry?.showOwnerLibrary ?? showProfileOnSharedPages,
         portfolioMode: existingEntry?.portfolioMode ?? isPortfolioMode,
         hiddenFromPublicLibrary: existingEntry?.hiddenFromPublicLibrary,
