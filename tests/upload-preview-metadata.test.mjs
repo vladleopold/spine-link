@@ -8,6 +8,8 @@ test('background upload sends parsed Spine animation names and an explicit defau
   assert.match(source, /spineAnimationMetadataFromJson/);
   assert.match(source, /animations:\s*animationMetadata\.animations/);
   assert.match(source, /defaultAnimation:\s*animationMetadata\.defaultAnimation/);
+  assert.match(source, /runtimeSkeletonFile\s*&&\s*\/\\.skel\$\/i\.test\(runtimeSkeletonFile\.name\)/);
+  assert.match(source, /defaultAnimation:\s*"__SPINE_AUTO__"/);
 });
 
 test('the upload metadata parser selects the first real Spine animation without inventing one', async () => {
