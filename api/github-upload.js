@@ -2,6 +2,7 @@ import agentAnimationHandler from '../lib/agent-animation.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
 import { githubMetricsCache } from '../lib/github-metrics-cache.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
+import { githubErrorForResponse } from '../lib/github-rate-limit.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
@@ -899,7 +900,7 @@ async function updateDataScienceCatalog(settings, body, entry, commitPrefix, ori
 // GitHub 409 on a write means the expected branch/file SHA is stale. It must
 // be returned to the caller so the index can be re-read, not replayed with the
 // same stale SHA (which can overwrite another person's just-published work).
-const GITHUB_RETRY_STATUS = new Set([403, 408, 429, 500, 502, 503, 504]);
+const GITHUB_RETRY_STATUS = new Set([408, 500, 502, 503, 504]);
 const GITHUB_RETRY_ATTEMPTS = 8;
 
 function githubRetryDelay(attempt) {
@@ -927,17 +928,8 @@ function withGitHubStatus(error, response, githubMessage = '') {
 // at once. Surfacing that as a 500 made the browser look broken and gave the
 // client nothing to act on. Hand it back as 429 with the window GitHub gave us
 // so the client can wait it out instead of hammering and losing the upload.
-function githubFailure(verb, path, response) {
-  const status = response?.status ?? 0;
-  const message = `Storage ${verb} failed for ${path}: ${status}`;
-  if (status !== 403 && status !== 429) return new Error(message);
-  const rateLimited = new Error(message);
-  rateLimited.statusCode = 429;
-  const reset = Number(response?.headers?.get?.('x-ratelimit-reset'));
-  const retryAfter = Number(response?.headers?.get?.('retry-after'));
-  if (Number.isFinite(retryAfter) && retryAfter > 0) rateLimited.retryAfter = Math.ceil(retryAfter);
-  else if (Number.isFinite(reset) && reset > 0) rateLimited.retryAfter = Math.max(1, Math.ceil(reset - Date.now() / 1000));
-  return rateLimited;
+function githubFailure(verb, path, response, detail = '') {
+  return githubErrorForResponse({ verb, path, response, message: detail });
 }
 
 async function getGitHubContent(settings, path) {
@@ -965,7 +957,7 @@ async function getGitHubContent(settings, path) {
   if (response.status === 404) return null;
   if (!response.ok) {
     const detail = await response.json().then((r) => (typeof r?.message === 'string' ? r.message : '')).catch(() => '');
-    throw withGitHubStatus(githubFailure('read', path, response), response, detail);
+    throw withGitHubStatus(githubFailure('read', path, response, detail), response, detail);
   }
 
   const data = await response.json();
@@ -1012,8 +1004,8 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       });
       const result = await response.json().catch(() => ({}));
       if (response.ok) return result;
-      // A rate-limited write is safe to replay: the PUT carries the expected
-      // blob sha, so a retry either succeeds or fails with 422 "sha mismatch".
+      // Rate-limited writes are returned immediately with Retry-After. Only
+      // transient transport/server failures are retried in this function.
       if (GITHUB_RETRY_STATUS.has(response.status) && attempt < GITHUB_RETRY_ATTEMPTS - 1) {
         await new Promise((r) => setTimeout(r, githubRetryDelay(attempt)));
         lastError = withGitHubStatus(new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`), response, typeof result?.message === 'string' ? result.message : '');
@@ -1023,7 +1015,7 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       // write failed for <path>: 422") says nothing about why, and GitHub's
       // message ("sha wasn't supplied") is the only clue that makes a failure
       // diagnosable from the browser console.
-      throw withGitHubStatus(githubFailure('write', path, response), response, typeof result?.message === 'string' ? result.message : '');
+      throw withGitHubStatus(githubFailure('write', path, response, typeof result?.message === 'string' ? result.message : ''), response, typeof result?.message === 'string' ? result.message : '');
     } catch (err) {
       lastError = err;
       // Only retry what the retry set says is worth retrying. A definitive
@@ -1093,7 +1085,7 @@ async function githubApi(settings, method, apiPath, payload) {
       const data = await response.json().catch(() => ({}));
       if (response.ok) return data;
       const detail = typeof data?.message === 'string' ? data.message : '';
-      const failure = withGitHubStatus(githubFailure(method === 'GET' ? 'read' : 'write', apiPath, response), response, detail);
+      const failure = withGitHubStatus(githubFailure(method === 'GET' ? 'read' : 'write', apiPath, response, detail), response, detail);
       if (!GITHUB_RETRY_STATUS.has(response.status)) throw failure;
       lastError = failure;
       await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
