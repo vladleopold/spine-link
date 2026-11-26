@@ -19,21 +19,13 @@ test("anonymous public proof contains no stable browser or device identifier", (
   assert.deepEqual(evidence, { mode: "anonymous-browser" });
 });
 
-test("Google public proof keeps only the email digest and omits device telemetry", () => {
-  const digest = "c".repeat(64);
+test("Google public proof records the sign-in mode without exposing an email digest or device telemetry", () => {
   const evidence = createPublicUploaderEvidence({
     mode: "google-account",
-    googleEmailSha256: digest,
+    googleEmailSha256: "c".repeat(64),
     anonymousAccountId: "must-not-appear",
     browserEnvironment: { userAgent: "must-not-appear" },
   });
 
-  assert.deepEqual(evidence, { mode: "google-account", googleEmailSha256: digest });
-});
-
-test("invalid email digests are omitted", () => {
-  assert.deepEqual(
-    createPublicUploaderEvidence({ mode: "google-account", googleEmailSha256: "not-a-hash" }),
-    { mode: "google-account" },
-  );
+  assert.deepEqual(evidence, { mode: "google-account" });
 });
