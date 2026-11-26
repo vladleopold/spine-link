@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runtimeVersionOverrideForSpineSkeleton } from '../lib/spine-runtime-file-selection.js';
-import { sanitizeSkeletonJson } from '../lib/spine-json-sanitize.js';
+import { sanitizeSkeletonJson, sanitizeSkeletonJsonText } from '../lib/spine-json-sanitize.js';
 
 test('rejects incompatible Spine 3.7 binary skeletons instead of routing them to 3.8', () => {
   assert.equal(runtimeVersionOverrideForSpineSkeleton('3.7.94', true), '');
@@ -57,4 +57,20 @@ test('continues to sanitize Spine 4.x array-based skin records', () => {
   const result = sanitizeSkeletonJson(source);
   assert.equal(result.skeleton.spine, '4.2.120');
   assert.deepEqual(result.skins[0].attachments.body.mesh.uvs, []);
+});
+
+test('normalizes the actual Spine 3.8 JSON asset response before serving it to the player', () => {
+  const source = JSON.stringify({
+    skeleton:{spine:'3.8.97'},
+    skins:{default:{body:{mesh:{type:'mesh'}}}},
+  });
+  const normalized = JSON.parse(sanitizeSkeletonJsonText(source));
+  assert.ok(Array.isArray(normalized.skins));
+  assert.equal(normalized.skins[0].name, 'default');
+  assert.ok(normalized.skins[0].attachments.body.mesh);
+});
+
+test('leaves unrelated JSON assets untouched by the Spine sanitizer', () => {
+  const source = '{"name":"not-a-skeleton","items":[1,2,3]}';
+  assert.equal(sanitizeSkeletonJsonText(source), source);
 });

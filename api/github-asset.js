@@ -1,4 +1,4 @@
-import { sanitizeSkeletonJson } from '../lib/spine-json-sanitize.js';
+import { sanitizeSkeletonJsonText } from '../lib/spine-json-sanitize.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
@@ -143,12 +143,11 @@ function isSkeletonJsonPath(path) {
   return String(path || '').toLowerCase().endsWith('.json');
 }
 
-function isSkeletonJsonData(data) {
-  return data && typeof data === 'object' && (data.skeleton || data.bones || data.slots || data.skins || data.animations);
-}
-
-function sanitizeSkeletonData(json) {
-  return sanitizeSkeletonJson(json);
+function sanitizeSkeletonJsonBuffer(buffer) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) return buffer;
+  const source = buffer.toString('utf8');
+  const normalized = sanitizeSkeletonJsonText(source);
+  return normalized === source ? buffer : Buffer.from(normalized, 'utf8');
 }
 
 function byteRangeFromHeader(rangeHeader = '', size = 0) {
@@ -469,6 +468,7 @@ export default async function handler(request, response) {
           buffer = withAtlasPageCacheBuster(buffer, assetVersion);
           if (String(request.query?.spineRuntime || '') === '3.8') buffer = stripPmaMetadataForSpine38(buffer);
         }
+        if (isSkeletonJsonPath(assetPath)) buffer = sanitizeSkeletonJsonBuffer(buffer);
         if (assetPath === 'library/index.json') buffer = sanitizeLibraryIndex(buffer);
         const etag = rawResponse.headers.get('etag') || '';
         putMemoryCacheEntry(cacheKey, { buffer, etag });
@@ -500,6 +500,7 @@ export default async function handler(request, response) {
     if (rangeResponse) return rangeResponse;
     let buffer = await contentBufferFromGitHubContent(data, token);
     if (!buffer.length) return response.status(404).send('Asset is empty');
+    if (isSkeletonJsonPath(assetPath)) buffer = sanitizeSkeletonJsonBuffer(buffer);
     if (/\.dds$/i.test(assetPath)) {
       try {
         const alreadyPng = buffer.length >= 8 && buffer.subarray(0,8)

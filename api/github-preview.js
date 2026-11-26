@@ -3000,7 +3000,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       atlas.sha,
       ...textures.map((texture) => texture.sha),
       ...(atlasPages.some((page) => /\.dds$/i.test(page)) ? ['dds-png-v1'] : []),
-      ...(runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion) ? ['spine38-atlas-compat-v1'] : []),
+      ...(runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion) ? ['spine38-runtime-compat-v2'] : []),
     ].filter(Boolean).join('-');
 
     // Version the skeleton JSON/binary as well as atlas pages and textures.

@@ -507,6 +507,8 @@ jobs:
                       return {
                         setKeys:Object.keys(set), jsonUrl, atlasUrl, jsonStatus, atlasStatus,
                         jsonContentType, jsonVersion:jsonData?.skeleton?.spine || '',
+                        jsonSkinFormat:Array.isArray(jsonData?.skins)?'array':typeof jsonData?.skins,
+                        jsonSkinNames:Array.isArray(jsonData?.skins)?jsonData.skins.map(skin=>skin?.name).filter(Boolean):Object.keys(jsonData?.skins||{}),
                         indexedSkeletonVersion:set.skeletonVersion || '',
                         runtimeVersionOverride:set.runtimeVersionOverride || '',
                         boneCount:jsonData?.bones?.length || 0, slotCount:jsonData?.slots?.length || 0,
@@ -563,6 +565,10 @@ jobs:
                         .filter(url => /spine-player.*\.js/.test(url)));
                     assert.equal(assetDiagnostic.indexedSkeletonVersion, '3.8.97',
                       'Rabbit index must expose the parsed Spine 3.8.97 version: ' + JSON.stringify(assetDiagnostic));
+                    assert.equal(assetDiagnostic.jsonSkinFormat, 'array',
+                      'Rabbit JSON response must normalize legacy skins for Spine 3.8: ' + JSON.stringify(assetDiagnostic));
+                    assert.ok(assetDiagnostic.jsonSkinNames.includes('default'),
+                      'Rabbit runtime response must include its default skin: ' + JSON.stringify(assetDiagnostic));
                     assert.ok(runtimeUrls.some(url => url.includes('/vendor-spine-player-3.8.js')),
                       'Rabbit must load the same-origin Spine 3.8 runtime, got: ' + JSON.stringify(runtimeUrls));
                   }
