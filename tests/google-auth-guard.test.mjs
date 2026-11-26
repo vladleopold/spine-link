@@ -8,12 +8,14 @@ process.env.GOOGLE_CLIENT_ID = 'expected-spine-link-client';
 
 const request = {headers:{authorization:'Bearer valid-google-access'}};
 const results = [];
-function setMocks({aud='expected-spine-link-client',azp='',sub='subject-1',userinfoSub='subject-1',tokenStatus=200}={}) {
+function setMocks({aud='expected-spine-link-client',azp='',sub='subject-1',userinfoSub='subject-1',tokenStatus=200,idTokenPayload=null}={}) {
   let tokenGets=0, userinfoGets=0;
   globalThis.fetch=async url=>{
     const value=String(url);
     if (value.includes('tokeninfo?id_token=')) {
-      return {ok:false,status:400,json:async()=>({error:'invalid_token'})};
+      return idTokenPayload
+        ? {ok:true,status:200,json:async()=>idTokenPayload}
+        : {ok:false,status:400,json:async()=>({error:'invalid_token'})};
     }
     if (value.includes('tokeninfo?access_token=')) {
       tokenGets++;
@@ -65,4 +67,38 @@ test.after(()=>{
   globalThis.fetch=prevFetch;
   if(prevClient===undefined)delete process.env.GOOGLE_CLIENT_ID;
   else process.env.GOOGLE_CLIENT_ID=prevClient;
+});
+
+
+test('ID token authorized-party claim allows a cross-client audience when azp matches this app', async () => {
+  setMocks({
+    idTokenPayload: {
+      aud: 'some-other-audience',
+      azp: 'expected-spine-link-client',
+      sub: 'subject-1',
+      email: 'email@test.invalid',
+      email_verified: true,
+    },
+  });
+  const profile = await verifyGoogleToken(
+    { headers: { authorization: 'Bearer valid-google-id-token' } },
+    {},
+  );
+  assert.equal(profile.sub, 'subject-1');
+});
+
+test('foreign ID token is rejected when neither audience nor authorized party matches', async () => {
+  setMocks({
+    idTokenPayload: {
+      aud: 'some-other-audience',
+      azp: 'foreign-client',
+      sub: 'subject-1',
+      email: 'email@test.invalid',
+      email_verified: true,
+    },
+  });
+  await assert.rejects(
+    () => verifyGoogleToken({ headers: { authorization: 'Bearer foreign-id-token' } }, {}),
+    /audience/,
+  );
 });
