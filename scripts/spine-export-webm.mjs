@@ -580,24 +580,16 @@ async function warmUpAnimations() {
       await new Promise(r => setTimeout(r, 500));
       if (page.isClosed()) break;
       try {
-        const w = await page.evaluate(() => window);
-        if (w.__warmup && w.__warmup.skeletonData && w.__warmup.skeletonData.animations) {
-          names = w.__warmup.skeletonData.animations.map(a => a.name).filter(Boolean);
+        const state = await page.evaluate(() => ({
+          animations: window.__warmup?.skeletonData?.animations?.map((animation) => animation.name).filter(Boolean) || [],
+          error: String(window.__warmupError || ''),
+        }));
+        if (state.animations.length > 0) {
+          names = state.animations;
           break;
         }
-        if (w.__warmupError) {
-          if (w.spine && w.spine.SkeletonData) {
-            try {
-              const sd = await page.evaluate(() => {
-                if (window.spine && window.spine.SkeletonData) {
-                  const s = new window.spine.SkeletonData();
-                  return { hasAnimations: !!s.animations, animNames: s.animations ? Object.keys(s.animations) : [] };
-                }
-                return null;
-              });
-              if (sd && sd.animNames.length > 0) { names = sd.animNames; break; }
-            } catch {}
-          }
+        if (state.error) {
+          console.error('Spine runtime animation discovery failed:', state.error);
           break;
         }
       } catch {}
