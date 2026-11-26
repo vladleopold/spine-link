@@ -58,7 +58,8 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
       if (!Array.isArray(skeleton?.bones)) continue;
       sawSkeleton = true;
       const animationNames = Object.keys(skeleton?.animations ?? {});
-      if (animation ? !animationNames.includes(animation) : animationNames.length === 0) continue;
+      const autoDiscovery = animation === '__SPINE_AUTO__';
+      if (autoDiscovery ? animationNames.length === 0 : animation ? !animationNames.includes(animation) : animationNames.length === 0) continue;
 
       const skeletonAbsolute = path.join(setDirectory, name);
       const skeletonRelative = path.relative(root, skeletonAbsolute).split(path.sep).join('/');
@@ -67,7 +68,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
         basePath: indexed.basePath,
         uploadPath: path.relative(root, uploadDirectory).split(path.sep).join('/'),
         skeletonPath: skeletonRelative,
-        runtimeDiscovery: !animation,
+        runtimeDiscovery: !animation || autoDiscovery,
       };
     }
 
@@ -85,7 +86,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
         uploadPath: path.relative(root, uploadDirectory).split(path.sep).join('/'),
         skeletonPath: skeletonRelative,
         binary: true,
-        runtimeDiscovery: !animation,
+        runtimeDiscovery: !animation || animation === '__SPINE_AUTO__',
       };
     }
   }
