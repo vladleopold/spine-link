@@ -992,9 +992,8 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       });
       const result = await response.json().catch(() => ({}));
       if (response.ok) {
-        invalidateCachedGithubText(settings, cleanRepoPath(path));
-        invalidateCachedGithubText(settings, normalizedPath);
         const normalizedPath = cleanRepoPath(path);
+        invalidateCachedGithubText(settings, normalizedPath);
         if (normalizedPath === 'index.json' || normalizedPath.endsWith('/index.json')) githubLibraryFoldersCache.invalidate(libraryFoldersCacheKey(settings));
         return result;
       }
