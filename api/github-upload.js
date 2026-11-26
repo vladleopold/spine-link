@@ -572,6 +572,15 @@ export async function verifyGoogleToken(request, body) {
     accessPayload.azp,
   ].some(value => value === clientId);
   if (!accessTokenResponse.ok || !issuedToThisApp) {
+    const claim = value => typeof value === 'string' && value ? value : null;
+    console.warn('[AUTH] Google access-token audience mismatch', {
+      status: accessTokenResponse.status,
+      expectedClientId: clientId,
+      issued_to: claim(accessPayload.issued_to),
+      audience: claim(accessPayload.audience),
+      aud: claim(accessPayload.aud),
+      azp: claim(accessPayload.azp),
+    });
     throw unauthorized('Google token audience does not match this app');
   }
 
