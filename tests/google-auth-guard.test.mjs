@@ -65,6 +65,27 @@ test('foreign access-token issued_to claim remains rejected',async()=>{
   assert.deepEqual(counts(),{tokenGets:1,userinfoGets:0});
 });
 
+test('audience mismatch diagnostics expose client claims but never the bearer token',async()=>{
+  const logs=[];
+  const oldWarn=console.warn;
+  console.warn=(...args)=>logs.push(args);
+  setMocks({aud:'',azp:'',issuedTo:'legacy-client-id',audience:'legacy-client-id'});
+  try{
+    await assert.rejects(()=>verifyGoogleToken(request,{}),/audience/);
+    assert.equal(logs.length,1);
+    assert.equal(logs[0][0],'[AUTH] Google access-token audience mismatch');
+    assert.deepEqual(logs[0][1],{
+      status:200,
+      expectedClientId:'expected-spine-link-client',
+      issued_to:'legacy-client-id',
+      audience:'legacy-client-id',
+      aud:null,
+      azp:null,
+    });
+    assert.equal(JSON.stringify(logs).includes('valid-google-access'),false);
+  }finally{console.warn=oldWarn;}
+});
+
 test('missing token introspection cannot fall back to userinfo only',async()=>{
   const counts=setMocks({tokenStatus:400});
   await assert.rejects(()=>verifyGoogleToken(request,{}),/audience/);
