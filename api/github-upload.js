@@ -2284,6 +2284,8 @@ export default async function handler(request, response) {
     }
 
     if (action === 'create-anonymous-recovery-key') {
+      response.setHeader('Cache-Control', 'no-store, private');
+      response.setHeader('Pragma', 'no-cache');
       if (googlePayload?.email) return response.status(400).json({ error: 'Use your Google account to recover Google-linked uploads' });
       if (!anonymousAccount) throw unauthorized('Anonymous account is required');
       const recoverySecret = createRecoverySecret();
@@ -2306,6 +2308,8 @@ export default async function handler(request, response) {
     }
 
     if (action === 'recover-anonymous-library') {
+      response.setHeader('Cache-Control', 'no-store, private');
+      response.setHeader('Pragma', 'no-cache');
       if (googlePayload?.email) return response.status(400).json({ error: 'Use your Google account to open your library' });
       if (!anonymousAccount) throw unauthorized('Anonymous account is required');
       const recoverySecret = normalizeRecoverySecret(body?.recoverySecret);
@@ -2335,6 +2339,8 @@ export default async function handler(request, response) {
     }
 
     if (action === 'revoke-anonymous-recovery-key') {
+      response.setHeader('Cache-Control', 'no-store, private');
+      response.setHeader('Pragma', 'no-cache');
       if (googlePayload?.email) return response.status(400).json({ error: 'Use your Google account to manage this library' });
       if (!anonymousAccount) throw unauthorized('Anonymous account is required');
       const collections = await libraryCollectionIndexes(settings);
