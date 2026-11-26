@@ -422,9 +422,9 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
   if (!id) return null;
   const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
   const animations = Array.isArray(entry?.animations) ? entry.animations : [];
-  // An empty selection is intentional: the export worker loads the exact
-  // uploaded skeleton in its pinned Spine runtime and chooses only an
-  // unambiguous default (exact idle or the sole available track).
+  // Missing index metadata is explicit: the export worker loads the exact
+  // uploaded skeleton with its pinned Spine runtime, then validates visible
+  // motion before selecting a preview track; it never guesses from the index.
   try {
     const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
       method: 'POST',
@@ -433,7 +433,7 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
         event_type: 'spine-export-webm',
         client_payload: {
           uploadId: id,
-          animation: defaultAnimation,
+          animation: defaultAnimation.trim() ? defaultAnimation : '__SPINE_AUTO__',
           animations,
           origin: String(origin || '').replace(/\/+$/, ''),
           owner: settings.owner,
