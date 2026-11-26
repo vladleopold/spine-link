@@ -20,7 +20,7 @@ Responses are JSON. No cross-origin CORS is enabled. Only an agent backend, serv
 
 **runtime**: an exported Spine 4.3 JSON/SKEL skeleton, one .atlas (or .atlas.txt), and atlas texture images. The page is playable when completed; WebM preview rendering can continue asynchronously. Spine JSON must declare an animation and be compatible with player 4.3.
 
-**spine-project**: exactly one source .spine file at upload root and images inside images/. The permanent page is created immediately; the private 3Spine-core Ubuntu Spine Editor 4.3.26 workflow exports the playable JSON/atlas/textures. API state is processing until that conversion finishes.
+**spine-project**: exactly one source .spine file at upload root and images inside images/. The permanent page is created immediately; the public vladleopold/spine GitHub-hosted Ubuntu Spine Editor 4.3.26 workflow exports the playable JSON/atlas/textures. API state is processing until that conversion finishes.
 
 ## Direct CLI integration
 
