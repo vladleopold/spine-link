@@ -6,6 +6,7 @@ import {
   shouldRetryGitHubResponse,
   githubErrorForResponse,
 } from '../lib/github-rate-limit.js';
+import { getGitHubContent } from '../api/github-upload.js';
 
 function response(status, headers = {}) {
   const values = new Map(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), String(value)]));
@@ -75,4 +76,23 @@ test('permission errors preserve HTTP 403 instead of becoming rate limits', () =
   });
   assert.equal(error.statusCode, 403);
   assert.equal(error.retryAfter, undefined);
+});
+
+
+test('GitHub Contents reads stop after a secondary rate-limit body even without rate headers', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return new Response(JSON.stringify({ message: 'API rate limit exceeded' }), { status: 403 });
+  };
+  try {
+    await assert.rejects(
+      () => getGitHubContent({ owner: 'vladleopold', repo: 'spine', branch: 'main', token: 'test-token' }, 'library/index.json'),
+      error => error.statusCode === 429 && error.status === 403,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
