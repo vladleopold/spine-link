@@ -3174,6 +3174,8 @@ async function resolveEntryRecord(settings, entryId) {
   const id = cleanRepoPath(entryId).split('/').pop() || '';
   if (!id) return null;
   const basePaths = await libraryCollectionPaths(settings);
+  let successfulIndexReads = 0;
+  let lastLookupError = null;
   for (let index = 0; index < basePaths.length; index++) {
     const basePath = basePaths[index];
     try {
@@ -3183,6 +3185,7 @@ async function resolveEntryRecord(settings, entryId) {
       let indexText = await githubText(settings, indexPath, { ttlMs: 60_000, preferRaw: true });
       let entries = indexText ? JSON.parse(indexText) : [];
       if (!Array.isArray(entries)) entries = [];
+      successfulIndexReads++;
       let match = entries.find((entry) => String(entry?.id || '') === id);
 
       // A just-published work may not be present in the cached index. Refresh
@@ -3202,9 +3205,13 @@ async function resolveEntryRecord(settings, entryId) {
       if (previewPath) return { previewPath, entry: match, entries, basePath };
     } catch (error) {
       // One legacy/corrupt/oversized index must never hide newer previews.
+      // If every collection failed, however, a missing match is unknown—not a
+      // genuine 404. Let the handler return a generic, non-cacheable 503.
+      lastLookupError = error;
       console.warn('[preview] collection lookup failed:', basePath, String(error));
     }
   }
+  if (successfulIndexReads === 0 && lastLookupError) throw lastLookupError;
 
   // Three older public works were preserved in the immutable pre-rotation
   // index and their files now live under library_01/<id>. The archive feed
