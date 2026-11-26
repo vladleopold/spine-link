@@ -20,6 +20,22 @@ test('converts object-keyed Spine 3.8 skins to named runtime skin records', () =
   assert.equal(result.animations.idle !== undefined, true);
 });
 
+test('wraps legacy object-map slot attachments in the runtime attachments field', () => {
+  const source = JSON.stringify({
+    skeleton: { spine: '3.8.97' },
+    skins: {
+      default: {
+        body: { region: { type: 'region', path: 'body' } },
+        head: { mesh: { type: 'mesh', uvs: [0, 0], vertices: [1, 2], triangles: [0] } },
+      },
+    },
+  });
+  const result = JSON.parse(normalizeSpineJsonForLegacy38Runtime(source));
+  assert.deepEqual(Object.keys(result.skins[0].attachments), ['body', 'head']);
+  assert.equal(result.skins[0].attachments.body.region.path, 'body');
+  assert.deepEqual(result.skins[0].attachments.head.mesh.uvs, [0, 0]);
+});
+
 test('leaves array-based Spine 3.8 skins unchanged', () => {
   const source = JSON.stringify({
     skeleton: { spine: '3.8.99' },
