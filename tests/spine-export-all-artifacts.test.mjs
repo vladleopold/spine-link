@@ -16,6 +16,8 @@ test('every artifact-index writer marks an export ready only when a WebM file ex
       `writer ${index + 1} must treat a missing WebM as an export failure`);
     assert.match(block, /webmStatus: exportError \? 'error' : 'ready'/,
       `writer ${index + 1} must not mark an empty export ready`);
+    assert.match(block, /\.\.\.\(exportError \? \{\} : uploadedUrls\)/,
+      `writer ${index + 1} must not index partial media from a failed export`);
   }
 });
 
