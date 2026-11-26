@@ -88,11 +88,15 @@ try {
   assert.equal(firstSession?.user?.email,'spine-link-test@example.invalid');
   assert.ok(firstSession?.accessToken,'OAuth access token must be stored');
   assert.ok(firstSession.expiresAt > Date.now(),'Stored token expiry must be valid');
+  assert.ok(typeof firstSession.clientId === 'string' && firstSession.clientId.length > 0,
+    'Stored OAuth session must be bound to the client ID that issued its token');
 
-  // Simulate a token that expired while the user was away, then reload the page.
+  // Simulate a still-live token issued to the previous OAuth client. The app
+  // must not send it to the API after the configured client ID changes.
   await page.evaluate(() => {
     const session = JSON.parse(localStorage.getItem('spine-link-google-session'));
-    session.expiresAt = Date.now() - 1000;
+    session.clientId = 'previous-google-client';
+    session.expiresAt = Date.now() + 5 * 60_000;
     localStorage.setItem('spine-link-google-session', JSON.stringify(session));
     sessionStorage.setItem('spine-test-fail-silent','1');
   });
@@ -129,6 +133,7 @@ try {
   const renewed = await page.evaluate(() => JSON.parse(localStorage.getItem('spine-link-google-session') || 'null'));
   assert.equal(renewed?.user?.email,'spine-link-test@example.invalid','Reauth must preserve account identity');
   assert.equal(renewed?.accessToken,'browser-test-google-access-token');
+  assert.equal(renewed?.clientId,firstSession.clientId,'Reauth must bind the token to the active OAuth client');
   assert.ok(renewed.expiresAt > Date.now() + 60_000,'Reauth must store a fresh token lifetime');
   const prompts = await page.evaluate(() => window.__gisPromptLog);
   assert.ok(prompts.includes('select_account'),'Explicit reconnect must request account interaction');
