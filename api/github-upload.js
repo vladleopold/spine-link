@@ -664,13 +664,11 @@ export function canEditEntry(entry, googlePayload, anonymousAccount) {
 }
 
 function accountLibraryEntries(origin, entries, googlePayload, anonymousAccount) {
-  return publicLibraryEntries(origin, entries).map(entry => {
-    const next = { ...entry, canEdit: canEditEntry(entry, googlePayload, anonymousAccount) };
-    delete next.ownerEmail;
-    delete next.ownerEmailSha256;
-    delete next.ownerAccountId;
-    delete next.ownerAnonId;
-    delete next.ownerAnonFingerprint;
+  return (Array.isArray(entries) ? entries : []).map(entry => {
+    // Compute authorization against the original index record before the
+    // public projection removes its private owner/recovery metadata.
+    const canEdit = canEditEntry(entry, googlePayload, anonymousAccount);
+    const next = { ...publicLibraryEntry(origin, entry), canEdit };
     // The account list is a card index, not the complete download manifest.
     // Large per-animation exports can exceed the server response limit.
     delete next.allAnimationPreviews;
