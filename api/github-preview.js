@@ -1,3 +1,4 @@
+import { sanitizeSkeletonJson } from '../lib/spine-json-sanitize.js';
 import { runtimeVersionOverrideForSpineSkeleton, selectSpineRuntimeSkeleton } from '../lib/spine-runtime-file-selection.js';
 import { canReadPublicSpineWithoutToken } from '../lib/github-read-access.js';
 import { isValidSpineAtlasHeader } from '../lib/spine-atlas-integrity.js';
@@ -117,31 +118,6 @@ function spineBinaryVersionFromBase64(base64 = '') {
 
 function escapedJson(value) {
   return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
-}
-
-function sanitizeSkeletonJson(json) {
-  if (!json || typeof json !== 'object') return json;
-  const attachments = json?.skins?.flatMap((skin) => Object.values(skin || {})) || [];
-  for (const slotAttachments of attachments) {
-    if (!slotAttachments || typeof slotAttachments !== 'object') continue;
-    for (const attachment of Object.values(slotAttachments)) {
-      if (!attachment || typeof attachment !== 'object') continue;
-      const type = attachment.type;
-      if (type === 'mesh' || type === 'linkedmesh') {
-        if (type === 'mesh' && !attachment.source) {
-          if (!Array.isArray(attachment.uvs)) attachment.uvs = [];
-          if (!Array.isArray(attachment.vertices)) attachment.vertices = [];
-          if (!Array.isArray(attachment.triangles)) attachment.triangles = [];
-        }
-        if (type === 'linkedmesh' && !attachment.source) {
-          if (!Array.isArray(attachment.uvs)) attachment.uvs = [];
-          if (!Array.isArray(attachment.vertices)) attachment.vertices = [];
-          if (!Array.isArray(attachment.triangles)) attachment.triangles = [];
-        }
-      }
-    }
-  }
-  return json;
 }
 
 function sanitizeSkeletonData(json) {

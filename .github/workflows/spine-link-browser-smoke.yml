@@ -506,9 +506,11 @@ jobs:
                       return {
                         setKeys:Object.keys(set), jsonUrl, atlasUrl, jsonStatus, atlasStatus,
                         jsonContentType, jsonVersion:jsonData?.skeleton?.spine || '',
+                        indexedSkeletonVersion:set.skeletonVersion || '',
+                        runtimeVersionOverride:set.runtimeVersionOverride || '',
                         boneCount:jsonData?.bones?.length || 0, slotCount:jsonData?.slots?.length || 0,
                         missingSlotBones,
-                        runtimeScriptUrls:performance.getEntriesByType('resource').map(x=>x.name).filter(x=>/spine-player\.js/.test(x)),
+                        runtimeScriptUrls:performance.getEntriesByType('resource').map(x=>x.name).filter(x=>/spine-player.*\.js/.test(x)),
                       };
                       });
                     } catch (error) {
@@ -551,6 +553,15 @@ jobs:
                     sample.label + ' Runtime must reach ready; got ' + JSON.stringify(beforeSelection));
                   assert.ok(beforeSelection.animationCount > 0,
                     sample.label + ' must expose its indexed animation list');
+                  if (sample.id === 'rabbit-2026-11-23T21-16-31-801Z') {
+                    const runtimeUrls = await playbackPage.evaluate(() =>
+                      performance.getEntriesByType('resource').map(item => item.name)
+                        .filter(url => /spine-player.*\.js/.test(url)));
+                    assert.equal(assetDiagnostic.indexedSkeletonVersion, '3.8.97',
+                      'Rabbit index must expose the parsed Spine 3.8.97 version: ' + JSON.stringify(assetDiagnostic));
+                    assert.ok(runtimeUrls.some(url => url.includes('/vendor-spine-player-3.8.js')),
+                      'Rabbit must load the same-origin Spine 3.8 runtime, got: ' + JSON.stringify(runtimeUrls));
+                  }
                   const clicked = await playbackPage.evaluate(name => {
                     const button = Array.from(document.querySelectorAll('#animation-menu button'))
                       .find(item => item.textContent.trim() === name);
