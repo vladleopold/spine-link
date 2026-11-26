@@ -11,16 +11,16 @@ on:
 jobs:
   generate-matrix:
     name: 📋 Build animation matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix:    ${{ steps.set-matrix.outputs.matrix }}
       has-items: ${{ steps.set-matrix.outputs.has_items }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -39,7 +39,7 @@ jobs:
     name: 🎬 Opaque · ${{ matrix.animation }}
     needs: generate-matrix
     if: needs.generate-matrix.outputs.has-items == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -47,10 +47,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -157,7 +157,7 @@ jobs:
     name: 🌀 Alpha · ${{ matrix.animation }}
     needs: generate-matrix
     if: needs.generate-matrix.outputs.has-items == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -165,10 +165,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -197,7 +197,7 @@ jobs:
           SAFE=$(echo "$ANIM" | sed 's/[^a-zA-Z0-9_-]/_/g')
           echo "=== Exporting alpha WebM: $ANIM ($SAFE) ==="
 
-          node scripts/spine-export-webm.mjs \
+          if ! node scripts/spine-export-webm.mjs \
             --upload-id="$UPLOAD_ID" \
             --animation="$ANIM" \
             --origin="${{ github.event.client_payload.origin }}" \
@@ -206,9 +206,11 @@ jobs:
             --branch="${{ github.event.client_payload.branch }}" \
             --repo-path="${{ github.workspace }}" \
             --alpha \
-            --output="${{ github.workspace }}/${UPLOAD_ID}-anim-${SAFE}-alpha.webm" \
-            && echo "Alpha export succeeded" \
-            || echo "Alpha export failed (non-critical, continuing)"
+            --output="${{ github.workspace }}/${UPLOAD_ID}-anim-${SAFE}-alpha.webm"; then
+            echo "::error::Alpha WebM export failed for animation: $ANIM"
+            exit 1
+          fi
+          echo "Alpha export succeeded"
 
           echo "safe_name=${SAFE}" >> $GITHUB_OUTPUT
           echo "=== Alpha WebM done ==="
@@ -291,7 +293,7 @@ jobs:
     name: 💾 Commit all to repository
     needs: [export-opaque, export-alpha]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
 
@@ -304,10 +306,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -519,7 +521,7 @@ jobs:
             git commit -m "Full export: all animations + alpha for ${UPLOAD_ID}"
 
             # 5. Push — retry if rejected by another concurrent push
-            if git push origin main; then
+            if git push origin HEAD:main; then
               echo "Successfully pushed on attempt $i!"
               exit 0
             else
