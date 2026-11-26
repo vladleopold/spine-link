@@ -99,6 +99,8 @@ test('API exposes create, restore and revoke actions without persisting plaintex
   assert.match(apiSource, /addRecoveryHashToOwnedEntries\(entries, anonymousAccount\.id, recoveryHash/);
   assert.match(apiSource, /recoverEntriesByRecoveryHash\(entries, recoveryHash, anonymousAccount\.id\)/);
   assert.doesNotMatch(apiSource, /ownerRecoveryHash\s*:\s*recoverySecret/);
+  assert.match(apiSource, /Cache-Control', 'no-store, private/);
+  assert.match(appSource, /cache: "no-store"/);
 });
 
 test('Google-linked uploads never write raw email or unkeyed email hashes to the public index', () => {
