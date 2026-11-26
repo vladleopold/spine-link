@@ -370,6 +370,7 @@ async function dispatchSpineProjectExport(settings, entry, origin) {
   try {
     // The public storage repository owns the licensed Ubuntu executor.
     // Dispatch directly there; the private repository is only credential storage.
+    // Its hourly public queue scan recovers pending projects if dispatch is denied.
     const result = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
       method: 'POST',
       headers: githubHeaders(settings.token),
