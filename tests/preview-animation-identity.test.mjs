@@ -4,6 +4,7 @@ import fs from 'node:fs';
 
 const preview = fs.readFileSync(new URL('../api/github-preview.js', import.meta.url), 'utf8');
 const archive = fs.readFileSync(new URL('../api/github-archive.js', import.meta.url), 'utf8');
+const app = fs.readFileSync(new URL('../src/SpineApp.tsx', import.meta.url), 'utf8');
 
 function section(source, start, end) {
   const from = source.indexOf(start);
@@ -12,6 +13,13 @@ function section(source, start, end) {
   assert.notEqual(to, -1, `missing section end: ${end}`);
   return source.slice(from, to);
 }
+
+test('owner library cards prefer generated medium WebM and WebP preview tiers', () => {
+  const card = section(app, 'const bestWebmPreview = ownEntryWebm', 'const safeThumbnail');
+  assert.match(card, /entry\.webmPreviewMedium \|\| entry\.webmPreview \|\| entry\.webmPreviewLow/);
+  assert.match(card, /entry\.webpPosterMedium,\s*entry\.webpPoster,\s*entry\.webpPosterLow,\s*entry\.thumbnailPoster/);
+  assert.match(card, /src=\{videosEnabled \? \(webmPreviewUrl \|\| undefined\) : undefined\}/);
+});
 
 test('URL-selected animation is preserved even when absent from index animation names', () => {
   const initial = section(preview, 'function initialAnimation(set)', 'const PREVIEW_PAD');
