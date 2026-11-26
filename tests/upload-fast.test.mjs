@@ -103,7 +103,7 @@ test('fast path uploads four Spine files concurrently and commits only once', as
       action: 'publish-entry', stagedBlobs: [forged],
       entry: { id: 'fast-project', previewPath: 'library_02/fast-project' },
     });
-    assert.equal(invalid.status, 400);
+    assert.equal(invalid.status, 403);
     assert.equal(commits, 1);
     // Larger files are assembled from verified staged parts before commit.
     const source = randomBytes(125_011);
