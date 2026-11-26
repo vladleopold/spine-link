@@ -230,13 +230,12 @@ jobs:
               const files = fs.readdirSync(sourceDir);
               const uploadedUrls = {};
               let videoMeta = {};
-              let isError = false;
               
               for (const file of files) {
                 if (file === 'meta.json') {
                   try {
                     videoMeta = JSON.parse(fs.readFileSync(path.join(sourceDir, file), 'utf8'));
-                    if (videoMeta.error) isError = true;
+                    
                   } catch(e) {}
                   continue;
                 }
@@ -256,8 +255,19 @@ jobs:
               }
               
               // Update index
+              const hasWebmPreview = Boolean(uploadedUrls.webmPreview || uploadedUrls.webmPreviewMedium || uploadedUrls.webmPreviewLow);
+              const exportError = videoMeta.error || (!hasWebmPreview ? 'No WebM preview artifact was produced' : '');
               const entryIndex = indexData.findIndex(e => e.id === uploadId);
               if (entryIndex !== -1) {
+                  if (exportError) {
+                    delete indexData[entryIndex].webmPreview;
+                    delete indexData[entryIndex].webmPreviewMedium;
+                    delete indexData[entryIndex].webmPreviewLow;
+                    delete indexData[entryIndex].webpPoster;
+                    delete indexData[entryIndex].webpPosterMedium;
+                    delete indexData[entryIndex].webpPosterLow;
+                    delete indexData[entryIndex].webmPreviewPath;
+                  }
                 delete indexData[entryIndex].webmChunksJson;
                 delete indexData[entryIndex].webmChunks;
                 delete indexData[entryIndex].webmChunkCount;
@@ -266,9 +276,9 @@ jobs:
                 indexData[entryIndex] = {
                   ...indexData[entryIndex],
                   ...uploadedUrls,
-                  webmPreviewPath: isError ? undefined : `${basePath}/${uploadId}/preview.webm`,
-                  webmStatus: isError ? 'error' : 'ready',
-                  webmError: isError ? videoMeta.error : undefined,
+                  webmPreviewPath: exportError ? undefined : `${basePath}/${uploadId}/preview.webm`,
+                  webmStatus: exportError ? 'error' : 'ready',
+                  webmError: exportError || undefined,
                   webmGeneratedAt: new Date().toISOString(),
                   ...(videoMeta.width > 0 ? { previewWidth: videoMeta.width } : {}),
                   ...(videoMeta.height > 0 ? { previewHeight: videoMeta.height } : {}),
@@ -350,11 +360,10 @@ jobs:
                 const files = fs.readdirSync(sourceDir);
                 const uploadedUrls = {};
                 let videoMeta = {};
-                let isError = false;
                 
                 for (const file of files) {
                   if (file === 'meta.json') {
-                    try { videoMeta = JSON.parse(fs.readFileSync(path.join(sourceDir, file), 'utf8')); if (videoMeta.error) isError = true; } catch(e) {}
+                    try { videoMeta = JSON.parse(fs.readFileSync(path.join(sourceDir, file), 'utf8'));  } catch(e) {}
                     continue;
                   }
                   const cleanFileName = file.replace(uploadId + '-', '');
@@ -369,8 +378,19 @@ jobs:
                   if (file.endsWith('-preview-low.webp')) uploadedUrls['webpPosterLow'] = \`\${origin}/assets/\${relativeTarget}\`;
                 }
                 
+                const hasWebmPreview = Boolean(uploadedUrls.webmPreview || uploadedUrls.webmPreviewMedium || uploadedUrls.webmPreviewLow);
+                const exportError = videoMeta.error || (!hasWebmPreview ? 'No WebM preview artifact was produced' : '');
                 const entryIndex = indexData.findIndex(e => e.id === uploadId);
                 if (entryIndex !== -1) {
+                  if (exportError) {
+                    delete indexData[entryIndex].webmPreview;
+                    delete indexData[entryIndex].webmPreviewMedium;
+                    delete indexData[entryIndex].webmPreviewLow;
+                    delete indexData[entryIndex].webpPoster;
+                    delete indexData[entryIndex].webpPosterMedium;
+                    delete indexData[entryIndex].webpPosterLow;
+                    delete indexData[entryIndex].webmPreviewPath;
+                  }
                   delete indexData[entryIndex].webmChunksJson;
                   delete indexData[entryIndex].webmChunks;
                   delete indexData[entryIndex].webmChunkCount;
@@ -378,9 +398,9 @@ jobs:
                   indexData[entryIndex] = {
                     ...indexData[entryIndex],
                     ...uploadedUrls,
-                    webmPreviewPath: isError ? undefined : \`\${basePath}/\${uploadId}/preview.webm\`,
-                    webmStatus: isError ? 'error' : 'ready',
-                    webmError: isError ? videoMeta.error : undefined,
+                    webmPreviewPath: exportError ? undefined : \`\${basePath}/\${uploadId}/preview.webm\`,
+                    webmStatus: exportError ? 'error' : 'ready',
+                    webmError: exportError || undefined,
                     webmGeneratedAt: new Date().toISOString(),
                     ...(videoMeta.width > 0 ? { previewWidth: videoMeta.width } : {}),
                     ...(videoMeta.height > 0 ? { previewHeight: videoMeta.height } : {}),
