@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { runSerializedWrite } from '../lib/serialized-write-queue.js';
 
 const source = fs.readFileSync(new URL('../api/github-upload.js', import.meta.url), 'utf8');
 const start = source.indexOf('async function mutateMetrics(');
@@ -13,13 +14,14 @@ function buildMutateMetrics({readMetrics,putGitHubContent,delays,cacheEvents=[]}
     invalidate: (...args) => cacheEvents.push(['invalidate', ...args]),
   };
   return new Function(
-    'readMetrics','putGitHubContent','textToBase64','setTimeout','Math','githubMetricsCache',
+    'readMetrics','putGitHubContent','textToBase64','setTimeout','Math','githubMetricsCache','runSerializedWrite',
     declaration + '\nreturn mutateMetrics;'
   )(
     readMetrics,putGitHubContent,value=>value,
     (resolve,ms)=>{delays.push(ms);resolve();},
     {min:Math.min,floor:Math.floor,random:()=>0},
-    githubMetricsCache
+    githubMetricsCache,
+    runSerializedWrite
   );
 }
 
@@ -40,7 +42,7 @@ test('metrics 409 re-reads the latest SHA and retries with bounded backoff',asyn
   assert.equal(reads,3);
   assert.equal(writes,3);
   assert.deepEqual(writtenShas,['sha-1','sha-2','sha-3']);
-  assert.deepEqual(delays,[150,300]);
+  assert.deepEqual(delays,[200,400]);
   assert.equal(cacheEvents.filter(([event])=>event==='invalidate').length,2);
   assert.equal(cacheEvents.filter(([event])=>event==='set').length,1);
 });
