@@ -3004,9 +3004,17 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     ].filter(Boolean).join('-');
 
     // Version the skeleton JSON/binary as well as atlas pages and textures.
-    // Without this query, replacing a broken export at the same path can leave
-    // the old cached binary in the browser even after GitHub has the new JSON.
-    const skeletonUrl = versionedAssetUrl(origin, skeleton, assetVersion);
+    // Spine 3.8 JSON additionally needs a distinct cache key and an explicit
+    // asset-route flag so object-keyed skins are normalized for the official
+    // 3.8 player without rewriting the immutable source upload.
+    const spine38JsonCompat = !skeletonIsBinary && /^3\\.8(?:[.]|$)/.test(skeletonVersion);
+    const skeletonAssetVersion = spine38JsonCompat
+      ? `${assetVersion}-spine38-json-skin-array-v1`
+      : assetVersion;
+    const skeletonUrlBase = versionedAssetUrl(origin, skeleton, skeletonAssetVersion);
+    const skeletonUrl = spine38JsonCompat
+      ? `${skeletonUrlBase}&spineRuntime=3.8`
+      : skeletonUrlBase;
     const atlasUrlBase = versionedAssetUrl(origin, atlas, assetVersion);
     // Spine 3.8 predates the pma page field; the asset route strips it for 3.8 only.
     const atlasUrl = runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion)
