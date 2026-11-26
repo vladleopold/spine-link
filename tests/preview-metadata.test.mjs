@@ -72,6 +72,37 @@ test('restored pre-rotation archive works also resolve from /p links', async () 
   assert.equal(snapshotReads.length, recoveredIds.length);
 });
 
+test('structured file manifests resolve skeleton sets without GitHub directory API calls', async () => {
+  const start = source.indexOf('async function findSpineSetDirectories(');
+  const end = source.indexOf('// Download buttons for the work page sidebar', start);
+  const helper = source.slice(start, end).trim();
+  let directoryReads = 0;
+  const findDirectories = new Function(
+    'cleanRepoPath', 'isSkeleton', 'isAtlas', 'isImage', 'joinRepoPath', 'githubList', 'indexedFilePath',
+    helper + '; return findSpineSetDirectories;',
+  )(
+    value => String(value || '').replace(/^\\/+|\\/+$/g, ''),
+    name => /\\.(?:json|skel|bytes)$/i.test(String(name || '')),
+    name => /\\.atlas$/i.test(String(name || '')),
+    name => /\\.(?:png|webp|jpe?g|dds)$/i.test(String(name || '')),
+    (...parts) => parts.filter(Boolean).join('/'),
+    async () => { directoryReads += 1; throw new Error('Directory listing should not be needed'); },
+    indexedFilePath,
+  );
+  const result = await findDirectories({}, 'library_02/legacy-work', 3, {
+    files: [
+      { path: 'library_02/legacy-work/rig/hero.json', name: 'hero.json' },
+      { path: 'library_02/legacy-work/rig/hero.atlas', name: 'hero.atlas' },
+      { path: 'library_02/legacy-work/rig/hero.png', name: 'hero.png' },
+    ],
+  });
+  assert.equal(directoryReads, 0);
+  assert.equal(result.length, 1);
+  assert.ok(result[0].items.some(item => item.name === 'hero.json'));
+  assert.ok(result[0].items.some(item => item.name === 'hero.atlas'));
+  assert.ok(result[0].items.some(item => item.name === 'hero.png'));
+});
+
 test('legacy indexed skeleton/atlas/texture fields bypass a throttled directory listing', async () => {
   const start = source.indexOf('async function findSpineSetDirectories(');
   const end = source.indexOf('// Download buttons for the work page sidebar', start);
