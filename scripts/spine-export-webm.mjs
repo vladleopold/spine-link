@@ -506,6 +506,7 @@ function sanitizedSkelBuffer(buffer, version = "") {
 }
 
 const skeletonFilePath = path.join(firstSet.path, skeletonFile);
+const skeletonVersion = detectSkeletonVersion(skeletonFilePath);
 
 // Convert 2.x skeletons to 3.8+ format for web player compatibility
 let convertedSkeletonPath = null;
@@ -514,10 +515,9 @@ if (skeletonFile.toLowerCase().endsWith('.skel')) {
 }
 const finalSkeletonPath = convertedSkeletonPath || skeletonFilePath;
 const finalSkeletonFile = path.basename(finalSkeletonPath);
-const finalSkeletonVersion = convertedSkeletonPath 
-  ? JSON.parse(fs.readFileSync(finalSkeletonPath, 'utf8')).skeleton.spine 
+const finalSkeletonVersion = convertedSkeletonPath
+  ? JSON.parse(fs.readFileSync(finalSkeletonPath, 'utf8')).skeleton.spine
   : skeletonVersion;
-const skeletonVersion = detectSkeletonVersion(skeletonFilePath);
 const skeletonBounds = readSkeletonBounds(skeletonFilePath);
 const requestedAnimation = args.animation !== ''
   ? args.animation
