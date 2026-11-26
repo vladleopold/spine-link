@@ -9,7 +9,7 @@ test('Spine 3.8 previews use the same-origin official runtime and compatible atl
   assert.ok(previewSource.includes('setPlayerStylesheet("/vendor-spine-player-3.8.css")'));
   assert.ok(previewSource.includes('loadScriptOnce("/vendor-spine-player-3.8.js")'));
   assert.ok(!previewSource.includes('cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@8b4844bd4b193ba9e54487ed397a777993cbad56'));
-  assert.ok(previewSource.includes('spine38-runtime-compat-v2'));
+  assert.ok(previewSource.includes('spine38-atlas-compat-v1'));
   assert.ok(previewSource.includes('&spineRuntime=3.8'));
   assert.ok(assetSource.includes('function stripPmaMetadataForSpine38('));
   assert.ok(assetSource.includes('request.query?.spineRuntime'));
@@ -53,8 +53,9 @@ test('Spine 3.7 previews use the official branch runtime pinned to its commit', 
 test('Spine skeleton JSON and binary URLs are versioned to avoid stale CDN exports', () => {
   assert.match(
     previewSource,
-    /const skeletonUrl = versionedAssetUrl\(origin, skeleton, assetVersion\);/,
+    /const skeletonUrlBase = versionedAssetUrl\(origin, skeleton, skeletonAssetVersion\);/,
   );
+  assert.ok(previewSource.includes('spine38-json-skin-array-v1'));
 });
 
 test('Spine 4.2 and 4.3 JSON URLs keep a query-free extension for the official parser', () => {
@@ -65,6 +66,16 @@ test('Spine 4.2 and 4.3 JSON URLs keep a query-free extension for the official p
   assert.ok(previewSource.includes('rawDataURIs[atlasPath] = atlasSource'));
   assert.ok(previewSource.includes('rawDataURIs[textureName] = textureSource'));
   assert.ok(previewSource.includes('playerOptions.rawDataURIs = rawDataURIs'));
+});
+
+test('Spine 3.8 JSON preview assets use the versioned runtime-compatible JSON response', () => {
+  assert.ok(previewSource.includes('spine38-json-skin-array-v1'));
+  assert.ok(previewSource.includes('spineRuntime=3.8'));
+  assert.ok(assetSource.includes('normalizeSpineJsonForLegacy38Runtime'));
+  assert.ok(assetSource.includes('isSkeletonJsonPath(assetPath)'));
+  assert.ok(assetSource.includes('needsSpine38JsonNormalization'));
+  assert.equal(assetSource.split('normalizeSkeletonJsonAsset(buffer, assetPath, request)').length - 1, 2,
+    'both GitHub API and raw-fallback asset paths must normalize Spine 3.8 JSON');
 });
 
 test('Spine 4.2 binary skeletons use binaryUrl just like 4.0 and 4.1', () => {
