@@ -645,7 +645,11 @@ function applyOwnerMetadata(entry, googlePayload, anonymousAccount, existingEntr
   const next = { ...entry };
   delete next.ownerEmail;
   delete next.ownerEmailSha256;
+  delete next.ownerAccountId;
+  delete next.ownerAnonId;
   delete next.ownerAnonFingerprint;
+  delete next.ownerRecoveryHash;
+  delete next.ownerRecoveryCreatedAt;
   delete next.apiKeyId;
 
   const publicOwnerId = publicOwnerIdFor(
@@ -1553,6 +1557,7 @@ export default async function handler(request, response) {
         const currentEntries = index?.content && index.encoding === 'base64'
           ? JSON.parse(base64ToText(index.content)) : [];
         const existing = currentEntries.find(item => item.id === uploadId);
+        if (existing && !canEditEntry(existing, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can replace this entry', 403);
         nextEntry = applyOwnerMetadata({
           ...body?.entry,
           files: relativeFiles,
@@ -1615,6 +1620,7 @@ export default async function handler(request, response) {
         const currentIndex = await getGitHubContent(settings, indexPath);
         const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
         const existingEntry = currentEntries.find((c) => c.id === uploadId);
+        if (existingEntry && !canEditEntry(existingEntry, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can replace this entry', 403);
         const nextEntry = applyOwnerMetadata({
           ...body?.entry,
           id: uploadId,
@@ -1868,6 +1874,7 @@ export default async function handler(request, response) {
       const currentIndex = await getGitHubContent(settings, indexPath);
       const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
       const existingEntry = currentEntries.find((c) => c.id === entry.id);
+      if (existingEntry && !canEditEntry(existingEntry, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can update this library entry', 403);
       const nextEntry = applyOwnerMetadata({
         ...entry,
         ...(entry?.ownerName || googlePayload?.name ? { ownerName: cleanPublicProfileText(entry?.ownerName || googlePayload?.name) } : {}),
@@ -1961,6 +1968,7 @@ export default async function handler(request, response) {
         const currentIndex = await getGitHubContent(settings, indexPath);
         const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
         existingEntry = currentEntries.find((currentItem) => currentItem.id === entryPayload.id);
+        if (existingEntry && !canEditEntry(existingEntry, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can publish changes to this entry', 403);
         nextEntry = applyOwnerMetadata({
           ...entryPayload,
           ...(entryPayload?.ownerName || googlePayload?.name
@@ -2512,6 +2520,7 @@ export default async function handler(request, response) {
     const currentIndex = await getGitHubContent(settings, indexPath);
     const currentEntries = currentIndex?.content && currentIndex.encoding === 'base64' ? JSON.parse(base64ToText(currentIndex.content)) : [];
     const existingEntry = currentEntries.find((c) => c.id === entry.id);
+      if (existingEntry && !canEditEntry(existingEntry, googlePayload, anonymousAccount)) throw unauthorized('Only the owner can update this library entry', 403);
     const nextEntry = applyOwnerMetadata({
       ...entry,
       ...(entry?.ownerName || googlePayload?.name ? { ownerName: cleanPublicProfileText(entry?.ownerName || googlePayload?.name) } : {}),
