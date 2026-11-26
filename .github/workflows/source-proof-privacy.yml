@@ -9,6 +9,8 @@ on:
       - 'lib/source-proof-privacy.d.ts'
       - 'tests/source-proof-privacy.test.mjs'
       - 'public/spine-link-manifesto.html'
+      - 'index.html'
+      - 'public/spine-link.html'
       - 'public/llms.txt'
       - '.github/workflows/source-proof-privacy.yml'
   workflow_dispatch:
