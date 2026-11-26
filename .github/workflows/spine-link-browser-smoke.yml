@@ -604,9 +604,17 @@ jobs:
               // with Spine 4.3.26. Verify the real production player and all original animations.
               const convertedPage = await browser.newPage({viewport:{width:1200,height:780}});
               const convertedErrors = [];
+              const convertedMissingAssets = [];
+              const convertedConsoleErrors = [];
               convertedPage.on('pageerror', error => convertedErrors.push(String(error)));
               convertedPage.on('console', message => {
-                if (message.type() === 'error') convertedErrors.push(message.text());
+                if (message.type() === 'error') convertedConsoleErrors.push(message.text());
+              });
+              convertedPage.on('response', response => {
+                if (response.status() >= 400 &&
+                    /\\.(?:atlas|json|png|webp|skel)(?:\\?|$)/i.test(response.url())) {
+                  convertedMissingAssets.push(response.status() + ' ' + response.url());
+                }
               });
               try {
                 const convertedResponse = await gotoWithRetry(
@@ -629,8 +637,18 @@ jobs:
                 assert.ok(converted.animations.includes('digesting_4_full'));
                 assert.ok(converted.animations.includes('digesting_5_full'));
                 assert.ok(converted.canvas > 0, 'converted skeleton must render a canvas');
+                assert.deepEqual(convertedMissingAssets, [],
+                  'sabrinaBedSide converted preview missing Spine assets: ' + JSON.stringify(convertedMissingAssets));
                 assert.deepEqual(convertedErrors, [],
-                  'sabrinaBedSide converted player errors: ' + JSON.stringify(convertedErrors));
+                  'sabrinaBedSide converted preview JavaScript errors: ' + JSON.stringify(convertedErrors));
+                const relevantConvertedConsoleErrors = convertedConsoleErrors.filter(message =>
+                  !/Failed to load resource:.*status of 404/.test(message));
+                if (relevantConvertedConsoleErrors.length !== convertedConsoleErrors.length) {
+                  console.log('IGNORED NON-SPINE 404 CONSOLE MESSAGES sabrinaBedSide',
+                    JSON.stringify(convertedConsoleErrors.filter(message => !relevantConvertedConsoleErrors.includes(message))));
+                }
+                assert.deepEqual(relevantConvertedConsoleErrors, [],
+                  'sabrinaBedSide converted preview relevant console errors: ' + JSON.stringify(relevantConvertedConsoleErrors));
                 console.log('PASS CONVERTED SPINE 3.8.75 -> 4.3.26',
                   JSON.stringify(converted));
               } catch (error) {
