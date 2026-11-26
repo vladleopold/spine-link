@@ -10,7 +10,8 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
   if (typeof uploadId !== 'string' || !/^[A-Za-z0-9_.-]{1,120}$/.test(uploadId)) {
     return failed('invalid-upload-id');
   }
-  if (typeof animation !== 'string' || !animation.trim() || animation.length > 160 || /[\r\n]/.test(animation)) {
+  if (typeof animation !== 'string' || !animation.trim() || animation.length > 160 || /[\r
+]/.test(animation)) {
     return failed('invalid-animation');
   }
 
@@ -57,7 +58,8 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
       }
       if (!Array.isArray(skeleton?.bones)) continue;
       sawSkeleton = true;
-      const animationNames = Object.keys(skeleton?.animations ?? {});\n      if (animation ? !animationNames.includes(animation) : animationNames.length === 0) continue;
+      const animationNames = Object.keys(skeleton?.animations ?? {});
+      if (animation ? !animationNames.includes(animation) : animationNames.length === 0) continue;
 
       const skeletonAbsolute = path.join(setDirectory, name);
       const skeletonRelative = path.relative(root, skeletonAbsolute).split(path.sep).join('/');
@@ -66,6 +68,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
         basePath: indexed.basePath,
         uploadPath: path.relative(root, uploadDirectory).split(path.sep).join('/'),
         skeletonPath: skeletonRelative,
+        runtimeDiscovery: !animation,
       };
     }
 
@@ -82,7 +85,8 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
         basePath: indexed.basePath,
         uploadPath: path.relative(root, uploadDirectory).split(path.sep).join('/'),
         skeletonPath: skeletonRelative,
-        binary: true,\n        runtimeDiscovery: !animation,
+        binary: true,
+        runtimeDiscovery: !animation,
       };
     }
   }
@@ -104,7 +108,9 @@ if (isCli) {
       : ['reason=' + result.reason]),
   ];
   if (process.env.GITHUB_OUTPUT) {
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, output.join('\n') + '\n');
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, output.join('
+') + '
+');
   }
   console.log(result.found
     ? 'WEBM_DISPATCH_VALIDATED ' + result.uploadPath
