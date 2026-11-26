@@ -67,7 +67,7 @@ test('fast path uploads four Spine files concurrently and commits only once', as
   try {
     const files = [
       ['fast-project.json', Buffer.from('{"skeleton":{"spine":"4.3.26"},"bones":[{"name":"root"}]}')],
-      ['fast-project.atlas', Buffer.from('texture.png\\nsize:128,128\\n')],
+      ['fast-project.atlas', Buffer.from('texture.png\nsize:128,128\n')],
       ['texture.png', randomBytes(100_003)],
       ['texture-2.png', randomBytes(70_001)],
     ];
