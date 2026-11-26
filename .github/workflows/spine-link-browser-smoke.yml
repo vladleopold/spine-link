@@ -78,6 +78,7 @@ jobs:
           import assert from 'node:assert/strict';
           import { createHash } from 'node:crypto';
           import { chromium } from 'playwright';
+          import { isAmbiguous404ConsoleMessage } from './scripts/lib/preview-console-errors.mjs';
 
           const site = process.env.SITE;
           async function gotoWithRetry(targetPage, url, options) {
@@ -604,9 +605,22 @@ jobs:
               // with Spine 4.3.26. Verify the real production player and all original animations.
               const convertedPage = await browser.newPage({viewport:{width:1200,height:780}});
               const convertedErrors = [];
+              const convertedConsoleErrors = [];
+              const convertedHttpErrors = [];
+              const convertedMissingAssets = [];
               convertedPage.on('pageerror', error => convertedErrors.push(String(error)));
               convertedPage.on('console', message => {
-                if (message.type() === 'error') convertedErrors.push(message.text());
+                if (message.type() !== 'error') return;
+                if (!isAmbiguous404ConsoleMessage(message.text())) convertedConsoleErrors.push(message.text());
+              });
+              convertedPage.on('response', response => {
+                if (response.status() < 400) return;
+                const url = response.url();
+                convertedHttpErrors.push({status:response.status(),url});
+                if (/\\.(?:atlas|json|png|webp|skel)(?:[?#]|$)/i.test(url) ||
+                    /spine-player(?:\\.min)?\\.(?:js|css)(?:[?#]|$)/i.test(url)) {
+                  convertedMissingAssets.push(response.status() + ' ' + url);
+                }
               });
               try {
                 const convertedResponse = await gotoWithRetry(
@@ -630,9 +644,26 @@ jobs:
                 assert.ok(converted.animations.includes('digesting_5_full'));
                 assert.ok(converted.canvas > 0, 'converted skeleton must render a canvas');
                 assert.deepEqual(convertedErrors, [],
-                  'sabrinaBedSide converted player errors: ' + JSON.stringify(convertedErrors));
+                  'sabrinaBedSide converted JavaScript errors: ' + JSON.stringify(convertedErrors));
+                assert.deepEqual(convertedConsoleErrors, [],
+                  'sabrinaBedSide converted console errors: ' + JSON.stringify(convertedConsoleErrors));
+                assert.deepEqual(convertedMissingAssets, [],
+                  'sabrinaBedSide converted required assets must load: ' + JSON.stringify(convertedMissingAssets));
+                const convertedCanvas = convertedPage.locator('#player canvas').first();
+                await convertedCanvas.waitFor({state:'visible',timeout:15000});
+                const convertedFrameA = await convertedCanvas.screenshot();
+                await convertedPage.waitForTimeout(1200);
+                const convertedFrameB = await convertedCanvas.screenshot();
+                const convertedHashA = createHash('sha256').update(convertedFrameA).digest('hex');
+                const convertedHashB = createHash('sha256').update(convertedFrameB).digest('hex');
+                assert.notEqual(convertedHashA, convertedHashB,
+                  'sabrinaBedSide idle animation must visibly advance between frames');
+                const optionalHttpErrors = convertedHttpErrors.filter(item => !convertedMissingAssets.includes(item.status + ' ' + item.url));
+                if (optionalHttpErrors.length) {
+                  console.log('IGNORED OPTIONAL CONVERTED PREVIEW HTTP ERRORS', JSON.stringify(optionalHttpErrors));
+                }
                 console.log('PASS CONVERTED SPINE 3.8.75 -> 4.3.26',
-                  JSON.stringify(converted));
+                  JSON.stringify({...converted,frameA:convertedHashA,frameB:convertedHashB}));
               } catch (error) {
                 failures.push('sabrinaBedSide converted 4.3.26 preview: ' + String(error));
               } finally {
