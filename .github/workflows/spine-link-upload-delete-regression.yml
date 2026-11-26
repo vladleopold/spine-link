@@ -8,6 +8,7 @@ on:
       - 'api/github-preview.js'
       - 'api/github-library.js'
       - 'api/github-archive.js'
+      - 'lib/spine-json-sanitize.js'
       - 'src/main.tsx'
       - 'src/SpineApp.tsx'
       - 'tests/**'
