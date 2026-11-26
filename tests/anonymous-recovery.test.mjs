@@ -65,13 +65,14 @@ test('a valid recovery hash transfers every matching entry to the new random ano
 
 test('revocation removes recovery hashes only from the current anonymous account', () => {
   const entries = [
-    {id:'a',ownerAnonId:'anon_owner',ownerRecoveryHash:'a'.repeat(64),ownerRecoveryCreatedAt:'now'},
+    {id:'a',ownerAnonId:'anon_owner',ownerRecoveryHash:'a'.repeat(64),ownerRecoveryCreatedAt:'now',ownerAnonFingerprint:'legacy'},
     {id:'b',ownerAnonId:'anon_other',ownerRecoveryHash:'b'.repeat(64)},
   ];
   const result = revokeRecoveryHashFromOwnedEntries(entries, 'anon_owner');
   assert.equal(result.changed, 1);
   assert.equal(result.entries[0].ownerRecoveryHash, undefined);
   assert.equal(result.entries[0].ownerRecoveryCreatedAt, undefined);
+  assert.equal(result.entries[0].ownerAnonFingerprint, undefined);
   assert.equal(result.entries[1].ownerRecoveryHash, 'b'.repeat(64));
 });
 
