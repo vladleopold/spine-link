@@ -557,12 +557,13 @@ const runtimeMinor = isLegacy ? (finalSkeletonVersion.split('.')[1] || '8') : ''
 
 // Use reliable Vercel domain for legacy player assets to avoid DNS resolution issues in GitHub Actions
 const stableOrigin = 'https://spine-link.vercel.app';
+const pinnedRuntimeVersion = /^4\\.2\\./.test(finalSkeletonVersion) ? '4.2.120' : /^4\\.1\\./.test(finalSkeletonVersion) ? '4.1.56' : /^4\\.0\\./.test(finalSkeletonVersion) ? '4.0.31' : '4.3.13';
 const playerJsUrl = isLegacy
   ? `${stableOrigin}/vendor-spine-player-${versionMajor}.${runtimeMinor}.js`
-  : 'https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/iife/spine-player.js';
+  : `https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@${pinnedRuntimeVersion}/dist/iife/spine-player.js`;
 const playerCssUrl = isLegacy
   ? `${stableOrigin}/vendor-spine-player-${versionMajor}.${runtimeMinor}.css`
-  : 'https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@4.3.13/dist/spine-player.css';
+  : `https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@${pinnedRuntimeVersion}/dist/spine-player.css`;
 
 const skeletonKey = finalSkeletonFile.toLowerCase().endsWith('.skel') ? 'skelUrl' : 'skeleton';
 const atlasKey = 'atlas';
