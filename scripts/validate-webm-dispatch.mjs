@@ -46,7 +46,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
     }
     const images = files.filter((name) => /\.(png|jpe?g|webp)$/i.test(name));
     const atlases = files.filter((name) => /\.atlas(?:\.txt)?$/i.test(name));
-    if (!images.length || !atlases.length) continue;
+    if (!images.length) continue;
 
     for (const name of files.filter((file) => /\.json$/i.test(file))) {
       let skeleton;
@@ -72,7 +72,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
     // Binary Spine skeletons cannot be inspected without the matching Spine
     // runtime. Accept the dispatch candidate here; spine-export-webm performs
     // the authoritative animation-name validation after loading the .skel.
-    for (const name of files.filter((file) => /\.skel$/i.test(file))) {
+    for (const name of (atlases.length ? files.filter((file) => /\.skel$/i.test(file)) : [])) {
       sawSkeleton = true;
       sawBinarySkeleton = true;
       const skeletonAbsolute = path.join(setDirectory, name);
