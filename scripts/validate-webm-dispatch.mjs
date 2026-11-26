@@ -35,6 +35,7 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
   }
 
   let sawSkeleton = false;
+  let sawBinarySkeleton = false;
   for (const setName of setDirectories) {
     const setDirectory = path.join(uploadDirectory, setName);
     let files;
@@ -44,7 +45,8 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
       continue;
     }
     const images = files.filter((name) => /\.(png|jpe?g|webp)$/i.test(name));
-    if (!images.length) continue;
+    const atlases = files.filter((name) => /\.atlas(?:\.txt)?$/i.test(name));
+    if (!images.length || !atlases.length) continue;
 
     for (const name of files.filter((file) => /\.json$/i.test(file))) {
       let skeleton;
@@ -66,9 +68,26 @@ export function validateWebmDispatch(repoRoot, uploadId, animation) {
         skeletonPath: skeletonRelative,
       };
     }
+
+    // Binary Spine skeletons cannot be inspected without the matching Spine
+    // runtime. Accept the dispatch candidate here; spine-export-webm performs
+    // the authoritative animation-name validation after loading the .skel.
+    for (const name of files.filter((file) => /\\.skel$/i.test(file))) {
+      sawSkeleton = true;
+      sawBinarySkeleton = true;
+      const skeletonAbsolute = path.join(setDirectory, name);
+      const skeletonRelative = path.relative(root, skeletonAbsolute).split(path.sep).join('/');
+      return {
+        found: true,
+        basePath: indexed.basePath,
+        uploadPath: path.relative(root, uploadDirectory).split(path.sep).join('/'),
+        skeletonPath: skeletonRelative,
+        binary: true,
+      };
+    }
   }
 
-  return failed(sawSkeleton ? 'animation-not-found' : 'source-files-missing');
+  return failed(sawBinarySkeleton ? 'binary-animation-runtime-validation-required' : sawSkeleton ? 'animation-not-found' : 'source-files-missing');
 }
 
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
