@@ -80,3 +80,21 @@ test("public library API responses do not expose legacy anonymous device fingerp
   assert.match(projection, /delete next\.ownerAnonFingerprint/);
   assert.doesNotMatch(source, /ownerAnonFingerprint: anonymousAccount\?\.fingerprint/);
 });
+
+
+test("public HTML disclosures do not claim browser/account evidence is published", async () => {
+  const [home, publicPage] = await Promise.all([
+    readFile(new URL("../index.html", import.meta.url), "utf8"),
+    readFile(new URL("../public/spine-link.html", import.meta.url), "utf8"),
+  ]);
+
+  for (const [file, source] of [["index.html", home], ["public/spine-link.html", publicPage]]) {
+    assert.doesNotMatch(
+      source,
+      /browser\/account evidence hashes|browser\/account identity hashes|account\/browser evidence/i,
+      `${file} must not disclose legacy browser/account evidence fields`,
+    );
+  }
+  assert.match(home, /new records disclose only Google-sign-in or anonymous mode/);
+  assert.match(publicPage, /new Source Proof records disclose uploader mode only/);
+});
