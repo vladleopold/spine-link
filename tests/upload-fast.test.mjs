@@ -210,7 +210,9 @@ test('licensed Spine project upload dispatches directly to the public storage ex
       return result.data;
     }));
     const published = await call({
-      action: 'publish-entry',
+      action: 'background-finalize-fast',
+      uploadId: 'project-upload',
+      uploadedAt: '2026-11-26T12:00:00.000Z',
       entry: {
         id: 'project-upload',
         previewPath: 'library_02/project-upload',
