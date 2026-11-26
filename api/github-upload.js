@@ -436,6 +436,8 @@ export function publicLibraryEntry(origin, entry) {
   // responses. Authorization is computed against the original index record.
   delete next.ownerAccountId;
   delete next.apiKeyId;
+  // Legacy anonymous device fingerprints are no longer exposed by public APIs.
+  delete next.ownerAnonFingerprint;
   const version = assetVersionForEntry(entry);
   next.thumbnail = appendAssetVersion(safeHttpAsset(next.thumbnail), version);
   // Generated WebP preview posters take precedence over uploaded texture
@@ -1516,7 +1518,6 @@ export default async function handler(request, response) {
           } : {}),
           ownerEmail: googlePayload?.email,
           ownerAnonId: anonymousAccount?.id,
-          ownerAnonFingerprint: anonymousAccount?.fingerprint,
           publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existing?.publicOwnerId),
         });
         nextEntry.webmStatus = isEditorProject ? 'waiting-for-editor' :
@@ -1576,7 +1577,6 @@ export default async function handler(request, response) {
           previewPath: uploadPathBg,
           ownerEmail: googlePayload?.email,
           ownerAnonId: anonymousAccount?.id,
-          ownerAnonFingerprint: anonymousAccount?.fingerprint,
           publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, existingEntry?.publicOwnerId),
           sourceProof: body?.entry?.sourceProof,
         });
@@ -1831,7 +1831,7 @@ export default async function handler(request, response) {
         ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
         ...(entry?.ownerName || googlePayload?.name ? { ownerName: cleanPublicProfileText(entry?.ownerName || googlePayload?.name) } : {}),
         ...(entry?.ownerPicture || googlePayload?.picture ? { ownerPicture: cleanPublicProfileImage(entry?.ownerPicture || googlePayload?.picture) } : {}),
-        ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id, ownerAnonFingerprint: anonymousAccount.fingerprint } : {}),
+        ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id } : {}),
         publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
         showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
         portfolioMode: Boolean(entry?.portfolioMode),
@@ -1931,7 +1931,7 @@ export default async function handler(request, response) {
           ...(entryPayload?.ownerPicture || googlePayload?.picture
             ? { ownerPicture: cleanPublicProfileImage(entryPayload?.ownerPicture || googlePayload?.picture) }
             : {}),
-          ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id, ownerAnonFingerprint: anonymousAccount.fingerprint } : {}),
+          ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id } : {}),
           publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entryPayload?.publicOwnerId),
           showOwnerLibrary: Boolean(entryPayload?.showOwnerLibrary),
           portfolioMode: Boolean(entryPayload?.portfolioMode),
@@ -2400,7 +2400,7 @@ export default async function handler(request, response) {
       ...(googlePayload?.email ? { ownerEmail: googlePayload.email } : {}),
       ...(entry?.ownerName || googlePayload?.name ? { ownerName: cleanPublicProfileText(entry?.ownerName || googlePayload?.name) } : {}),
       ...(entry?.ownerPicture || googlePayload?.picture ? { ownerPicture: cleanPublicProfileImage(entry?.ownerPicture || googlePayload?.picture) } : {}),
-      ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id, ownerAnonFingerprint: anonymousAccount.fingerprint } : {}),
+      ...(anonymousAccount?.id ? { ownerAnonId: anonymousAccount.id } : {}),
       publicOwnerId: publicOwnerIdFor(googlePayload, anonymousAccount, entry?.publicOwnerId),
       showOwnerLibrary: Boolean(entry?.showOwnerLibrary),
       portfolioMode: Boolean(entry?.portfolioMode),
