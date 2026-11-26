@@ -422,10 +422,9 @@ async function dispatchSpineExportWebm(settings, entry, origin) {
   if (!id) return null;
   const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
   const animations = Array.isArray(entry?.animations) ? entry.animations : [];
-  if (!defaultAnimation.trim()) {
-    console.log('[UPLOAD] skipping WebM export: explicit default animation is missing');
-    return { status: 'blocked', reason: 'missing-explicit-default-animation' };
-  }
+  // An empty selection is intentional: the export worker loads the exact
+  // uploaded skeleton in its pinned Spine runtime and chooses only an
+  // unambiguous default (exact idle or the sole available track).
   try {
     const response = await fetch(`https://api.github.com/repos/${settings.owner}/${settings.repo}/dispatches`, {
       method: 'POST',
