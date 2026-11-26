@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { verifyGoogleToken } from '../api/github-upload.js';
+import { hasUsableGoogleSession } from '../lib/google-session.js';
 
 const prevFetch = globalThis.fetch;
 const prevClient = process.env.GOOGLE_CLIENT_ID;
@@ -65,4 +66,21 @@ test.after(()=>{
   globalThis.fetch=prevFetch;
   if(prevClient===undefined)delete process.env.GOOGLE_CLIENT_ID;
   else process.env.GOOGLE_CLIENT_ID=prevClient;
+});
+
+
+test('stored Google access tokens are reused only for the OAuth client that issued them', () => {
+  const now = 1_000_000;
+  const valid = {
+    user: { email: 'email@test.invalid' },
+    accessToken: 'valid-token',
+    clientId: 'expected-spine-link-client',
+    expiresAt: now + 3_600_000,
+  };
+
+  assert.equal(hasUsableGoogleSession(valid, 'expected-spine-link-client', now), true);
+  assert.equal(hasUsableGoogleSession({ ...valid, clientId: 'old-google-client' }, 'expected-spine-link-client', now), false);
+  assert.equal(hasUsableGoogleSession({ ...valid, clientId: undefined }, 'expected-spine-link-client', now), false);
+  assert.equal(hasUsableGoogleSession({ ...valid, expiresAt: now + 30_000 }, 'expected-spine-link-client', now), false);
+  assert.equal(hasUsableGoogleSession(valid, '', now), false);
 });
