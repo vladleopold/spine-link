@@ -4782,6 +4782,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     const response = await fetch("/api/github-upload", {
       method: "POST",
       headers: requestHeaders,
+      cache: "no-store",
       body: JSON.stringify({
         action,
         googleIdToken,
