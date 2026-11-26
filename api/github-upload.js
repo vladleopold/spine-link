@@ -2,7 +2,7 @@ import agentAnimationHandler from '../lib/agent-animation.js';
 import { mergeCollectionEntries } from '../lib/library-accounts.js';
 import { githubMetricsCache } from '../lib/github-metrics-cache.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
-import { githubErrorForResponse } from '../lib/github-rate-limit.js';
+import { githubErrorForResponse, shouldRetryGitHubResponse } from '../lib/github-rate-limit.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
 const defaultBranch = 'main';
@@ -891,16 +891,12 @@ async function updateDataScienceCatalog(settings, body, entry, commitPrefix, ori
   return prepared.summary;
 }
 
-// Every anonymous upload shares one GITHUB_TOKEN, so GitHub rate limits and
-// transient API failures hit all users at once. Treat those as retryable
-// instead of letting them escape as a 500 that kills the whole upload.
-// GitHub's Contents API returns 409 when another upload advances the branch
-// between reading and writing. This is a transient branch-head race, not a
-// malformed Spine asset. Retry it with jitter just like rate limits.
+// Every anonymous upload shares one GITHUB_TOKEN. Retry only transient
+// transport/server failures; primary and secondary rate limits must be returned
+// immediately with Retry-After so concurrent users do not amplify the limit.
 // GitHub 409 on a write means the expected branch/file SHA is stale. It must
 // be returned to the caller so the index can be re-read, not replayed with the
 // same stale SHA (which can overwrite another person's just-published work).
-const GITHUB_RETRY_STATUS = new Set([408, 500, 502, 503, 504]);
 const GITHUB_RETRY_ATTEMPTS = 8;
 
 function githubRetryDelay(attempt) {
@@ -948,7 +944,7 @@ async function getGitHubContent(settings, path) {
     }
     // Nothing to gain from retrying a definitive answer.
     if (response.ok || response.status === 404) break;
-    if (!GITHUB_RETRY_STATUS.has(response.status)) break;
+    if (!shouldRetryGitHubResponse(response, '')) break;
     if (attempt < GITHUB_RETRY_ATTEMPTS - 1) {
       await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
     }
@@ -1006,7 +1002,7 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       if (response.ok) return result;
       // Rate-limited writes are returned immediately with Retry-After. Only
       // transient transport/server failures are retried in this function.
-      if (GITHUB_RETRY_STATUS.has(response.status) && attempt < GITHUB_RETRY_ATTEMPTS - 1) {
+      if (shouldRetryGitHubResponse(response, typeof result?.message === 'string' ? result.message : '') && attempt < GITHUB_RETRY_ATTEMPTS - 1) {
         await new Promise((r) => setTimeout(r, githubRetryDelay(attempt)));
         lastError = withGitHubStatus(new Error(typeof result?.message === 'string' ? result.message : `Upload API ${response.status}`), response, typeof result?.message === 'string' ? result.message : '');
         continue;
@@ -1022,7 +1018,7 @@ async function putGitHubContent(settings, path, contentBase64, message, sha, ori
       // answer (422 "sha mismatch", 404, 401) must surface immediately: the
       // chunk writer relies on seeing 422 to look the current sha up, and
       // replaying it four times only burned seconds before failing anyway.
-      const definitive = Number(err?.status) >= 400 && !GITHUB_RETRY_STATUS.has(Number(err.status));
+      const definitive = Number(err?.status) >= 400 && !shouldRetryGitHubResponse({ status: Number(err.status) }, err?.githubMessage || '');
       if (definitive || attempt >= GITHUB_RETRY_ATTEMPTS - 1) break;
       await new Promise((r) => setTimeout(r, githubRetryDelay(attempt)));
     }
@@ -1086,12 +1082,12 @@ async function githubApi(settings, method, apiPath, payload) {
       if (response.ok) return data;
       const detail = typeof data?.message === 'string' ? data.message : '';
       const failure = withGitHubStatus(githubFailure(method === 'GET' ? 'read' : 'write', apiPath, response, detail), response, detail);
-      if (!GITHUB_RETRY_STATUS.has(response.status)) throw failure;
+      if (!shouldRetryGitHubResponse(response, detail)) throw failure;
       lastError = failure;
       await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
     } catch (error) {
       lastError = error;
-      const definitive = Number(error?.status) >= 400 && !GITHUB_RETRY_STATUS.has(Number(error.status));
+      const definitive = Number(error?.status) >= 400 && !shouldRetryGitHubResponse({ status: Number(error.status) }, error?.githubMessage || '');
       if (definitive || attempt >= GITHUB_RETRY_ATTEMPTS - 1) break;
       await new Promise((resolve) => setTimeout(resolve, githubRetryDelay(attempt)));
     }
