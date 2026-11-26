@@ -534,7 +534,16 @@ export async function verifyGoogleToken(request, body) {
   const idPayload = await idTokenResponse.json().catch(() => ({}));
 
   if (idTokenResponse.ok) {
-    if (idPayload.aud !== clientId) throw unauthorized('Google token audience does not match this app');
+    const audiences = Array.isArray(idPayload.aud) ? idPayload.aud : [idPayload.aud];
+    const audienceMatches = audiences.includes(clientId);
+    const authorizedPartyMatches = idPayload.azp === clientId;
+    // Google may issue a cross-client ID token whose audience differs while
+    // azp identifies the OAuth client that presented it. For multi-audience
+    // tokens, require the authorized-party claim as well.
+    if ((!audienceMatches && !authorizedPartyMatches) ||
+        (audiences.length > 1 && !authorizedPartyMatches)) {
+      throw unauthorized('Google token audience does not match this app');
+    }
     if (idPayload.email_verified !== true && idPayload.email_verified !== 'true') throw unauthorized('Google email is not verified');
     return idPayload;
   }
