@@ -137,9 +137,9 @@ test('fast path uploads four Spine files concurrently and commits only once', as
 test('licensed Spine project upload dispatches directly to the public storage executor', async () => {
   const previousFetch = globalThis.fetch;
   const previousToken = process.env.GITHUB_TOKEN;
-  const previousExportEnabled = process.env.SPINE_PROJECT_EXPORT_ENABLED;
+  const previousExportEnabled = process.env.SPINE_EDITOR_EXPORT_ENABLED;
   process.env.GITHUB_TOKEN = 'test-only';
-  process.env.SPINE_PROJECT_EXPORT_ENABLED = 'true';
+  process.env.SPINE_EDITOR_EXPORT_ENABLED = 'true';
   const blobs = new Map();
   const dispatches = [];
   let commits = 0;
@@ -232,7 +232,7 @@ test('licensed Spine project upload dispatches directly to the public storage ex
     globalThis.fetch = previousFetch;
     if (previousToken === undefined) delete process.env.GITHUB_TOKEN;
     else process.env.GITHUB_TOKEN = previousToken;
-    if (previousExportEnabled === undefined) delete process.env.SPINE_PROJECT_EXPORT_ENABLED;
-    else process.env.SPINE_PROJECT_EXPORT_ENABLED = previousExportEnabled;
+    if (previousExportEnabled === undefined) delete process.env.SPINE_EDITOR_EXPORT_ENABLED;
+    else process.env.SPINE_EDITOR_EXPORT_ENABLED = previousExportEnabled;
   }
 });
