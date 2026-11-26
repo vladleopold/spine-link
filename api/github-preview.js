@@ -1688,11 +1688,13 @@ const pinchDistance = { value: null };
               setPlayerStylesheet(base + "player/css/spine-player.css");
               await loadScriptOnce(base + "build/spine-player.js");
             } else if (runtime === "3.8") {
-              // The legacy 3.8 endpoint was retired. Load the official 3.8
-              // player build from a commit-pinned CDN source instead.
-              const base = "https://cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@8b4844bd4b193ba9e54487ed397a777993cbad56/spine-ts/";
-              setPlayerStylesheet(base + "player/css/spine-player.css");
-              await loadScriptOnce(base + "build/spine-player.js");
+              // Serve the exact official, commit-pinned Spine 3.8 runtime from
+              // this origin. The public vendor files are byte-identical to
+              // EsotericSoftware/spine-runtimes@8b4844bd4b193ba9e54487ed397a777993cbad56.
+              // Same-origin delivery avoids third-party CDN/DNS failures on
+              // legacy previews and matches the exporter runtime.
+              setPlayerStylesheet("/vendor-spine-player-3.8.css");
+              await loadScriptOnce("/vendor-spine-player-3.8.js");
             } else if (runtime) {
               setPlayerStylesheet("/vendor-spine-player-" + runtime + ".css");
               await loadScriptOnce("/vendor-spine-player-" + runtime + ".js");
