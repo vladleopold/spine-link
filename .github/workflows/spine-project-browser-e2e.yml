@@ -26,12 +26,12 @@ permissions:
   contents: read
 jobs:
   project-folder-ui:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Build and project importer unit tests
         run: |

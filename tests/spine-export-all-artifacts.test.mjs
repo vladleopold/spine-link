@@ -39,3 +39,22 @@ test('failed or empty exports clear stale preview asset URLs from the index', ()
       `writer ${index + 1} must clear stale poster URLs after a failed export`);
   }
 });
+
+const batchWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-export-all.yml', import.meta.url), 'utf8');
+const fullWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-export-full.yml', import.meta.url), 'utf8');
+
+test('batch export fails CI when any work fails while preserving successful artifacts', () => {
+  assert.match(batchWorkflow, /FAILED_EXPORTS=0/);
+  assert.match(batchWorkflow, /if ! node scripts\/spine-export-webm\.mjs/);
+  assert.match(batchWorkflow, /FAILED_EXPORTS=\$\(\(FAILED_EXPORTS \+ 1\)\)/);
+  assert.match(batchWorkflow, /if \[ "\$FAILED_EXPORTS" -gt 0 \]; then/);
+  assert.doesNotMatch(batchWorkflow, /\|\| echo "Export failed/);
+  assert.match(batchWorkflow, /name: Prepare Artifacts[\s\S]*?if: always\(\)/);
+  assert.match(batchWorkflow, /name: Upload Artifact[\s\S]*?if: always\(\)/);
+});
+
+test('transparent WebM export failures are fatal instead of reported as non-critical', () => {
+  const alpha = fullWorkflow.split('  export-alpha:')[1]?.split('  commit-all:')[0] || '';
+  assert.match(alpha, /if ! node scripts\/spine-export-webm\.mjs/);
+  assert.doesNotMatch(alpha, /\|\| echo "Alpha export failed/);
+});
