@@ -542,6 +542,7 @@ jobs:
                   const beforeSelection = await playbackPage.evaluate(() => ({
                     status: document.querySelector('#player')?.dataset.previewStatus || '',
                     error: document.querySelector('#player')?.dataset.previewError || '',
+                    detail: document.querySelector('#player')?.dataset.previewErrorDetail || '',
                     runtimeText: document.querySelector('#player')?.innerText || '',
                     animationCount: document.querySelectorAll('#animation-menu button').length,
                   }));
@@ -551,7 +552,9 @@ jobs:
                     continue;
                   }
                   assert.equal(beforeSelection.status, 'ready',
-                    sample.label + ' Runtime must reach ready; got ' + JSON.stringify(beforeSelection));
+                    sample.label + ' Runtime must reach ready; got ' + JSON.stringify({
+                      beforeSelection,assetDiagnostic,playbackConsoleErrors,playbackMissingAssets,playbackErrors,
+                    }));
                   assert.ok(beforeSelection.animationCount > 0,
                     sample.label + ' must expose its indexed animation list');
                   if (sample.id === 'rabbit-2026-11-23T21-16-31-801Z') {
