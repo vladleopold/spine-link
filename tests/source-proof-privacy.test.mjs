@@ -69,3 +69,14 @@ test("new anonymous account IDs are random and are not derived from browser char
   assert.doesNotMatch(factory, /browserFingerprint|fingerprint/);
   assert.match(factory, /id: `anon_\$\{randomPart\}`/);
 });
+
+test("public library API responses do not expose legacy anonymous device fingerprints", async () => {
+  const source = await readFile(new URL("../api/github-upload.js", import.meta.url), "utf8");
+  const start = source.indexOf("function publicLibraryEntry(");
+  const end = source.indexOf("\nfunction publicLibraryEntries", start);
+  assert.ok(start >= 0 && end > start, "public library projection must be present");
+  const projection = source.slice(start, end);
+
+  assert.match(projection, /delete next\.ownerAnonFingerprint/);
+  assert.doesNotMatch(source, /ownerAnonFingerprint: anonymousAccount\?\.fingerprint/);
+});
