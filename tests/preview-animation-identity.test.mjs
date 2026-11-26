@@ -389,7 +389,7 @@ test('upload export dispatches unindexed animations for runtime-safe selection',
   const dispatch = section(upload, 'async function dispatchSpineExportWebm(', 'export function publicLibraryEntry(');
   assert.ok(dispatch.includes("const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';"));
   assert.ok(dispatch.includes("animation: defaultAnimation.trim() ? defaultAnimation : '__SPINE_AUTO__',"));
-  assert.ok(dispatch.includes('runtime animation discovery'));
+  assert.ok(dispatch.includes('validates visible'));
   assert.ok(!dispatch.includes('missing-explicit-default-animation'));
   assert.ok(!dispatch.includes('entry?.animations[0]'));
 });
