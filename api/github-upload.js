@@ -88,7 +88,8 @@ async function collectionFoldersWithIndex(settings) {
       { headers: githubHeaders(settings.token) },
     );
     if (!response.ok) {
-      const detail = await response.clone().json().then(value => typeof value?.message === 'string' ? value.message : '').catch(() => '');
+      const detailResponse = typeof response.clone === 'function' ? response.clone() : response;
+      const detail = await detailResponse.json().then(value => typeof value?.message === 'string' ? value.message : '').catch(() => '');
       throw withGitHubStatus(githubFailure('list', '/', response, detail), response, detail);
     }
     const items = await response.json();
@@ -948,7 +949,8 @@ export async function getGitHubContent(settings, path) {
       continue;
     }
     if (response.ok || response.status === 404) break;
-    responseDetail = await response.clone().json().then(value => typeof value?.message === 'string' ? value.message : '').catch(() => '');
+    const detailResponse = typeof response.clone === 'function' ? response.clone() : response;
+    responseDetail = await detailResponse.json().then(value => typeof value?.message === 'string' ? value.message : '').catch(() => '');
     if (!shouldRetryGitHubResponse(response, responseDetail)) break;
     if (attempt < GITHUB_RETRY_ATTEMPTS - 1) await new Promise(resolve => setTimeout(resolve, githubRetryDelay(attempt)));
   }
@@ -1296,7 +1298,8 @@ export default async function handler(request, response) {
     };
     // An explicit setting still wins; otherwise uploads follow the newest folder.
     const routePathHint = cleanRepoPath(body?.uploadPath || body?.path || body?.entry?.previewPath || body?.collectionBasePath || '');
-    const routeCollectionHint = routePathHint.match(/^(library(?:_\\d+)?)\\//i)?.[1] || '';
+    const routeCollectionCandidate = routePathHint.split('/')[0] || '';
+    const routeCollectionHint = /^library(_\d+)?$/i.test(routeCollectionCandidate) ? routeCollectionCandidate : '';
     settings.basePath = cleanRepoPath(process.env.GITHUB_BASE_PATH || body?.settings?.basePath || routeCollectionHint || (await newestLibraryBasePath(settings)));
 
     const files = Array.isArray(body?.files) ? body.files : [];
