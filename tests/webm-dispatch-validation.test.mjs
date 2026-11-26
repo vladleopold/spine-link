@@ -122,7 +122,7 @@ test('JSON skeleton with indexed tracks can be dispatched for runtime default se
     fs.writeFileSync(path.join(set, 'body.png'), Buffer.from([137, 80, 78, 71]));
     f.writeIndex([{ id: 'upload-123' }]);
 
-    const result = validateWebmDispatch(f.root, 'upload-123', '');
+    const result = validateWebmDispatch(f.root, 'upload-123', '__SPINE_AUTO__');
     assert.equal(result.found, true);
     assert.equal(result.runtimeDiscovery, true);
   } finally {
@@ -140,7 +140,7 @@ test('binary skeleton with no indexed animation can be dispatched for runtime di
     fs.writeFileSync(path.join(set, 'body.png'), Buffer.from([137, 80, 78, 71]));
     f.writeIndex([{ id: 'upload-123', animations: [] }]);
 
-    const result = validateWebmDispatch(f.root, 'upload-123', '');
+    const result = validateWebmDispatch(f.root, 'upload-123', '__SPINE_AUTO__');
     assert.equal(result.found, true);
     assert.equal(result.binary, true);
     assert.equal(result.runtimeDiscovery, true);
