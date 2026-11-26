@@ -3184,7 +3184,7 @@ async function resolveEntryRecord(settings, entryId) {
           const files = directItems
             .filter((item) => item?.type === 'file')
             .map((item) => cleanRepoPath(item.path || joinRepoPath(directPath, item.name)))
-            .filter(Boolean);
+            .filter((file) => file && (isSkeleton(file) || isAtlas(file) || isImage(file)));
           const entry = { id, previewPath: directPath, files, showOwnerLibrary: false };
           return { previewPath: directPath, entry, entries: [entry], basePath };
         }
