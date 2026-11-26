@@ -359,7 +359,7 @@ function createLibraryHtml({ origin, publicOwnerId, entries: entriesWithFallback
       const previewUrl = previewPath || playerPathForEntry(entry) || '/';
       const rawThumbnail = entryImageAsset(entry.thumbnail || '', entry, 'thumbnail');
       const derivedTexture = derivedMediaFromFiles(origin, entry, ['.png', '.jpg', '.jpeg', '.webp']);
-      const thumbnailPoster = entryImageAsset(entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || derivedTexture;
+      const thumbnailPoster = entryImageAsset(entry.webpPosterMedium || entry.webpPoster || entry.webpPosterLow || entry.thumbnailPoster || '', entry, 'poster') || generatedThumbnailUrl(origin, entry) || derivedTexture;
       // No shared placeholder video: a card without its own webm renders the
       // poster only, so a fresh entry never borrows another entry's clip.
       // The profile page is a video gallery for Google video search, so every
