@@ -45,7 +45,7 @@ const fullWorkflow = fs.readFileSync(new URL('../.github/workflows/spine-export-
 
 test('batch export fails CI when any work fails while preserving successful artifacts', () => {
   assert.match(batchWorkflow, /FAILED_EXPORTS=0/);
-  assert.match(batchWorkflow, /if ! node scripts\\/spine-export-webm\\.mjs/);
+  assert.match(batchWorkflow, /if ! node scripts\/spine-export-webm\.mjs/);
   assert.match(batchWorkflow, /FAILED_EXPORTS=\$\(\(FAILED_EXPORTS \+ 1\)\)/);
   assert.match(batchWorkflow, /if \[ "\$FAILED_EXPORTS" -gt 0 \]; then/);
   assert.doesNotMatch(batchWorkflow, /\|\| echo "Export failed/);
