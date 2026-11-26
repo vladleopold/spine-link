@@ -68,7 +68,7 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.59.1-noble
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Playwright
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify poster-first lazy pagination for desktop and mobile
