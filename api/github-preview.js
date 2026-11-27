@@ -1461,6 +1461,7 @@ function createHtml(config) {
       /* Phone-only viewport contract: leave the first animation control visible below the player. */
       @media (max-width: 700px) {
         .player-frame {
+          order: 1 !important;
           height: clamp(220px, calc(100svh - 360px), 54svh) !important;
           min-height: 220px !important;
           max-height: 54svh !important;
@@ -1471,8 +1472,8 @@ function createHtml(config) {
           min-height: 0 !important;
           max-height: 100% !important;
         }
-        #sidebar > #animation-card { order: 1 !important; margin: 0; }
-        #sidebar > .animation-download-block { order: 2 !important; margin: 0; }
+        #sidebar > #animation-card { order: 2 !important; margin: 0; }
+        #sidebar > .animation-download-block { order: 3 !important; margin: 0; }
         #sidebar > .preview-video-card { order: 5 !important; }
         #sidebar > .owner-library { display: none !important; }
       }
