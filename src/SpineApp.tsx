@@ -2976,6 +2976,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     () => !hasDismissedSkeletonUploadTip(googleUser, anonymousAccount),
   );
   const [googleAuthError, setGoogleAuthError] = useState("");
+  const [isCheckingPersistentSession, setIsCheckingPersistentSession] = useState(() => Boolean(readStoredGoogleSession()?.user?.email));
+  const [hasPersistentGoogleSession, setHasPersistentGoogleSession] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [libraryEntries, setLibraryEntries] = useState<LibraryEntry[]>([]);
@@ -4659,9 +4661,12 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
   const signOutGoogle = () => {
     window.google?.accounts.id.disableAutoSelect();
+    void fetch("/api/github-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sign-out" }) }).catch(() => {});
     clearStoredGoogleSession();
     setGoogleUser(null);
     setGoogleIdToken("");
+    setHasPersistentGoogleSession(false);
+    setIsCheckingPersistentSession(false);
     setProfileNameInput("");
     setGoogleAuthError("");
     setIsAccountMenuOpen(false);
@@ -4827,23 +4832,19 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
   const openLibrary = () => {
     setIsAccountMenuOpen(false);
-    if (googleUser && !googleIdToken) {
-      setGoogleAuthError("Reconnect Google to open your portfolio.");
-      return;
-    }
     setIsLibraryOpen(true);
     void loadLibrary();
   };
 
   useEffect(() => {
     if (!initialOpenLibraryRef.current) return;
-    // If the remembered Google profile needs token renewal, wait for silent
-    // refresh or the user's reconnect action before opening the private portfolio.
-    if (googleUser && !googleIdToken) return;
+    // Wait for the cookie check or a one-time legacy-token renewal. A valid
+    // persistent session is enough to open the private portfolio without GIS.
+    if (googleUser && !googleIdToken && !hasPersistentGoogleSession) return;
     initialOpenLibraryRef.current = false;
     openLibrary();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [googleIdToken, googleUser]);
+  }, [googleIdToken, googleUser, hasPersistentGoogleSession]);
 
   useEffect(() => {
     const hasPending = libraryEntries.some(entry => entry.webmStatus === "pending");
@@ -5143,17 +5144,47 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
     googleTokenClientRef.current.requestAccessToken({ prompt: "select_account" });
   };
 
-  // Google GIS access tokens are short-lived. When a remembered profile has no
-  // usable token, first request a silent token; if Google requires interaction,
-  // keep the avatar and expose an explicit reconnect action instead of signing
-  // the user out on refresh.
+  // First ask the server whether the HttpOnly session cookie is still valid.
+  // This survives Google access-token expiry and browser restarts without exposing
+  // a refresh token or trusting the editable profile stored in localStorage.
   useEffect(() => {
     const storedSession = readStoredGoogleSession();
-    if (!storedSession?.user?.email || googleIdToken) return;
-    // Legacy sessions do not record the OAuth client that issued their token.
-    // Refresh those once silently instead of sending a stale token to the API.
-    if (hasUsableGoogleSession(storedSession, googleClientId)) return;
+    if (!storedSession?.user?.email) {
+      setIsCheckingPersistentSession(false);
+      return;
+    }
+    let cancelled = false;
+    const checkSession = async () => {
+      try {
+        const response = await fetch("/api/github-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "get-session" }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (cancelled) return;
+        if (response.ok && result.authenticated === true) {
+          setHasPersistentGoogleSession(true);
+          setGoogleUser((current) => current || storedSession.user);
+          setGoogleAuthError("");
+        }
+      } catch {
+        // If the persistent session endpoint is unavailable, fall back to the
+        // existing Google silent-renewal path below.
+      } finally {
+        if (!cancelled) setIsCheckingPersistentSession(false);
+      }
+    };
+    void checkSession();
+    return () => { cancelled = true; };
+  }, []);
 
+  // Older installations without a session cookie get one silent token renewal.
+  // Once the server confirms its durable session, repeated Google prompts stop.
+  useEffect(() => {
+    const storedSession = readStoredGoogleSession();
+    if (isCheckingPersistentSession || hasPersistentGoogleSession || !storedSession?.user?.email || googleIdToken) return;
+    if (hasUsableGoogleSession(storedSession, googleClientId)) return;
     let cancelled = false;
     const restoreSession = async () => {
       setGoogleAuthError("Restoring Google session...");
@@ -5167,10 +5198,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       googleTokenClientRef.current.requestAccessToken({ prompt: "" });
     };
     void restoreSession();
-    return () => {
-      cancelled = true;
-    };
-  }, [googleIdToken]);
+    return () => { cancelled = true; };
+  }, [googleIdToken, isCheckingPersistentSession, hasPersistentGoogleSession]);
 
   async function publishToGitHub(spine: PreparedSpine, animationNames: string[], defaultAnimation: string) {
     const existingEntry = currentLibraryEntry;
@@ -5579,7 +5608,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               {googleUser ? (
                 <div className={`auth-user ${isAccountMenuOpen ? "is-account-menu-open" : ""}`}>
                   <span>{googleUser.email}</span>
-                  {googleIdToken ? (
+                  {googleIdToken || hasPersistentGoogleSession ? (
                     <button type="button" onClick={openLibrary}>MY PORTFOLIO</button>
                   ) : (
                     <button type="button" aria-label="Reconnect Google" onClick={() => void openGoogleSignIn()}>RECONNECT</button>

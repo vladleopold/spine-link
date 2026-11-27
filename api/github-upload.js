@@ -7,6 +7,7 @@ import { runSerializedWrite } from '../lib/serialized-write-queue.js';
 import { cachedGithubText, invalidateCachedGithubText } from '../lib/github-content-cache.js';
 import { githubLibraryFoldersCache } from '../lib/github-library-folders-cache.js';
 import { verifyGoogleAccessToken } from '../lib/google-access-token.js';
+import { createGoogleSessionCookie, serializeGoogleSessionCookie, clearGoogleSessionCookie, readGoogleSessionCookie } from '../lib/google-session-cookie.js';
 import { githubErrorForResponse, shouldRetryGitHubResponse } from '../lib/github-rate-limit.js';
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -570,12 +571,12 @@ export async function verifyGoogleToken(request, body) {
   }
 }
 
-async function optionalGooglePayload(request, body) {
+async function optionalGooglePayload(request, body, sessionSecret) {
   const authHeader = request.headers.authorization || request.headers.Authorization || '';
   const bearerToken = String(authHeader).match(/^Bearer\s+(.+)$/i)?.[1] || '';
   const googleToken = bearerToken || String(body?.googleIdToken || '');
-  if (!googleToken) return null;
-  return verifyGoogleToken(request, body);
+  if (googleToken) return verifyGoogleToken(request, body);
+  return readGoogleSessionCookie(request.headers.cookie, sessionSecret);
 }
 
 function normalizeAnonymousAccount(body) {
@@ -1291,7 +1292,22 @@ export default async function handler(request, response) {
   try {
     const origin = `${request.headers['x-forwarded-proto'] || 'https'}://${request.headers['x-forwarded-host'] || request.headers.host}`;
     const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body;
-    const googlePayload = await optionalGooglePayload(request, body);
+    const sessionSecret = process.env.SPINE_LINK_SESSION_SECRET || token;
+    const action = String(body?.action || '');
+    if (action === 'sign-out') {
+      const secure = request.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
+      response.setHeader('Set-Cookie', clearGoogleSessionCookie({ secure }));
+      return response.status(200).json({ ok: true, signedOut: true });
+    }
+    const googlePayload = await optionalGooglePayload(request, body, sessionSecret);
+    if (googlePayload && String(sessionSecret || '').length >= 32) {
+      const secure = request.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
+      const cookie = createGoogleSessionCookie(googlePayload, sessionSecret, { secure });
+      response.setHeader('Set-Cookie', serializeGoogleSessionCookie(cookie));
+    }
+    if (action === 'get-session') {
+      return response.status(200).json({ ok: true, authenticated: Boolean(googlePayload), user: googlePayload ? { sub: googlePayload.sub, email: googlePayload.email } : null });
+    }
     const anonymousAccount = normalizeAnonymousAccount(body);
 
     const settings = {
@@ -1312,7 +1328,6 @@ export default async function handler(request, response) {
     const previewHtml = String(body?.previewHtml || '');
     const uploadPath = resolveUploadPath(body?.uploadPath, settings.basePath, String(body?.entry?.id || body?.uploadId || ''));
     const commitPrefix = String(body?.commitPrefix || 'Add Spine preview');
-    const action = String(body?.action || '');
     failedAction = action || 'unknown';
     if (['update-note', 'update-layout', 'update-entry-visibility'].includes(action) && body?.entryId) {
       const collections = await libraryCollectionIndexes(settings);
