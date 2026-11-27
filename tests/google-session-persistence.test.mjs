@@ -74,9 +74,10 @@ try {
     session.expiresAt = Date.now() - 1000;
     localStorage.setItem('spine-link-google-session', JSON.stringify(session));
   });
-  await page.reload({waitUntil:'domcontentloaded'});
-  await page.waitForTimeout(1500);
-  assert.ok(apiActions.includes('get-session'), 'App did not request its persistent session on reload. API actions: ' + JSON.stringify(apiActions) + '; stored session: ' + await page.evaluate(() => localStorage.getItem('spine-link-google-session')));
+  await page.reload({waitUntil:'load'});
+  await page.locator('.auth-user').waitFor({state:'visible',timeout:10000});
+  await page.waitForTimeout(1000);
+  assert.ok(apiActions.includes('get-session'), 'App did not request its persistent session on reload. API actions: ' + JSON.stringify(apiActions) + '; stored session: ' + await page.evaluate(() => localStorage.getItem('spine-link-google-session')) + '; page errors: ' + JSON.stringify(pageErrors) + '; URL: ' + page.url());
   const sessionCheckResponse = await page.waitForResponse(r => {
     if (!r.url().includes('/api/github-upload')) return false;
     try { return JSON.parse(r.request().postData() || '{}').action === 'get-session'; }
