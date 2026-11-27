@@ -62,6 +62,15 @@ test('archive keeps a public work visible with its own source texture when motio
     assert.equal(work.video, '', 'a source texture must never unlock motion playback');
     assert.match(work.posterFallback, /library_02\/Spine-animation-2026-11-27T04-40-28-926Z\/20938824\.png/,
       'the card should show the exact uploaded texture as a static fallback');
+    const htmlRes = response();
+    await handler({ method: 'GET', headers: { host: 'spine-link.vercel.app' }, query: {} }, htmlRes);
+    assert.equal(htmlRes.code, 200);
+    assert.match(String(htmlRes.body), /feed-source-texture/,
+      'the server-rendered archive card must display a static texture fallback');
+    assert.match(String(htmlRes.body), /library_02\\/Spine-animation-2026-11-27T04-40-28-926Z\\/20938824\\.png/,
+      'the rendered card must use the same work source texture');
+    assert.doesNotMatch(String(htmlRes.body), /data-video-src="https:\\/\\/spine-link\\.vercel\\.app\\/assets\\/library_02\\/Spine-animation-2026-11-27T04-40-28-926Z\\/20938824\\.png/,
+      'a source texture must never be wired as an autoplay video');
   } finally {
     globalThis.fetch = originalFetch;
     if (originalToken === undefined) delete process.env.GITHUB_TOKEN;
