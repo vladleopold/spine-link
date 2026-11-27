@@ -253,6 +253,12 @@ test('binary and Unity-wrapped skeletons use the matching JSON or binary runtime
   assert.match(preview, /skeletonIsBinary && !needsSpine37BinaryConversion && !needsUnityTextAssetExtraction \? \{ skelUrl: skeletonUrl \} : \{ jsonUrl: skeletonUrl \}/);
 });
 
+test('automatic animation sentinel resolves to a real runtime track after load', () => {
+  const success = section(preview, 'success: (loadedPlayer) =>', 'error: (_player, reason)');
+  assert.match(success, /queryValue\("animation"\) === "__SPINE_AUTO__"/);
+  assert.match(success, /activeAnimation\.name = choosePreviewAnimation\(names, "__SPINE_AUTO__", activeSet\.value\?\.animation \|\| ""\)/);
+});
+
 test('animation selections made during loading are queued until the Spine Player success callback', () => {
   const playback = section(preview, 'function playAnimationEntry(name)', 'function togglePlayback()');
   assert.match(playback, /if \(!playerReady\) return true/);
