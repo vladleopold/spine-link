@@ -90,9 +90,3 @@ test('Spine 4.3 previews adapt folder-qualified attachment paths before atlas pa
   assert.ok(previewSource.includes('rawDataURIs[atlasPath] = activeAtlasBlobUrl'));
 });
 
-test('Spine 4.3 previews adapt folder-qualified attachment paths before atlas parsing', () => {
-  assert.match(previewSource, /import \\{ addSpineAtlasPathAliases \\} from '\\.\\.\\/lib\\/spine-atlas-path-aliases\\.js';/);
-  assert.match(previewSource, /const addSpineAtlasPathAliases = \\$\\{addSpineAtlasPathAliases\\.toString\\(\\)\\};/);
-  assert.match(previewSource, /const compatibleAtlas = addSpineAtlasPathAliases\\(atlasText, skeletonJson\\)/);
-  assert.match(previewSource, /rawDataURIs\\[atlasPath\\] = activeAtlasBlobUrl/);
-});
