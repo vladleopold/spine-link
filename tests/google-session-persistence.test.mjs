@@ -52,6 +52,8 @@ try {
   await page.locator('button[aria-label="Sign in"]').click();
   await page.locator('.auth-user').waitFor({state:'visible',timeout:15000});
   await mergeResponse;
+  // Keep the mocked HttpOnly session available across the reload just as the API Set-Cookie does in production.
+  await context.addCookies([{name:'spine_link_session',value:'browser-test-session',url:SITE,httpOnly:true,sameSite:'Lax'}]);
   assert.equal(await page.locator('.avatar-menu-toggle').isVisible(),true,'Avatar must appear after sign-in');
   const firstSession = await page.evaluate(() => JSON.parse(localStorage.getItem('spine-link-google-session') || 'null'));
   assert.equal(firstSession?.user?.email,'spine-link-test@example.invalid');
