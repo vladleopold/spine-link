@@ -69,6 +69,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install browser tooling
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test isolated upload-stage mock contract
+        run: node --test tests/production-smoke-stage-receipt.test.mjs
       - name: Verify live homepage, real interactions, and a Spine preview
         shell: bash
         run: |
@@ -79,6 +81,7 @@ jobs:
           import { createHash } from 'node:crypto';
           import { chromium } from 'playwright';
           import { isAmbiguous404ConsoleMessage } from './scripts/lib/preview-console-errors.mjs';
+          import { createProductionSmokeStageReceipt } from './scripts/lib/production-smoke-stage-receipt.mjs';
 
           const site = process.env.SITE;
           async function gotoWithRetry(targetPage, url, options) {
@@ -114,10 +117,20 @@ jobs:
               await page.route('**/api/github-upload', async route => {
                 let payload = {};
                 try { payload = JSON.parse(route.request().postData() || '{}'); } catch {}
-                if (payload.action === 'stage-blob') stagePaths.push(String(payload.path || ''));
+                if (payload.action === 'stage-blob') {
+                  stagePaths.push(String(payload.path || ''));
+                  // Return a synthetic receipt so the client can stage every
+                  // file. The route remains intercepted: no GitHub write occurs.
+                  await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify(createProductionSmokeStageReceipt(payload)),
+                  });
+                  return;
+                }
                 await route.fulfill({
                   status: 422, contentType: 'application/json',
-                  body: '{"error":"Production smoke test: upload intentionally blocked"}',
+                  body: '{"error":"Production smoke test: finalization intentionally blocked"}',
                 });
               });
               try {
