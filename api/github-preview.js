@@ -8,6 +8,7 @@ import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-
 import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.js';
 import { cachedGithubText } from '../lib/github-content-cache.js';
 import { indexedFilePath, previewIndexPath } from '../lib/github-preview-index.js';
+import { choosePreviewAnimation } from '../scripts/preview-animation-choice.mjs';
 
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -1498,6 +1499,7 @@ function createHtml(config) {
         window.spine.GLTexture.DISABLE_UNPACK_PREMULTIPLIED_ALPHA_WEBGL = true;
       }
       const config = JSON.parse(document.getElementById("spine-preview-config").textContent);
+      const choosePreviewAnimation = ${choosePreviewAnimation.toString()};
       const sets = config.sets || [];
       function queryValue(name) { return new URLSearchParams(window.location.search).get(name) || ""; }
       function setHasAnimation(set, animationName) { return Boolean(set && animationName && (set.animations || []).includes(animationName)); }
@@ -1509,6 +1511,9 @@ function createHtml(config) {
       }
       function initialAnimation(set) {
         const queryAnimation = queryValue("animation");
+        if (queryAnimation === "__SPINE_AUTO__") {
+          return choosePreviewAnimation(set?.animations || [], queryAnimation, set?.animation || "");
+        }
         return queryAnimation || set?.animation || "";
       }
       // Kept in sync with the server-side PREVIEW_PAD: a narrow margin so a clip whose
