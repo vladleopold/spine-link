@@ -985,6 +985,31 @@ export default async function handler(request, response) {
       : (Array.isArray(allEntries)
           ? allEntries.filter((entry) => String(entry?.publicOwnerId || '') === publicOwnerId)
           : []);
+    // The player sidebar needs only public media metadata, never private source paths or account fields.
+    if (String(request.query?.format || '').toLowerCase() === 'json') {
+      const publicEntries = entries
+        .filter((entry) => !entry?.hiddenFromPublicLibrary && entry?.showOwnerLibrary !== false)
+        .sort(compareLibraryEntries)
+        .map((entry) => ({
+          id: String(entry.id || ''),
+          title: cleanPublicText(entry.title || entry.id || 'Spine animation work', 120),
+          publicOwnerId: String(entry.publicOwnerId || ''),
+          defaultAnimation: cleanPublicText(entry.defaultAnimation || '', 120),
+          webmPreview: safeVideo(entry.webmPreview || ''),
+          webmPreviewMedium: safeVideo(entry.webmPreviewMedium || ''),
+          webmPreviewLow: safeVideo(entry.webmPreviewLow || ''),
+          webpPoster: safeImage(entry.webpPoster || ''),
+          thumbnailPoster: safeImage(entry.thumbnailPoster || ''),
+          thumbnail: safeImage(entry.thumbnail || ''),
+          webmStatus: String(entry.webmStatus || ''),
+          uploadedAt: String(entry.uploadedAt || ''),
+        }))
+        .filter((entry) => entry.id && entry.publicOwnerId && (entry.webmPreview || entry.webmPreviewMedium || entry.webmPreviewLow));
+      setNoStoreHeaders(response);
+      response.setHeader('Content-Type', 'application/json; charset=utf-8');
+      response.setHeader('X-Robots-Tag', 'noindex, nofollow');
+      return response.status(200).json({ ok: true, entries: publicEntries });
+    }
     // Never show somebody else's works when an owner's portfolio is empty.
     const entriesWithFallback = entries;
     entriesWithFallback.sort(compareLibraryEntries);
