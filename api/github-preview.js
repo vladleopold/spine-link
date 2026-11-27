@@ -2029,9 +2029,10 @@ const pinchDistance = { value: null };
         // Recalculate on every clip change. A too-large old viewport can contain
         // the new clip without clipping it, so an overflow-only check cannot
         // detect the resulting tiny character/effect.
+        const targetPlayer = player;
         requestAnimationFrame(() => {
-          if (!playerReady || !player) return;
-          if (!refitToContent(player)) {
+          if (!playerReady || player !== targetPlayer) return;
+          if (!refitToContent(targetPlayer)) {
             rememberBaseViewport();
             applyZoom(currentZoom.value);
           }
@@ -2459,6 +2460,7 @@ const pinchDistance = { value: null };
                 installLoopButton();
               }
               requestAnimationFrame(() => {
+                if (!playerReady || player !== loadedPlayer) return;
                 // Fit the first selected animation before caching the base
                 // viewport. This fixes both oversized and undersized framing.
                 if (!selectedAnimation || !refitToContent(loadedPlayer)) rememberBaseViewport();
