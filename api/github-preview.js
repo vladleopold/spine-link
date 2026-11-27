@@ -1292,6 +1292,7 @@ function createHtml(config) {
          short list stretch one card across the whole panel. The fixed height
          keeps every thumbnail a readable rectangle instead of a collapsed sliver. */
       .owner-library.is-visible { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 108px; align-items: stretch; align-content: start; }
+      .owner-library-title { grid-column: 1 / -1; color: rgba(237,245,255,.72); font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
       .owner-library a { position: relative; display: block; overflow: hidden; height: 108px; min-height: 108px; border: 1px solid rgba(255,255,255,.09); border-radius: 8px; color: inherit; text-decoration: none; background: rgba(255,255,255,.045); isolation: isolate; }
       .owner-library a::after { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(rgba(0,0,0,.18), rgba(0,0,0,.18) 45%, rgba(8,10,12,.82)); pointer-events: none; }
       .owner-library a:hover { border-color: rgba(179,255,64,.55); background: rgba(179,255,64,.08); transform: translateY(-2px); }
@@ -1818,6 +1819,12 @@ const pinchDistance = { value: null };
           ownerProfile.style.cursor = "pointer";
           ownerProfile.onclick = () => { window.location.href = owner.url; };
           ownerProfile.title = "Open public library";
+        }
+        if (items.length) {
+          const heading = document.createElement("div");
+          heading.className = "owner-library-title";
+          heading.textContent = "Other animations by this user";
+          ownerLibrary.appendChild(heading);
         }
         const visibleItems = items.slice(0, 7);
         visibleItems.forEach((item) => {
