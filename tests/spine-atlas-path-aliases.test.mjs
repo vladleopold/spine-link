@@ -77,3 +77,16 @@ l_bra
   assert.match(result, /01b\/l_bra\n  bounds: 10, 0, 12, 12/);
   assert.match(result, /__spine_link_atlas_source_0_l_bra/);
 });
+
+
+test('uses a case-insensitive basename fallback only when the atlas match is unique', () => {
+  const source = `page.png
+  size: 32, 32
+Tail
+  bounds: 0, 0, 8, 8
+`;
+  const result = addSpineAtlasPathAliases(source, { skins: [{ attachments: {
+    slot: { tail: { type: 'region' } },
+  } }] });
+  assert.match(result, /tail\n  bounds: 0, 0, 8, 8/);
+});
