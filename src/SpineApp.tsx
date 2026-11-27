@@ -2792,70 +2792,6 @@ function ProgressiveVideo({
   );
 }
 
-function RelatedUserAnimationPreview({ entry }: { entry: LibraryEntry }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const playWhenVisible = () => {
-      if (document.visibilityState === "visible") {
-        video.play().catch(() => {});
-      } else {
-        video.pause();
-      }
-    };
-
-    if (!("IntersectionObserver" in window)) {
-      playWhenVisible();
-      return () => video.pause();
-    }
-
-    const observer = new IntersectionObserver(
-      ([intersection]) => {
-        if (intersection?.isIntersecting && intersection.intersectionRatio >= 0.15) {
-          video.preload = "metadata";
-          playWhenVisible();
-        } else {
-          video.pause();
-        }
-      },
-      { threshold: [0, 0.15] },
-    );
-    observer.observe(video);
-    document.addEventListener("visibilitychange", playWhenVisible);
-
-    return () => {
-      observer.disconnect();
-      document.removeEventListener("visibilitychange", playWhenVisible);
-      video.pause();
-    };
-  }, []);
-
-  const videoUrl = [entry.webmPreviewMedium, entry.webmPreview, entry.webmPreviewLow]
-    .find((url) => ownEntryWebm(url)) || "";
-  const poster = entry.webpPoster || entry.thumbnailPoster || entry.thumbnail || undefined;
-  if (!videoUrl) return null;
-
-  return (
-    <a className="related-user-animation-card" href={`/p/${encodeURIComponent(entry.id)}?animation=${encodeURIComponent(entry.defaultAnimation || "")}`}>
-      <video
-        ref={videoRef}
-        className="related-user-animation-video"
-        src={withAssetVersion(videoUrl, assetVersionForLibraryEntry(entry, "webm"))}
-        poster={poster}
-        muted
-        loop
-        playsInline
-        preload="none"
-        aria-label={entry.title || entry.id}
-      />
-      <span>{entry.title || entry.id}</span>
-    </a>
-  );
-}
-
 function splitIdLines(value: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -2988,7 +2924,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   }, []);
   const [previewNoteStatus, setPreviewNoteStatus] = useState("");
   const [currentLibraryEntry, setCurrentLibraryEntry] = useState<LibraryEntry | null>(null);
-  const [relatedUserEntries, setRelatedUserEntries] = useState<LibraryEntry[]>([]);
   const [status, setStatus] = useState("Drop Spine export files or a .spine project with images.");
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -4054,29 +3989,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       mountedPlayers.forEach((player) => player.dispose?.());
     };
   }, [extraSpineSets]);
-
-  useEffect(() => {
-    const publicOwnerId = currentLibraryEntry?.publicOwnerId;
-    if (!publicOwnerId) {
-      setRelatedUserEntries([]);
-      return;
-    }
-    const controller = new AbortController();
-    fetch(`/api/github-library?user=${encodeURIComponent(publicOwnerId)}&format=json`, {
-      signal: controller.signal,
-      headers: { Accept: "application/json" },
-    })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error(`Related works API ${response.status}`)))
-      .then((payload) => {
-        if (!controller.signal.aborted) {
-          setRelatedUserEntries(Array.isArray(payload?.entries) ? payload.entries : []);
-        }
-      })
-      .catch((error) => {
-        if (error?.name !== "AbortError" && !controller.signal.aborted) setRelatedUserEntries([]);
-      });
-    return () => controller.abort();
-  }, [currentLibraryEntry?.publicOwnerId]);
 
   const initialFilesLoadedRef = useRef(false);
   const editEntryLoadedRef = useRef(false);
@@ -5834,7 +5746,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         )}
 
         <div className="stage">
-          <div className={isHomeDropOnly ? "home-drop-panel" : `preview-panel public-player-mobile-fit ${extraSpineSets.length ? "has-multiple-players" : ""}`} ref={previewPanelRef}>
+          <div className={isHomeDropOnly ? "home-drop-panel" : `preview-panel ${extraSpineSets.length ? "has-multiple-players" : ""}`} ref={previewPanelRef}>
             {!preparedSpine && !isEditPage && !isLibraryOpen && !isUploadModalOpen && (
               <>
                 <label
@@ -6567,17 +6479,6 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
                 </a>
               </div>
             </div>
-            {currentLibraryEntry?.publicOwnerId && (
-              <section className="related-user-animations" aria-label="Other animations by this user">
-                <div className="animation-download-title">Other animations by this user</div>
-                <div className="related-user-animations-grid">
-                  {relatedUserEntries
-                    .filter((entry) => entry.id !== currentLibraryEntry.id)
-                    .slice(0, 7)
-                    .map((entry) => <RelatedUserAnimationPreview key={entry.id} entry={entry} />)}
-                </div>
-              </section>
-            )}
           </aside>
         </div>
       </section>
