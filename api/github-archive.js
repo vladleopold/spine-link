@@ -602,10 +602,10 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 function sourceTextureFallbackUrl(origin, entry = {}) {
   const declaredTextures = Array.isArray(entry?.textures) ? entry.textures : [];
   const declaredFiles = Array.isArray(entry?.files) ? entry.files : [];
-  const candidates = [...declaredTextures, ...declaredFiles.filter(file => /\\.(?:png|jpe?g|webp)$/i.test(String(file || '')))];
+  const candidates = [...declaredTextures, ...declaredFiles.filter(file => /\.(?:png|jpe?g|webp)$/i.test(String(file || '')))];
   for (const candidate of candidates) {
     const path = cleanRepoPath(candidate);
-    if (!path || path.split('/').some(part => part === '..') || !/\\.(?:png|jpe?g|webp)$/i.test(path)) continue;
+    if (!path || path.split('/').some(part => part === '..') || !/\.(?:png|jpe?g|webp)$/i.test(path)) continue;
     const url = lightweightAssetUrl(origin, entry, path);
     if (url) return url;
   }
