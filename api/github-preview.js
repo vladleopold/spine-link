@@ -2026,8 +2026,17 @@ const pinchDistance = { value: null };
           } };
         }
         player.play();
-        rememberBaseViewport();
-        applyStageAnchor();
+        // Recalculate on every clip change. A too-large old viewport can contain
+        // the new clip without clipping it, so an overflow-only check cannot
+        // detect the resulting tiny character/effect.
+        requestAnimationFrame(() => {
+          if (!playerReady || !player) return;
+          if (!refitToContent(player)) {
+            rememberBaseViewport();
+            applyZoom(currentZoom.value);
+          }
+          applyStageAnchor();
+        });
         return true;
       }
       function playActiveAnimationFromStart() {
@@ -2066,7 +2075,10 @@ const pinchDistance = { value: null };
       // base used by zoom/pan. This is the "fix it on the fly" path.
       function refitToContent(targetPlayer) {
         const p = targetPlayer || player;
-        if (!p?.skeleton?.data) return false;
+        // An explicitly saved author viewport is intentional and must remain
+        // untouched; every other preview is fitted to the active animation.
+        if (activeSet.value?.viewport?.__locked) return false;
+        if (!p?.skeleton?.data || typeof p.setViewport !== "function") return false;
         const names = p.skeleton.data.animations.map((a) => a.name);
         const active = typeof activeAnimation.name === 'string' ? activeAnimation.name : '';
         if (!active || !names.includes(active)) return false;
@@ -2447,7 +2459,9 @@ const pinchDistance = { value: null };
                 installLoopButton();
               }
               requestAnimationFrame(() => {
-                rememberBaseViewport();
+                // Fit the first selected animation before caching the base
+                // viewport. This fixes both oversized and undersized framing.
+                if (!selectedAnimation || !refitToContent(loadedPlayer)) rememberBaseViewport();
                 captureStageOffset();
                 applyZoom(currentZoom.value);
                 window.setTimeout(ensureVisibleContent, 120);
