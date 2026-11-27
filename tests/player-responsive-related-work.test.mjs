@@ -23,3 +23,13 @@ test("related video previews pause outside the viewport and loop while visible",
   assert.match(app, /video\.pause\(\)/);
   assert.match(app, /video\.play\(\)/);
 });
+
+test("related works are fetched from the public owner index without exposing private source metadata", () => {
+  const api = readFileSync(new URL("../api/github-library.js", import.meta.url), "utf8");
+  assert.match(app, /api\/github-library\?user=.*format=json/);
+  assert.match(api, /request\.query\?\.format/);
+  assert.match(api, /showOwnerLibrary !== false/);
+  assert.match(api, /webmPreviewMedium/);
+  const publicPayload = api.slice(api.indexOf("const publicEntries ="), api.indexOf("const entriesWithFallback"));
+  assert.doesNotMatch(publicPayload, /ownerEmail|ownerAccountId|skeleton:|atlas:/);
+});
