@@ -1634,6 +1634,7 @@ const pinchDistance = { value: null };
         const version = String(set?.skeletonVersion || "");
         const runtimeVersionOverride = String(set?.runtimeVersionOverride || "");
         if (runtimeVersionOverride === "3.8") return "3.8";
+        if (runtimeVersionOverride === "4.3") return "4.3";
         // В шаблонной строке точка экранируется одним обратным слэшем:
         // было "\\." — регулярка искала буквальную "\." и никогда не срабатывала.
         if (/^3\.7(?:\.|$)/.test(version)) return "3.7";
@@ -1690,7 +1691,7 @@ const pinchDistance = { value: null };
             if (runtime && runtime.startsWith("4.")) {
               // Use the same exact package pins as the server-side renderer;
               // wildcard unpkg URLs can resolve inconsistently or return 403.
-              const pinnedVersions = {"4.0":"4.0.31","4.1":"4.1.56","4.2":"4.2.120"};
+              const pinnedVersions = {"4.0":"4.0.31","4.1":"4.1.56","4.2":"4.2.120","4.3":"4.3.13"};
               const version = pinnedVersions[runtime];
               if (!version) throw new Error("Unsupported pinned Spine runtime: " + runtime);
               const base = "https://cdn.jsdelivr.net/npm/@esotericsoftware/spine-player@" + version + "/dist/";
@@ -2210,7 +2211,7 @@ const pinchDistance = { value: null };
         // Spine 3.7 and 3.8 use incompatible binary formats. The official
         // 3.7 Web Player only loads JSON, while the 3.8 runtime cannot parse
         // 3.7 SKEL data. Never report an empty skeleton as successfully loaded.
-        if (/^3\\.7(?:\\.|$)/.test(skeletonVersion) && Boolean(activeSet.value.skelUrl)) {
+        if (/^3\\.7(?:\\.|$)/.test(skeletonVersion) && Boolean(activeSet.value.skelUrl) && activeSet.value.runtimeVersionOverride !== "4.3") {
           markPreviewBlocked("UNSUPPORTED_SPINE_3_7_BINARY");
           return;
         }
@@ -2269,7 +2270,8 @@ const pinchDistance = { value: null };
           delete playerSet.animations;
         }
         try {
-          const isSpine42Or43 = /^4[.][23](?:[.]|$)/.test(String(activeSet.value?.skeletonVersion || ""));
+          const runtimeVersionForPlayer = String(activeSet.value?.runtimeVersionOverride || activeSet.value?.skeletonVersion || "");
+          const isSpine42Or43 = /^4[.][23](?:[.]|$)/.test(runtimeVersionForPlayer);
           const playerOptions = {
             ...playerSet,
             ...(requestedAnimation ? { animation: requestedAnimation } : {}),
@@ -3032,21 +3034,30 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       ...textures.map((texture) => texture.sha),
       ...(atlasPages.some((page) => /\.dds$/i.test(page)) ? ['dds-png-v1'] : []),
       ...(runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion) ? ['spine38-runtime-compat-v2'] : []),
+      ...(runtimeVersionOverride === '4.3' ? ['spine37-binary-convert-v1'] : []),
     ].filter(Boolean).join('-');
 
     // Version the skeleton JSON/binary as well as atlas pages and textures.
     // Without this query, replacing a broken export at the same path can leave
     // the old cached binary in the browser even after GitHub has the new JSON.
-    const skeletonUrl = versionedAssetUrl(origin, skeleton, assetVersion);
-    const atlasUrlBase = versionedAssetUrl(origin, atlas, assetVersion);
+    const needsSpine37BinaryConversion = skeletonIsBinary && runtimeVersionOverride === '4.3';
+    const skeletonUrl = needsSpine37BinaryConversion
+      ? `${versionedAssetUrl(origin, { ...skeleton, path: `${skeleton.path}.json` }, assetVersion)}&spineRuntime=4.3`
+      : versionedAssetUrl(origin, skeleton, assetVersion);
+    const atlasUrlBase = needsSpine37BinaryConversion
+      ? versionedAssetUrl(origin, { ...atlas, path: `${atlas.path}.spine43` }, assetVersion)
+      : versionedAssetUrl(origin, atlas, assetVersion);
     // Spine 3.8 predates the pma page field; the asset route strips it for 3.8 only.
-    const atlasUrl = runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion)
-      ? `${atlasUrlBase}&spineRuntime=3.8`
-      : atlasUrlBase;
+    // Spine 3.7 binary is converted together with its atlas to the 4.3 player format.
+    const atlasUrl = needsSpine37BinaryConversion
+      ? `${atlasUrlBase}&spineRuntime=4.3`
+      : runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion)
+        ? `${atlasUrlBase}&spineRuntime=3.8`
+        : atlasUrlBase;
     sets.push({
       label: directory.name,
       skeleton: skeletonUrl,
-      ...(skeletonIsBinary ? { skelUrl: skeletonUrl } : { jsonUrl: skeletonUrl }),
+      ...(skeletonIsBinary && !needsSpine37BinaryConversion ? { skelUrl: skeletonUrl } : { jsonUrl: skeletonUrl }),
       atlas: atlasUrl,
       atlasUrl,
       animation: defaultAnimation,
