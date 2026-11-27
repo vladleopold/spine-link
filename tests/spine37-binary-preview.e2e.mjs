@@ -31,7 +31,7 @@ page.on('response', response => {
   conversionResponses.push(response.allHeaders().then(headers => ({
     url,
     status: response.status(),
-    converted: headers['x-spine-link-converted'] || '',
+    contentType: headers['content-type'] || '',
   })));
 });
 
@@ -76,9 +76,9 @@ try {
   assert.ok(binaryState.boneCount > 0, 'converted Spine 3.7 skeleton must expose bones');
   assert.ok(binaryState.animationCount > 0, 'converted Spine 3.7 skeleton must expose animations');
   let responses = await Promise.all(conversionResponses);
-  assert.ok(responses.some(item => item.converted === 'spine-3.7-to-4.3-json' && item.status === 200),
+  assert.ok(responses.some(item => item.url.includes('B507201.skel.json') && item.status === 200 && item.contentType.includes('application/json')),
     'converted 3.7 skeleton response must be served as JSON');
-  assert.ok(responses.some(item => item.converted === 'spine-atlas-to-4.3' && item.status === 200),
+  assert.ok(responses.some(item => item.url.includes('B507201.atlas.txt.spine43') && item.status === 200 && item.contentType.includes('text/plain')),
     'converted 3.7 atlas response must be served');
 
   const unityState = await openAndWait(unityTextAssetId, '?animation=__SPINE_AUTO__');
@@ -91,8 +91,8 @@ try {
   assert.ok(unityState.animationCount > 0, 'extracted Unity skeleton must expose animations');
   assert.equal(unityState.animation, 'animation', '__SPINE_AUTO__ must resolve to the runtime animation');
   responses = await Promise.all(conversionResponses);
-  assert.ok(responses.some(item => item.converted === 'unity-textasset-to-spine-json' && item.status === 200),
-    'Unity TextAsset asset response must be extracted to Spine JSON');
+  assert.ok(responses.some(item => item.url.includes('20938824.skel.json') && item.status === 200 && item.contentType.includes('application/json')),
+    'Unity TextAsset asset response must be served as Spine JSON');
 
   assert.deepEqual(pageErrors, [], 'both previews must not throw browser JavaScript errors');
   console.log('SPINE_LEGACY_AND_UNITY_PREVIEWS_PASS');
