@@ -9,6 +9,7 @@ import { appendAssetVersion, assetVersionForEntry } from '../lib/asset-version.j
 import { cachedGithubText } from '../lib/github-content-cache.js';
 import { indexedFilePath, previewIndexPath } from '../lib/github-preview-index.js';
 import { choosePreviewAnimation } from '../scripts/preview-animation-choice.mjs';
+import { addSpineAtlasPathAliases } from '../lib/spine-atlas-path-aliases.js';
 
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -1500,6 +1501,7 @@ function createHtml(config) {
       }
       const config = JSON.parse(document.getElementById("spine-preview-config").textContent);
       const choosePreviewAnimation = ${choosePreviewAnimation.toString()};
+      const addSpineAtlasPathAliases = ${addSpineAtlasPathAliases.toString()};
       const sets = config.sets || [];
       function queryValue(name) { return new URLSearchParams(window.location.search).get(name) || ""; }
       function setHasAnimation(set, animationName) { return Boolean(set && animationName && (set.animations || []).includes(animationName)); }
@@ -1598,6 +1600,7 @@ const pinchDistance = { value: null };
        const touchPanPosition = { value: null };
       let player;
       let playerReady = false;
+      let activeAtlasBlobUrl = '';
       // A URL may select an animation whose owning skeleton is not the first
       // set when the library index is stale or incomplete. Probe each set once.
       const attemptedAnimationSets = new Set();
@@ -2242,6 +2245,10 @@ const pinchDistance = { value: null };
         resetHealAttempts();
         try { player?.dispose?.(); } catch {}
         player = null;
+        if (activeAtlasBlobUrl) {
+          URL.revokeObjectURL(activeAtlasBlobUrl);
+          activeAtlasBlobUrl = '';
+        }
         baseViewport.value = null;
         showPreviewVideoFallback();
         let SpinePlayer;
@@ -2321,6 +2328,27 @@ const pinchDistance = { value: null };
                 if (!textureName) continue;
                 rawDataURIs[texturePath] = textureSource;
                 rawDataURIs[textureName] = textureSource;
+              }
+
+              // Spine 4.3 projects can keep folder-qualified attachment paths
+              // (e.g. new/head, 01a/wing) while the packed atlas stores only
+              // basenames. The official runtime does exact region lookup, so
+              // create atlas aliases without altering skeleton geometry.
+              if (atlasPath && /\\.json$/i.test(skeletonPath)) {
+                const [skeletonResponse, atlasResponse] = await Promise.all([
+                  fetch(skeletonSource),
+                  fetch(atlasSource),
+                ]);
+                if (!skeletonResponse.ok || !atlasResponse.ok) {
+                  throw new Error("Could not read Spine skeleton and atlas for compatibility mapping.");
+                }
+                const skeletonJson = await skeletonResponse.json();
+                const atlasText = await atlasResponse.text();
+                const compatibleAtlas = addSpineAtlasPathAliases(atlasText, skeletonJson);
+                if (compatibleAtlas !== atlasText) {
+                  activeAtlasBlobUrl = URL.createObjectURL(new Blob([compatibleAtlas], { type: "text/plain" }));
+                  rawDataURIs[atlasPath] = activeAtlasBlobUrl;
+                }
               }
 
               playerOptions.rawDataURIs = rawDataURIs;

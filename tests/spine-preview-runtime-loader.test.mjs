@@ -74,3 +74,19 @@ test('Spine 4.2 binary skeletons use binaryUrl just like 4.0 and 4.1', () => {
   );
   assert.ok(previewSource.includes('binaryUrl: activeSet.value.skelUrl || undefined'));
 });
+
+
+test('Spine 4.3 exports use the official 4.3 runtime package', async () => {
+  const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(packageJson.dependencies['@esotericsoftware/spine-player'], '^4.3.13');
+  assert.ok(previewSource.includes('spine-player@4.3.13'));
+  assert.ok(previewSource.includes('const key = runtime || "4.3.13"'));
+});
+
+test('Spine 4.3 previews adapt folder-qualified attachment paths before atlas parsing', () => {
+  assert.ok(previewSource.includes("import { addSpineAtlasPathAliases } from '../lib/spine-atlas-path-aliases.js';"));
+  assert.ok(previewSource.includes('const addSpineAtlasPathAliases = ${addSpineAtlasPathAliases.toString()};'));
+  assert.ok(previewSource.includes('const compatibleAtlas = addSpineAtlasPathAliases(atlasText, skeletonJson)'));
+  assert.ok(previewSource.includes('rawDataURIs[atlasPath] = activeAtlasBlobUrl'));
+});
+
