@@ -9226,3 +9226,50 @@ h1 {
     width: 100%;
   }
 }
+
+
+/* Related creator work is a desktop sidebar companion to the download controls. */
+.related-user-animations {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.related-user-animations-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.related-user-animation-card {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  overflow: hidden;
+  color: #dfe7f5;
+  text-decoration: none;
+}
+.related-user-animation-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: #090b0e;
+}
+.related-user-animation-card span {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 767px) {
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .public-player-mobile-fit {
+    height: clamp(220px, calc(100svh - 480px), 48svh) !important;
+    min-height: 220px !important;
+    max-height: 48svh !important;
+  }
+  .app-shell:not(.is-empty):not(.is-edit-page):not(.is-upload-page) .related-user-animations {
+    display: none !important;
+  }
+}
