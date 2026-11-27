@@ -45,5 +45,5 @@ test("all production preview smoke contexts isolate metrics writes", () => {
   assert.match(workflow, /await isolateProductionSmokeMetrics\\(playbackPage\\)/);
   assert.match(workflow, /await isolateProductionSmokeMetrics\\(convertedPage\\)/);
   assert.match(binarySmoke, /createProductionSmokeMetricsResponse/);
-  assert.match(binarySmoke, /page\\.route\\('\\*\\*\\/api\\/github-upload'/);
+  assert.ok(binarySmoke.includes("page.route('**/api/github-upload'"));
 });
