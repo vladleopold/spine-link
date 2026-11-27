@@ -12,7 +12,7 @@ const embedded = JSON.stringify({
 });
 const unityTextAsset = `TextAsset Base
   string m_Name = "20938824"
-  string m_Script = ${JSON.stringify(embedded)}
+  string m_Script = "${embedded}"
   int m_PathID = 0
 `;
 
