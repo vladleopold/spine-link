@@ -18,7 +18,7 @@ test('public Spine player recalculates viewport after every animation switch', (
   const playEnd = source.indexOf('function playActiveAnimationFromStart()', playStart);
   assert.notEqual(playStart, -1, 'animation playback function exists');
   const play = source.slice(playStart, playEnd);
-  assert.match(play, /requestAnimationFrame\(\(\) =>\s*\{\s*refitToContent\(player\)/);
+  assert.match(play, /requestAnimationFrame\(\(\) =>\s*\{\s*refitToContent\\(targetPlayer\\)/);
 });
 
 test('automatic viewport fitting does not override an explicitly locked author layout', () => {
