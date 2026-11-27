@@ -2391,6 +2391,11 @@ const pinchDistance = { value: null };
               if (names.length) {
                 animationNames.value = names.filter(name => !name.startsWith("Backup/") || name === requestedAnimation);
               }
+              // __SPINE_AUTO__ can reach the player before the index has animation
+              // metadata. Resolve it only after the runtime exposes the real tracks.
+              if (!activeAnimation.name && queryValue("animation") === "__SPINE_AUTO__") {
+                activeAnimation.name = choosePreviewAnimation(names, "__SPINE_AUTO__", activeSet.value?.animation || "");
+              }
               const selectedAnimation = activeAnimation.name || requestedAnimation;
               if (selectedAnimation && names.length && !names.includes(selectedAnimation)) {
                 // The selected clip can belong to another skeleton set in this
