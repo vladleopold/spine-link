@@ -27,3 +27,17 @@ test('automatic viewport fitting does not override an explicitly locked author l
   const fit = source.slice(fitStart, fitEnd);
   assert.match(fit, /activeSet\.value\?\.viewport\?\.__locked/);
 });
+
+const app = readFileSync(new URL('../src/SpineApp.tsx', import.meta.url), 'utf8');
+
+test('the main app player re-fits the initial animation before caching its viewport', () => {
+  assert.match(app, /refitSpinePlayerToAnimation\(player, playableAnimation\)/);
+});
+
+test('the main app player re-fits the viewport after animation selection changes', () => {
+  assert.match(app, /refitSpinePlayerToAnimation\(playerRef\.current, animationName\)/);
+});
+
+test('the modal Spine player uses the same automatic viewport fitting', () => {
+  assert.match(app, /refitSpinePlayerToAnimation\(player, initial\)/);
+});
