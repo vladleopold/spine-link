@@ -600,9 +600,9 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
 }
 
 function sourceTextureFallbackUrl(origin, entry = {}) {
-  const declaredTextures = Array.isArray(entry?.textures) ? entry.textures : [];
-  const declaredFiles = Array.isArray(entry?.files) ? entry.files : [];
-  const candidates = [...declaredTextures, ...declaredFiles.filter(file => /\.(?:png|jpe?g|webp)$/i.test(String(file || '')))];
+  // Only the explicit texture manifest is authoritative. Do not infer a
+  // fallback from arbitrary files, which may be unrelated images or previews.
+  const candidates = Array.isArray(entry?.textures) ? entry.textures : [];
   for (const candidate of candidates) {
     const path = cleanRepoPath(candidate);
     if (!path || path.split('/').some(part => part === '..') || !/\.(?:png|jpe?g|webp)$/i.test(path)) continue;
@@ -661,7 +661,9 @@ function archiveFeedEntry(origin, entry, metrics, preferredQuality = 'medium') {
     archiveUrl: archiveItemUrl(entry),
     poster: selected?.poster || '',
     // Static source texture fallback; never used to unlock video playback.
-    posterFallback: selected?.poster ? '' : sourceTextureFallbackUrl(origin, entry),
+    ...(!selected?.poster && sourceTextureFallbackUrl(origin, entry)
+      ? { posterFallback: sourceTextureFallbackUrl(origin, entry) }
+      : {}),
     video: selected?.video || '',
     quality: selected?.quality || '',
     width: positiveInteger(entry?.previewWidth),
