@@ -10,6 +10,7 @@ import { cachedGithubText } from '../lib/github-content-cache.js';
 import { indexedFilePath, previewIndexPath } from '../lib/github-preview-index.js';
 import { choosePreviewAnimation } from '../scripts/preview-animation-choice.mjs';
 import { addSpineAtlasPathAliases } from '../lib/spine-atlas-path-aliases.js';
+import { spineUnityTextAssetVersionFromBase64 } from '../lib/spine-unity-textasset.js';
 
 const defaultOwner = 'vladleopold';
 const defaultRepo = 'spine';
@@ -2976,6 +2977,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     let skeletonJson = null;
     let skeletonVersion = '';
     let skeletonIsBinary = /\.(?:skel|bytes)$/i.test(skeleton.name);
+    let skeletonIsUnityTextAsset = false;
     const atlasText = await githubText(settings, atlas.path);
     // This is a text atlas, never binary; do not interpret control bytes as
     // texture filenames and leak corrupted URLs into the browser.
@@ -2989,16 +2991,27 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
         skeletonVersion = typeof skeletonJson?.skeleton?.spine === 'string' ? skeletonJson.skeleton.spine : '';
       } catch {
         skeletonJson = null;
-        // Some uploads contain genuine Spine binary data with a .json suffix.
-        // Detect the binary header instead of telling Spine Player to JSON.parse it.
-        const binaryVersion = spineBinaryVersionFromBase64(await githubFileHead(settings, skeleton.path, 256));
+        // Some uploads contain genuine Spine binary data or Unity TextAsset
+        // wrappers with a .json suffix. Detect the actual payload before routing.
+        const skeletonHead = await githubFileHead(settings, skeleton.path, 256);
+        const unityVersion = spineUnityTextAssetVersionFromBase64(skeletonHead);
+        const binaryVersion = unityVersion || spineBinaryVersionFromBase64(skeletonHead);
         if (binaryVersion) {
           skeletonVersion = binaryVersion;
-          skeletonIsBinary = true;
+          skeletonIsUnityTextAsset = Boolean(unityVersion);
+          skeletonIsBinary = !unityVersion;
         }
       }
     } else if (skeletonIsBinary) {
-      skeletonVersion = spineBinaryVersionFromBase64(await githubFileHead(settings, skeleton.path, 256));
+      const skeletonHead = await githubFileHead(settings, skeleton.path, 256);
+      const unityVersion = spineUnityTextAssetVersionFromBase64(skeletonHead);
+      if (unityVersion) {
+        skeletonVersion = unityVersion;
+        skeletonIsUnityTextAsset = true;
+        skeletonIsBinary = false;
+      } else {
+        skeletonVersion = spineBinaryVersionFromBase64(skeletonHead);
+      }
     }
 
     const runtimeAnimationNames = animationNamesFromJson(skeletonJson);
@@ -3041,9 +3054,12 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     // Without this query, replacing a broken export at the same path can leave
     // the old cached binary in the browser even after GitHub has the new JSON.
     const needsSpine37BinaryConversion = skeletonIsBinary && runtimeVersionOverride === '4.3';
+    const needsUnityTextAssetExtraction = skeletonIsUnityTextAsset;
     const skeletonUrl = needsSpine37BinaryConversion
       ? `${versionedAssetUrl(origin, { ...skeleton, path: `${skeleton.path}.json` }, assetVersion)}&spineRuntime=4.3`
-      : versionedAssetUrl(origin, skeleton, assetVersion);
+      : needsUnityTextAssetExtraction
+        ? `${versionedAssetUrl(origin, { ...skeleton, path: `${skeleton.path}.json` }, assetVersion)}&spineRuntime=4.2`
+        : versionedAssetUrl(origin, skeleton, assetVersion);
     const atlasUrlBase = needsSpine37BinaryConversion
       ? versionedAssetUrl(origin, { ...atlas, path: `${atlas.path}.spine43` }, assetVersion)
       : versionedAssetUrl(origin, atlas, assetVersion);
@@ -3057,7 +3073,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
     sets.push({
       label: directory.name,
       skeleton: skeletonUrl,
-      ...(skeletonIsBinary && !needsSpine37BinaryConversion ? { skelUrl: skeletonUrl } : { jsonUrl: skeletonUrl }),
+      ...(skeletonIsBinary && !needsSpine37BinaryConversion && !needsUnityTextAssetExtraction ? { skelUrl: skeletonUrl } : { jsonUrl: skeletonUrl }),
       atlas: atlasUrl,
       atlasUrl,
       animation: defaultAnimation,
