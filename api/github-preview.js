@@ -1158,6 +1158,7 @@ function createHtml(config) {
       #sidebar > #owner-library { order: 3; }
       #sidebar > .video-watch-panel--below-list { order: 4; }
       #sidebar > .proof-card { order: 5; }
+      #sidebar > .preview-video-card { order: 7; }
       #sidebar > #set-card, #sidebar > .note-card { order: 6; }
       .animation-card.is-open .animation-menu { max-height: 240px; }
 
