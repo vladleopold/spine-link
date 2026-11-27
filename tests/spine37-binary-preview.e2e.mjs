@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { createProductionSmokeMetricsResponse } from '../scripts/lib/production-smoke-metrics.mjs';
 
 const site = process.env.SITE;
 assert.ok(site, 'SITE must point at the public preview site');
@@ -9,6 +10,17 @@ const browser = await chromium.launch({
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl'],
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+await page.route('**/api/github-upload', async route => {
+  let payload = {};
+  try { payload = JSON.parse(route.request().postData() || '{}'); } catch {}
+  const mocked = createProductionSmokeMetricsResponse(payload);
+  if (!mocked) return route.continue();
+  await route.fulfill({
+    status: mocked.status,
+    contentType: 'application/json',
+    body: JSON.stringify(mocked.body),
+  });
+});
 const pageErrors = [];
 page.on('pageerror', error => pageErrors.push(String(error)));
 
