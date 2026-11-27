@@ -5,6 +5,7 @@ const defaultBranch = 'main';
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
 import { ddsToPng } from '../lib/dds-png.js';
 import { canReadPublicSpineWithoutToken } from '../lib/github-read-access.js';
+import { convertLegacySpineAsset } from '../lib/spine-binary-conversion.js';
 
 const memoryCache = globalThis.__spineLinkAssetMemoryCache || {
   entries: new Map(),
@@ -56,7 +57,7 @@ async function contentBufferFromGitHubContent(data, token) {
 function contentTypeFor(path) {
   const lowerPath = path.toLowerCase();
   if (lowerPath.endsWith('.json')) return 'application/json; charset=utf-8';
-  if (lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx')) return 'text/plain; charset=utf-8';
+  if (lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx') || lowerPath.endsWith('.atlas.spine43')) return 'text/plain; charset=utf-8';
   if (lowerPath.endsWith('.png')) return 'image/png';
   // Spine Web Player needs an image, not raw BC3/DXT DDS bytes.
   if (lowerPath.endsWith('.dds')) return 'image/png';
@@ -136,7 +137,7 @@ function putMemoryCacheEntry(key, entry) {
 
 function isAtlasPath(path) {
   const lowerPath = path.toLowerCase();
-  return lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx');
+  return lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx') || lowerPath.endsWith('.atlas.spine43');
 }
 
 function isSkeletonJsonPath(path) {
@@ -407,8 +408,16 @@ export default async function handler(request, response) {
   // to a different tier or substitute another image.
   const assetPath = path;
   const assetVersion = typeof request.query?.v === 'string' ? request.query.v : '';
+  const convertTo43 = String(request.query?.spineRuntime || '') === '4.3';
+  const convertedSkeleton = convertTo43 && /\.skel\.json$/i.test(assetPath);
+  const convertedAtlas = convertTo43 && /\.atlas\.spine43$/i.test(assetPath);
+  const sourcePath = convertedSkeleton
+    ? assetPath.slice(0, -5)
+    : convertedAtlas
+      ? assetPath.slice(0, -7)
+      : assetPath;
 
-  const encodedPath = encodeURIComponent(assetPath).replace(/%2F/g, '/');
+  const encodedPath = encodeURIComponent(sourcePath).replace(/%2F/g, '/');
   const cacheKey = memoryCacheKey({ owner, repo, branch, path: assetPath, assetVersion });
   const cachedAsset = getMemoryCacheEntry(cacheKey);
   if (cachedAsset) {
@@ -494,12 +503,27 @@ export default async function handler(request, response) {
       const earlyResponse = setAssetResponseHeaders(request, response, { path: assetPath, assetVersion, etag });
       if (earlyResponse) return earlyResponse;
     }
-    const headResponse = sendAssetHeadFromMetadata(request, response, { path: assetPath, assetVersion, data, etag });
-    if (headResponse) return headResponse;
-    const rangeResponse = await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag });
-    if (rangeResponse) return rangeResponse;
+    if (!convertedSkeleton && !convertedAtlas) {
+      const headResponse = sendAssetHeadFromMetadata(request, response, { path: assetPath, assetVersion, data, etag });
+      if (headResponse) return headResponse;
+      const rangeResponse = await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag });
+      if (rangeResponse) return rangeResponse;
+    }
     let buffer = await contentBufferFromGitHubContent(data, token);
     if (!buffer.length) return response.status(404).send('Asset is empty');
+    if (convertedSkeleton) {
+      const converted = await convertLegacySpineAsset(buffer, 'skeleton');
+      buffer = converted.buffer;
+      response.setHeader('X-Spine-Link-Converted', 'spine-3.7-to-4.3-json');
+      response.setHeader('X-Spine-Link-Conversion-Loss-Count', String(converted.lossCount));
+      response.setHeader('X-Spine-Link-Conversion-Max-Impact', converted.maxImpact);
+    } else if (convertedAtlas) {
+      const converted = await convertLegacySpineAsset(buffer, 'atlas');
+      buffer = converted.buffer;
+      response.setHeader('X-Spine-Link-Converted', 'spine-atlas-to-4.3');
+      response.setHeader('X-Spine-Link-Conversion-Loss-Count', String(converted.lossCount));
+      response.setHeader('X-Spine-Link-Conversion-Max-Impact', converted.maxImpact);
+    }
     if (isSkeletonJsonPath(assetPath)) buffer = sanitizeSkeletonJsonBuffer(buffer);
     if (/\.dds$/i.test(assetPath)) {
       try {
