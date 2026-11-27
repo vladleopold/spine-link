@@ -23,8 +23,20 @@ test('converts Spine 3.7 binary skeleton data to Spine 4.3 JSON', async () => {
   assert.deepEqual(converter.optionsSeen, {
     targetVersion: '4.3',
     targetFormat: 'json',
-    failOnLoss: false,
+    failOnLoss: true,
   });
+});
+
+test('rejects any conversion result that reports data loss', async () => {
+  const converter = fakeConverter(
+    { format: 'binary', version: '3.7.94' },
+    { lossCount: 1, maxImpact: 'pose', report: [{ code: 'physics.dropped' }] },
+  );
+  await assert.rejects(
+    convertLegacySpineAsset(new Uint8Array([1, 2, 3]), 'skeleton', converter),
+    /rejected lossy output \(1 loss events; max impact: pose\)/,
+  );
+  assert.equal(converter.optionsSeen.failOnLoss, true);
 });
 
 test('converts a legacy atlas to the matching Spine 4.3 atlas format', async () => {
