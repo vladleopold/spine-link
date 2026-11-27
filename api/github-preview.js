@@ -1454,6 +1454,9 @@ function createHtml(config) {
       }
       /* The animation picker grows with its content but scrolls before exceeding
          the player. Following sidebar cards remain in normal document flow. */
+      @media (max-width: 1000px) {
+        #sidebar > .owner-library { display: none !important; }
+      }
       /* Phone-only viewport contract: leave the first animation control visible below the player. */
       @media (max-width: 700px) {
         .player-frame {
@@ -3103,7 +3106,9 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
         // The owner library is a dense strip of thumbnails that autoplays several
         // clips at once, so the cards use the LOW (360p) WebM. The full-quality
         // clip stays on the page's big video preview below the player.
-        const lowWebm = target.lowUrl ? entryVideoAsset(target.lowUrl, item, 'webm') : '';
+        const lowWebm = target.lowUrl
+          ? entryVideoAsset(target.lowUrl, item, 'webm')
+          : target.url ? entryVideoAsset(target.url, item, 'webm') : '';
         return {
           title: cleanPublicText(item?.title || item?.id || 'Spine preview'),
           url: `${origin}/p/${encodeURIComponent(String(item?.id || '').trim())}`,
