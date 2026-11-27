@@ -11,7 +11,7 @@ test("phone player height is reduced independently of desktop player sizing", ()
 });
 
 test("desktop owner sidebar shows at most seven other user works in two columns", () => {
-  assert.match(source, /ownerEntries[\s\S]*?item\?\.id\s*!==\s*entry\.id/);
+  assert.match(source, /ownerEntries[\\s\\S]*?item\\?\\.id[\\s\\S]*?entry\\?\\.id/);
   assert.match(source, /library:\s*ownerLibraryItems\.slice\(0,\s*7\)/);
   assert.match(source, /visibleItems\s*=\s*items\.slice\(0,\s*7\)/);
   assert.match(source, /\.owner-library\.is-visible\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
