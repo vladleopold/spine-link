@@ -4819,13 +4819,13 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
 
   useEffect(() => {
     if (!initialOpenLibraryRef.current) return;
-    // If the remembered Google profile needs token renewal, wait for silent
-    // refresh or the user's reconnect action before opening the private portfolio.
-    if (googleUser && !googleIdToken) return;
+    // Wait for the cookie check or a one-time legacy-token renewal. A valid
+    // persistent session is enough to open the private portfolio without GIS.
+    if (googleUser && !googleIdToken && !hasPersistentGoogleSession) return;
     initialOpenLibraryRef.current = false;
     openLibrary();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [googleIdToken, googleUser]);
+  }, [googleIdToken, googleUser, hasPersistentGoogleSession]);
 
   useEffect(() => {
     const hasPending = libraryEntries.some(entry => entry.webmStatus === "pending");
