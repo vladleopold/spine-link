@@ -58,7 +58,7 @@ async function contentBufferFromGitHubContent(data, token) {
 function contentTypeFor(path) {
   const lowerPath = path.toLowerCase();
   if (lowerPath.endsWith('.json')) return 'application/json; charset=utf-8';
-  if (lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx') || lowerPath.endsWith('.atlas.spine43')) return 'text/plain; charset=utf-8';
+  if (lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx') || lowerPath.endsWith('.atlas.spine43') || lowerPath.endsWith('.atlas.txt.spine43')) return 'text/plain; charset=utf-8';
   if (lowerPath.endsWith('.png')) return 'image/png';
   // Spine Web Player needs an image, not raw BC3/DXT DDS bytes.
   if (lowerPath.endsWith('.dds')) return 'image/png';
@@ -138,7 +138,7 @@ function putMemoryCacheEntry(key, entry) {
 
 function isAtlasPath(path) {
   const lowerPath = path.toLowerCase();
-  return lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx') || lowerPath.endsWith('.atlas.spine43');
+  return lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx') || lowerPath.endsWith('.atlas.spine43') || lowerPath.endsWith('.atlas.txt.spine43');
 }
 
 function isSkeletonJsonPath(path) {
@@ -413,7 +413,7 @@ export default async function handler(request, response) {
   const convertTo43 = spineRuntimeRequest === '4.3';
   const extractUnitySkeleton = spineRuntimeRequest === '4.2' && /\.(?:skel|bytes|json)\.json$/i.test(assetPath);
   const convertedSkeleton = convertTo43 && /\.skel\.json$/i.test(assetPath);
-  const convertedAtlas = convertTo43 && /\.atlas\.spine43$/i.test(assetPath);
+  const convertedAtlas = convertTo43 && /\.atlas(?:\.txt)?\.spine43$/i.test(assetPath);
   const sourcePath = convertedSkeleton || extractUnitySkeleton
     ? assetPath.slice(0, -5)
     : convertedAtlas
