@@ -246,9 +246,11 @@ test('empty animation names are guarded before Spine 4.3 findAnimation viewport 
 test('binary Spine skeletons mislabeled with a .json extension use the binary runtime URL', () => {
   const loader = section(preview, 'let skeletonJson = null;', 'const runtimeAnimationNames = animationNamesFromJson(skeletonJson);');
   assert.match(loader, /let skeletonIsBinary = \/\\.\(\?:skel\|bytes\)\$\/i\.test\(skeleton\.name\)/);
-  assert.match(loader, /const binaryVersion = spineBinaryVersionFromBase64\(await githubFileHead\(settings, skeleton\.path, 256\)\)/);
-  assert.match(loader, /if \(binaryVersion\) \{\s*skeletonVersion = binaryVersion;\s*skeletonIsBinary = true;/);
-  assert.match(preview, /skeletonIsBinary \? \{ skelUrl: skeletonUrl \} : \{ jsonUrl: skeletonUrl \}/);
+  assert.match(loader, /const skeletonHead = await githubFileHead\(settings, skeleton\.path, 256\)/);
+  assert.match(loader, /const unityVersion = spineUnityTextAssetVersionFromBase64\(skeletonHead\)/);
+  assert.match(loader, /const binaryVersion = unityVersion \|\| spineBinaryVersionFromBase64\(skeletonHead\)/);
+  assert.match(loader, /skeletonIsUnityTextAsset = Boolean\(unityVersion\)/);
+  assert.match(preview, /skeletonIsBinary && !needsSpine37BinaryConversion && !needsUnityTextAssetExtraction \? \{ skelUrl: skeletonUrl \} : \{ jsonUrl: skeletonUrl \}/);
 });
 
 test('animation selections made during loading are queued until the Spine Player success callback', () => {
