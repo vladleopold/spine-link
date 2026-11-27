@@ -453,7 +453,7 @@ export default async function handler(request, response) {
     }
 
     if (!githubResponse.ok && (githubResponse.status === 401 || githubResponse.status === 403)) {
-      const rawPath = encodeURIComponent(assetPath).replace(/%2F/g, '/');
+      const rawPath = encodeURIComponent(sourcePath).replace(/%2F/g, '/');
       const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${rawPath}`;
       let rawResponse = await githubRawFetch(rawUrl, token);
       if (!rawResponse.ok && /\\.dds$/i.test(assetPath)) {
@@ -473,11 +473,24 @@ export default async function handler(request, response) {
           if (!alreadyPng) buffer = ddsToPng(buffer);
           response.setHeader('X-Spine-Link-Texture-Transcoded', 'DXT-to-PNG-v1');
         }
+        if (convertedSkeleton) {
+          const converted = await convertLegacySpineAsset(buffer, 'skeleton');
+          buffer = converted.buffer;
+          response.setHeader('X-Spine-Link-Converted', 'spine-3.7-to-4.3-json');
+          response.setHeader('X-Spine-Link-Conversion-Loss-Count', String(converted.lossCount));
+          response.setHeader('X-Spine-Link-Conversion-Max-Impact', converted.maxImpact);
+        } else if (convertedAtlas) {
+          const converted = await convertLegacySpineAsset(buffer, 'atlas');
+          buffer = converted.buffer;
+          response.setHeader('X-Spine-Link-Converted', 'spine-atlas-to-4.3');
+          response.setHeader('X-Spine-Link-Conversion-Loss-Count', String(converted.lossCount));
+          response.setHeader('X-Spine-Link-Conversion-Max-Impact', converted.maxImpact);
+        }
+        if (isSkeletonJsonPath(assetPath)) buffer = sanitizeSkeletonJsonBuffer(buffer);
         if (isAtlasPath(assetPath)) {
           buffer = withAtlasPageCacheBuster(buffer, assetVersion);
           if (String(request.query?.spineRuntime || '') === '3.8') buffer = stripPmaMetadataForSpine38(buffer);
         }
-        if (isSkeletonJsonPath(assetPath)) buffer = sanitizeSkeletonJsonBuffer(buffer);
         if (assetPath === 'library/index.json') buffer = sanitizeLibraryIndex(buffer);
         const etag = rawResponse.headers.get('etag') || '';
         putMemoryCacheEntry(cacheKey, { buffer, etag });
@@ -487,8 +500,8 @@ export default async function handler(request, response) {
     }
 
     if (!githubResponse.ok) {
-      const fallbackPath = await findFallbackGitHubPath({ owner, repo, branch, token, path: assetPath });
-      if (!fallbackPath || fallbackPath === assetPath) return response.status(githubResponse.status).send('Asset not found');
+      const fallbackPath = await findFallbackGitHubPath({ owner, repo, branch, token, path: sourcePath });
+      if (!fallbackPath || fallbackPath === sourcePath) return response.status(githubResponse.status).send('Asset not found');
       const fallbackEncodedPath = encodeURIComponent(fallbackPath).replace(/%2F/g, '/');
       githubResponse = await githubApiFetch(
         `https://api.github.com/repos/${owner}/${repo}/contents/${fallbackEncodedPath}?ref=${encodeURIComponent(branch)}`,
