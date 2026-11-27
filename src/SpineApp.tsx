@@ -5585,7 +5585,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               {googleUser ? (
                 <div className={`auth-user ${isAccountMenuOpen ? "is-account-menu-open" : ""}`}>
                   <span>{googleUser.email}</span>
-                  {googleIdToken ? (
+                  {googleIdToken || hasPersistentGoogleSession ? (
                     <button type="button" onClick={openLibrary}>MY PORTFOLIO</button>
                   ) : (
                     <button type="button" aria-label="Reconnect Google" onClick={() => void openGoogleSignIn()}>RECONNECT</button>
