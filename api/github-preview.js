@@ -3099,7 +3099,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
           thumbnailType: '',
           animations: Array.isArray(item?.animations) ? item.animations.length : 0,
         };
-      });
+      }).filter((item) => item.webmPreview);
       ownerProfile = {
         id: entry.ownerAnonId || entry.publicOwnerId || "",
         visible: true,
