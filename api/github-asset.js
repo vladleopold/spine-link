@@ -411,7 +411,7 @@ export default async function handler(request, response) {
   const assetVersion = typeof request.query?.v === 'string' ? request.query.v : '';
   const spineRuntimeRequest = String(request.query?.spineRuntime || '');
   const convertTo43 = spineRuntimeRequest === '4.3';
-  const extractUnitySkeleton = spineRuntimeRequest === '4.2' && /\.skel\.json$/i.test(assetPath);
+  const extractUnitySkeleton = spineRuntimeRequest === '4.2' && /\.(?:skel|bytes|json)\.json$/i.test(assetPath);
   const convertedSkeleton = convertTo43 && /\.skel\.json$/i.test(assetPath);
   const convertedAtlas = convertTo43 && /\.atlas\.spine43$/i.test(assetPath);
   const sourcePath = convertedSkeleton || extractUnitySkeleton
