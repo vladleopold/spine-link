@@ -10,6 +10,16 @@ test("phone player height is reduced independently of desktop player sizing", ()
   assert.match(source, /#player\s*\{[^}]*min-height:\s*0\s*!important/s);
 });
 
+test("mobile player appears before the animation picker and its first control", () => {
+  const mobile = source.slice(
+    source.indexOf("@media (max-width: 700px)"),
+    source.indexOf("@media (min-width: 1001px)")
+  );
+  assert.match(mobile, /\.player-frame\s*\{[^}]*order:\s*1\s*!important/s);
+  assert.match(mobile, /#sidebar\s*>\s*#animation-card\s*\{\s*order:\s*2\s*!important/s);
+  assert.match(mobile, /#sidebar\s*>\s*\.animation-download-block\s*\{\s*order:\s*3\s*!important/s);
+});
+
 test("desktop owner sidebar shows at most seven other user video works in two columns", () => {
   assert.match(source, /ownerEntries[\s\S]*?item\?\.id[\s\S]*?entry\?\.id/);
   assert.match(source, /library:\s*ownerLibraryItems\.slice\(0,\s*7\)/);
