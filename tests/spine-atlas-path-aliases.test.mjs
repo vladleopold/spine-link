@@ -58,3 +58,22 @@ new/body
 test('leaves atlas text unchanged when no matching folder-qualified paths exist', () => {
   assert.equal(addSpineAtlasPathAliases(atlas, { skins: [] }), atlas);
 });
+
+
+test('disambiguates duplicate basename regions when one skin uses an unqualified path', () => {
+  const duplicateAtlas = `page.png
+  size: 128, 128
+l_bra
+  bounds: 0, 0, 10, 10
+l_bra
+  bounds: 10, 0, 12, 12
+`;
+  const skeleton = { skins: [
+    { name: 'outside-clothes', attachments: { slot: { l_bra: { type: 'region' } } } },
+    { name: 'work-clothes', attachments: { slot: { '01b/l_bra': { type: 'region' } } } },
+  ] };
+  const result = addSpineAtlasPathAliases(duplicateAtlas, skeleton);
+  assert.match(result, /l_bra\n  bounds: 0, 0, 10, 10/);
+  assert.match(result, /01b\/l_bra\n  bounds: 10, 0, 12, 12/);
+  assert.match(result, /__spine_link_atlas_source_0_l_bra/);
+});
