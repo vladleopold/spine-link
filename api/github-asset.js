@@ -414,7 +414,8 @@ export default async function handler(request, response) {
   const sourcePath = convertedSkeleton
     ? assetPath.slice(0, -5)
     : convertedAtlas
-      ? assetPath.slice(0, -7)
+      
+      ? assetPath.slice(0, -8)
       : assetPath;
 
   const encodedPath = encodeURIComponent(sourcePath).replace(/%2F/g, '/');
