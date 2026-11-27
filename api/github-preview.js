@@ -3053,6 +3053,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
       ...(atlasPages.some((page) => /\.dds$/i.test(page)) ? ['dds-png-v1'] : []),
       ...(runtimeVersionOverride === '3.8' || /^3\.8\./.test(skeletonVersion) ? ['spine38-runtime-compat-v2'] : []),
       ...(runtimeVersionOverride === '4.3' ? ['spine37-binary-convert-v1'] : []),
+      ...(skeletonIsUnityTextAsset ? ['unity-textasset-extract-v1'] : []),
     ].filter(Boolean).join('-');
 
     // Version the skeleton JSON/binary as well as atlas pages and textures.
