@@ -2614,6 +2614,18 @@ function disablePlayerMix(player: SpinePlayerInstance | null) {
   if (animationStateData) animationStateData.defaultMix = 0;
 }
 
+function refitSpinePlayerToAnimation(player: SpinePlayerInstance | null, animationName: string) {
+  if (!player || !animationName) return false;
+  try {
+    const runtime = player as unknown as { setViewport?: (name: string) => void };
+    if (typeof runtime.setViewport !== "function") return false;
+    runtime.setViewport(animationName);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function playAnimationWithLoopMode(player: SpinePlayerInstance | null, animationName: string, isLoopEnabled: boolean, isLoopEnabledNow: () => boolean) {
   if (!player || !animationName) return false;
 
@@ -3679,6 +3691,12 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   const playActiveAnimationFromStart = useCallback(() => {
     const animationName = activeAnimationRef.current || preparedSpineRef.current?.defaultAnimation || animationsRef.current[0] || "";
     if (playAnimationWithLoopMode(playerRef.current, animationName, loopEnabledRef.current, () => loopEnabledRef.current)) {
+      // Re-fit after changing clips: the previous clip may have had a very
+      // different world-space size even when the new clip is not clipped.
+      if (refitSpinePlayerToAnimation(playerRef.current, animationName)) {
+        rememberCurrentViewport();
+        applyZoomToPlayer(zoomRef.current, false);
+      }
       setActiveAnimation(animationName);
       setError("");
     } else if (animationName) {
@@ -4107,6 +4125,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
         setAnimations(names);
         setActiveAnimation(playableAnimation ?? initialAnimation ?? "");
         if (playableAnimation) {
+          refitSpinePlayerToAnimation(player, playableAnimation);
           installLoopButton(player, loopEnabledRef.current, toggleLoopEnabled, playActiveAnimationFromStart);
           rememberCurrentViewport();
           applyZoomToPlayer(zoomRef.current, false);
@@ -5399,7 +5418,11 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               setModalActiveAnimation(initial || "");
               setModalIsLoading(false);
               if (initial) {
-                try { player.setAnimation(initial, true); player.play(); } catch {}
+                try {
+                  player.setAnimation(initial, true);
+                  refitSpinePlayerToAnimation(player, initial);
+                  player.play();
+                } catch {}
               }
             },
             error: (_player: SpinePlayerInstance, message: unknown) => {
