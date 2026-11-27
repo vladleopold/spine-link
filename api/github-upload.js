@@ -1328,7 +1328,6 @@ export default async function handler(request, response) {
     const previewHtml = String(body?.previewHtml || '');
     const uploadPath = resolveUploadPath(body?.uploadPath, settings.basePath, String(body?.entry?.id || body?.uploadId || ''));
     const commitPrefix = String(body?.commitPrefix || 'Add Spine preview');
-    const action = String(body?.action || '');
     failedAction = action || 'unknown';
     if (['update-note', 'update-layout', 'update-entry-visibility'].includes(action) && body?.entryId) {
       const collections = await libraryCollectionIndexes(settings);
