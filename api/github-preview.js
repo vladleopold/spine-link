@@ -1155,9 +1155,9 @@ function createHtml(config) {
       /* Supporting panels follow the animation picker at every desktop width. */
       #sidebar > #animation-card { order: 1; }
       #sidebar > .animation-download-block { order: 2; }
-      #sidebar > .video-watch-panel--below-list { order: 3; }
-      #sidebar > .proof-card { order: 4; }
-      #sidebar > #owner-library { order: 5; }
+      #sidebar > #owner-library { order: 3; }
+      #sidebar > .video-watch-panel--below-list { order: 4; }
+      #sidebar > .proof-card { order: 5; }
       #sidebar > #set-card, #sidebar > .note-card { order: 6; }
       .animation-card.is-open .animation-menu { max-height: 240px; }
 
@@ -1291,7 +1291,8 @@ function createHtml(config) {
       /* auto-fill keeps the columns at their intended width; auto-fit let a
          short list stretch one card across the whole panel. The fixed height
          keeps every thumbnail a readable rectangle instead of a collapsed sliver. */
-      .owner-library.is-visible { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); grid-auto-rows: 108px; align-items: stretch; align-content: start; }
+      .owner-library.is-visible { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 108px; align-items: stretch; align-content: start; }
+      .owner-library-title { grid-column: 1 / -1; color: rgba(237,245,255,.72); font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
       .owner-library a { position: relative; display: block; overflow: hidden; height: 108px; min-height: 108px; border: 1px solid rgba(255,255,255,.09); border-radius: 8px; color: inherit; text-decoration: none; background: rgba(255,255,255,.045); isolation: isolate; }
       .owner-library a::after { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(rgba(0,0,0,.18), rgba(0,0,0,.18) 45%, rgba(8,10,12,.82)); pointer-events: none; }
       .owner-library a:hover { border-color: rgba(179,255,64,.55); background: rgba(179,255,64,.08); transform: translateY(-2px); }
@@ -1421,9 +1422,9 @@ function createHtml(config) {
       .dl-status { display: none !important; }
       #sidebar > #animation-card { order: 1 !important; }
       #sidebar > .animation-download-block { order: 2 !important; }
-      #sidebar > .video-watch-panel--below-list { order: 3 !important; }
-      #sidebar > .proof-card { order: 4 !important; }
-      #sidebar > #owner-library { order: 5 !important; }
+      #sidebar > #owner-library { order: 3 !important; }
+      #sidebar > .video-watch-panel--below-list { order: 4 !important; }
+      #sidebar > .proof-card { order: 5 !important; }
       #sidebar > #set-card, #sidebar > .note-card { order: 6 !important; }
       .video-watch-panel--below-list { display: grid; gap: 8px; padding: 10px; border: 1px solid rgba(255,185,214,.28); border-radius: 8px; background: #020304; }
       .video-watch-panel--below-list video { display: block; width: 100%; max-height: 56svh; object-fit: contain; background: #000; }
@@ -1439,18 +1440,37 @@ function createHtml(config) {
         #sidebar { display: flex !important; flex-direction: column; order: 2 !important; width: 100%; max-height: none !important; height: auto !important; overflow: visible !important; gap: 12px; margin: 0; padding: 0; }
         #sidebar > #animation-card { order: 1 !important; margin: 0; }
         #sidebar > .animation-download-block { order: 2 !important; margin: 0; }
-        #sidebar > .video-watch-panel--below-list { order: 3 !important; margin: 0; }
-        #sidebar > .proof-card { order: 4 !important; margin: 0; }
-        #sidebar > #owner-library { order: 5 !important; margin: 0; }
+        #sidebar > #owner-library { order: 3 !important; margin: 0; }
+        #sidebar > .video-watch-panel--below-list { order: 4 !important; margin: 0; }
+        #sidebar > .proof-card { order: 5 !important; margin: 0; }
         #sidebar > #set-card, #sidebar > .note-card { order: 6 !important; margin: 0; }
         .animation-menu, .animation-card.is-open .animation-menu { max-height: none !important; height: auto !important; overflow: visible !important; }
         .animation-menu button, #animation-menu button { min-height: 40px; }
         .video-watch-panel--below-list video { max-height: 60svh; }
+        .owner-library { display: none !important; }
         .owner-library.is-visible { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 100px; }
         .owner-library a { height: 100px; min-height: 100px; }
       }
       /* The animation picker grows with its content but scrolls before exceeding
          the player. Following sidebar cards remain in normal document flow. */
+      /* Phone-only viewport contract: leave the first animation control visible below the player. */
+      @media (max-width: 700px) {
+        .player-frame {
+          height: clamp(220px, calc(100svh - 360px), 54svh) !important;
+          min-height: 220px !important;
+          max-height: 54svh !important;
+        }
+        #player {
+          width: 100% !important;
+          height: 100% !important;
+          min-height: 0 !important;
+          max-height: 100% !important;
+        }
+        #sidebar > #animation-card { order: 1 !important; margin: 0; }
+        #sidebar > .animation-download-block { order: 2 !important; margin: 0; }
+        #sidebar > .preview-video-card { order: 5 !important; }
+        #sidebar > .owner-library { display: none !important; }
+      }
       @media (min-width: 1001px) {
         #animation-card.is-open #animation-menu {
           height: auto !important;
@@ -1800,7 +1820,13 @@ const pinchDistance = { value: null };
           ownerProfile.onclick = () => { window.location.href = owner.url; };
           ownerProfile.title = "Open public library";
         }
-        const visibleItems = items.length > 8 ? items.slice(0, 7) : items.slice(0, 8);
+        if (items.length) {
+          const heading = document.createElement("div");
+          heading.className = "owner-library-title";
+          heading.textContent = "Other animations by this user";
+          ownerLibrary.appendChild(heading);
+        }
+        const visibleItems = items.slice(0, 7);
         visibleItems.forEach((item) => {
           const link = document.createElement("a");
           link.href = item.url;
@@ -1829,7 +1855,7 @@ const pinchDistance = { value: null };
           link.append(thumb, text);
           ownerLibrary.appendChild(link);
         });
-        if (items.length > 8 && owner.url) {
+        if (items.length > 7 && owner.url) {
           const more = document.createElement("a");
           more.className = "owner-library-more";
           more.href = owner.url;
@@ -1841,104 +1867,49 @@ const pinchDistance = { value: null };
         }
       }
       function installOwnerLibraryChaos() {
+        const videos = Array.from(document.querySelectorAll("video.owner-thumb"));
         const visibleVideos = new Set();
-        const manualVideos = new WeakSet();
-        const hoverTimers = new WeakMap();
-        let chaosTimer = 0;
-        function clearHoverTimer(video) {
-          const timer = hoverTimers.get(video);
-          if (timer) window.clearTimeout(timer);
-          hoverTimers.delete(video);
-        }
-        function startHoverLoop(video) {
-          manualVideos.add(video);
-          clearHoverTimer(video);
-          video.onended = () => {
-            const timer = window.setTimeout(() => {
-              if (!manualVideos.has(video)) return;
-              try { video.currentTime = 0; } catch {}
-              playOwnerThumb(video);
-            }, 1000);
-            hoverTimers.set(video, timer);
-          };
-          playOwnerThumb(video);
-        }
-        function stopHoverLoop(video) {
-          manualVideos.delete(video);
-          clearHoverTimer(video);
-          stopOwnerThumb(video);
-        }
-        function scheduleChaos() {
-          window.clearTimeout(chaosTimer);
-          chaosTimer = window.setTimeout(runChaos, 800 + Math.random() * 2000);
-        }
-        function randomSample(items, count) {
-          return items
-            .map((item) => ({ item, sort: Math.random() }))
-            .sort((a, b) => a.sort - b.sort)
-            .slice(0, count)
-            .map((entry) => entry.item);
-        }
-        function runChaos() {
-          const videos = Array.from(visibleVideos).filter((video) => video.isConnected && (video.dataset.videoSrc || video.getAttribute("src")));
-          if (!videos.length) {
-            scheduleChaos();
+        const playVisibleVideos = () => {
+          if (document.hidden) {
+            visibleVideos.forEach(stopOwnerThumb);
             return;
           }
-          const activeLimit = Math.min(4, Math.max(2, Math.ceil(videos.length * 0.35)));
-          randomSample(videos.filter((video) => !video.paused && !manualVideos.has(video)), videos.length).slice(activeLimit).forEach(stopOwnerThumb);
-          randomSample(videos.filter((video) => video.paused && !manualVideos.has(video)), activeLimit).forEach((video) => {
-            if (Math.random() < 0.92) {
-              playOwnerThumb(video);
-              window.setTimeout(() => {
-                if (!manualVideos.has(video) && visibleVideos.has(video) && Math.random() < 0.7) stopOwnerThumb(video);
-              }, 1200 + Math.random() * 3000);
-            }
+          visibleVideos.forEach((video) => {
+            if (video.isConnected) playOwnerThumb(video);
           });
-          videos.forEach((video) => {
-            if (!manualVideos.has(video) && !video.paused && Math.random() < 0.4) stopOwnerThumb(video);
-          });
-          scheduleChaos();
-        }
-        document.querySelectorAll(".owner-library a").forEach((link) => {
-          const video = link.querySelector("video.owner-thumb");
-          if (!video) return;
-          link.addEventListener("pointerenter", () => startHoverLoop(video));
-          link.addEventListener("focusin", () => startHoverLoop(video));
-          link.addEventListener("pointerleave", () => stopHoverLoop(video));
-          link.addEventListener("focusout", () => stopHoverLoop(video));
-        });
+        };
         if ("IntersectionObserver" in window) {
           const observer = new IntersectionObserver((entries) => {
             entries.forEach((entry) => {
-              const video = entry.target.querySelector("video.owner-thumb");
-              if (!video) return;
-              if (entry.isIntersecting && entry.intersectionRatio >= 0.42) {
+              const video = entry.target;
+              if (!(video instanceof HTMLVideoElement)) return;
+              if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
                 visibleVideos.add(video);
+                if (!document.hidden) playOwnerThumb(video);
               } else {
                 visibleVideos.delete(video);
-                if (!manualVideos.has(video)) stopOwnerThumb(video);
+                stopOwnerThumb(video);
               }
             });
-            scheduleChaos();
-          }, { threshold: [0, 0.42, 0.68, 1] });
-          document.querySelectorAll(".owner-library a").forEach((link) => observer.observe(link));
+          }, { threshold: [0, 0.15] });
+          videos.forEach((video) => observer.observe(video));
+          window.addEventListener("pagehide", () => {
+            observer.disconnect();
+            videos.forEach(stopOwnerThumb);
+            visibleVideos.clear();
+          }, { once: true });
         } else {
-          document.querySelectorAll("video.owner-thumb").forEach((video) => visibleVideos.add(video));
+          videos.forEach((video) => {
+            const rect = video.getBoundingClientRect();
+            if (rect.bottom > 0 && rect.top < window.innerHeight) visibleVideos.add(video);
+          });
+          playVisibleVideos();
         }
-        document.addEventListener("visibilitychange", () => {
-          if (document.hidden) {
-            window.clearTimeout(chaosTimer);
-            visibleVideos.forEach((video) => { if (!manualVideos.has(video)) stopOwnerThumb(video); });
-          } else {
-            scheduleChaos();
-          }
-        });
+        document.addEventListener("visibilitychange", playVisibleVideos);
         window.addEventListener("pagehide", () => {
-          window.clearTimeout(chaosTimer);
-          visibleVideos.forEach(stopOwnerThumb);
+          videos.forEach(stopOwnerThumb);
+          visibleVideos.clear();
         }, { once: true });
-        scheduleChaos();
       }
       // Кадр зафиксирован на весь показ: переключение анимации не должно
       // пересчитывать вьюпорт и сбивать центровку.
@@ -3122,7 +3093,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
             const itemEmail = String(item?.ownerEmail || '').toLowerCase();
             const itemAnonId = String(item?.ownerAnonId || '').toLowerCase();
             const sameOwner = (ownerEmail && itemEmail === ownerEmail) || (ownerAnonId && itemAnonId === ownerAnonId);
-            return sameOwner && item?.showOwnerLibrary;
+            return sameOwner && item?.showOwnerLibrary && String(item?.id || '') !== String(entry?.id || '');
           })
         : [];
       ownerEntries.sort(compareLibraryEntries);
@@ -3144,7 +3115,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
           thumbnailType: '',
           animations: Array.isArray(item?.animations) ? item.animations.length : 0,
         };
-      });
+      }).filter((item) => item.webmPreview);
       ownerProfile = {
         id: entry.ownerAnonId || entry.publicOwnerId || "",
         visible: true,
@@ -3152,7 +3123,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
         picture: safePublicImage(entry.ownerPicture || ''),
         subtitle: `${ownerEntries.length} SPINE WORK'S`,
         url: entry.publicOwnerId ? `${origin}/u/${encodeURIComponent(String(entry.publicOwnerId))}` : '',
-        library: ownerLibraryItems.slice(0, 6),
+        library: ownerLibraryItems.slice(0, 7),
         navigation: ownerLibraryItems.map((item) => ({ title: item.title, url: item.url })),
       };
     }
