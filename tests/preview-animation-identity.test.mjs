@@ -243,7 +243,7 @@ test('empty animation names are guarded before Spine 4.3 findAnimation viewport 
   assert.doesNotMatch(measured, /findAnimation\(activeAnimation\.name\)/);
 });
 
-test('binary Spine skeletons mislabeled with a .json extension use the binary runtime URL', () => {
+test('binary and Unity-wrapped skeletons use the matching JSON or binary runtime URL', () => {
   const loader = section(preview, 'let skeletonJson = null;', 'const runtimeAnimationNames = animationNamesFromJson(skeletonJson);');
   assert.match(loader, /let skeletonIsBinary = \/\\.\(\?:skel\|bytes\)\$\/i\.test\(skeleton\.name\)/);
   assert.match(loader, /const skeletonHead = await githubFileHead\(settings, skeleton\.path, 256\)/);
@@ -372,8 +372,8 @@ test('Spine 4.2 and 4.3 versioned JSON URLs use exact immutable asset mappings',
 });
 
 
-test('Spine 4.0-4.2 runtime loader uses exact pinned package versions', () => {
-  assert.match(preview, /pinnedVersions = \{"4\.0":"4\.0\.31","4\.1":"4\.1\.56","4\.2":"4\.2\.120"\}/);
+test('Spine 4.0-4.3 runtime loader uses exact pinned package versions', () => {
+  assert.match(preview, /pinnedVersions = \{"4\.0":"4\.0\.31","4\.1":"4\.1\.56","4\.2":"4\.2\.120","4\.3":"4\.3\.13"\}/);
   assert.match(preview, /cdn\.jsdelivr\.net\/npm\/@esotericsoftware\/spine-player@/);
   assert.doesNotMatch(preview, /unpkg\.com\/@esotericsoftware\/spine-player@\s*\+\s*runtime\s*\+\s*"\.\*\/dist/);
 });
