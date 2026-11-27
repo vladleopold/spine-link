@@ -690,7 +690,7 @@ function lightweightCardHtml(item, index = 0, firstPosterIndex = -1) {
       : `<div class="feed-media-placeholder">Preview pending</div>`;
   const videoAttrs = video && item.poster ? ` data-video-src="${video}"` : '';
   const playerUrlAttr = item.playerUrl ? ` data-player-url="${escapeHtml(item.playerUrl)}"` : '';
-  const previewStatus = item.poster && item.video ? 'poster-pending' : 'blocked-no-webm-poster';
+  const previewStatus = item.poster && item.video ? 'poster-pending' : item.posterFallback ? 'source-texture-static' : 'blocked-no-webm-poster';
   const openLink = item.playerUrl
     ? `<a class="feed-card-link" href="${escapeHtml(item.playerUrl)}" aria-label="Open interactive Spine preview: ${title}"></a>`
     : '';
