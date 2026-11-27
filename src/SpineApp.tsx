@@ -2988,6 +2988,7 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
   }, []);
   const [previewNoteStatus, setPreviewNoteStatus] = useState("");
   const [currentLibraryEntry, setCurrentLibraryEntry] = useState<LibraryEntry | null>(null);
+  const [relatedUserEntries, setRelatedUserEntries] = useState<LibraryEntry[]>([]);
   const [status, setStatus] = useState("Drop Spine export files or a .spine project with images.");
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -4053,6 +4054,29 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
       mountedPlayers.forEach((player) => player.dispose?.());
     };
   }, [extraSpineSets]);
+
+  useEffect(() => {
+    const publicOwnerId = currentLibraryEntry?.publicOwnerId;
+    if (!publicOwnerId) {
+      setRelatedUserEntries([]);
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/github-library?user=${encodeURIComponent(publicOwnerId)}&format=json`, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error(`Related works API ${response.status}`)))
+      .then((payload) => {
+        if (!controller.signal.aborted) {
+          setRelatedUserEntries(Array.isArray(payload?.entries) ? payload.entries : []);
+        }
+      })
+      .catch((error) => {
+        if (error?.name !== "AbortError" && !controller.signal.aborted) setRelatedUserEntries([]);
+      });
+    return () => controller.abort();
+  }, [currentLibraryEntry?.publicOwnerId]);
 
   const initialFilesLoadedRef = useRef(false);
   const editEntryLoadedRef = useRef(false);
@@ -6547,9 +6571,8 @@ export function App({ initialFiles, initialOpenLibrary = false, initialLogin = f
               <section className="related-user-animations" aria-label="Other animations by this user">
                 <div className="animation-download-title">Other animations by this user</div>
                 <div className="related-user-animations-grid">
-                  {libraryEntries
-                    .filter((entry) => entry.id !== currentLibraryEntry.id && entry.publicOwnerId === currentLibraryEntry.publicOwnerId)
-                    .filter((entry) => [entry.webmPreviewMedium, entry.webmPreview, entry.webmPreviewLow].some((url) => ownEntryWebm(url)))
+                  {relatedUserEntries
+                    .filter((entry) => entry.id !== currentLibraryEntry.id)
                     .slice(0, 7)
                     .map((entry) => <RelatedUserAnimationPreview key={entry.id} entry={entry} />)}
                 </div>
