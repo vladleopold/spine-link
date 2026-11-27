@@ -67,9 +67,9 @@ test('archive keeps a public work visible with its own source texture when motio
     assert.equal(htmlRes.code, 200);
     assert.match(String(htmlRes.body), /feed-source-texture/,
       'the server-rendered archive card must display a static texture fallback');
-    assert.match(String(htmlRes.body), /library_02\\/Spine-animation-2026-11-27T04-40-28-926Z\\/20938824\\.png/,
+    assert.ok(String(htmlRes.body).includes('/assets/library_02/Spine-animation-2026-11-27T04-40-28-926Z/20938824.png'),
       'the rendered card must use the same work source texture');
-    assert.doesNotMatch(String(htmlRes.body), /data-video-src="https:\\/\\/spine-link\\.vercel\\.app\\/assets\\/library_02\\/Spine-animation-2026-11-27T04-40-28-926Z\\/20938824\\.png/,
+    assert.doesNotMatch(String(htmlRes.body), /data-video-src=/,
       'a source texture must never be wired as an autoplay video');
   } finally {
     globalThis.fetch = originalFetch;
