@@ -48,9 +48,10 @@ try {
   const response = await page.goto(SITE + '/', {waitUntil:'domcontentloaded'});
   assert.equal(response?.status(),200,'Homepage must load');
   await page.locator('button[aria-label="Sign in"]').waitFor({state:'visible',timeout:20000});
+  const mergeResponse = page.waitForResponse(r => r.url().includes('/api/github-upload') && r.request().postDataJSON()?.action === 'merge-anonymous-account');
   await page.locator('button[aria-label="Sign in"]').click();
   await page.locator('.auth-user').waitFor({state:'visible',timeout:15000});
-  await page.waitForResponse(r => r.url().includes('/api/github-upload') && r.request().postDataJSON()?.action === 'merge-anonymous-account');
+  await mergeResponse;
   assert.equal(await page.locator('.avatar-menu-toggle').isVisible(),true,'Avatar must appear after sign-in');
   const firstSession = await page.evaluate(() => JSON.parse(localStorage.getItem('spine-link-google-session') || 'null'));
   assert.equal(firstSession?.user?.email,'spine-link-test@example.invalid');
