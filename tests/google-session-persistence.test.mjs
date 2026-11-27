@@ -10,6 +10,12 @@ const page = await context.newPage();
 const pageErrors = [];
 let portfolioLoads = 0;
 const sessionCookieHeaders = [];
+const apiActions = [];
+page.on('request', request => {
+  if (!request.url().includes('/api/github-upload')) return;
+  try { apiActions.push(JSON.parse(request.postData() || '{}').action || 'unknown'); }
+  catch { apiActions.push('unparseable'); }
+});
 page.on('pageerror', error => pageErrors.push(String(error)));
 
 await page.addInitScript(() => {
@@ -68,9 +74,14 @@ try {
     session.expiresAt = Date.now() - 1000;
     localStorage.setItem('spine-link-google-session', JSON.stringify(session));
   });
-  const sessionCheck = page.waitForResponse(r => r.url().includes('/api/github-upload') && r.request().postDataJSON()?.action === 'get-session');
   await page.reload({waitUntil:'domcontentloaded'});
-  const sessionCheckResponse = await sessionCheck;
+  await page.waitForTimeout(1500);
+  assert.ok(apiActions.includes('get-session'), 'App did not request its persistent session on reload. API actions: ' + JSON.stringify(apiActions) + '; stored session: ' + await page.evaluate(() => localStorage.getItem('spine-link-google-session')));
+  const sessionCheckResponse = await page.waitForResponse(r => {
+    if (!r.url().includes('/api/github-upload')) return false;
+    try { return JSON.parse(r.request().postData() || '{}').action === 'get-session'; }
+    catch { return false; }
+  }, {timeout:5000});
   const sessionCheckResult = await sessionCheckResponse.json();
   assert.equal(sessionCheckResult.authenticated,true,'Server did not recognize the HttpOnly cookie: ' + JSON.stringify(sessionCookieHeaders));
   await page.locator('.auth-user').waitFor({state:'visible',timeout:15000});
