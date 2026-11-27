@@ -1660,7 +1660,7 @@ const pinchDistance = { value: null };
 
       function loadSpineRuntime(set) {
         const runtime = legacyRuntimeForSet(set);
-        const key = runtime || "4.3.13";
+        const key = runtime || "4.3.26";
         if (!runtimeLoaders.has(key)) {
           runtimeLoaders.set(key, (async () => {
             if (runtime && runtime.startsWith("4.")) {
