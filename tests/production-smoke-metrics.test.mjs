@@ -41,9 +41,9 @@ test("all production preview smoke contexts isolate metrics writes", () => {
   const binarySmoke = readFileSync(new URL("./spine37-binary-preview.e2e.mjs", import.meta.url), "utf8");
 
   assert.match(workflow, /createProductionSmokeMetricsResponse/);
-  assert.match(workflow, /await isolateProductionSmokeMetrics\\(page\\)/);
-  assert.match(workflow, /await isolateProductionSmokeMetrics\\(playbackPage\\)/);
-  assert.match(workflow, /await isolateProductionSmokeMetrics\\(convertedPage\\)/);
+  assert.ok(workflow.includes("await isolateProductionSmokeMetrics(page)"));
+  assert.ok(workflow.includes("await isolateProductionSmokeMetrics(playbackPage)"));
+  assert.ok(workflow.includes("await isolateProductionSmokeMetrics(convertedPage)"));
   assert.match(binarySmoke, /createProductionSmokeMetricsResponse/);
   assert.ok(binarySmoke.includes("page.route('**/api/github-upload'"));
 });
