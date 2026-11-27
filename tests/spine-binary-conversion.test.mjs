@@ -57,3 +57,11 @@ test('rejects malformed or empty conversion output', async () => {
     /empty asset/,
   );
 });
+
+test('loads the packaged Spine converter WebAssembly module in Node', async () => {
+  const { Converter } = await import('spine-converter');
+  const converter = await Converter.load();
+  assert.ok(converter.libraryVersion);
+  assert.equal(typeof converter.detect, 'function');
+  assert.equal(typeof converter.convert, 'function');
+});
