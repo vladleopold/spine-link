@@ -25,3 +25,19 @@ test('does not guess when multiple animations exist without idle', () => {
 test('does not guess when runtime animation discovery returns no tracks', () => {
   assert.equal(choosePreviewAnimation([], ''), '');
 });
+
+test('resolves the Spine-Link automatic animation sentinel to a valid default track', () => {
+  assert.equal(choosePreviewAnimation(['walk', 'Idle', 'hit'], '__SPINE_AUTO__', 'Idle'), 'Idle');
+});
+
+test('uses a valid indexed default before automatic fallback tracks', () => {
+  assert.equal(choosePreviewAnimation(['walk', 'hit'], '__SPINE_AUTO__', 'hit'), 'hit');
+});
+
+test('falls back to the first real runtime track for automatic playback', () => {
+  assert.equal(choosePreviewAnimation(['walk', 'hit'], '__SPINE_AUTO__', 'missing'), 'walk');
+});
+
+test('does not return the automatic sentinel when the skeleton has no tracks', () => {
+  assert.equal(choosePreviewAnimation([], '__SPINE_AUTO__', ''), '');
+});
