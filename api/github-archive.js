@@ -599,6 +599,19 @@ function lightweightAssetUrl(origin, entry, fileName, fallback = '') {
   return fallback;
 }
 
+function sourceTextureFallbackUrl(origin, entry = {}) {
+  const declaredTextures = Array.isArray(entry?.textures) ? entry.textures : [];
+  const declaredFiles = Array.isArray(entry?.files) ? entry.files : [];
+  const candidates = [...declaredTextures, ...declaredFiles.filter(file => /\\.(?:png|jpe?g|webp)$/i.test(String(file || '')))];
+  for (const candidate of candidates) {
+    const path = cleanRepoPath(candidate);
+    if (!path || path.split('/').some(part => part === '..') || !/\\.(?:png|jpe?g|webp)$/i.test(path)) continue;
+    const url = lightweightAssetUrl(origin, entry, path);
+    if (url) return url;
+  }
+  return '';
+}
+
 function archiveFeedEntry(origin, entry, metrics, preferredQuality = 'medium') {
   const id = String(entry?.id || '').trim();
   const hasPreviewAnimation = (typeof entry?.previewAnimation === 'string' && entry.previewAnimation.trim().length > 0) ||
@@ -647,6 +660,8 @@ function archiveFeedEntry(origin, entry, metrics, preferredQuality = 'medium') {
     playerUrl: previewUrl(entry),
     archiveUrl: archiveItemUrl(entry),
     poster: selected?.poster || '',
+    // Static source texture fallback; never used to unlock video playback.
+    posterFallback: selected?.poster ? '' : sourceTextureFallbackUrl(origin, entry),
     video: selected?.video || '',
     quality: selected?.quality || '',
     width: positiveInteger(entry?.previewWidth),
@@ -667,9 +682,12 @@ function lightweightCardHtml(item, index = 0, firstPosterIndex = -1) {
   const posterOnError = `onerror="const c=this.closest('.feed-card');if(c){c.dataset.previewStatus='blocked-poster-load-failed';delete c.dataset.videoSrc;}this.remove();"`;
   // Never mix assets from different works: the preview poster and WebM must be
   // the matching pair selected by archiveFeedEntry.
+  const staticTexture = escapeHtml(item.posterFallback);
   const media = item.poster && item.video
     ? `<img src="${poster}" ${posterOnError} alt="${title} Spine animation preview" width="${item.width || 480}" height="${item.height || 480}" loading="${eagerPoster ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${eagerPoster ? 'high' : 'low'}" />`
-    : '';
+    : item.posterFallback
+      ? `<img class="feed-source-texture" src="${staticTexture}" alt="${title} uploaded source texture (static preview)" loading="${eagerPoster ? 'eager' : 'lazy'}" decoding="async" onerror="this.remove();" />`
+      : `<div class="feed-media-placeholder">Preview pending</div>`;
   const videoAttrs = video && item.poster ? ` data-video-src="${video}"` : '';
   const playerUrlAttr = item.playerUrl ? ` data-player-url="${escapeHtml(item.playerUrl)}"` : '';
   const previewStatus = item.poster && item.video ? 'poster-pending' : 'blocked-no-webm-poster';
@@ -1600,7 +1618,7 @@ function archiveHtml({ origin, entries, metrics }) {
     <script type="application/ld+json">${jsonScript(structuredData)}</script>
     <style>
       *{box-sizing:border-box}html{color-scheme:dark;background:#07090c;scroll-behavior:smooth}body{margin:0;color:#f4f7fa;background:radial-gradient(ellipse at 50% -18%,rgba(50,67,82,.32),transparent 48%),#07090c;font:14px/1.45 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit}.shell{width:min(100%,1480px);margin:auto;padding:clamp(14px,2.4vw,32px)}.top{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0 16px;background:rgba(7,9,12,.9);backdrop-filter:blur(18px);border-bottom:1px solid rgba(255,255,255,.07)}.logo{font-size:20px;font-weight:950;letter-spacing:.14em;text-decoration:none}.logo b{color:#ff6a2a}.create{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 17px;border:1px solid rgba(154,220,69,.7);border-radius:999px;color:#e4ffc0;background:rgba(154,220,69,.08);text-decoration:none;font-weight:850;transition:background .18s,border-color .18s,transform .18s}.create:hover{background:rgba(154,220,69,.16);border-color:#b7f45d;transform:translateY(-1px)}.intro{padding:clamp(28px,5vw,66px) 0 26px}.intro h1{max-width:900px;margin:0;font-size:clamp(38px,7vw,82px);line-height:.92;letter-spacing:-.065em}.intro p{max-width:760px;margin:18px 0 0;color:#a6b0bb;font-size:clamp(14px,1.4vw,17px);line-height:1.65}.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}.legend span{padding:7px 11px;border:1px solid rgba(255,255,255,.1);border-radius:999px;color:#c4cdd6;background:rgba(255,255,255,.035);font-size:12px}.feed{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(12px,1.5vw,20px);align-items:start}.feed-card{position:relative;isolation:isolate;content-visibility:auto;contain-intrinsic-size:390px;overflow:hidden;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:linear-gradient(155deg,#151b22,#0c1015 72%);box-shadow:0 12px 34px rgba(0,0,0,.22);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}.feed-card:nth-child(-n+4){content-visibility:visible}
-      .feed-card:hover{transform:translateY(-4px);border-color:rgba(140,199,255,.42);box-shadow:0 22px 52px rgba(0,0,0,.38)}.feed-card:focus-within{outline:2px solid #9adc45;outline-offset:3px}.feed-card-link{position:absolute;inset:0;z-index:3;border-radius:inherit}.feed-card-link:focus-visible{outline:3px solid #b7f45d;outline-offset:-4px}.feed-media{position:relative;display:grid;width:100%;aspect-ratio:var(--media-ratio);min-height:190px;overflow:hidden;color:#fff;background:radial-gradient(ellipse at center,rgba(42,53,64,.5),#05070a 72%)}.feed-media:after{position:absolute;inset:0;content:"";pointer-events:none;background:linear-gradient(180deg,transparent 65%,rgba(0,0,0,.16))}.feed-media img,.feed-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:transparent}.feed-media video{z-index:1;opacity:0;pointer-events:none;transition:opacity .2s}.feed-media video.is-playing{opacity:1}.feed-info{position:relative;z-index:1;display:grid;gap:10px;padding:14px 15px 16px}.feed-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}.feed-title{overflow:hidden;color:#f5f8fb;font-size:15px;font-weight:850;letter-spacing:-.015em;text-overflow:ellipsis;white-space:nowrap}.feed-mode{flex:none;padding:4px 8px;border:1px solid rgba(154,220,69,.22);border-radius:999px;color:#b7ec70;background:rgba(154,220,69,.07);font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}.feed-meta{display:flex;gap:9px;overflow:hidden;color:#8e9aa6;font-size:11px;white-space:nowrap}.feed-meta span{flex:none}.sentinel{min-height:90px;display:grid;place-items:center;color:#7d8790}.footer{padding:32px 0;color:#737e87;font-size:12px;text-align:center}@media(max-width:980px){.feed{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.shell{padding:8px 10px}.top{padding-top:max(8px,env(safe-area-inset-top))}.feed{grid-template-columns:1fr;gap:12px}.feed-card{contain-intrinsic-size:440px}.feed-media{min-height:230px}.intro{padding-top:30px}.feed-meta{gap:8px}.feed-info{padding:13px}.feed-title{font-size:14px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.feed-card,.create{transition:none}}
+      .feed-card:hover{transform:translateY(-4px);border-color:rgba(140,199,255,.42);box-shadow:0 22px 52px rgba(0,0,0,.38)}.feed-card:focus-within{outline:2px solid #9adc45;outline-offset:3px}.feed-card-link{position:absolute;inset:0;z-index:3;border-radius:inherit}.feed-card-link:focus-visible{outline:3px solid #b7f45d;outline-offset:-4px}.feed-media{position:relative;display:grid;width:100%;aspect-ratio:var(--media-ratio);min-height:190px;overflow:hidden;color:#fff;background:radial-gradient(ellipse at center,rgba(42,53,64,.5),#05070a 72%)}.feed-media:after{position:absolute;inset:0;content:"";pointer-events:none;background:linear-gradient(180deg,transparent 65%,rgba(0,0,0,.16))}.feed-media img,.feed-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:transparent}.feed-media .feed-source-texture{opacity:.88}.feed-media-placeholder{position:absolute;inset:0;display:grid;place-items:center;color:#8e9aa6;font-size:12px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;background:radial-gradient(ellipse at center,rgba(42,53,64,.42),#05070a 72%)}.feed-media video{z-index:1;opacity:0;pointer-events:none;transition:opacity .2s}.feed-media video.is-playing{opacity:1}.feed-info{position:relative;z-index:1;display:grid;gap:10px;padding:14px 15px 16px}.feed-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}.feed-title{overflow:hidden;color:#f5f8fb;font-size:15px;font-weight:850;letter-spacing:-.015em;text-overflow:ellipsis;white-space:nowrap}.feed-mode{flex:none;padding:4px 8px;border:1px solid rgba(154,220,69,.22);border-radius:999px;color:#b7ec70;background:rgba(154,220,69,.07);font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}.feed-meta{display:flex;gap:9px;overflow:hidden;color:#8e9aa6;font-size:11px;white-space:nowrap}.feed-meta span{flex:none}.sentinel{min-height:90px;display:grid;place-items:center;color:#7d8790}.footer{padding:32px 0;color:#737e87;font-size:12px;text-align:center}@media(max-width:980px){.feed{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.shell{padding:8px 10px}.top{padding-top:max(8px,env(safe-area-inset-top))}.feed{grid-template-columns:1fr;gap:12px}.feed-card{contain-intrinsic-size:440px}.feed-media{min-height:230px}.intro{padding-top:30px}.feed-meta{gap:8px}.feed-info{padding:13px}.feed-title{font-size:14px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.feed-card,.create{transition:none}}
     </style>
   </head>
   <body>
@@ -1737,7 +1755,7 @@ function archiveHtml({ origin, entries, metrics }) {
         function attach(card){
           if(observer)observer.observe(card);
           const poster=card.querySelector('img');
-          if(poster){
+          if(poster&&card.dataset.videoSrc){
             const settle=()=>{
               if(!poster.complete)return;
               const url=poster.currentSrc||poster.src;
@@ -1774,15 +1792,17 @@ function archiveHtml({ origin, entries, metrics }) {
           const card=document.createElement('article');
           card.className='feed-card';
           card.dataset.entryId=item.id;
-          card.dataset.previewStatus=item.poster&&item.video?'poster-pending':'blocked-no-webm-poster';
+          card.dataset.previewStatus=item.poster&&item.video?'poster-pending':item.posterFallback?'source-texture-static':'blocked-no-webm-poster';
           if(item.poster&&item.video)card.dataset.videoSrc=item.video;
           card.style.setProperty('--media-ratio',item.width&&item.height
             ?Math.min(1.8,Math.max(.62,item.width/item.height)):1);
           const media=document.createElement('div');media.className='feed-media';
-          if(item.poster&&item.video){
+          if(item.poster&&item.video||item.posterFallback){
             const image=document.createElement('img');
-            image.src=item.poster;
-            image.alt=item.title+' Spine animation preview';
+            image.src=item.poster||item.posterFallback;
+            image.alt=item.poster&&item.video
+              ? item.title+' Spine animation preview'
+              : item.title+' uploaded source texture (static preview)';
             image.loading=index<6?'eager':'lazy';
             image.fetchPriority=index<4?'high':'low';
             image.decoding='async';
@@ -1798,9 +1818,14 @@ function archiveHtml({ origin, entries, metrics }) {
               }
               queueUpdate();
             };
-            image.addEventListener('load',settlePoster);
-            image.addEventListener('error',settlePoster);
-            if(image.complete)settlePoster();
+            if(item.poster&&item.video){
+              image.addEventListener('load',settlePoster);
+              image.addEventListener('error',settlePoster);
+              if(image.complete)settlePoster();
+            }else{
+              image.className='feed-source-texture';
+              image.addEventListener('error',()=>image.remove(),{once:true});
+            }
             media.append(image);
           }
           const info=document.createElement('div');info.className='feed-info';
