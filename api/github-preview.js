@@ -3122,7 +3122,8 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
         : null;
     }
     note = String(entry?.note || '').trim();
-    if (entry?.showOwnerLibrary) {
+    // Match the public library's default: missing metadata means visible; only an explicit false opts out.
+    if (entry?.showOwnerLibrary !== false) {
       const ownerEmail = String(entry?.ownerEmail || '').toLowerCase();
       const ownerAnonId = String(entry?.ownerAnonId || '').toLowerCase();
       const ownerEntries = Array.isArray(entries)
@@ -3130,7 +3131,7 @@ async function createDynamicPreview(settings, uploadPath, origin, knownEntryReco
             const itemEmail = String(item?.ownerEmail || '').toLowerCase();
             const itemAnonId = String(item?.ownerAnonId || '').toLowerCase();
             const sameOwner = (ownerEmail && itemEmail === ownerEmail) || (ownerAnonId && itemAnonId === ownerAnonId);
-            return sameOwner && item?.showOwnerLibrary && String(item?.id || '') !== String(entry?.id || '');
+            return sameOwner && item?.showOwnerLibrary !== false && String(item?.id || '') !== String(entry?.id || '');
           })
         : [];
       ownerEntries.sort(compareLibraryEntries);
