@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { runtimeVersionOverrideForSpineSkeleton } from '../lib/spine-runtime-file-selection.js';
 import { sanitizeSkeletonJson, sanitizeSkeletonJsonText } from '../lib/spine-json-sanitize.js';
 
-test('rejects incompatible Spine 3.7 binary skeletons instead of routing them to 3.8', () => {
-  assert.equal(runtimeVersionOverrideForSpineSkeleton('3.7.94', true), '');
+test('routes Spine 3.7 binary skeletons through the 4.3 conversion runtime', () => {
+  assert.equal(runtimeVersionOverrideForSpineSkeleton('3.7.94', true), '4.3');
 });
 
 test('keeps Spine 3.7 JSON skeletons on their native 3.7 player', () => {

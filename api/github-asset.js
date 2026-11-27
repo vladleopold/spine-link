@@ -5,6 +5,8 @@ const defaultBranch = 'main';
 import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-headers.js';
 import { ddsToPng } from '../lib/dds-png.js';
 import { canReadPublicSpineWithoutToken } from '../lib/github-read-access.js';
+import { convertLegacySpineAsset } from '../lib/spine-binary-conversion.js';
+import { extractSpineJsonFromUnityTextAsset } from '../lib/spine-unity-textasset.js';
 
 const memoryCache = globalThis.__spineLinkAssetMemoryCache || {
   entries: new Map(),
@@ -56,7 +58,7 @@ async function contentBufferFromGitHubContent(data, token) {
 function contentTypeFor(path) {
   const lowerPath = path.toLowerCase();
   if (lowerPath.endsWith('.json')) return 'application/json; charset=utf-8';
-  if (lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx')) return 'text/plain; charset=utf-8';
+  if (lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx') || lowerPath.endsWith('.atlas.spine43') || lowerPath.endsWith('.atlas.txt.spine43')) return 'text/plain; charset=utf-8';
   if (lowerPath.endsWith('.png')) return 'image/png';
   // Spine Web Player needs an image, not raw BC3/DXT DDS bytes.
   if (lowerPath.endsWith('.dds')) return 'image/png';
@@ -136,7 +138,7 @@ function putMemoryCacheEntry(key, entry) {
 
 function isAtlasPath(path) {
   const lowerPath = path.toLowerCase();
-  return lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx');
+  return lowerPath.endsWith('.atlas') || lowerPath.endsWith('.atlas.txt') || lowerPath.endsWith('.atlas.docx') || lowerPath.endsWith('.atlas.spine43') || lowerPath.endsWith('.atlas.txt.spine43');
 }
 
 function isSkeletonJsonPath(path) {
@@ -407,8 +409,18 @@ export default async function handler(request, response) {
   // to a different tier or substitute another image.
   const assetPath = path;
   const assetVersion = typeof request.query?.v === 'string' ? request.query.v : '';
+  const spineRuntimeRequest = String(request.query?.spineRuntime || '');
+  const convertTo43 = spineRuntimeRequest === '4.3';
+  const extractUnitySkeleton = spineRuntimeRequest === '4.2' && /\.(?:skel|bytes|json)\.json$/i.test(assetPath);
+  const convertedSkeleton = convertTo43 && /\.skel\.json$/i.test(assetPath);
+  const convertedAtlas = convertTo43 && /\.atlas(?:\.txt)?\.spine43$/i.test(assetPath);
+  const sourcePath = convertedSkeleton || extractUnitySkeleton
+    ? assetPath.slice(0, -5)
+    : convertedAtlas
+      ? assetPath.slice(0, -8)
+      : assetPath;
 
-  const encodedPath = encodeURIComponent(assetPath).replace(/%2F/g, '/');
+  const encodedPath = encodeURIComponent(sourcePath).replace(/%2F/g, '/');
   const cacheKey = memoryCacheKey({ owner, repo, branch, path: assetPath, assetVersion });
   const cachedAsset = getMemoryCacheEntry(cacheKey);
   if (cachedAsset) {
@@ -444,7 +456,7 @@ export default async function handler(request, response) {
     }
 
     if (!githubResponse.ok && (githubResponse.status === 401 || githubResponse.status === 403)) {
-      const rawPath = encodeURIComponent(assetPath).replace(/%2F/g, '/');
+      const rawPath = encodeURIComponent(sourcePath).replace(/%2F/g, '/');
       const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(branch)}/${rawPath}`;
       let rawResponse = await githubRawFetch(rawUrl, token);
       if (!rawResponse.ok && /\\.dds$/i.test(assetPath)) {
@@ -464,11 +476,27 @@ export default async function handler(request, response) {
           if (!alreadyPng) buffer = ddsToPng(buffer);
           response.setHeader('X-Spine-Link-Texture-Transcoded', 'DXT-to-PNG-v1');
         }
+        if (extractUnitySkeleton) {
+          buffer = Buffer.from(extractSpineJsonFromUnityTextAsset(buffer), 'utf8');
+          response.setHeader('X-Spine-Link-Converted', 'unity-textasset-to-spine-json');
+        } else if (convertedSkeleton) {
+          const converted = await convertLegacySpineAsset(buffer, 'skeleton');
+          buffer = converted.buffer;
+          response.setHeader('X-Spine-Link-Converted', 'spine-3.7-to-4.3-json');
+          response.setHeader('X-Spine-Link-Conversion-Loss-Count', String(converted.lossCount));
+          response.setHeader('X-Spine-Link-Conversion-Max-Impact', converted.maxImpact);
+        } else if (convertedAtlas) {
+          const converted = await convertLegacySpineAsset(buffer, 'atlas');
+          buffer = converted.buffer;
+          response.setHeader('X-Spine-Link-Converted', 'spine-atlas-to-4.3');
+          response.setHeader('X-Spine-Link-Conversion-Loss-Count', String(converted.lossCount));
+          response.setHeader('X-Spine-Link-Conversion-Max-Impact', converted.maxImpact);
+        }
+        if (isSkeletonJsonPath(assetPath)) buffer = sanitizeSkeletonJsonBuffer(buffer);
         if (isAtlasPath(assetPath)) {
           buffer = withAtlasPageCacheBuster(buffer, assetVersion);
           if (String(request.query?.spineRuntime || '') === '3.8') buffer = stripPmaMetadataForSpine38(buffer);
         }
-        if (isSkeletonJsonPath(assetPath)) buffer = sanitizeSkeletonJsonBuffer(buffer);
         if (assetPath === 'library/index.json') buffer = sanitizeLibraryIndex(buffer);
         const etag = rawResponse.headers.get('etag') || '';
         putMemoryCacheEntry(cacheKey, { buffer, etag });
@@ -478,8 +506,8 @@ export default async function handler(request, response) {
     }
 
     if (!githubResponse.ok) {
-      const fallbackPath = await findFallbackGitHubPath({ owner, repo, branch, token, path: assetPath });
-      if (!fallbackPath || fallbackPath === assetPath) return response.status(githubResponse.status).send('Asset not found');
+      const fallbackPath = await findFallbackGitHubPath({ owner, repo, branch, token, path: sourcePath });
+      if (!fallbackPath || fallbackPath === sourcePath) return response.status(githubResponse.status).send('Asset not found');
       const fallbackEncodedPath = encodeURIComponent(fallbackPath).replace(/%2F/g, '/');
       githubResponse = await githubApiFetch(
         `https://api.github.com/repos/${owner}/${repo}/contents/${fallbackEncodedPath}?ref=${encodeURIComponent(branch)}`,
@@ -494,12 +522,30 @@ export default async function handler(request, response) {
       const earlyResponse = setAssetResponseHeaders(request, response, { path: assetPath, assetVersion, etag });
       if (earlyResponse) return earlyResponse;
     }
-    const headResponse = sendAssetHeadFromMetadata(request, response, { path: assetPath, assetVersion, data, etag });
-    if (headResponse) return headResponse;
-    const rangeResponse = await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag });
-    if (rangeResponse) return rangeResponse;
+    if (!convertedSkeleton && !convertedAtlas && !extractUnitySkeleton) {
+      const headResponse = sendAssetHeadFromMetadata(request, response, { path: assetPath, assetVersion, data, etag });
+      if (headResponse) return headResponse;
+      const rangeResponse = await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag });
+      if (rangeResponse) return rangeResponse;
+    }
     let buffer = await contentBufferFromGitHubContent(data, token);
     if (!buffer.length) return response.status(404).send('Asset is empty');
+    if (extractUnitySkeleton) {
+      buffer = Buffer.from(extractSpineJsonFromUnityTextAsset(buffer), 'utf8');
+      response.setHeader('X-Spine-Link-Converted', 'unity-textasset-to-spine-json');
+    } else if (convertedSkeleton) {
+      const converted = await convertLegacySpineAsset(buffer, 'skeleton');
+      buffer = converted.buffer;
+      response.setHeader('X-Spine-Link-Converted', 'spine-3.7-to-4.3-json');
+      response.setHeader('X-Spine-Link-Conversion-Loss-Count', String(converted.lossCount));
+      response.setHeader('X-Spine-Link-Conversion-Max-Impact', converted.maxImpact);
+    } else if (convertedAtlas) {
+      const converted = await convertLegacySpineAsset(buffer, 'atlas');
+      buffer = converted.buffer;
+      response.setHeader('X-Spine-Link-Converted', 'spine-atlas-to-4.3');
+      response.setHeader('X-Spine-Link-Conversion-Loss-Count', String(converted.lossCount));
+      response.setHeader('X-Spine-Link-Conversion-Max-Impact', converted.maxImpact);
+    }
     if (isSkeletonJsonPath(assetPath)) buffer = sanitizeSkeletonJsonBuffer(buffer);
     if (/\.dds$/i.test(assetPath)) {
       try {

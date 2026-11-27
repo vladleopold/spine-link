@@ -21,3 +21,11 @@ test('prefers matching JSON skeleton over same-basename binary when Spine player
  const files=[{name:'hero.skel'},{name:'hero.json'},{name:'hero.atlas'},{name:'hero.png'}];
  assert.equal(select(files,'hero.atlas')?.name,'hero.json');
 });
+
+import {runtimeVersionOverrideForSpineSkeleton as runtimeOverride} from '../lib/spine-runtime-file-selection.js';
+
+test('routes Spine 3.7 binary exports through the 4.3 conversion pipeline', () => {
+ assert.equal(runtimeOverride('3.7.94', true), '4.3');
+ assert.equal(runtimeOverride('3.7.94', false), '');
+ assert.equal(runtimeOverride('3.8.99', true), '');
+});
