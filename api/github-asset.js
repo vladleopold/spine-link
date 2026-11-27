@@ -522,7 +522,7 @@ export default async function handler(request, response) {
       const earlyResponse = setAssetResponseHeaders(request, response, { path: assetPath, assetVersion, etag });
       if (earlyResponse) return earlyResponse;
     }
-    if (!convertedSkeleton && !convertedAtlas) {
+    if (!convertedSkeleton && !convertedAtlas && !extractUnitySkeleton) {
       const headResponse = sendAssetHeadFromMetadata(request, response, { path: assetPath, assetVersion, data, etag });
       if (headResponse) return headResponse;
       const rangeResponse = await sendGitHubRangeAsset(request, response, { path: assetPath, assetVersion, data, token, etag });
