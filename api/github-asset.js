@@ -6,6 +6,7 @@ import { cacheProfiles, setCacheHeaders, setNoStoreHeaders } from '../lib/cache-
 import { ddsToPng } from '../lib/dds-png.js';
 import { canReadPublicSpineWithoutToken } from '../lib/github-read-access.js';
 import { convertLegacySpineAsset } from '../lib/spine-binary-conversion.js';
+import { extractSpineJsonFromUnityTextAsset } from '../lib/spine-unity-textasset.js';
 
 const memoryCache = globalThis.__spineLinkAssetMemoryCache || {
   entries: new Map(),
@@ -408,13 +409,14 @@ export default async function handler(request, response) {
   // to a different tier or substitute another image.
   const assetPath = path;
   const assetVersion = typeof request.query?.v === 'string' ? request.query.v : '';
-  const convertTo43 = String(request.query?.spineRuntime || '') === '4.3';
+  const spineRuntimeRequest = String(request.query?.spineRuntime || '');
+  const convertTo43 = spineRuntimeRequest === '4.3';
+  const extractUnitySkeleton = spineRuntimeRequest === '4.2' && /\.skel\.json$/i.test(assetPath);
   const convertedSkeleton = convertTo43 && /\.skel\.json$/i.test(assetPath);
   const convertedAtlas = convertTo43 && /\.atlas\.spine43$/i.test(assetPath);
-  const sourcePath = convertedSkeleton
+  const sourcePath = convertedSkeleton || extractUnitySkeleton
     ? assetPath.slice(0, -5)
     : convertedAtlas
-      
       ? assetPath.slice(0, -8)
       : assetPath;
 
@@ -474,7 +476,10 @@ export default async function handler(request, response) {
           if (!alreadyPng) buffer = ddsToPng(buffer);
           response.setHeader('X-Spine-Link-Texture-Transcoded', 'DXT-to-PNG-v1');
         }
-        if (convertedSkeleton) {
+        if (extractUnitySkeleton) {
+          buffer = Buffer.from(extractSpineJsonFromUnityTextAsset(buffer), 'utf8');
+          response.setHeader('X-Spine-Link-Converted', 'unity-textasset-to-spine-json');
+        } else if (convertedSkeleton) {
           const converted = await convertLegacySpineAsset(buffer, 'skeleton');
           buffer = converted.buffer;
           response.setHeader('X-Spine-Link-Converted', 'spine-3.7-to-4.3-json');
@@ -525,7 +530,10 @@ export default async function handler(request, response) {
     }
     let buffer = await contentBufferFromGitHubContent(data, token);
     if (!buffer.length) return response.status(404).send('Asset is empty');
-    if (convertedSkeleton) {
+    if (extractUnitySkeleton) {
+      buffer = Buffer.from(extractSpineJsonFromUnityTextAsset(buffer), 'utf8');
+      response.setHeader('X-Spine-Link-Converted', 'unity-textasset-to-spine-json');
+    } else if (convertedSkeleton) {
       const converted = await convertLegacySpineAsset(buffer, 'skeleton');
       buffer = converted.buffer;
       response.setHeader('X-Spine-Link-Converted', 'spine-3.7-to-4.3-json');
