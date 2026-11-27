@@ -9,6 +9,7 @@ const context = await browser.newContext({viewport:{width:1280,height:800}});
 const page = await context.newPage();
 const pageErrors = [];
 let portfolioLoads = 0;
+const sessionCookieHeaders = [];
 page.on('pageerror', error => pageErrors.push(String(error)));
 
 await page.addInitScript(() => {
@@ -33,6 +34,7 @@ await page.route('**/api/github-upload', async route => {
   const headers = { 'Set-Cookie':'spine_link_session=browser-test-session; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax' };
   if (body.action === 'get-session') {
     const cookie = route.request().headers()['cookie'] || '';
+    sessionCookieHeaders.push(cookie);
     payload = {ok:true,authenticated:cookie.includes('spine_link_session=browser-test-session'),user:{sub:'spine-link-browser-test-subject',email:'spine-link-test@example.invalid'}};
   } else if (body.action === 'merge-anonymous-account') {
     payload = {ok:true,entries:[],merged:false};
@@ -54,6 +56,7 @@ try {
   await mergeResponse;
   // Keep the mocked HttpOnly session available across the reload just as the API Set-Cookie does in production.
   await context.addCookies([{name:'spine_link_session',value:'browser-test-session',url:SITE,httpOnly:true,sameSite:'Lax'}]);
+  assert.ok((await context.cookies(SITE)).some(cookie => cookie.name === 'spine_link_session'), 'Mock HttpOnly session cookie was not stored');
   assert.equal(await page.locator('.avatar-menu-toggle').isVisible(),true,'Avatar must appear after sign-in');
   const firstSession = await page.evaluate(() => JSON.parse(localStorage.getItem('spine-link-google-session') || 'null'));
   assert.equal(firstSession?.user?.email,'spine-link-test@example.invalid');
@@ -65,7 +68,11 @@ try {
     session.expiresAt = Date.now() - 1000;
     localStorage.setItem('spine-link-google-session', JSON.stringify(session));
   });
+  const sessionCheck = page.waitForResponse(r => r.url().includes('/api/github-upload') && r.request().postDataJSON()?.action === 'get-session');
   await page.reload({waitUntil:'domcontentloaded'});
+  const sessionCheckResponse = await sessionCheck;
+  const sessionCheckResult = await sessionCheckResponse.json();
+  assert.equal(sessionCheckResult.authenticated,true,'Server did not recognize the HttpOnly cookie: ' + JSON.stringify(sessionCookieHeaders));
   await page.locator('.auth-user').waitFor({state:'visible',timeout:15000});
   assert.equal(await page.locator('.avatar-menu-toggle').isVisible(),true,'Avatar disappeared after reload');
   await page.getByRole('button',{name:'MY PORTFOLIO'}).click();
