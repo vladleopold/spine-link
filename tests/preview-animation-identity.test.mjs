@@ -46,7 +46,7 @@ test('video target prefers the indexed previewAnimation while preserving the pla
   assert.match(resolver, /const selectedAnimation = chosen\.trim\(\) && \(previews\?\.\[chosen\] \|\| preferRootPreview\) \? chosen : defaultAnimation/);
   assert.match(resolver, /const selectedFullValue = preferRootPreview \? '' :/);
   assert.match(resolver, /poster: preferRootPreview \? \(fallbackPoster \|\| selectedPoster\)/);
-  assert.match(resolver, /const selectedAnimation = chosen\.trim\(\) && previews && previews\[chosen\] \? chosen : defaultAnimation/);
+
   assert.match(resolver, /name: selectedAnimation/);
   assert.match(resolver, /const fallbackFull = String\(entry\?\.webmPreview/);
   assert.match(resolver, /selected\?\.previewFrameCount \?\? entry\?\.previewFrameCount/);
