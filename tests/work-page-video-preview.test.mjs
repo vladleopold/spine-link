@@ -27,6 +27,6 @@ test('video preview is conditionally omitted when the selected animation has no 
 test('video preview is placed immediately after the animation picker on desktop and mobile', () => {
   assert.match(preview, /#sidebar > #animation-card \{ order: 1; \}/);
   assert.match(preview, /#sidebar > \.preview-video-card \{ order: 2; \}/);
-  assert.match(preview, /#sidebar > #animation-card \{ order: 2 !important; \}/);
+  assert.match(preview, /#sidebar > #animation-card \{ order: 2 !important;[^}]*\}/);
   assert.match(preview, /#sidebar > \.preview-video-card \{ order: 3 !important; \}/);
 });
