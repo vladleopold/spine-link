@@ -44,7 +44,8 @@ test('video target prefers the indexed previewAnimation while preserving the pla
   assert.match(resolver, /const selectedAnimation = chosen\.trim\(\) && previews && previews\[chosen\] \? chosen : defaultAnimation/);
   assert.match(resolver, /name: selectedAnimation/);
   assert.match(resolver, /const fallbackFull = String\(entry\?\.webmPreview/);
-  assert.match(resolver, /const frameCountValue = Number\(entry\?\.previewFrameCount \|\| entry\?\.videoFrameCount \|\| 0\)/);
+  assert.match(resolver, /selected\?\.previewFrameCount \?\? entry\?\.previewFrameCount/);
+  assert.match(resolver, /selected\?\.videoFrameCount \?\? entry\?\.videoFrameCount/);
   assert.match(resolver, /const hasVerifiedMotionFrames = Number\.isFinite\(frameCountValue\) && frameCountValue > 5/);
   assert.match(resolver, /const shortClip = duration > 0 && duration < 2 && !hasVerifiedMotionFrames/);
   assert.match(resolver, /url: shortClip \? '' : \(selectedUrl \|\| fallbackFull\)/);
@@ -417,5 +418,5 @@ test('per-animation WebM frame counts are exported and override stale duration m
   assert.match(workflow, /ffprobe[\s\S]*nb_read_frames/);
   assert.match(workflow, /previewFrameCount/);
   assert.match(workflow, /allAnimPreviews\[animName\]\.previewFrameCount/);
-  assert.match(app, /allAnimationPreviews\?\?: Record<string, \{[\s\S]*previewFrameCount\?: number/);
+  assert.match(app, /allAnimationPreviews\?: Record<string, \{[\s\S]*previewFrameCount\?: number/);
 });
