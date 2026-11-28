@@ -74,12 +74,13 @@ function selectedAnimationVideo(entry = {}) {
   // by the renderer may unlock that preview; never guess another map entry.
   const name = previewAnimation.trim() ? previewAnimation : defaultAnimation;
   const selected = name.trim() && previews ? previews[name] : null;
-  // Older public records may have a verified root media pair but predate
-  // allAnimationPreviews. Reuse those root URLs only when the requested track
-  // is exactly the indexed default; a different explicit previewAnimation
-  // must resolve through its own per-animation map or remain blocked.
+  // Root media is the renderer's authoritative pair for either the exact
+  // previewAnimation or the indexed defaultAnimation. Prefer it over stale
+  // per-animation map entries for that exact recorded track.
   const isDefaultTrack = Boolean(name.trim() && defaultAnimation.trim() && name === defaultAnimation);
-  const defaultSource = isDefaultTrack ? {
+  const isPreviewTrack = Boolean(name.trim() && previewAnimation.trim() && name === previewAnimation);
+  const useRootSource = isPreviewTrack || isDefaultTrack;
+  const defaultSource = useRootSource ? {
     poster: entryImageAsset(entry?.webpPoster || '', entry, 'poster'),
     posterMedium: entryImageAsset(entry?.webpPosterMedium || '', entry, 'preview-medium'),
     posterLow: entryImageAsset(entry?.webpPosterLow || '', entry, 'preview-low'),
