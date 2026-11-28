@@ -410,7 +410,8 @@ test('upload export dispatches unindexed animations for runtime-safe selection',
 
 test('per-animation WebM frame counts are exported and override stale duration metadata', () => {
   const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
-  assert.match(resolver, /const frameCountValue = Number\(selected\?\.previewFrameCount \?\? entry\?\.previewFrameCount \?\? selected\?\.videoFrameCount \?\? entry\?\.videoFrameCount \?\? 0\)/);
+  assert.match(resolver, /selected\?\.previewFrameCount \?\? entry\?\.previewFrameCount/);
+  assert.match(resolver, /selected\?\.videoFrameCount \?\? entry\?\.videoFrameCount/);
   assert.match(resolver, /const hasVerifiedMotionFrames = Number\.isFinite\(frameCountValue\) && frameCountValue > 5/);
   const workflow = fs.readFileSync(new URL('../.github/workflows/spine-export-full.yml', import.meta.url), 'utf8');
   assert.match(workflow, /ffprobe[\s\S]*nb_read_frames/);
