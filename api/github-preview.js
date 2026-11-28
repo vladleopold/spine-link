@@ -1152,6 +1152,7 @@ function createHtml(config) {
       .library-nav-button:disabled { display: none; }
       .library-nav-button--prev { left: 14px; }
       .library-nav-button--next { right: 14px; }
+      .preview-video-card video { display: block; width: 100%; max-width: 100%; height: auto; max-height: 260px; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
       #sidebar { min-height: 0; max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(74,78,84,.72) transparent; }
       /* Supporting panels follow the animation picker at every desktop width. */
       #sidebar > #animation-card { order: 1; }
