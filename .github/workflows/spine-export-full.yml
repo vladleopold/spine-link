@@ -134,6 +134,23 @@ jobs:
           META="${UPLOAD_ID}-anim-${SAFE}-preview.webm.json"
           [ -f "$META" ] && mv "$META" "$DIR/meta.json" || echo '{}' > "$DIR/meta.json"
 
+          # Persist the decoded frame count from the actual high-quality WebM.
+          # Duration metadata alone can be stale after an export repair.
+          PRIMARY_WEBM="$DIR/${UPLOAD_ID}-anim-${SAFE}-preview.webm"
+          if [ -f "$PRIMARY_WEBM" ]; then
+            FRAME_COUNT=$(ffprobe -v error -select_streams v:0 -count_frames \
+              -show_entries stream=nb_read_frames -of csv=p=0 "$PRIMARY_WEBM" 2>/dev/null | head -n 1)
+            node -e "
+              const fs = require('fs');
+              const file = process.argv[1];
+              const count = Number(process.argv[2]);
+              const meta = JSON.parse(fs.readFileSync(file, 'utf8'));
+              if (Number.isFinite(count) && count > 0) meta.previewFrameCount = Math.round(count);
+              fs.writeFileSync(file, JSON.stringify(meta, null, 2));
+            " "$DIR/meta.json" "${FRAME_COUNT:-0}"
+            echo "Verified WebM frame count: ${FRAME_COUNT:-0}"
+          fi
+
           # Animation name mapping
           echo "$ANIM" > "$DIR/anim-name.txt"
           echo "$SAFE" > "$DIR/safe-name.txt"
@@ -420,6 +437,10 @@ jobs:
                       if (Number.isFinite(animDur) && animDur > 0) {
                         allAnimPreviews[animName].previewDuration = animDur;
                       }
+                      const frameCount = Number(meta?.previewFrameCount);
+                      if (Number.isFinite(frameCount) && frameCount > 0) {
+                        allAnimPreviews[animName].previewFrameCount = Math.round(frameCount);
+                      }
                       // Real pixel width per tier, so the site can label the
                       // size buttons honestly instead of claiming a fixed
                       // 1080p/720p/360p that only some clips actually match.
@@ -497,6 +518,9 @@ jobs:
                 ...indexData[entryIndex],
                 allAnimationPreviews: allAnimPreviews,
                 previewDuration: Number.isFinite(chosenDuration) && chosenDuration > 0 ? chosenDuration : undefined,
+                previewFrameCount: Number(chosenPreview?.previewFrameCount) > 0
+                  ? Math.round(Number(chosenPreview.previewFrameCount))
+                  : undefined,
                 fullExportStatus: hasChosenExport ? 'ready' : 'failed',
                 fullExportGeneratedAt: new Date().toISOString(),
                 ...(hasChosenExport ? {} : {

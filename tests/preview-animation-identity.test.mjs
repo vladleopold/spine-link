@@ -44,6 +44,10 @@ test('video target prefers the indexed previewAnimation while preserving the pla
   assert.match(resolver, /const selectedAnimation = chosen\.trim\(\) && previews && previews\[chosen\] \? chosen : defaultAnimation/);
   assert.match(resolver, /name: selectedAnimation/);
   assert.match(resolver, /const fallbackFull = String\(entry\?\.webmPreview/);
+  assert.match(resolver, /selected\?\.previewFrameCount \?\? entry\?\.previewFrameCount/);
+  assert.match(resolver, /selected\?\.videoFrameCount \?\? entry\?\.videoFrameCount/);
+  assert.match(resolver, /const hasVerifiedMotionFrames = Number\.isFinite\(frameCountValue\) && frameCountValue > 5/);
+  assert.match(resolver, /const shortClip = duration > 0 && duration < 2 && !hasVerifiedMotionFrames/);
   assert.match(resolver, /url: shortClip \? '' : \(selectedUrl \|\| fallbackFull\)/);
   assert.match(resolver, /lowUrl: shortClip \? '' : \(selectedLowUrl \|\| fallbackLow \|\| selectedUrl \|\| fallbackFull\)/);
   assert.ok(resolver.indexOf('selectedUrl || fallbackFull') > resolver.indexOf('const selectedUrl'));
@@ -403,4 +407,16 @@ test('upload export dispatches unindexed animations for runtime-safe selection',
   assert.ok(dispatch.includes('validates visible'));
   assert.ok(!dispatch.includes('missing-explicit-default-animation'));
   assert.ok(!dispatch.includes('entry?.animations[0]'));
+});
+
+test('per-animation WebM frame counts are exported and override stale duration metadata', () => {
+  const resolver = section(preview, 'function resolvePreviewTarget(entry', '// Compact download picker');
+  assert.match(resolver, /selected\?\.previewFrameCount \?\? entry\?\.previewFrameCount/);
+  assert.match(resolver, /selected\?\.videoFrameCount \?\? entry\?\.videoFrameCount/);
+  assert.match(resolver, /const hasVerifiedMotionFrames = Number\.isFinite\(frameCountValue\) && frameCountValue > 5/);
+  const workflow = fs.readFileSync(new URL('../.github/workflows/spine-export-full.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /ffprobe[\s\S]*nb_read_frames/);
+  assert.match(workflow, /previewFrameCount/);
+  assert.match(workflow, /allAnimPreviews\[animName\]\.previewFrameCount/);
+  assert.match(app, /allAnimationPreviews\?: Record<string, \{[\s\S]*previewFrameCount\?: number/);
 });

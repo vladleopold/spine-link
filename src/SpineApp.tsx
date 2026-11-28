@@ -283,6 +283,7 @@ type LibraryEntry = {
   mediaHeight?: number;
   mediaAspectRatio?: number;
   previewDuration?: number;
+  previewFrameCount?: number;
   cardSize?: LibraryCardSize;
   layout?: PlayerViewport;
   sourceProof?: SourceProof;
@@ -297,6 +298,7 @@ type LibraryEntry = {
   fullExportGeneratedAt?: string;
   allAnimationPreviews?: Record<string, {
     previewDuration?: number;
+    previewFrameCount?: number;
     webmPreview?: string;
     webmPreviewMedium?: string;
     webmPreviewLow?: string;
