@@ -437,6 +437,10 @@ jobs:
                       if (Number.isFinite(animDur) && animDur > 0) {
                         allAnimPreviews[animName].previewDuration = animDur;
                       }
+                      const frameCount = Number(meta?.previewFrameCount);
+                      if (Number.isFinite(frameCount) && frameCount > 0) {
+                        allAnimPreviews[animName].previewFrameCount = Math.round(frameCount);
+                      }
                       // Real pixel width per tier, so the site can label the
                       // size buttons honestly instead of claiming a fixed
                       // 1080p/720p/360p that only some clips actually match.
@@ -514,6 +518,9 @@ jobs:
                 ...indexData[entryIndex],
                 allAnimationPreviews: allAnimPreviews,
                 previewDuration: Number.isFinite(chosenDuration) && chosenDuration > 0 ? chosenDuration : undefined,
+                previewFrameCount: Number(chosenPreview?.previewFrameCount) > 0
+                  ? Math.round(Number(chosenPreview.previewFrameCount))
+                  : undefined,
                 fullExportStatus: hasChosenExport ? 'ready' : 'failed',
                 fullExportGeneratedAt: new Date().toISOString(),
                 ...(hasChosenExport ? {} : {
