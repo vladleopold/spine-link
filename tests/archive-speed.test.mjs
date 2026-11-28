@@ -422,7 +422,8 @@ test('preview sidebar keeps all supporting panels below the animation picker on 
   assert.match(preview,/@media \(max-width: 1000px\)/);
   assert.match(preview,/#sidebar > #animation-card\s*\{\s*order:\s*1;\s*\}/);
   assert.match(preview,/#sidebar > \.preview-video-card\s*\{\s*order:\s*2;\s*\}/);
-  assert.match(preview,/#sidebar > \.animation-download-block\s*\{\s*order:\s*3;\s*\}/);\n  assert.match(preview,/#sidebar > #owner-library\s*\{\s*order:\s*4;\s*\}/);
+  assert.match(preview,/#sidebar > \.animation-download-block\s*\{\s*order:\s*3;\s*\}/);
+  assert.match(preview,/#sidebar > #owner-library\s*\{\s*order:\s*4;\s*\}/);
   assert.match(preview,/#sidebar > \.video-watch-panel--below-list\s*\{\s*order:\s*5;\s*\}/);
   assert.match(preview,/#sidebar > \.proof-card\s*\{\s*order:\s*6;\s*\}/);
   
