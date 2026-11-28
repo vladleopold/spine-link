@@ -849,44 +849,58 @@ function resolvePreviewTarget(entry, origin = '') {
   const previewAnimation = typeof entry?.previewAnimation === 'string' ? entry.previewAnimation : '';
   const defaultAnimation = typeof entry?.defaultAnimation === 'string' ? entry.defaultAnimation : '';
   const chosen = previewAnimation.trim() ? previewAnimation : defaultAnimation;
+  const fallbackFull = String(entry?.webmPreview || entry?.webmPreviewMedium || entry?.webmPreviewLow || '').trim();
+  const fallbackLow = String(entry?.webmPreviewLow || entry?.webmPreviewMedium || entry?.webmPreview || '').trim();
+  const fallbackPoster = String(entry?.webpPosterMedium || entry?.webpPoster || entry?.thumbnailPoster || '').trim();
+  const hasRootPreview = Boolean(fallbackFull || fallbackLow);
+  // The renderer records the exact animation represented by the root media pair.
+  // Prefer that pair over older per-animation map entries for this one track.
+  const preferRootPreview = Boolean(chosen.trim() && hasRootPreview && (
+    (previewAnimation.trim() && chosen === previewAnimation) ||
+    (defaultAnimation.trim() && chosen === defaultAnimation)
+  ));
   const previews = entry && entry.allAnimationPreviews && typeof entry.allAnimationPreviews === 'object'
     ? entry.allAnimationPreviews
     : null;
-  const selectedAnimation = chosen.trim() && previews && previews[chosen] ? chosen : defaultAnimation;
+  const selectedAnimation = chosen.trim() && ((previews && previews[chosen]) || preferRootPreview)
+    ? chosen
+    : defaultAnimation;
   const selected = selectedAnimation.trim() && previews ? previews[selectedAnimation] : null;
   const fix = origin ? (value) => repairAnimationAssetUrl(entry, value, origin) : (value) => value;
-  const selectedFullValue = selected?.webmPreview || selected?.webmPreviewMedium || selected?.webmPreviewLow || '';
-  const selectedLowValue = selected?.webmPreviewLow || selected?.webmPreviewMedium || selected?.webmPreview || '';
+  const selectedFullValue = preferRootPreview ? '' : (selected?.webmPreview || selected?.webmPreviewMedium || selected?.webmPreviewLow || '');
+  const selectedLowValue = preferRootPreview ? '' : (selected?.webmPreviewLow || selected?.webmPreviewMedium || selected?.webmPreview || '');
   const selectedUrl = typeof selectedFullValue === 'string' && selectedFullValue.trim()
     ? fix(selectedFullValue.trim())
     : '';
   const selectedLowUrl = typeof selectedLowValue === 'string' && selectedLowValue.trim()
     ? fix(selectedLowValue.trim())
     : '';
-  const durationValue = Number(selected?.previewDuration ?? entry?.previewDuration ?? 0);
+  const durationValue = Number(preferRootPreview
+    ? (entry?.previewDuration ?? selected?.previewDuration ?? 0)
+    : (selected?.previewDuration ?? entry?.previewDuration ?? 0));
   const duration = Number.isFinite(durationValue) && durationValue > 0 ? durationValue : 0;
   // Duration metadata can lag behind the verified media artifact after an
   // export repair. A decoded multi-frame WebM is authoritative evidence of
   // motion, so do not suppress it solely because the index duration is stale.
-  const frameCountValue = Number(
-    selected?.previewFrameCount ?? entry?.previewFrameCount ??
-    selected?.videoFrameCount ?? entry?.videoFrameCount ?? 0
-  );
+  const frameCountValue = Number(preferRootPreview
+    ? (entry?.previewFrameCount ?? entry?.videoFrameCount ?? selected?.previewFrameCount ?? selected?.videoFrameCount ?? 0)
+    : (selected?.previewFrameCount ?? entry?.previewFrameCount ??
+      selected?.videoFrameCount ?? entry?.videoFrameCount ?? 0));
   const hasVerifiedMotionFrames = Number.isFinite(frameCountValue) && frameCountValue > 5;
   const shortClip = duration > 0 && duration < 2 && !hasVerifiedMotionFrames;
-  const fallbackFull = String(entry?.webmPreview || entry?.webmPreviewMedium || entry?.webmPreviewLow || '').trim();
-  const fallbackLow = String(entry?.webmPreviewLow || entry?.webmPreviewMedium || entry?.webmPreview || '').trim();
-  const fallbackPoster = String(entry?.webpPosterMedium || entry?.webpPoster || entry?.thumbnailPoster || '').trim();
-  const hasAnimationPreview = Boolean(selectedUrl || selectedLowUrl);
+  const hasAnimationPreview = preferRootPreview
+    ? hasRootPreview
+    : Boolean(selectedUrl || selectedLowUrl);
+  const selectedPoster = typeof selected?.webpPosterMedium === 'string' && selected.webpPosterMedium.trim()
+    ? selected.webpPosterMedium.trim()
+    : (typeof selected?.webpPoster === 'string' && selected.webpPoster.trim()
+      ? selected.webpPoster.trim()
+      : '');
   return {
     name: selectedAnimation || chosen || defaultAnimation || '',
     url: shortClip ? '' : (selectedUrl || fallbackFull),
     lowUrl: shortClip ? '' : (selectedLowUrl || fallbackLow || selectedUrl || fallbackFull),
-    poster: typeof selected?.webpPosterMedium === 'string' && selected.webpPosterMedium.trim()
-      ? selected.webpPosterMedium.trim()
-      : (typeof selected?.webpPoster === 'string' && selected.webpPoster.trim()
-        ? selected.webpPoster.trim()
-        : fallbackPoster),
+    poster: preferRootPreview ? (fallbackPoster || selectedPoster) : (selectedPoster || fallbackPoster),
     duration,
     isFallback: !hasAnimationPreview && Boolean(fallbackFull || fallbackLow),
   };

@@ -41,7 +41,13 @@ test('video target prefers the indexed previewAnimation while preserving the pla
   assert.match(resolver, /const previewAnimation = typeof entry\?\.previewAnimation === 'string' \? entry\.previewAnimation : '';/);
   assert.match(resolver, /const defaultAnimation = typeof entry\?\.defaultAnimation === 'string' \? entry\.defaultAnimation : '';/);
   assert.match(resolver, /const chosen = previewAnimation\.trim\(\) \? previewAnimation : defaultAnimation/);
-  assert.match(resolver, /const selectedAnimation = chosen\.trim\(\) && previews && previews\[chosen\] \? chosen : defaultAnimation/);
+  assert.match(resolver, /const hasRootPreview = Boolean\(fallbackFull \|\| fallbackLow\)/);
+  assert.match(resolver, /const preferRootPreview = Boolean\([\s\S]*previewAnimation[\s\S]*defaultAnimation[\s\S]*hasRootPreview[\s\S]*\)/);
+  assert.match(resolver, /const selectedAnimation = chosen\.trim\(\) && \(\(previews && previews\[chosen\]\) \|\| preferRootPreview\)/);
+  assert.match(resolver, /\? chosen\s+: defaultAnimation/);
+  assert.match(resolver, /const selectedFullValue = preferRootPreview \? '' :/);
+  assert.match(resolver, /poster: preferRootPreview \? \(fallbackPoster \|\| selectedPoster\)/);
+
   assert.match(resolver, /name: selectedAnimation/);
   assert.match(resolver, /const fallbackFull = String\(entry\?\.webmPreview/);
   assert.match(resolver, /selected\?\.previewFrameCount \?\? entry\?\.previewFrameCount/);
@@ -144,7 +150,14 @@ test('archive cards use the exact recorded preview animation or indexed default 
   assert.match(selected, /defaultAnimation/);
   assert.match(selected, /const name = previewAnimation\.trim\(\) \? previewAnimation : defaultAnimation/);
   assert.match(selected, /const isDefaultTrack = Boolean\(name\.trim\(\) && defaultAnimation\.trim\(\) && name === defaultAnimation\)/);
-  assert.match(selected, /const defaultSource = isDefaultTrack \? \{/);
+  assert.match(selected, /const isPreviewTrack = Boolean\(name\.trim\(\) && previewAnimation\.trim\(\) && name === previewAnimation\)/);
+  assert.match(selected, /const useRootSource = isPreviewTrack \|\| isDefaultTrack/);
+  assert.match(selected, /const defaultSource = useRootSource \? \{/);
+  assert.match(selected, /poster: defaultSource\?\.poster \|\| animationSource\.poster/);
+  assert.match(selected, /full: defaultSource\?\.full \|\| animationSource\.full/);
+  assert.match(selected, /const isPreviewTrack = Boolean\(name\.trim\(\) && previewAnimation\.trim\(\) && name === previewAnimation\)/);
+  assert.match(selected, /const useRootSource = isPreviewTrack \|\| isDefaultTrack/);
+  assert.match(selected, /const defaultSource = useRootSource \? \{/);
   assert.match(selected, /entry\?\.webmPreviewMedium/);
   assert.match(selected, /entry\?\.webpPosterLow/);
   assert.doesNotMatch(selected, /const isDefaultTrack = Boolean\(name\.trim\(\) && defaultAnimation\.trim\(\) && name !== defaultAnimation\)/);
