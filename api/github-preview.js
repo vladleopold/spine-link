@@ -868,7 +868,10 @@ function resolvePreviewTarget(entry, origin = '') {
   // Duration metadata can lag behind the verified media artifact after an
   // export repair. A decoded multi-frame WebM is authoritative evidence of
   // motion, so do not suppress it solely because the index duration is stale.
-  const frameCountValue = Number(entry?.previewFrameCount || entry?.videoFrameCount || 0);
+  const frameCountValue = Number(
+    selected?.previewFrameCount ?? entry?.previewFrameCount ??
+    selected?.videoFrameCount ?? entry?.videoFrameCount ?? 0
+  );
   const hasVerifiedMotionFrames = Number.isFinite(frameCountValue) && frameCountValue > 5;
   const shortClip = duration > 0 && duration < 2 && !hasVerifiedMotionFrames;
   const fallbackFull = String(entry?.webmPreview || entry?.webmPreviewMedium || entry?.webmPreviewLow || '').trim();
