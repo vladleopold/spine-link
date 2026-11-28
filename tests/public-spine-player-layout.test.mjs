@@ -17,7 +17,8 @@ test("mobile player appears before the animation picker and its first control", 
   );
   assert.match(mobile, /\.player-frame\s*\{[^}]*order:\s*1\s*!important/s);
   assert.match(mobile, /#sidebar\s*>\s*#animation-card\s*\{\s*order:\s*2\s*!important/s);
-  assert.match(mobile, /#sidebar\s*>\s*\.animation-download-block\s*\{\s*order:\s*3\s*!important/s);
+  assert.match(mobile, /#sidebar\s*>\s*\.preview-video-card\s*\{\s*order:\s*3\s*!important/s);
+  assert.match(mobile, /#sidebar\s*>\s*\.animation-download-block\s*\{\s*order:\s*4\s*!important/s);
 });
 
 test("desktop owner sidebar shows at most seven other user video works in two columns", () => {
@@ -26,7 +27,7 @@ test("desktop owner sidebar shows at most seven other user video works in two co
   assert.match(source, /visibleItems\s*=\s*items\.slice\(0,\s*7\)/);
   assert.match(source, /\.filter\(\(item\)\s*=>\s*item\.webmPreview\)/);
   assert.match(source, /\.owner-library\.is-visible\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
-  assert.match(source, /#sidebar\s*>\s*#owner-library\s*\{\s*order:\s*3/);
+  assert.match(source, /#sidebar\s*>\s*#owner-library\s*\{\s*order:\s*4/);
   assert.match(source, /Other animations by this user/);
 });
 
