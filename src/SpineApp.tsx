@@ -283,6 +283,7 @@ type LibraryEntry = {
   mediaHeight?: number;
   mediaAspectRatio?: number;
   previewDuration?: number;
+  previewFrameCount?: number;
   cardSize?: LibraryCardSize;
   layout?: PlayerViewport;
   sourceProof?: SourceProof;
