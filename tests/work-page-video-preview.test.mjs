@@ -33,5 +33,5 @@ test('video preview is placed immediately after the animation picker on desktop 
 
 test('work page constrains the standalone video to its responsive sidebar width', () => {
   const page = preview.slice(preview.indexOf('function createHtml('), preview.indexOf('function createVideoFallbackHtml('));
-  assert.match(page, /\\.preview-video-card video\\s*\\{[^}]*width:\\s*100%[^}]*max-width:\\s*100%[^}]*height:\\s*auto[^}]*max-height:\\s*260px/s);
+  assert.match(page, /\.preview-video-card video\s*\{[^}]*width:\s*100%[^}]*max-width:\s*100%[^}]*height:\s*auto[^}]*max-height:\s*260px/s);
 });
