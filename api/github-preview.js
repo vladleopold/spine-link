@@ -1155,17 +1155,16 @@ function createHtml(config) {
       #sidebar { min-height: 0; max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(74,78,84,.72) transparent; }
       /* Supporting panels follow the animation picker at every desktop width. */
       #sidebar > #animation-card { order: 1; }
-      #sidebar > .animation-download-block { order: 2; }
-      #sidebar > #owner-library { order: 3; }
-      #sidebar > .video-watch-panel--below-list { order: 4; }
-      #sidebar > .proof-card { order: 5; }
-      #sidebar > .preview-video-card { order: 7; }
-      #sidebar > #set-card, #sidebar > .note-card { order: 6; }
+      #sidebar > .preview-video-card { order: 2; }
+      #sidebar > .animation-download-block { order: 3; }
+      #sidebar > #owner-library { order: 4; }
+      #sidebar > .video-watch-panel--below-list { order: 5; }
+      #sidebar > .proof-card { order: 6; }
+      #sidebar > #set-card, #sidebar > .note-card { order: 7; }
       .animation-card.is-open .animation-menu { max-height: 240px; }
 
-      /* Большое видео-превью остаётся на странице: это главная видео-поверхность
-         работы и единственное место, где показывается клип в полном качестве.
-         Оно живёт под плеером и не мешает сайдпанелу. */
+      /* Keep the selected WebM directly below the animation picker so it is
+         visible without scrolling past downloads, the owner gallery or proofs. */
       .video-watch-panel { display: grid; }
       .video-watch-panel .seo-video-frame { height: min(58vh, 720px); max-height: min(58vh, 720px); }
       .preview-card { padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.05); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
@@ -1423,11 +1422,12 @@ function createHtml(config) {
       .dl-steps .dl-step span, .dl-status [data-dl-status-text] { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
       .dl-status { display: none !important; }
       #sidebar > #animation-card { order: 1 !important; }
-      #sidebar > .animation-download-block { order: 2 !important; }
-      #sidebar > #owner-library { order: 3 !important; }
-      #sidebar > .video-watch-panel--below-list { order: 4 !important; }
-      #sidebar > .proof-card { order: 5 !important; }
-      #sidebar > #set-card, #sidebar > .note-card { order: 6 !important; }
+      #sidebar > .preview-video-card { order: 2 !important; }
+      #sidebar > .animation-download-block { order: 3 !important; }
+      #sidebar > #owner-library { order: 4 !important; }
+      #sidebar > .video-watch-panel--below-list { order: 5 !important; }
+      #sidebar > .proof-card { order: 6 !important; }
+      #sidebar > #set-card, #sidebar > .note-card { order: 7 !important; }
       .video-watch-panel--below-list { display: grid; gap: 8px; padding: 10px; border: 1px solid rgba(255,185,214,.28); border-radius: 8px; background: #020304; }
       .video-watch-panel--below-list video { display: block; width: 100%; max-height: 56svh; object-fit: contain; background: #000; }
       .owner-library.is-visible { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 96px; }
