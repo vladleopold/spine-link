@@ -1473,8 +1473,8 @@ function createHtml(config) {
           max-height: 100% !important;
         }
         #sidebar > #animation-card { order: 2 !important; margin: 0; }
-        #sidebar > .animation-download-block { order: 3 !important; margin: 0; }
-        #sidebar > .preview-video-card { order: 5 !important; }
+        #sidebar > .preview-video-card { order: 3 !important; }
+        #sidebar > .animation-download-block { order: 4 !important; margin: 0; }
         #sidebar > .owner-library { display: none !important; }
       }
       @media (min-width: 1001px) {
