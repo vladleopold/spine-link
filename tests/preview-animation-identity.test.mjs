@@ -152,7 +152,9 @@ test('archive cards use the exact recorded preview animation or indexed default 
   assert.match(selected, /const isPreviewTrack = Boolean\(name\.trim\(\) && previewAnimation\.trim\(\) && name === previewAnimation\)/);
   assert.match(selected, /const useRootSource = isPreviewTrack \|\| isDefaultTrack/);
   assert.match(selected, /const candidates = useRootSource \? \[defaultSource, selected\] : \[selected, defaultSource\]/);
-  assert.match(selected, /const defaultSource = isDefaultTrack \? \{/);
+  assert.match(selected, /const isPreviewTrack = Boolean\(name\.trim\(\) && previewAnimation\.trim\(\) && name === previewAnimation\)/);
+  assert.match(selected, /const useRootSource = isPreviewTrack \|\| isDefaultTrack/);
+  assert.match(selected, /const defaultSource = useRootSource \? \{/);
   assert.match(selected, /entry\?\.webmPreviewMedium/);
   assert.match(selected, /entry\?\.webpPosterLow/);
   assert.doesNotMatch(selected, /const isDefaultTrack = Boolean\(name\.trim\(\) && defaultAnimation\.trim\(\) && name !== defaultAnimation\)/);
